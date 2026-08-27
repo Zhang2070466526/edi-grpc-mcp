@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 
 from servers import mcp
 from servers.settings import get_settings
-from servers.multimodal_vision.validators import validate_image_path
+from servers.multimodal_vision.validators import validate_image_path, IMAGE_MIME_MAP
 
 load_dotenv()
 _logger = logging.getLogger("multimodal.workspace")
@@ -28,10 +28,7 @@ _MAX_WORKSPACE_IMAGE_SIZE = 40 * 1024 * 1024  # 40 MB
 _OPENCLAW_CACHE_TTL = 24 * 60 * 60
 _ALLOWED_CACHE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
 
-_MIME_MAP: dict[str, str] = {
-    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-    ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
-}
+_MIME_MAP = IMAGE_MIME_MAP
 
 
 # ═══════════════════════════════════════════════════════════

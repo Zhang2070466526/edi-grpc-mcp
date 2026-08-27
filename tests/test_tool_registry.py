@@ -30,6 +30,8 @@ def test_all_tools_registered():
         "list_schematic_components", "get_schematic_component_info",
         "open_hfss_project", "close_hfss_project", "launch_aedt", "get_hfss_project_info",
         "start_hfss_analysis_async", "get_hfss_analysis_status",
+        "cst_solve_async", "cst_solve_query", "cst_export_snp",
+        "cst_export_farfield", "cst_export_farfield_query",
     ]
     # copy_image_to_workspace is conditional
     from servers.multimodal_vision import OPENCLAW_WORKSPACE_PATH
@@ -85,7 +87,8 @@ def test_mcp_only_tools_are_expected():
     from start_servers import mcp
     mcp_tools = set(t.name for t in mcp._tool_manager._tools.values())
 
-    from servers.chat.service import CHAT_TOOL_MAP
+    from servers.chat.service import CHAT_TOOL_MAP, _ensure_chat_tools
+    _ensure_chat_tools()  # 刷新，确保 CHAT_TOOL_MAP 包含所有已注册工具（含后注册的 CST 等）
     chat_tools = set(CHAT_TOOL_MAP.keys())
 
     mcp_only = mcp_tools - chat_tools

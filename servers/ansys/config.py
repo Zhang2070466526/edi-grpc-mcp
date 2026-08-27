@@ -10,9 +10,7 @@ from __future__ import annotations
 
 import logging
 import psutil
-import subprocess
 import threading
-import time
 import winreg
 from pathlib import Path
 from typing import Any

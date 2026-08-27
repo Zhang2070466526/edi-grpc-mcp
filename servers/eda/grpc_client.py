@@ -36,6 +36,7 @@ _logger = logging.getLogger("eda.grpc_client")
 
 # EDA 操作全局锁 — 确保同一时间只进行一项 gRPC 状态操作
 _EDA_LOCK = threading.RLock()
+_queue_busy = False  # EDA gRPC 执行槽是否被占用（跨线程标志，由 _EDA_LOCK 串行化写）
 
 # gRPC 通道配置：默认接收上限 4MB，长仿真日志可能会超过，导致
 # RESOURCE_EXHAUSTED 被误判为 STREAM_DISCONNECTED，结果丢失。
@@ -55,8 +56,8 @@ _channel_lock = threading.Lock()
 
 
 def _is_queue_busy() -> bool:
-    """EDA 执行槽是否被占用（公开接口，不依赖私有 API）。"""
-    return _EDA_LOCK._is_owned()
+    """EDA 执行槽是否被占用。"""
+    return _queue_busy
 
 
 def _get_cached_channel(target: str) -> grpc.Channel | None:
@@ -151,9 +152,9 @@ def _parse_payload_json(payload_json: str) -> tuple[dict[str, Any], str | None]:
     try:
         value = json.loads(payload_json)
     except json.JSONDecodeError as exc:
-        return {"raw_payload": payload_json}, f"payload_json 解析失败: {exc}"
+        return {}, f"payload_json 解析失败: {exc}"
     if not isinstance(value, dict):
-        return {"raw_payload": value}, "payload_json 不是 JSON 对象"
+        return {}, "payload_json 不是 JSON 对象"
     return value, None
 
 
@@ -178,11 +179,11 @@ def _terminal_result(
         client_uuid: str,
         task_id: str,
         task_type_name: str,
-        project_path: str,
-        result_path: str,
-        ads_output: str,
-        log_complete: bool,
-        latest_details: dict[str, Any],
+        project_path: str = "",
+        result_path: str = "",
+        ads_output: str = "",
+        log_complete: bool = False,
+        latest_details: dict[str, Any] | None = None,
         *,
         outcome_known: bool = False,
 ) -> dict[str, Any]:
@@ -191,6 +192,7 @@ def _terminal_result(
     outcome_known=True 表示已收到 EDI 的最终事件（SUCCEEDED/FAILED），
     此时 task_success 有意义；False 表示 EDI 任务结果未知（超时/断连等）。
     """
+    latest_details = latest_details or {}
     return {
         "success": success,
         "completed": True,
@@ -267,6 +269,8 @@ def call_grpc(
             result_path="", ads_output="", log_complete=False,
             latest_details={},
         )
+    global _queue_busy
+    _queue_busy = True
     try:
         if time.monotonic() >= deadline:
             # 排队耗时耗尽预算，未开始执行（几乎不可达：acquire 成功意味着未超时）
@@ -286,6 +290,7 @@ def call_grpc(
             on_event=on_event,
         )
     finally:
+        _queue_busy = False
         _EDA_LOCK.release()
 
 
@@ -373,42 +378,23 @@ def _call_grpc_unlocked(
                 )
 
             # ── 4. 回显校验 ──
+            def _mismatch(msg: str) -> dict[str, Any]:
+                _logger.error("task=%s %s", task_id[:12], msg)
+                return _terminal_result(
+                    success=False, status="PROTOCOL_MISMATCH", message=msg,
+                    client_uuid=client_uuid, task_id=task_id,
+                    task_type_name=task_type_name,
+                    project_path=payload.get("project_path", ""),
+                )
             if response.client_uuid and response.client_uuid != client_uuid:
-                msg = f"PerformAction client_uuid 不匹配: sent={client_uuid} got={response.client_uuid}"
-                _logger.error("task=%s %s", task_id[:12], msg)
-                return _terminal_result(
-                    success=False, status="PROTOCOL_MISMATCH", message=msg,
-                    client_uuid=client_uuid, task_id=task_id,
-                    task_type_name=task_type_name,
-                    project_path=payload.get("project_path", ""),
-                    result_path="", ads_output="", log_complete=False,
-                    latest_details={},
-                )
+                return _mismatch(f"PerformAction client_uuid 不匹配: sent={client_uuid} got={response.client_uuid}")
             if response.task_id and response.task_id != task_id:
-                msg = f"PerformAction task_id 不匹配: sent={task_id} got={response.task_id}"
-                _logger.error("task=%s %s", task_id[:12], msg)
-                return _terminal_result(
-                    success=False, status="PROTOCOL_MISMATCH", message=msg,
-                    client_uuid=client_uuid, task_id=task_id,
-                    task_type_name=task_type_name,
-                    project_path=payload.get("project_path", ""),
-                    result_path="", ads_output="", log_complete=False,
-                    latest_details={},
-                )
+                return _mismatch(f"PerformAction task_id 不匹配: sent={task_id} got={response.task_id}")
             if response.event_type not in (
                     ecserver_pb2.EVENT_TYPE_UNSPECIFIED,
                     task_type,
             ):
-                msg = f"PerformAction event_type 不匹配: sent={task_type_name} got={ecserver_pb2.EventType.Name(response.event_type)}"
-                _logger.error("task=%s %s", task_id[:12], msg)
-                return _terminal_result(
-                    success=False, status="PROTOCOL_MISMATCH", message=msg,
-                    client_uuid=client_uuid, task_id=task_id,
-                    task_type_name=task_type_name,
-                    project_path=payload.get("project_path", ""),
-                    result_path="", ads_output="", log_complete=False,
-                    latest_details={},
-                )
+                return _mismatch(f"PerformAction event_type 不匹配: sent={task_type_name} got={ecserver_pb2.EventType.Name(response.event_type)}")
 
             # ── 5. ACCEPTED 回调 ──
             _logger.info("task=%s phase=ACCEPTED code=0", task_id[:12])

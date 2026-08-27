@@ -276,6 +276,20 @@ def list_result_curves(result_path: str) -> dict[str, Any]:
     return response
 
 
+def _build_cmd(raw_path, img_path, chart_type, *, linename="", dependency="", csv_path="", ac_config=""):
+    """构造 turbocharts 命令行参数列表（基础参数 + 可选参数）。"""
+    cmd = [TURBOCHARTS_PATH, "--raw", raw_path, "--img", img_path, "--type", chart_type]
+    if linename:
+        cmd.extend(["--linename", linename])
+    if csv_path:
+        cmd.extend(["--csv", csv_path])
+    if dependency:
+        cmd.extend(["--dependcy", dependency])
+    if ac_config:
+        cmd.extend(["--ac", ac_config])
+    return cmd
+
+
 @mcp.tool()
 def turbocharts_convert(
     raw_path: str,
@@ -367,13 +381,7 @@ def turbocharts_convert(
     need_split = csv_path and len(vswr_curves) > 1  # 需要拆分：有 CSV 且多条 VSWR
 
     # ── 第 1 步：生成 PNG 图片（所有曲线一次性合并，VSWR 不受影响）──
-    cmd_img = [TURBOCHARTS_PATH, "--raw", raw_path, "--img", img_path, "--type", chart_type]
-    if linename:
-        cmd_img.extend(["--linename", linename])
-    if dependency:
-        cmd_img.extend(["--dependcy", dependency])
-    if ac_config:
-        cmd_img.extend(["--ac", ac_config])
+    cmd_img = _build_cmd(raw_path, img_path, chart_type, linename=linename, dependency=dependency, ac_config=ac_config)
 
     result = run_turbocharts(cmd_img, timeout_seconds=120)
     img_generated = Path(img_path).exists()
@@ -398,10 +406,7 @@ def turbocharts_convert(
         vswr_artifacts = []
         for vswr in vswr_curves:
             csv_vswr = str(csv_dir / f"{csv_stem}_{vswr.replace('[','').replace(']','').replace(',','_')}{csv_ext}")
-            cmd_csv = [TURBOCHARTS_PATH, "--raw", raw_path, "--img", img_path, "--type", chart_type,
-                       "--csv", csv_vswr, "--linename", vswr]
-            if dependency:
-                cmd_csv.extend(["--dependcy", dependency])
+            cmd_csv = _build_cmd(raw_path, img_path, chart_type, linename=vswr, dependency=dependency, csv_path=csv_vswr)
             proc = run_turbocharts(cmd_csv, timeout_seconds=120)
             if proc.returncode == 0 and Path(csv_vswr).exists():
                 artifacts.append({"type": "csv", "path": csv_vswr, "name": Path(csv_vswr).name,
@@ -409,10 +414,7 @@ def turbocharts_convert(
 
         # 非 VSWR 曲线 CSV
         if csv_non and non_vswr:
-            cmd_non = [TURBOCHARTS_PATH, "--raw", raw_path, "--img", img_path, "--type", chart_type,
-                       "--csv", csv_non, "--linename", non_vswr]
-            if dependency:
-                cmd_non.extend(["--dependcy", dependency])
+            cmd_non = _build_cmd(raw_path, img_path, chart_type, linename=non_vswr, dependency=dependency, csv_path=csv_non)
             proc = run_turbocharts(cmd_non, timeout_seconds=120)
             if proc.returncode == 0 and Path(csv_non).exists():
                 artifacts.append({"type": "csv", "path": csv_non, "name": Path(csv_non).name,
@@ -421,14 +423,7 @@ def turbocharts_convert(
         warnings.append(f"VSWR 曲线已自动拆分为 {len(vswr_curves)} 次 CSV 导出：{', '.join(vswr_curves)}")
     elif csv_path:
         # 单条 VSWR 或无 VSWR，正常调用
-        cmd_csv = [TURBOCHARTS_PATH, "--raw", raw_path, "--img", img_path, "--type", chart_type,
-                   "--csv", csv_path]
-        if linename:
-            cmd_csv.extend(["--linename", linename])
-        if dependency:
-            cmd_csv.extend(["--dependcy", dependency])
-        if ac_config:
-            cmd_csv.extend(["--ac", ac_config])
+        cmd_csv = _build_cmd(raw_path, img_path, chart_type, linename=linename, dependency=dependency, csv_path=csv_path, ac_config=ac_config)
         r = run_turbocharts(cmd_csv, timeout_seconds=120)
         if r.returncode == 0 and Path(csv_path).exists():
             artifacts.append({"type": "csv", "path": csv_path, "name": Path(csv_path).name,

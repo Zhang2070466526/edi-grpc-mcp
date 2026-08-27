@@ -23,7 +23,7 @@ from starlette.responses import FileResponse, JSONResponse
 
 from servers import mcp
 from servers.utils import get_server_base_url
-from servers.multimodal_vision.validators import validate_image_path
+from servers.multimodal_vision.validators import validate_image_path, IMAGE_MIME_MAP
 from servers.multimodal_vision.workspace_copy import OPENCLAW_WORKSPACE_PATH
 
 load_dotenv()
@@ -35,10 +35,9 @@ _TOKEN_TTL = 600
 _IMAGE_TOKENS: dict[str, dict[str, Any]] = {}
 _TOKEN_LOCK = threading.RLock()
 
-_MIME_TYPES: dict[str, str] = {
-    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-    ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
-}
+_MIME_TYPES = IMAGE_MIME_MAP
+# serve_image 用：图片 MIME + .svg（SVG 不在 IMAGE_MIME_MAP 中）
+_MEDIA_TYPES = {**IMAGE_MIME_MAP, ".svg": "image/svg+xml"}
 
 
 # ═══════════════════════════════════════════════════════════
@@ -141,11 +140,9 @@ async def serve_image(request: Request) -> FileResponse | JSONResponse:
         return JSONResponse({"error": "file gone"}, status_code=404)
 
     ext = image_path.suffix.lower()
-    media_map = {**{k: v for k, v in _MIME_TYPES.items()},
-                 ".svg": "image/svg+xml"}
     return FileResponse(
         image_path,
-        media_type=media_map.get(ext, "application/octet-stream"),
+        media_type=_MEDIA_TYPES.get(ext, "application/octet-stream"),
         filename=image_path.name,
         content_disposition_type="inline",
         headers={"Cache-Control": "private, max-age=600", "X-Content-Type-Options": "nosniff"},

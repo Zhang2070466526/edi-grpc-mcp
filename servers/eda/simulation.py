@@ -56,17 +56,27 @@ atexit.register(_SIM_EXECUTOR.shutdown, wait=False)
 # 任务保留 2 小时
 _TASK_TTL = 7200
 
+# list_eda_tasks 的合法状态过滤值（模块级常量，避免每次调用重建）
+_VALID_TASK_STATUSES = {"QUEUED", "QUEUE_TIMEOUT", "ACCEPTED", "RUNNING", "SUCCEEDED",
+                        "FAILED", "TIMEOUT", "STREAM_DISCONNECTED", "REJECTED",
+                        "PROTOCOL_MISMATCH", "GRPC_UNAVAILABLE"}
+
+
+def _prune_tasks_locked() -> None:
+    """（需持 _sim_lock）清理过期任务。"""
+    now = time.time()
+    expired = [
+        tid for tid, t in _sim_tasks.items()
+        if t.get("finished_at") is not None and now - t["finished_at"] > _TASK_TTL
+    ]
+    for tid in expired:
+        del _sim_tasks[tid]
+
 
 def _prune_tasks() -> None:
     """清理过期任务（超过 TTL 的已完成/失败任务）。"""
-    now = time.time()
     with _sim_lock:
-        expired = [
-            tid for tid, t in _sim_tasks.items()
-            if t.get("finished_at") is not None and now - t["finished_at"] > _TASK_TTL
-        ]
-        for tid in expired:
-            del _sim_tasks[tid]
+        _prune_tasks_locked()
 
 
 def _task_completed(task: dict[str, Any]) -> bool:
@@ -87,9 +97,27 @@ def _current_ads_output(task: dict) -> str:
     return "".join(task.get("log_chunks", []))
 
 
-def _get_task_snapshot(task_id: str) -> dict[str, Any] | None:
-    """获取任务快照，避免并发修改问题。"""
+def _task_not_found(task_id: str) -> dict[str, Any]:
+    """统一的 TASK_NOT_FOUND 响应（status/result 查询共用）。"""
+    return {
+        "success": False,
+        "completed": True,
+        "task_success": None,
+        "outcome_known": False,
+        "error_code": "TASK_NOT_FOUND",
+        "task_id": task_id,
+        "status": "UNKNOWN",
+        "message": "仿真任务不存在、已经过期或服务已经重启",
+        "ads_output": "",
+        "log_complete": False,
+    }
+
+
+def _get_task_snapshot(task_id: str, *, prune: bool = False) -> dict[str, Any] | None:
+    """获取任务快照，避免并发修改问题。prune=True 时在单锁内先清理过期任务。"""
     with _sim_lock:
+        if prune:
+            _prune_tasks_locked()
         task = _sim_tasks.get(task_id)
         if task is None:
             return None
@@ -297,37 +325,25 @@ def get_simulation_async_status(task_id: str) -> dict[str, Any]:
          "outcome_known": False, "status": "RUNNING", "ads_output": "...", "log_complete": False}
         completed=True 且 outcome_known=False 表示 MCP 已退出但 EDI 结果未知（如 TIMEOUT）
     """
-    _prune_tasks()
-    task = _get_task_snapshot(task_id)
+    task = _get_task_snapshot(task_id, prune=True)
 
     if task is None:
-        return {
-            "success": False,
-            "completed": True,
-            "task_success": None,
-            "outcome_known": False,
-            "error_code": "TASK_NOT_FOUND",
-            "task_id": task_id,
-            "status": "UNKNOWN",
-            "message": "仿真任务不存在、已经过期或服务已经重启",
-            "ads_output": "",
-            "log_complete": False,
-        }
+        return _task_not_found(task_id)
 
     completed = _task_completed(task)
 
-    gprc_outcome_known = bool(
+    grpc_outcome_known = bool(
         completed and task.get("result") is not None
         and isinstance(task["result"], dict)
         and task["result"].get("outcome_known", False)
     )
-    gprc_task_success = task["result"].get("task_success") if gprc_outcome_known else None
+    grpc_task_success = task["result"].get("task_success") if grpc_outcome_known else None
 
     return {
         "success": True,
         "completed": completed,
-        "task_success": gprc_task_success,
-        "outcome_known": gprc_outcome_known,
+        "task_success": grpc_task_success,
+        "outcome_known": grpc_outcome_known,
         "task_id": task_id,
         "client_uuid": task["client_uuid"],
         "status": task["status"],
@@ -355,22 +371,10 @@ def get_simulation_async_result(task_id: str) -> dict[str, Any]:
                   "status": "RUNNING", "ads_output": "部分日志..."}
         超时/断连：{"success": True, "outcome_known": False, "task_success": null}
     """
-    _prune_tasks()
-    task = _get_task_snapshot(task_id)
+    task = _get_task_snapshot(task_id, prune=True)
 
     if task is None:
-        return {
-            "success": False,
-            "completed": True,
-            "task_success": None,
-            "outcome_known": False,
-            "error_code": "TASK_NOT_FOUND",
-            "task_id": task_id,
-            "status": "UNKNOWN",
-            "message": "仿真任务不存在、已经过期或服务已经重启",
-            "ads_output": "",
-            "log_complete": False,
-        }
+        return _task_not_found(task_id)
 
     completed = _task_completed(task)
 
@@ -488,14 +492,11 @@ def list_eda_tasks(status: str = "") -> dict[str, Any]:
         {"success": True, "total": 3, "tasks": [
             {"task_id": "abc", "status": "RUNNING", "project_path": "...", ...}]}
     """
-    _VALID_STATUSES = {"", "QUEUED", "QUEUE_TIMEOUT", "ACCEPTED", "RUNNING", "SUCCEEDED",
-                       "FAILED", "TIMEOUT", "STREAM_DISCONNECTED", "REJECTED",
-                       "PROTOCOL_MISMATCH", "GRPC_UNAVAILABLE"}
     status_filter = status.strip().upper()
-    if status_filter and status_filter not in _VALID_STATUSES:
+    if status_filter and status_filter not in _VALID_TASK_STATUSES:
         return {"success": False,
                 "error_code": "INVALID_STATUS",
-                "message": f"无效状态: {status}，可选: {sorted(s for s in _VALID_STATUSES if s)}"}
+                "message": f"无效状态: {status}，可选: {sorted(_VALID_TASK_STATUSES)}"}
     _prune_tasks()
     snapshot_ids: list[str] = []
     with _sim_lock:

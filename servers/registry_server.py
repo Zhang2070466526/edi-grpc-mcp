@@ -9,6 +9,8 @@
     close_edi_project             关闭 .epp 工程
     get_project_summary           工程概览
     analyze_variables             分析变量定义和引用关系
+    list_schematic_components     查询原理图全部器件（gRPC）
+    get_schematic_component_info  按实例名查询器件完整信息
 
   仿真：
     simulate_project              执行工程仿真（同步）
@@ -38,6 +40,7 @@
 
   启动：
     launch_edi                    启动 EDI 客户端
+    get_service_status            返回 gRPC 通道状态、队列信息
 
   ANSYS：
     open_hfss_project             打开 .aedt HFSS 项目
@@ -46,6 +49,13 @@
     get_hfss_project_info         获取 HFSS 项目信息
     start_hfss_analysis_async     异步启动 HFSS 仿真
     get_hfss_analysis_status      查询 HFSS 仿真状态
+
+  CST：
+    cst_solve_async               异步求解 .cst 模型
+    cst_solve_query               查询求解任务（进度+结果）
+    cst_export_snp                导出 S 参数 (.sNp)
+    cst_export_farfield           导出远场方向图（自动判断求解）
+    cst_export_farfield_query     查询远场导出任务（进度+结果）
 
   图片：
     show_image                    读取本地图片，返回 MCP ImageContent
@@ -82,6 +92,7 @@ import servers.ansys.project_manage       # noqa: F401
 import servers.ansys.run_analysis         # noqa: F401
 import servers.multimodal_vision          # noqa: F401 — show_image + copy + analyze + open_document
 import servers.report                     # noqa: F401 — generate_simulation_report
+import servers.cst                        # noqa: F401 — cst_solve + cst_export_snp
 # 知识库暂不注册为 MCP 工具，仅 Chat 内部使用
 # try:
 #     import servers.knowledge

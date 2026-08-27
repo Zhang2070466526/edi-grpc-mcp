@@ -15,7 +15,6 @@ from __future__ import annotations
 import asyncio
 import json as _json
 import logging
-import os as _os
 import threading
 import time
 import uuid
@@ -968,6 +967,11 @@ _TOOL_LABELS: dict[str, str] = {
     "replace_port_component": "替换端口",
     "attach_out_component": "挂载Out器件",
     "replace_schematic_from_file": "替换原理图",
+    "cst_solve_async": "CST求解",
+    "cst_solve_query": "CST求解查询",
+    "cst_export_snp": "CST导出S参数",
+    "cst_export_farfield": "CST导出远场方向图",
+    "cst_export_farfield_query": "CST导出远场查询",
 }
 if OPENCLAW_WORKSPACE_PATH is not None:
     _TOOL_LABELS["copy_image_to_workspace"] = "复制到工作区"

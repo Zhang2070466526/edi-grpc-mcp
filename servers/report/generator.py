@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 
 from servers import mcp
 from servers.settings import get_settings
-from servers.utils import build_file_link, tool_error
+from servers.utils import build_file_link, is_network_path, tool_error
 from servers.multimodal_vision.document import register_document_url
 
 _error = tool_error  # 别名，内部校验函数使用
@@ -48,7 +48,7 @@ def _validate_output(path: str, overwrite: bool) -> tuple[str, str] | tuple[None
     p = Path(path)
     if not p.is_absolute():
         return None, _error("INVALID_OUTPUT_PATH", "output_path 必须是绝对路径")
-    if str(p).startswith(r"\\") or str(p).startswith("//"):
+    if is_network_path(p):
         return None, _error("INVALID_OUTPUT_PATH", "禁止网络路径")
     ext = p.suffix.lower()
     if ext not in _ALLOWED_EXTENSIONS:
@@ -116,7 +116,7 @@ def _validate_charts(charts: list | None) -> tuple[list | None, list[str], dict 
         p = Path(path)
         if not p.is_absolute():
             return None, warnings, _error("INVALID_CHART_PATH", f"charts[{i}].path 必须是绝对路径")
-        if str(p).startswith(r"\\") or str(p).startswith("//"):
+        if is_network_path(p):
             return None, warnings, _error("INVALID_CHART_PATH", "禁止网络路径")
         if p.suffix.lower() not in _IMAGE_EXTENSIONS:
             return None, warnings, _error("INVALID_CHART_PATH",
@@ -181,7 +181,7 @@ def _validate_schematic(path: str) -> tuple[str | None, bool, dict | None]:
     p = Path(path)
     if not p.is_absolute():
         return None, False, _error("INVALID_REPORT_PARAMETERS", "schematic 必须是绝对路径")
-    if str(p).startswith(r"\\") or str(p).startswith("//"):
+    if is_network_path(p):
         return None, False, _error("INVALID_REPORT_PARAMETERS", "禁止网络路径")
     if p.suffix.lower() not in _IMAGE_EXTENSIONS:
         return None, False, _error("INVALID_REPORT_PARAMETERS",

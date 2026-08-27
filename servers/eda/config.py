@@ -29,6 +29,9 @@ _settings = _get_settings()
 EDA_GRPC_SERVER = _settings.eda_grpc_server
 MCP_TRANSPORT = _settings.mcp_transport if _settings.mcp_transport else None
 
+# 仿真器件目录类型（SP/HB/XDB），供 simulation_components 与 project_manage 共用
+SIM_COMPONENT_TYPES = {"SParameter", "HarmonicBalance", "XDB"}
+
 # ── 应用根目录检测 ──
 
 if getattr(_sys, "frozen", False):
@@ -118,19 +121,6 @@ class ProjectReader:
         if ".." in name or "/" in name or "\\" in name:
             return None
         return self.read_text(f"schematics/{name}/schematic.ep")
-
-    def read_netlist(self) -> str | None:
-        """读取工程网表文件内容。"""
-        return self.read_text("netlist.log")
-
-    def file_exists(self, relative_path: str) -> bool:
-        """检查工程内文件是否存在。"""
-        return (self.workspace / relative_path).is_file()
-
-    def file_size(self, relative_path: str) -> int:
-        """返回工程内文件的字节大小。"""
-        p = self.workspace / relative_path
-        return p.stat().st_size if p.is_file() else 0
 
 
 # ---------------------------------------------------------------------------

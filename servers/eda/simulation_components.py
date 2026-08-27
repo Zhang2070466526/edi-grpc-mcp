@@ -31,13 +31,15 @@ from servers.eda.config import (
     ProjectReader,
     parse_components,
     validate_project_path,
+    SIM_COMPONENT_TYPES,
 )
 from servers.eda.grpc_client import call_grpc
+from servers.utils import is_network_path, tool_error
 from servers import mcp
 
 _logger = logging.getLogger("sim_components")
 
-_COMPONENT_TYPES = {"SParameter", "HarmonicBalance", "XDB"}
+_COMPONENT_TYPES = SIM_COMPONENT_TYPES
 _ACTIVE_STATES = {"NORMAL", "DISABLED", "SHORTED"}
 
 
@@ -359,16 +361,16 @@ def _find_component_by_instance(
     """
     target = instance_name.strip()
     if not target:
-        return None, _component_error("EMPTY_INSTANCE_NAME",
+        return None, tool_error("EMPTY_INSTANCE_NAME",
                                        "instance_name 不能为空")
 
     try:
         reader = ProjectReader(project_path)
     except FileNotFoundError:
-        return None, _component_error("PROJECT_NOT_FOUND",
+        return None, tool_error("PROJECT_NOT_FOUND",
                                        "工程文件不存在")
     except ValueError:
-        return None, _component_error("INVALID_PROJECT_PATH",
+        return None, tool_error("INVALID_PROJECT_PATH",
                                        "project_path 必须是 .epp 文件")
 
     matches: list[dict] = []
@@ -382,12 +384,12 @@ def _find_component_by_instance(
             matches.append({**comp, "schematic": sname})
 
     if not matches:
-        return None, _component_error("COMPONENT_NOT_FOUND",
+        return None, tool_error("COMPONENT_NOT_FOUND",
                                        f"在已保存工程中未找到器件实例 {target}",
                                        hint="请确认 EDI 中已保存工程，或使用 list_simulation_components 查看当前器件")
 
     if len(matches) > 1:
-        return None, _component_error("AMBIGUOUS_INSTANCE_NAME",
+        return None, tool_error("AMBIGUOUS_INSTANCE_NAME",
                                        f"发现多个名为 {target} 的器件",
                                        details={"matches": [
                                            {"schematic": m["schematic"],
@@ -449,36 +451,25 @@ def _param_error(
     parameter: str = "",
     **extra,
 ) -> dict:
-    """构建器件参数校验的错误响应（含 component_type/parameter 等 details）。"""
-    result: dict = {
-        "success": False,
-        "error_code": code,
-        "message": message,
-    }
+    """构建器件参数校验错误响应（等价于 tool_error + 参数 details）。"""
+    kwargs = dict(extra)
     if component_type:
-        result.setdefault("details", {})["component_type"] = component_type
+        kwargs["component_type"] = component_type
     if parameter:
-        result.setdefault("details", {})["parameter"] = parameter
-    if extra:
-        result.setdefault("details", {}).update(extra)
-    return result
+        kwargs["parameter"] = parameter
+    return tool_error(code, message, **kwargs)
 
 
-def _component_error(code: str, message: str, **extra) -> dict:
-    """构建器件查找类错误响应（如 COMPONENT_NOT_FOUND）。"""
-    result: dict = {"success": False, "error_code": code, "message": message}
-    if extra:
-        result["details"] = extra
-    return result
-
-
-def _find_sim_components(project_path: str, component_type: str = "", schematic_name: str = "", include_hidden: bool = False) -> list[dict]:
+def _find_sim_components(project_path: str, component_type: str = "", schematic_name: str = "",
+                         include_hidden: bool = False, reader: ProjectReader | None = None) -> list[dict]:
     """Local lookup of all components from saved project files.
 
     schematic_name 为空时遍历所有原理图，指定时只读取该原理图。
     include_hidden=False 时过滤 visible=false 的隐藏参数。
+    reader 为 None 时内部创建；否则复用（避免调用方二次实例化）。
     """
-    reader = ProjectReader(project_path)
+    if reader is None:
+        reader = ProjectReader(project_path)
     schematics = reader.list_schematics() or []
     if schematic_name:
         schematics = [s for s in schematics if s == schematic_name]
@@ -610,7 +601,8 @@ def list_simulation_components(
     except ValueError:
         return {"success": False, "error_code": "INVALID_PROJECT_PATH",
                 "message": "project_path 必须是 .epp 文件"}
-    components = _find_sim_components(project_path, component_type, schematic_name=schematic_name, include_hidden=include_hidden)
+    components = _find_sim_components(project_path, component_type, schematic_name=schematic_name,
+                                      include_hidden=include_hidden, reader=reader)
     if name_contains:
         components = [c for c in components
                       if name_contains.lower() in c["instance_name"].lower()]
@@ -746,10 +738,6 @@ def update_simulation_component(
             return prepare_error
     else:
         # Basic validation — EDI handles business rules for non-catalog types
-        if not isinstance(parameters, dict) or not parameters:
-            return {"success": False,
-                    "error_code": "INVALID_PARAMETERS",
-                    "message": "parameters 必须是非空对象"}
         for k, v in parameters.items():
             if not isinstance(v, dict) or "value" not in v:
                 return {"success": False,
@@ -999,7 +987,7 @@ def replace_schematic_from_file(
     sch_path = Path(schematic_path).expanduser().resolve()
 
     # 仅允许本地文件，拒绝网络路径（UNC）
-    if str(sch_path).startswith(r"\\") or str(sch_path).startswith("//"):
+    if is_network_path(sch_path):
         return {"success": False,
                 "error_code": "INVALID_PATH",
                 "message": f"禁止访问网络路径: {sch_path}"}

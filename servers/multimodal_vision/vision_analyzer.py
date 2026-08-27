@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 
 from servers import mcp
 from servers.utils import tool_error
-from servers.multimodal_vision.validators import validate_image_path, validate_image_content
+from servers.multimodal_vision.validators import validate_image_path, validate_image_content, IMAGE_MIME_MAP
 
 from servers.settings import get_settings
 
@@ -35,10 +35,7 @@ VISION_TIMEOUT = _cfg.vision_timeout
 VISION_MAX_MB = _cfg.vision_max_mb
 
 _VISION_ALLOWED = {".png", ".jpg", ".jpeg", ".webp"}
-_MIME_MAP: dict[str, str] = {
-    ".png": "image/png", ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg", ".webp": "image/webp",
-}
+_MIME_MAP = IMAGE_MIME_MAP
 _VISION_SEMAPHORE = threading.BoundedSemaphore(2)
 
 _SYSTEM_PROMPT = (

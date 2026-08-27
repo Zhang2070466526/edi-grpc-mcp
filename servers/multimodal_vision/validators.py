@@ -10,8 +10,16 @@ from pathlib import Path
 
 from PIL import Image
 
+from servers.utils import is_network_path
+
 # 允许的图片扩展名
 _ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+
+# 图片扩展名 → MIME 类型（供 image_display / vision_analyzer / workspace_copy 复用）
+IMAGE_MIME_MAP: dict[str, str] = {
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
+}
 
 
 def validate_image_path(image_path: str, allowed: set[str] | None = None) -> Path:
@@ -28,7 +36,7 @@ def validate_image_path(image_path: str, allowed: set[str] | None = None) -> Pat
     """
     exts = allowed or _ALLOWED_EXTENSIONS
     path = Path(image_path).expanduser().resolve()
-    if str(path).startswith(r"\\") or str(path).startswith("//"):
+    if is_network_path(path):
         raise PermissionError(f"禁止访问网络路径: {path}")
     if not path.is_file():
         raise FileNotFoundError(f"图片不存在: {path}")

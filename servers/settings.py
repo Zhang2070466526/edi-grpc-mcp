@@ -105,9 +105,6 @@ class Settings:
         # ── 传输方式 ──
         if self.mcp_transport not in ("stdio", "streamable-http"):
             issues.append(f"MCP_TRANSPORT 不支持（streamable-http / stdio）: {self.mcp_transport}")
-        # ── MCP 端口 ──
-        if self.mcp_port < 1 or self.mcp_port > 65535:
-            issues.append(f"MCP_PORT 越界: {self.mcp_port}")
         return issues
 
 

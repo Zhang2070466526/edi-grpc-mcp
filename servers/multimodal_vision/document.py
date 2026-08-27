@@ -19,7 +19,7 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse
 
 from servers import mcp
-from servers.utils import get_server_base_url
+from servers.utils import get_server_base_url, is_network_path
 
 load_dotenv()
 _logger = logging.getLogger("multimodal.document")
@@ -50,7 +50,7 @@ def _validate_path(file_path: str, allowed: set[str]) -> Path:
     if not raw.is_absolute():
         raise ValueError("file_path 必须是绝对路径")
     p = raw.resolve()
-    if str(p).startswith(r"\\") or str(p).startswith("//"):
+    if is_network_path(p):
         raise PermissionError(f"禁止访问网络路径: {p}")
     if not p.is_file():
         raise FileNotFoundError(f"文件不存在: {p}")
@@ -95,15 +95,8 @@ def register_document_url(file_path: str, disposition: str = "inline") -> str:
     供其他模块（如报告生成器）在生成文档后直接返回预览链接。
     Token 10 分钟后过期，仅本机 127.0.0.1 可访问。
     """
-    _cleanup_expired()
-    token = secrets.token_urlsafe(24)
-    with _TOKEN_LOCK:
-        _DOC_TOKENS[token] = {
-            "path": str(Path(file_path).resolve()),
-            "disposition": disposition,
-            "expires_at": time.time() + _TOKEN_TTL,
-        }
-    return f"{_base_url()}/documents/{token}"
+    _, url = _register_token(Path(file_path).resolve(), disposition)
+    return url
 
 
 # ═══════════════════════════════════════════════════════════

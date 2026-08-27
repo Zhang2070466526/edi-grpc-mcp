@@ -28,7 +28,7 @@ from typing import Any
 
 from proto import ecserver_pb2
 from servers.eda.grpc_client import call_grpc
-from servers.eda.config import ProjectReader, parse_components, validate_project_path
+from servers.eda.config import ProjectReader, parse_components, validate_project_path, SIM_COMPONENT_TYPES
 from servers import mcp
 
 
@@ -146,28 +146,19 @@ def get_project_summary(
     schematics_info = {"count": len(schematics), "names": schematics}
 
     components_info: dict[str, Any] = {"total": 0, "by_type": {}}
+    simulation_info: list[dict] = []
+    # 单遍遍历：每个原理图只读+解析一次，同时统计组件与仿真配置
     for sname in schematics:
         raw = reader.read_schematic(sname)
         if not raw:
             continue
         comps = parse_components(raw)
         components_info["total"] += len(comps)
-        if include_component_types:
-            for c in comps:
-                ct = c["type"]
-                components_info["by_type"][ct] = (
-                    components_info["by_type"].get(ct, 0) + 1
-                )
-
-    simulation_info: list[dict] = []
-    _SIM_TYPES = {"SParameter", "HarmonicBalance", "XDB"}
-    for sname in schematics:
-        raw = reader.read_schematic(sname)
-        if not raw:
-            continue
-        for comp in parse_components(raw):
+        for comp in comps:
             ct = comp.get("type", "")
-            if ct in _SIM_TYPES:
+            if include_component_types:
+                components_info["by_type"][ct] = components_info["by_type"].get(ct, 0) + 1
+            if ct in SIM_COMPONENT_TYPES:
                 pi = comp.get("paramsinfo", {})
                 entry: dict[str, Any] = {"component_type": ct, "instance_name": comp.get("name", "")}
                 for key, info in pi.items():
@@ -218,12 +209,16 @@ def analyze_variables(project_path: str) -> dict[str, Any]:
     variables: list[dict] = []
     references: list[dict] = []
     sweeps: list[dict] = []
+    all_comps: dict[str, list[dict]] = {}
 
+    # 第一遍：收集所有原理图的 Var 定义、Sweep 配置，并缓存组件
     for sname in reader.list_schematics() or []:
         raw = reader.read_schematic(sname)
         if not raw:
             continue
-        for comp in parse_components(raw):
+        comps = parse_components(raw)
+        all_comps[sname] = comps
+        for comp in comps:
             ct = comp.get("type", "")
             params = comp.get("paramsinfo", {})
 
@@ -258,15 +253,15 @@ def analyze_variables(project_path: str) -> dict[str, Any]:
                     "targets": targets,
                 })
 
-        # 查找参数值引用了变量的元件
-        # 兼容两种引用方式：Var 实例名 和 Var 参数名
-        var_names = {
-            value
-            for v in variables
-            for value in (v["name"], v["parameter"])
-            if value
-        }
-        for comp in parse_components(raw):
+    # 第二遍：在所有变量收集完后，跨原理图查找引用（避免后定义变量匹配不到前文引用）
+    var_names = {
+        value
+        for v in variables
+        for value in (v["name"], v["parameter"])
+        if value
+    }
+    for comps in all_comps.values():
+        for comp in comps:
             params = comp.get("paramsinfo", {})
             for pkey, pinfo in params.items():
                 val = pinfo.get("value", "")

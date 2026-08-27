@@ -23,7 +23,7 @@ class TestParsePayloadJson:
         from servers.eda.grpc_client import _parse_payload_json
         d, err = _parse_payload_json("not json")
         assert err is not None
-        assert "raw_payload" in d
+        assert d == {}  # 失败时返回空 dict，不泄漏原始 payload
 
     def test_array_not_dict(self):
         from servers.eda.grpc_client import _parse_payload_json

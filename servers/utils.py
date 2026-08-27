@@ -32,6 +32,12 @@ def validate_file(path: str, extensions: tuple[str, ...] = ()) -> str:
     return str(p.resolve())
 
 
+def is_network_path(path) -> bool:
+    """判断路径是否为网络路径（UNC \\\\ 或 URL //），此类路径无法本地校验。"""
+    s = str(path)
+    return s.startswith(r"\\") or s.startswith("//")
+
+
 # ── 统一错误响应 ──
 
 def tool_error(code: str, message: str, retryable: bool = False, **extra) -> dict[str, Any]:

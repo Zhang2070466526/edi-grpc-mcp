@@ -110,14 +110,25 @@ def open_hfss_project(
                 }
 
             if project_name in state["projects"]:
+                attach_error = None
                 pythoncom.CoInitialize()
                 try:
                     _, dtop = _attach_aedt()
                     dtop.SetActiveProject(project_name)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    attach_error = str(exc)
+                    logger.warning("SetActiveProject 失败 (%s): %s", project_name, exc)
                 finally:
                     pythoncom.CoUninitialize()
+                if attach_error is not None:
+                    # 工程已在 AEDT 中列出但激活失败，不能假装成功
+                    return {
+                        "success": False, "status": "com_open_failed",
+                        "aedt_running": True, "project_opened": False,
+                        "project_name": project_name, "project_path": resolved,
+                        "method": "com", "com_error": attach_error,
+                        "message": "工程已在 AEDT 中列出，但激活失败，请重试",
+                    }
                 _OPEN_PROJECT_PATHS[project_name] = resolved
                 rc = cleanup_stale_project_lock(resolved) if lock_result["removed"] else {}
                 return {
