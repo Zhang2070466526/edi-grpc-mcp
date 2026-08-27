@@ -8,7 +8,7 @@
 
 ## 为什么用这个项目
 
-电子设计自动化（EDA）工具通常需要人工在图形界面中操作——打开工程、配置器件、执行仿真、导出结果。本项目将这些操作封装为 42 个 MCP 工具，接入 Claude Code 或 OpenClaw 后，只需用自然语言描述需求，AI 就能自动完成：
+电子设计自动化（EDA）工具通常需要人工在图形界面中操作——打开工程、配置器件、执行仿真、导出结果。本项目将这些操作封装为 48 个 MCP 工具，接入 Claude Code 或 OpenClaw 后，只需用自然语言描述需求，AI 就能自动完成：
 
 > "帮我看看 C:/Projects 下有哪些 .epp 工程，打开第一个，查看 S 参数仿真器件的配置，设置频率 1-10GHz、步长 0.1GHz，然后跑仿真"
 
@@ -34,9 +34,9 @@ AI 客户端 (Claude Code / OpenClaw)
    │  Streamable HTTP (stateless) 或 stdio
    │  POST /mcp  │  initialize → tools/list → tools/call
    ▼
-EDI MCP 服务 (FastMCP, 42 工具, 5 Resource, 5 Prompt)
+EDI MCP 服务 (FastMCP, 48 工具, 5 Resource, 5 Prompt)
    │
-   ├── EDA gRPC 工具 (15) ──→ EDI 客户端 (127.0.0.1:50055)
+   ├── EDA gRPC 工具 (19) ──→ EDI 客户端 (127.0.0.1:50055)
    │     FetchEvent ← PerformAction 异步模型，增量 ads_output
    │
    ├── TurboCharts (3) ──→ turbocharts_app.exe (subprocess)
@@ -97,7 +97,7 @@ curl http://127.0.0.1:50026/health     # 进程 + gRPC 状态
 → {"status":"ok","mcp_ready":true,"eda_grpc_ready":true}
 
 curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
-→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":42}
+→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":48}
 ```
 
 ### 客户端接入
@@ -120,7 +120,7 @@ curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
 
 | 方式 | 说明 |
 |---|---|
-| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 42 个工具 |
+| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 48 个工具 |
 | **聊天界面** | 浏览器访问 `http://127.0.0.1:50026/ui`，内置 LLM 多轮工具闭环 |
 | **Python 调用** | `from servers.eda import list_epp_projects` 直接调用 |
 
@@ -136,7 +136,9 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 
 ---
 
-## 工具一览（42 个）
+## 工具一览（48 个）
+
+> 工具数量由运行时动态统计，此处为当前快照。权威值见 `/ready` 的 `tool_count`（或 `tests/test_tool_registry.py` 的 `required` 列表）。
 
 ### 工程管理（7 个）
 
@@ -203,6 +205,16 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 | `start_hfss_analysis_async` | 异步启动 HFSS 仿真 |
 | `get_hfss_analysis_status` | 查询 HFSS 仿真状态 |
 
+### CST 电磁仿真（5 个）
+
+| 工具 | 说明 |
+|---|---|
+| `cst_solve_async` | 异步求解 .cst 模型（一次性会话） |
+| `cst_solve_query` | 查询求解任务（进度+结果） |
+| `cst_export_snp` | 导出 S 参数为 Touchstone .sNp |
+| `cst_export_farfield` | 导出远场方向图为 ASCII .txt（自动判断求解） |
+| `cst_export_farfield_query` | 查询远场导出任务（进度+结果） |
+
 ### 图表与图片
 
 | 工具 | 说明 |
@@ -241,7 +253,7 @@ Streamable HTTP 模式启用 `stateless_http=True`，服务不保留 MCP 会话�
 | 路由 | 方法 | 说明 | 响应示例 |
 |---|---|---|---|
 | `/health` | GET | 进程存活 + gRPC 连接状态 | `{"status":"ok","mcp_ready":true,"eda_grpc_ready":true}` |
-| `/ready` | GET | 服务是否完成初始化（启动中返回 503） | `{"status":"ready","transport":"streamable-http","stateless":true,"tool_count":42}` |
+| `/ready` | GET | 服务是否完成初始化（启动中返回 503） | `{"status":"ready","transport":"streamable-http","stateless":true,"tool_count":48}` |
 | `/mcp` | POST | MCP 协议端点（Streamable HTTP） | MCP JSON-RPC 响应 |
 | `/ui` | GET | 内置聊天界面 | HTML 页面 |
 | `/chat` | POST | 聊天 API（LLM 多轮工具闭环） | `{"success":true,"reply":"...","activities":[...]}` |
@@ -413,7 +425,7 @@ mcp-grpc/
 │   │   ├── resources.py                #     5 个 Resource：服务概览 / 参数目录 / 操作规则 / 服务状态 / 错误码
 │   │   └── prompts.py                  #     5 个 Prompt：检查工程 / 执行仿真 / 配置器件 / 生成报告 / 错误诊断
 │   │
-│   ├── eda/                            #   EDI gRPC 工具 (26 个)
+│   ├── eda/                            #   EDI 工程工具 (29 个)
 │   │   ├── __init__.py                 #     公共 API re-export
 │   │   ├── config.py                   #     路径检测 / S-expression 解析器 / ProjectReader
 │   │   ├── grpc_client.py              #     gRPC 通信层：FetchEvent + PerformAction 异步模型
@@ -422,7 +434,7 @@ mcp-grpc/
 │   │   ├── project_manage.py           #     工程管理：扫描/打开/关闭/元件/概述/变量分析 (7 工具)
 │   │   ├── simulation.py               #     仿真引擎：同步/异步/网表/ADS 控制器 (7 工具)
 │   │   │                               #     ThreadPoolExecutor(1) 串行执行，最多 8 个排队任务
-│   │   ├── simulation_components.py    #     仿真器件管理：9 工具（含 Out 挂载）
+│   │   ├── simulation_components.py    #     仿真器件管理：10 工具（含 Out 挂载）
 │   │   │                               #     11 步参数校验管线 + wire↔public 名称映射
 │   │   ├── simulation_component_catalog.json  # SP/HB/XDB 参数目录 v2.0
 │   │   ├── design_export.py            #     网表查看 + 原理图截图 (2 工具)
@@ -440,6 +452,12 @@ mcp-grpc/
 │   │   ├── config.py                   #     进程检测 / COM 附着 (多 ProgID 回退) / 锁文件管理
 │   │   ├── project_manage.py           #     工程打开/关闭 + AEDT 启动 + 信息查询 (4 工具)
 │   │   └── run_analysis.py             #     异步仿真队列 (单 worker), outcome_known 追踪
+│   │
+│   ├── cst/                            #   CST 电磁仿真工具 (5 个)
+│   │   ├── __init__.py                 #     公共 API re-export
+│   │   ├── cst_api.py                  #     安装检测 / API 加载 / 会话管理
+│   │   ├── simulate.py                 #     仿真求解（异步，一次性会话）
+│   │   └── result_export.py            #     结果导出（S 参数 / 远场方向图）
 │   │
 │   ├── multimodal_vision/              #   图片 + 视觉 + 文档 (6 个工具)
 │   │   ├── __init__.py                 #     条件注册 copy_image_to_workspace
@@ -462,24 +480,29 @@ mcp-grpc/
 │
 ├── docs/                               # 项目文档
 │   ├── DEPLOY.md                       #   部署指南（打包产物使用、客户端配置）
-│   ├── TOOLS_API.md                    #   工具 API（42 个工具完整签名+返回值示例）
+│   ├── TOOLS_API.md                    #   工具 API（48 个工具完整签名+返回值示例）
 │   ├── HTTP_API.md                     #   HTTP 接口（请求体、响应体、成功/失败情况）
 │   ├── IMPLEMENTATION.md               #   实现原理（通信类型、校验管线、并发控制、工具动机与依赖）
 │   ├── HANDOVER.md                     #   交接文档（架构设计、技术栈、47 条注意事项）
 │   └── EDI系统接口与外部调用汇总.md    #   EDI 系统全量对外接口
 │
-├── tests/                              # 测试套件 (212 项)
-│   ├── test_chat_service.py            #   27 项：会话/校验/重复调用/上下文/show_image
-│   ├── test_simulation_components.py   #   85 项：参数目录/Schema/校验管线/wire转换
-│   ├── test_simulation.py              #   14 项：任务注册表/事件回调/生命周期
+├── tests/                              # 测试套件 (282 项)
+│   ├── test_chat_service.py            #   28 项：会话/校验/重复调用/上下文/show_image
+│   ├── test_simulation_components.py   #   89 项：参数目录/Schema/校验管线/wire转换
+│   ├── test_simulation.py              #   17 项：任务注册表/事件回调/生命周期
 │   ├── test_grpc_client.py             #   24 项：终端结果/日志累积/异常处理
-│   ├── test_report_generator.py        #   23 项：输出路径/模型名/spec_table/charts/components
+│   ├── test_report_generator.py        #   26 项：输出路径/模型名/spec_table/charts/components
 │   ├── test_mcp_content.py             #   13 项：Resources/Prompts 直接调用+MCP协议冒烟
 │   ├── test_tool_registry.py           #   7 项：完整工具注册+Chat一致性的双重验证
 │   ├── test_project_reader.py          #   5 项：S-expression 解析/元件提取
 │   ├── test_component_tools.py         #   4 项：list/过滤/分页/参数查询
-│   ├── test_chat_service.py            #   27 项
+│   ├── test_compare_results.py         #   2 项：多 RAW 对比对齐/插值参考轴
+│   ├── test_task_runner.py             #   9 项：异步队列生命周期/队列满/清理
+│   ├── test_cst.py                     #   22 项：共享函数/静态解析/查询返回/导出流程 mock
 │   ├── test_turbocharts_runner.py      #   3 项：串行执行器超时范围
+│   ├── test_utils.py                   #   12 项：文件校验/错误响应/地址管理/链接生成
+│   ├── test_settings.py                #   10 项：环境变量读取/范围限制/启动校验
+│   ├── test_ansys.py                   #   9 项：HFSS 队列迁移后逻辑（mock COM/AEDT）
 │   └── test_health.py                  #   2 项：TCP 检查
 │
 ├── scripts/                            # 构建与启动脚本
@@ -504,27 +527,32 @@ mcp-grpc/
 
 | 测试文件 | 覆盖范围 | 项数 |
 |---|---|---|
-| `test_simulation_components.py` | 参数目录 / Schema 查询 / 11 步校验 / wire 转换 / 权限 / 别名冲突 | 85 |
-| `test_chat_service.py` | 会话隔离 / 工具白名单 / 重复保护 / 上下文更新 / 消息裁剪 | 27 |
+| `test_simulation_components.py` | 参数目录 / Schema 查询 / 11 步校验 / wire 转换 / 权限 / 别名冲突 | 89 |
+| `test_chat_service.py` | 会话隔离 / 工具白名单 / 重复保护 / 上下文更新 / 消息裁剪 | 28 |
 | `test_grpc_client.py` | 终端结果构建 / 日志累积 / 任务隔离 / 异常处理 / 协议不匹配 | 24 |
-| `test_report_generator.py` | 输出路径 / 模型名 / spec_table / charts / components / timeout | 23 |
-| `test_simulation.py` | 任务注册表 / 事件回调 / TaskLifecycle / TASK_NOT_FOUND | 14 |
+| `test_report_generator.py` | 输出路径 / 模型名 / spec_table / charts / components / timeout | 26 |
+| `test_simulation.py` | 任务注册表 / 事件回调 / TaskLifecycle / TASK_NOT_FOUND | 17 |
 | `test_mcp_content.py` | Resources 结构 / Prompts 参数校验 / MCP 协议 list/read/get | 13 |
 | `test_tool_registry.py` | 完整注册验证 / Chat 一致性 / 破坏性工具 / 工具数动态统计 | 7 |
 | `test_project_reader.py` | S-expression 解析 / 元件提取 | 5 |
 | `test_component_tools.py` | 元件列表 / 类型过滤 / 分页 / 参数查询 | 4 |
 | `test_turbocharts_runner.py` | 超时范围校验 | 3 |
 | `test_health.py` | TCP 连接检查 | 2 |
-| `test_chat_service.py` | 27 项 | 27 |
+| `test_compare_results.py` | 多 RAW 对比对齐 / 插值参考轴校验 | 2 |
+| `test_task_runner.py` | 异步队列生命周期 / 结果写回 / 队列满 / 清理 | 9 |
+| `test_cst.py` | 共享函数 / 静态解析 / 查询返回结构 / 导出流程 mock | 22 |
+| `test_utils.py` | 文件校验 / 错误响应 / 地址管理 / 链接生成 | 12 |
+| `test_settings.py` | 环境变量读取 / 范围限制 / 启动校验 | 10 |
+| `test_ansys.py` | HFSS 队列迁移后逻辑（mock COM / AEDT） | 9 |
 
 ```powershell
-uv run pytest -q                 # 全量 212 项
+uv run pytest -q                 # 全量 282 项
 uv run pytest tests/ -v          # 详细输出
 uv run pytest tests/test_simulation_components.py -v  # 单文件
 ```
 
 ```powershell
-uv run pytest -q                 # 全量 212 项
+uv run pytest -q                 # 全量 282 项
 uv run pytest tests/ -v          # 详细输出
 ```
 
@@ -545,7 +573,7 @@ powershell -File scripts/build.ps1  # PyInstaller
 | 文档 | 说明 |
 |---|---|
 | [部署指南](./docs/DEPLOY.md) | 打包产物使用、客户端配置 |
-| [工具 API](./docs/TOOLS_API.md) | 全部 42 个工具参数、返回值、示例 |
+| [工具 API](./docs/TOOLS_API.md) | 全部 48 个工具参数、返回值、示例 |
 | [HTTP 接口](./docs/HTTP_API.md) | 全部 HTTP 路由的请求体、响应体、成功/失败情况 |
 | [实现原理](./docs/IMPLEMENTATION.md) | 5 种通信类型、校验管线、并发控制、工具动机与依赖 |
 | [交接文档](./docs/HANDOVER.md) | 架构设计、技术栈、扩展开发、47 条注意事项 |

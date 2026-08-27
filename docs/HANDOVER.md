@@ -43,7 +43,7 @@ servers/
   resources_prompts/       # 5 个 Resource + 5 个 Prompt
   multimodal_vision/      # 图片 + 视觉分析 + 文档工具
   report/                 # 仿真报告生成
-  eda/                   # EDI 工程工具（26 个）
+  eda/                   # EDI 工程工具（29 个）
     __init__.py           # 公共 API + 工具清单
     config.py             # 配置 + ProjectReader + S-expression
     grpc_client.py        # gRPC 通信层（FetchEvent → PerformAction）
@@ -62,6 +62,10 @@ servers/
     config.py             # 进程检测/COM 附着/锁文件
     project_manage.py     # 工程打开/关闭/启动/信息
     run_analysis.py       # 异步仿真
+  cst/                    # CST 电磁仿真工具（5 个）
+    cst_api.py            # 安装检测/API 加载/会话管理
+    simulate.py           # 仿真求解（异步，一次性会话）
+    result_export.py      # 结果导出（S 参数 / 远场方向图）
   chat/                   # 聊天模块
     service.py            # 聊天服务（会话/LLM/工具闭环）
     routes.py             # Web 路由（/health /chat /ui /tools/list）
@@ -81,11 +85,13 @@ README.md                # 项目主文档
 
 Python 3.12+ / uv 包管理 / FastMCP (mcp >= 1.0.0) / grpcio >= 1.81.0 / protobuf >= 7.35.0 / python-dotenv / httpx / matplotlib / numpy / psutil / pywin32
 
-PyPI: https://pypi.org/project/edi-mcp/  |  当前版本：0.1.5
+CST 电磁仿真依赖：CST 官方 Python 接口（cst.interface / cst.results，通过注册表定位，需本机安装 CST）
+
+PyPI: https://pypi.org/project/edi-mcp/  |  当前版本：0.1.6
 
 ## MCP 工具清单
 
-共 42 个工具（含 1 个条件注册），按功能分 10 类：
+工具总数随版本变化（当前 48 个，含 1 个条件注册，以运行时 `/ready` 的 `tool_count` 为准），按功能分 11 类：
 
 | 分类 | 数量 | 说明 |
 |---|---|---|
@@ -95,6 +101,7 @@ PyPI: https://pypi.org/project/edi-mcp/  |  当前版本：0.1.5
 | 导出分析 | 2 | 导出网表、截图原理图 |
 | 模型 / 启动 / 诊断 | 3 | 模型替换、启动 EDI、服务诊断 |
 | ANSYS HFSS | 6 | AEDT 工程开关、HFSS 异步仿真 |
+| CST 电磁仿真 | 5 | 异步求解 .cst、导出 S 参数 / 远场方向图 |
 | 图表 | 3 | RAW 曲线、转图、结果对比 |
 | 图片 | 3 | 显示、视觉分析、复制到工作区 |
 | 文档 | 1 | 打开本地文档 |
@@ -134,6 +141,7 @@ gRPC 工具：AI 客户端 -> MCP 工具 -> grpc_client.call_grpc() -> PerformAc
 - EDA gRPC 操作：全局 RLock，最大并发 1
 - 文件读取：允许并发（最多 4）
 - Turbocharts：BoundedSemaphore(1)
+- CST 求解：TaskRunner 单 worker 串行（异步任务队列）
 - 单实例控制：启动时检查端口
 
 ## 测试
@@ -254,6 +262,7 @@ python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto 
 23. matplotlib.use("Agg") 必须在 import matplotlib.pyplot 之前
 24. Pillow AVIF/WebP 编码器已通过 .spec excludes 排除
 25. 打包时自动过滤敏感配置（LLM_API_KEY 等），强制 MCP_TRANSPORT=streamable-http
+    · excludes 不能排除 `unittest`：matplotlib 依赖的 pyparsing.testing 会 `import unittest`，排除后 exe 启动报 `ModuleNotFoundError`
 
 ### 重启与恢复
 26. 重启后旧 MCP session 失效，客户端需重新 initialize
@@ -304,10 +313,16 @@ python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto 
 55. Streamlit 界面：`streamlit run servers/knowledge/knowledge_web.py`
 56. 安装依赖：`pip install chromadb langchain langchain-community langchain-text-splitters dashscope streamlit`
 
+### CST 电磁仿真
+57. CST 官方 Python 接口通过注册表定位（CST DESIGN ENVIRONMENT_AMD64.exe），需本机安装 CST
+58. 求解与远场导出采用一次性会话（连接 → run_solver → 保存/导远场 → 关闭），不保持会话复用；导出 S 参数无会话直接读结果
+59. CST 求解/导出逻辑原在参考脚本 `cst_libraries.py` 中，现已全部抽取到 `simulate.py`（求解）与 `result_export.py`（S 参数 + 远场方向图），参考脚本已删除
+60. 异步求解复用通用 `TaskRunner`（`servers/task_runner.py`），EDA/HFSS 后续也应迁移过来消除重复
+
 ## 维护人
 
 - 负责人：--
-- 更新时间：2026-08-07
-- 当前版本：0.1.5
+- 更新时间：2026-08-18
+- 当前版本：0.1.6
 
 

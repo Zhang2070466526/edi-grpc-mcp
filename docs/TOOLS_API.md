@@ -21,6 +21,7 @@ from servers.eda.project_manage import list_epp_projects
 - **[导出与分析（2 个）](#导出与分析2个)**：导出网表、截图原理图
 - **[模型与启动（3 个）](#模型与启动3个)**：批量替换模型、启动 EDI、服务诊断
 - **[ANSYS HFSS（6 个）](#ansys-hfss6个)**：AEDT 工程开关、HFSS 异步仿真
+- **[CST 电磁仿真（5 个）](#cst电磁仿真5个)**：异步求解 .cst、导出 S 参数 / 远场方向图
 - **[图表（3 个）](#图表3个)**：RAW 曲线解析、转图、结果对比
 - **[图片（3 个，1 个条件注册）](#图片3个1个条件注册)**：显示图片、视觉分析、复制到工作区
 - **[仿真器件管理（10 个）](#仿真器件管理10个协议-v3)**：器件 Schema、增删改、状态、网表导入、原理图加载
@@ -627,6 +628,93 @@ get_hfss_analysis_status(task_id: str, refresh_from_aedt: bool = False) -> dict
 
 ---
 
+## CST 电磁仿真（5 个）
+
+### `cst_solve_async`
+
+```python
+from servers.cst import cst_solve_async
+
+cst_solve_async(model_path: str) -> dict
+```
+
+异步求解 CST 模型（.cst），立即返回 task_id。求解在后台单 worker 串行执行（一次性会话：连接 → run_solver → 保存 → 关闭）。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `model_path` | str | 是 | — | .cst 模型文件绝对路径 |
+
+返回：`{"success": true, "task_id": "cst-a1b2...", "status": "QUEUED"}`；队列满 `{"success": false, "error_code": "CST_QUEUE_FULL"}`。
+
+### `cst_solve_query`
+
+```python
+from servers.cst import cst_solve_query
+
+cst_solve_query(task_id: str) -> dict
+```
+
+查询 CST 求解任务：返回进度，完成时附带 model_path。一次调用同时拿到进度和结果。
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `task_id` | str | 是 | `cst_solve_async` 返回的 task_id |
+
+返回（完成）：`{"success": true, "completed": true, "status": "SUCCEEDED", "model_path": "C:/.../xxx.cst"}`；运行中 `{"success": true, "completed": false, "status": "RUNNING"}`；失败 `{"success": false, "error_code": "CST_SOLVE_FAILED"}`。
+
+### `cst_export_snp`
+
+```python
+from servers.cst import cst_export_snp
+
+cst_export_snp(model_path: str, output_dir: str = "", port_count: int | None = None) -> dict
+```
+
+导出 CST 模型的 S 参数为 Touchstone .sNp 文件（需先求解）。无会话直接读结果。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `model_path` | str | 是 | — | .cst 模型文件绝对路径（需已求解） |
+| `output_dir` | str | 否 | "" | 导出目录（空则模型同级目录） |
+| `port_count` | int | 否 | None | 端口数（None 自动推断） |
+
+返回：`{"success": true, "snp_path": "C:/.../xxx.s2p"}`；失败 `{"success": false, "error_code": "CST_EXPORT_FAILED"}`。
+
+### `cst_export_farfield`
+
+```python
+from servers.cst import cst_export_farfield
+
+cst_export_farfield(model_path: str, output_dir: str = "") -> dict
+```
+
+导出 CST 模型的远场方向图为 ASCII .txt（自动判断是否已求解）。无会话检测结果树，已有远场结果则直接导出；否则先 run_solver 求解再导出。任务异步串行执行，通过 cst_export_farfield_query 查询。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `model_path` | str | 是 | — | .cst 模型文件绝对路径（模型需配置 farfield 监视器） |
+| `output_dir` | str | 否 | "" | 导出目录（空则模型同级目录） |
+
+返回：`{"success": true, "task_id": "cst-a1b2...", "status": "QUEUED"}`；队列满 `{"success": false, "error_code": "CST_QUEUE_FULL"}`。
+
+### `cst_export_farfield_query`
+
+```python
+from servers.cst import cst_export_farfield_query
+
+cst_export_farfield_query(task_id: str) -> dict
+```
+
+查询远场导出任务：返回进度，完成时附带 farfield_txts。一次调用同时拿到进度和结果。
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `task_id` | str | 是 | `cst_export_farfield` 返回的 task_id |
+
+返回（完成）：`{"success": true, "completed": true, "status": "SUCCEEDED", "farfield_txts": ["C:/.../farfield (...).txt"]}`；运行中 `{"success": true, "completed": false, "status": "RUNNING"}`；失败 `{"success": false, "error_code": "CST_EXPORT_FARFIELD_FAILED"}`。
+
+---
+
 ## 图表（3 个）
 
 ### `list_result_curves`
@@ -969,7 +1057,7 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 
 ## Resources & Prompts
 
-除了 Tool（启动时动态统计，当前 42 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
+除了 Tool（启动时动态统计，当前 48 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
 
 ### Resources（5 个）
 
@@ -1090,7 +1178,7 @@ response = await svc.chat(session_id="abc123", message="打开第一个工程")
 
 ## gRPC 工具统一返回格式
 
-所有 gRPC 工具（约 20 个）的返回结构统一如下（完整字段）：
+所有 gRPC 工具（19 个）的返回结构统一如下（完整字段）：
 
 ```json
 {

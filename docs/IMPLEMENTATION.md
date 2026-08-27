@@ -2,17 +2,17 @@
 
 每个 MCP 工具按底层通信方式分为 5 种实现类型：gRPC 远程调用、本地文件读取、subprocess 命令行、COM 对象、内存服务。本文逐一说明每种工具的协议交互、数据结构、校验流程、错误处理和设计决策。
 >
-> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（42 个工具接口）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由）。
+> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（48 个工具接口）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由）。
 
 ---
 
 ## 目录
 
-- **[一、gRPC 远程调用（14 个工具）](#一gRPC远程调用14个工具)**：通信协议、call_grpc 统一入口、11 步参数校验管线
+- **[一、gRPC 远程调用（19 个工具）](#一gRPC远程调用19个工具)**：通信协议、call_grpc 统一入口、11 步参数校验管线
 - **[二、本地文件读取（6 个工具）](#二本地文件读取6个工具)**：.epp 格式、S-expression 解析、参数格式化
 - **[三、参数目录与 Schema](#三参数目录与-Schema)**：目录设计动机、核心函数、动态参数模式
 - **[四、subprocess 命令行（3 个工具）](#四subprocess命令行3个工具)**：TurboCharts、RAW 曲线查询、结果对比、EDI 启动
-- **[五、COM 对象（6 个 ANSYS 工具）](#五COM对象6个-ANSYS-工具)**：COM 附着、AEDT 检测、锁文件管理
+- **[五、COM 对象与 CST 官方接口（ANSYS 6 个 + CST 5 个）](#五COM对象与CST官方接口)**：COM 附着、AEDT 检测、锁文件管理、CST 接口
 - **[六、图片工具（3 个，1 个条件注册）](#六图片工具3个1个条件注册)**：show_image、工作区复制、视觉分析
 - **[七、Chat 聊天服务](#七Chat聊天服务)**：会话管理、多轮闭环、工具 Schema、安全加固
 - **[八、Resources 与 Prompts](#八Resources与-Prompts)**：只读资源、可复用工作流
@@ -23,7 +23,7 @@
 
 ---
 
-## 一、gRPC 远程调用（14 个工具）
+## 一、gRPC 远程调用（19 个工具）
 
 所有操作 EDI 工程和仿真器件的工具共享同一套 gRPC 通信模型。核心实现在 `servers/eda/grpc_client.py`（通信层）和 `servers/eda/simulation_components.py`（参数校验层）。
 
@@ -567,7 +567,7 @@ Values:
 
 ---
 
-## 五、COM 对象（6 个 ANSYS 工具）
+## 五、COM 对象与 CST 官方接口（ANSYS 6 个 + CST 5 个）
 
 核心实现在 `servers/ansys/config.py`（进程检测/COM 附着/锁文件管理）。
 
@@ -628,6 +628,25 @@ cleanup_stale_project_lock(project_path):
 | `get_hfss_analysis_status` | 读取 `_HFSS_TASKS`，可选 `refresh_from_aedt` 查询 `AreThereSimulationsRunning` |
 
 HFSS 任务队列：串行 worker 线程从 `queue.Queue(maxsize=10)` 取任务执行，单任务互斥（`_any_hfss_running()` 检查）。
+
+### 5.5 CST 官方 Python 接口
+
+CST 工具不走 ANSYS COM，而是用 CST 官方 Python 接口（`servers/cst/cst_api.py`，通过注册表定位安装路径）：
+
+| 模块 | 性质 | 用途 |
+|---|---|---|
+| `cst.interface` | COM 自动化（连接/启动 CST） | `connect_to_any_or_new()` 打开会话、`run_solver`、`execute_vba_code` 导远场 |
+| `cst.results` | 只读结果 API（无会话） | `ProjectFile(...).get_3d().get_tree_items()` 读结果树、判断是否已求解、读 S 参数 |
+
+5 个工具按通信方式分两类：
+
+| 工具 | 通信方式 |
+|---|---|
+| `cst_solve_async` / `cst_solve_query` | `cst.interface` 会话（run_solver） |
+| `cst_export_snp` | `cst.results` 无会话读结果 |
+| `cst_export_farfield` / `cst_export_farfield_query` | 混合：`cst.results` 检测已求解 + `cst.interface` 会话 execute_vba 导出 |
+
+求解与远场导出共用全局串行队列 `cst_runner`（`TaskRunner`，见 `servers/cst/cst_api.py`），CST 一次只能跑一个会话。
 
 ---
 
@@ -1188,6 +1207,16 @@ get_project_summary + turbocharts_convert + capture_schematic + simulate_* ─�
 | `start_hfss_analysis_async` | 异步跑 HFSS 仿真 | 提交 setup 分析任务 | `open_hfss_project`（工程打开） | `get_hfss_analysis_status` |
 | `get_hfss_analysis_status` | 查 HFSS 仿真状态 | 查任务状态（可选刷新 AEDT） | `start_hfss_analysis_async`（task_id） | LLM 判断 HFSS 进度 |
 
+### 12.7.5 CST 电磁仿真（5 个）
+
+| 工具 | 动机 | 功能 | 依赖 | 被依赖 |
+|---|---|---|---|---|
+| `cst_solve_async` | 电磁求解耗时长，需异步不阻塞 MCP | 提交求解任务（一次性会话） | `.cst` 模型文件 | `cst_solve_query` |
+| `cst_solve_query` | 查求解任务，一次拿进度+结果 | 返回进度，完成时附 model_path | `cst_solve_async`（task_id） | `cst_export_snp` |
+| `cst_export_snp` | 把 S 参数导出成通用格式 | 导出 Touchstone `.sNp` | 已求解的 `.cst` | 后续画图/分析 |
+| `cst_export_farfield` | 把远场方向图导出成 ASCII txt | 自动判断求解，导出远场 `.txt` | 已求解或配 farfield 监视器的 `.cst` | 后续画图/分析 |
+| `cst_export_farfield_query` | 查远场导出任务，一次拿进度+结果 | 返回进度，完成时附 txt 列表 | `cst_export_farfield`（task_id） | 后续画图/分析 |
+
 ### 12.8 图片（3 个，1 个条件注册）
 
 | 工具 | 动机 | 功能 | 依赖 | 被依赖 |
@@ -1270,7 +1299,7 @@ Variables:
 
 | 机制 | 涉及工具 | 为什么这样设计 | 详细实现见 |
 |---|---|---|---|
-| gRPC 异步调用 | 15 个 EDA 工具 | EDI 是单实例桌面程序，同一时间只能做一件事，用「提交 + 流式推送」避免长连接阻塞 | 第一节 |
+| gRPC 异步调用 | 19 个 EDA 工具 | EDI 是单实例桌面程序，同一时间只能做一件事，用「提交 + 流式推送」避免长连接阻塞 | 第一节 |
 | subprocess 调用 | 3 个 turbocharts | `turbocharts_app.exe` 一次只能跑一个实例（多开会冲突），必须串行 | 第四节 |
 | COM 自动化 | 6 个 ANSYS | AEDT 是 Windows COM 程序，无 gRPC 接口；锁文件防多进程同时打开 | 第五节 |
 | 异步任务队列 | start_simulation_async / start_hfss_analysis_async | 仿真可能几分钟到几小时，用「提交即返回 task_id + 后台执行」解耦 | 第一节、第七节 |
