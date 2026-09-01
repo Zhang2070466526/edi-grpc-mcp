@@ -33,6 +33,9 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from dotenv import load_dotenv
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 if getattr(sys, "frozen", False):
     load_dotenv(Path(sys.executable).parent / ".env")
@@ -147,6 +150,32 @@ async def ready_check(request):
     })
 
 
+# 需要 token 鉴权的路径（健康检查 /health /ready /metrics 放行）
+_AUTH_REQUIRED_PREFIXES = ("/mcp", "/ui", "/chat", "/tools/list", "/upload")
+
+
+class _TokenAuthMiddleware(BaseHTTPMiddleware):
+    """校验敏感端点请求的访问令牌（URL query 参数 ?token=xxx）。
+
+    用于「只允许指定 agent 访问」：配置 MCP_API_KEY 后，只有带正确 ?token=
+    的请求才能访问 /mcp、/ui、/chat 等，其余返回 401。
+    """
+
+    def __init__(self, app, expected_token: str):
+        super().__init__(app)
+        self._expected_token = expected_token
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path.rstrip("/")
+        if any(path == p or path.startswith(p + "/") for p in _AUTH_REQUIRED_PREFIXES):
+            if request.query_params.get("token", "") != self._expected_token:
+                return JSONResponse(
+                    {"error": "unauthorized", "error_description": "invalid or missing token"},
+                    status_code=401,
+                )
+        return await call_next(request)
+
+
 def _run_http_server(port: int, transport: str = "streamable-http") -> None:
     """Streamable HTTP 模式入口。"""
     _install_shutdown_handlers()
@@ -206,7 +235,17 @@ def _run_http_server(port: int, transport: str = "streamable-http") -> None:
     mcp.settings.host = host
     mcp.settings.port = port
     set_server_address(host, port)
-    mcp.run(transport=transport)
+
+    # 构建 Starlette app，按需加 token 鉴权中间件（只允许指定 agent 访问 /mcp）
+    starlette_app = mcp.streamable_http_app()
+    if _cfg.mcp_api_key:
+        starlette_app.add_middleware(_TokenAuthMiddleware, expected_token=_cfg.mcp_api_key)
+        print("  Auth:   enabled (?token=... required on /mcp)")
+    else:
+        print("  Auth:   disabled (MCP_API_KEY not set)")
+
+    import uvicorn
+    uvicorn.run(starlette_app, host=host, port=port, log_level="info")
 
     # 正常退出
     _lifecycle_log("MCP_STOPPED")

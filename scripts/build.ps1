@@ -6,9 +6,9 @@ $root = Get-Location
 Write-Host "=== EDA MCP Build ===" -ForegroundColor Cyan
 
 # ── 阈值 ──
-$MAX_DIR_MB  = 150
+$MAX_DIR_MB  = 250
 $MAX_ZIP_MB  = 100
-$MAX_EXE_MB  = 45   # 超过此值提示可能重复打包
+$MAX_EXE_MB  = 80   # 超过此值提示可能重复打包
 
 # ── [1/7] 清理 ──
 Write-Host "[1/7] Cleaning..." -ForegroundColor Yellow
@@ -58,6 +58,8 @@ OPENCLAW_WORKSPACE=
 MCP_TRANSPORT=streamable-http
 MCP_HOST=127.0.0.1
 MCP_PORT=50026
+# Access token: /mcp /ui /chat require ?token= to match this value (leave empty to disable auth)
+MCP_API_KEY=mcp-9f6739b22e914752afc34dc0e7c4b647
 # Optional: image vision analysis (enabled when all three are configured)
 VISION_API_KEY=
 VISION_BASE_URL=

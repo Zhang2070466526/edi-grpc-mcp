@@ -62,6 +62,8 @@ class Settings:
     mcp_port: int = field(default_factory=lambda: _read_int("MCP_PORT", 50026, 1, 65535))
     mcp_transport: str = field(default_factory=lambda: _read_str("MCP_TRANSPORT", "streamable-http"))
     mcp_stateless_http: bool = field(default_factory=lambda: _read_bool("MCP_STATELESS_HTTP", True))
+    # MCP 访问令牌：留空则不鉴权；配置后 /mcp 端点要求 URL 带 ?token= 匹配才放行（用于只允许指定 agent 访问）
+    mcp_api_key: str = field(default_factory=lambda: _read_str("MCP_API_KEY"))
 
     # ── 路径（环境变量覆盖优先，空字符串 = 未设置 = 自动检测）──
     edi_path: str = field(default_factory=lambda: _read_str("EDI_PATH"))

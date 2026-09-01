@@ -3,6 +3,8 @@
 子包：
   - servers.eda : EDA gRPC 服务（工程、网表、仿真）
   - servers.turbocharts : turbocharts_app 图表生成
+  - servers.ansys : ANSYS HFSS 工具（COM 附着）
+  - servers.cst : CST 电磁仿真（求解 / S 参数 / 远场方向图导出）
   - servers.multimodal_vision : 图片显示 / 工作区复制 / 视觉分析
   - servers.report : 仿真报告生成
 """
@@ -10,7 +12,7 @@
 from mcp.server.fastmcp import FastMCP
 from servers.settings import get_settings
 
-__version__ = "0.1.6"
+__version__ = "0.1.7"
 
 _settings = get_settings()
 
