@@ -40,6 +40,7 @@ servers/
   registry_server.py     # 工具注册 + Web 路由注册
   utils.py                # 公共工具函数
   settings.py             # 统一配置加载
+  task_runner.py          # 通用异步任务队列（EDA/HFSS/CST 复用）
   resources_prompts/       # 5 个 Resource + 5 个 Prompt
   multimodal_vision/      # 图片 + 视觉分析 + 文档工具
   report/                 # 仿真报告生成
@@ -63,6 +64,7 @@ servers/
     project_manage.py     # 工程打开/关闭/启动/信息
     run_analysis.py       # 异步仿真
   cst/                    # CST 电磁仿真工具（5 个）
+    __init__.py           # 公共 API re-export
     cst_api.py            # 安装检测/API 加载/会话管理
     simulate.py           # 仿真求解（异步，一次性会话）
     result_export.py      # 结果导出（S 参数 / 远场方向图）
@@ -87,7 +89,7 @@ Python 3.12+ / uv 包管理 / FastMCP (mcp >= 1.0.0) / grpcio >= 1.81.0 / protob
 
 CST 电磁仿真依赖：CST 官方 Python 接口（cst.interface / cst.results，通过注册表定位，需本机安装 CST）
 
-PyPI: https://pypi.org/project/edi-mcp/  |  当前版本：0.1.6
+PyPI: https://pypi.org/project/edi-mcp/  |  当前版本：0.1.7
 
 ## MCP 工具清单
 
@@ -120,6 +122,7 @@ TURBOCHARTS_PATH=C:\Program Files (x86)\EDI\turbocharts_app.exe  # 留空自动�
 MCP_TRANSPORT=streamable-http
 MCP_HOST=127.0.0.1
 MCP_PORT=50026
+MCP_API_KEY=                              # 可选：留空不鉴权；配置后 /mcp /ui /chat 等要求 ?token= 匹配
 ```
 
 ## 启动方式
@@ -219,6 +222,11 @@ python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto 
 - 启动时 validate() 校验 gRPC 地址格式、端口范围、传输方式
 - EDI_PATH / TURBOCHARTS_PATH / OPENCLAW_WORKSPACE 留空自动检测
 
+### 访问控制
+- 配置 `MCP_API_KEY` 后，`/mcp` `/ui` `/chat` `/tools/list` `/upload` 端点要求 URL 带 `?token=<key>` 匹配才放行，其余返回 401
+- 留空则不鉴权（向后兼容）；用于「只允许指定 agent 访问」的场景
+- 实现：`start_servers.py` 的 `_TokenAuthMiddleware` 中间件，绕开 `mcp.run()` 手动构建 Starlette app 后 `add_middleware`
+
 ### Chat 与工具注册
 - Chat 工具列表从 MCP 元数据自动生成，排除同步阻塞和 COM 依赖工具
 - 破坏性操作需用户确认（支持肯定词），5 分钟过期
@@ -317,12 +325,13 @@ python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto 
 57. CST 官方 Python 接口通过注册表定位（CST DESIGN ENVIRONMENT_AMD64.exe），需本机安装 CST
 58. 求解与远场导出采用一次性会话（连接 → run_solver → 保存/导远场 → 关闭），不保持会话复用；导出 S 参数无会话直接读结果
 59. CST 求解/导出逻辑原在参考脚本 `cst_libraries.py` 中，现已全部抽取到 `simulate.py`（求解）与 `result_export.py`（S 参数 + 远场方向图），参考脚本已删除
-60. 异步求解复用通用 `TaskRunner`（`servers/task_runner.py`），EDA/HFSS 后续也应迁移过来消除重复
+60. CST/HFSS 异步任务复用通用 `TaskRunner`（`servers/task_runner.py`）；EDA 仿真保留自有注册表（增量日志推送 + gRPC 回调 + ACCEPTED 状态是 TaskRunner 无法优雅承载的）
+61. CST 求解/导出统一走 `cst_runner` 串行队列（含 `cst_export_snp` 经 `run_sync` 同步执行），避免无会话读结果与求解会话并发
 
 ## 维护人
 
 - 负责人：--
-- 更新时间：2026-08-18
-- 当前版本：0.1.6
+- 更新时间：2026-08-27
+- 当前版本：0.1.7
 
 

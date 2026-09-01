@@ -74,6 +74,7 @@ EDI_PATH=                    # 留空自动检测
 TURBOCHARTS_PATH=            # 留空自动检测
 MCP_TRANSPORT=streamable-http
 MCP_PORT=50026
+MCP_API_KEY=                 # 可选：留空不鉴权；配置后 /mcp /ui /chat 等要求 ?token= 匹配
 OPENCLAW_WORKSPACE=          # 留空自动检测，或手动指定
 ```
 
@@ -113,6 +114,8 @@ curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
     "baseUrl": "http://127.0.0.1:50026/mcp"
 } } }
 ```
+
+> 配置了 `MCP_API_KEY` 后，Streamable HTTP 客户端（OpenClaw、Hermes 等）的 URL 需带 `?token=` 才能访问，例如 `http://127.0.0.1:50026/mcp?token=xxx`，不带则返回 401。stdio 模式（Claude Code）不经过 HTTP，不受影响。
 
 ---
 
@@ -381,6 +384,7 @@ POST /chat
 | `MCP_STATELESS_HTTP` | `true` | 无状态模式 |
 | `MCP_HOST` | `127.0.0.1` | 监听地址（强制本地） |
 | `MCP_PORT` | `50026` | HTTP 监听端口 |
+| `MCP_API_KEY` | — | 访问令牌（留空不鉴权；配置后 `/mcp` `/ui` `/chat` 等要求 `?token=` 匹配） |
 | `EDI_PATH` | 自动检测 | EDI.exe 路径 |
 | `TURBOCHARTS_PATH` | 自动检测 | turbocharts_app.exe 路径 |
 | `OPENCLAW_WORKSPACE` | 自动检测 | OpenClaw 工作区路径 |
@@ -419,6 +423,7 @@ mcp-grpc/
 │   │                                   #     SERVER_STARTED_AT — 服务启动时间戳
 │   ├── settings.py                     #   统一配置：Settings dataclass (frozen, lru_cache)
 │   │                                   #   所有环境变量收敛于此，启动时 validate()
+│   ├── task_runner.py                  #   通用异步任务队列（EDA/HFSS/CST 复用，单 worker 串行）
 │   │
 │   ├── resources_prompts/              #   MCP Resource & Prompt
 │   │   ├── __init__.py                 #     导入触发 @mcp.resource() / @mcp.prompt() 注册
@@ -451,7 +456,7 @@ mcp-grpc/
 │   │   ├── __init__.py                 #     公共 API re-export
 │   │   ├── config.py                   #     进程检测 / COM 附着 (多 ProgID 回退) / 锁文件管理
 │   │   ├── project_manage.py           #     工程打开/关闭 + AEDT 启动 + 信息查询 (4 工具)
-│   │   └── run_analysis.py             #     异步仿真队列 (单 worker), outcome_known 追踪
+│   │   └── run_analysis.py             #     异步仿真（复用 TaskRunner 单 worker 队列）, outcome_known 追踪
 │   │
 │   ├── cst/                            #   CST 电磁仿真工具 (5 个)
 │   │   ├── __init__.py                 #     公共 API re-export

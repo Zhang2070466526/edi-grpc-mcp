@@ -624,10 +624,10 @@ cleanup_stale_project_lock(project_path):
 | `close_hfss_project` | COM `CloseProject`（可选 `Save` 前保存）→ 等待 2 秒让 AEDT 自己删锁 → 检查并清理残留锁 |
 | `launch_aedt` | 已运行则返回状态；否则 subprocess 启动 → 轮询 COM 就绪 |
 | `get_hfss_project_info` | COM 附着 → 读取 `GetProjectList`, `GetActiveProject`, `GetActiveDesign` |
-| `start_hfss_analysis_async` | 验证 AEDT 运行 + setup 存在 → task 入 `_HFSS_QUEUE` → worker 线程执行 `design.Analyze(setup)` → 验证结果目录 mtime 变化 |
-| `get_hfss_analysis_status` | 读取 `_HFSS_TASKS`，可选 `refresh_from_aedt` 查询 `AreThereSimulationsRunning` |
+| `start_hfss_analysis_async` | 验证 AEDT 运行 + setup 存在 → `hfss_runner.submit(..., require_idle=True)` 原子提交 → worker 执行 `design.Analyze(setup)` → 校验结果目录含结果文件 |
+| `get_hfss_analysis_status` | 读取 `hfss_runner.snapshot`，可选 `refresh_from_aedt` 查询 `AreThereSimulationsRunning` |
 
-HFSS 任务队列：串行 worker 线程从 `queue.Queue(maxsize=10)` 取任务执行，单任务互斥（`_any_hfss_running()` 检查）。
+HFSS 任务队列：复用通用 `TaskRunner`（`servers/task_runner.py`，单 worker 串行）；单任务互斥通过 `submit(require_idle=True)` 原子「检查+提交」实现。
 
 ### 5.5 CST 官方 Python 接口
 
@@ -953,7 +953,8 @@ SIMULATION_QUEUE_FULL           TASK_NOT_FOUND
 | 资源 | 锁类型 | 原因 |
 |---|---|---|
 | EDA gRPC 操作 | `threading.RLock` 全局锁 | EDI 进程同一时间只能做一件事。可重入锁确保同一个线程可以嵌套调用 |
-| 异步仿真任务 | `threading.Lock` | 保护 `_sim_tasks` 字典的读写 |
+| 异步仿真任务（EDA） | `threading.Lock` | 保护 `_sim_tasks` 字典的读写 |
+| CST / HFSS 任务队列 | `TaskRunner`（单 worker 线程池 + 内部锁） | CST/AEDT 单实例，同一时间只能跑一个求解/导出 |
 | TurboCharts 进程 | `BoundedSemaphore(1)` | 一次只能运行一个 turbocharts 实例 |
 | ANSYS COM 操作 | `threading.RLock` | 保护 AEDT COM 对象访问 |
 | ANSYS 工程路径 | 无锁（低频操作） | `_OPEN_PROJECT_PATHS` 字典，并发冲突概率极低 |

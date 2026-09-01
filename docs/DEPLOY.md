@@ -36,6 +36,7 @@ TURBOCHARTS_PATH=                    # 留空自动检测
 MCP_TRANSPORT=streamable-http         # streamable-http（Web）或 stdio（本地）
 MCP_PORT=50026                       # 监听端口
 MCP_HOST=127.0.0.1                   # 监听地址
+MCP_API_KEY=                          # 可选：访问令牌，配置后 /mcp 等端点要求 ?token= 匹配（只允许指定 agent 访问）
 OPENCLAW_WORKSPACE=                             # 留空自动检测 rfclaw/openclaw-service/state/workspace
 LLM_API_KEY=sk-xxx                   # 可选：聊天 AI 功能
 LLM_BASE_URL=https://api.deepseek.com
@@ -115,6 +116,20 @@ http://127.0.0.1:50026/health
 |---|---|
 | 传输方式 | Streamable HTTP |
 | URL | `http://127.0.0.1:50026/mcp` |
+
+### 访问控制（可选）
+
+在 `.env` 配置 `MCP_API_KEY=xxx` 后，`/mcp` `/ui` `/chat` 等端点只接受带正确 `?token=xxx` 的请求，其余返回 401——用于「只允许指定 agent 访问」。
+
+例如只允许 Hermes Agent 使用，把它的 url 改成：
+
+```yaml
+mcp_servers:
+  edi-mcp-sse-50026:
+    url: http://127.0.0.1:50026/mcp?token=xxx
+```
+
+而 OpenClaw 等不带 token 的客户端连 `http://127.0.0.1:50026/mcp` 会被拒绝（401）。
 
 ---
 
