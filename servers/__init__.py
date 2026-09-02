@@ -19,7 +19,7 @@ _settings = get_settings()
 
 """
 参数详解
-1. "EDA MCP" 含义：MCP服务器的名称
+1. "EDI gRPC MCP" 含义：MCP服务器的名称
 作用：这是服务的唯一标识符，会在客户端（如DeepSeek Harness）连接时显示，用来区分不同的MCP服务
 
 2. instructions= (...) 含义：服务器的指令/描述信息
@@ -40,7 +40,7 @@ _settings = get_settings()
 """
 
 mcp = FastMCP(
-    "EDA MCP",
+    "EDI gRPC MCP",
     instructions=(
         "EDA 工程操作工具集："
         "扫描工程、打开工程、网表查看、仿真执行、截图原理图、"

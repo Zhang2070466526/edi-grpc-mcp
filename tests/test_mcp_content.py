@@ -25,7 +25,7 @@ class TestResourcesDirect:
     def test_service_overview_structure(self):
         from servers.resources_prompts.resources import resource_service_overview
         data = resource_service_overview()
-        assert data["server_name"] == "EDI MCP"
+        assert data["server_name"] == "EDI gRPC MCP"
         assert data["protocol_version"] == "2"
         assert data.get("tool_api_version") == "3"
         assert "server_version" in data

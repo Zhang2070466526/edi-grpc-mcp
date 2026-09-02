@@ -4,6 +4,10 @@
 
 ### 新增
 - MCP 访问令牌鉴权（`MCP_API_KEY`）：配置后 `/mcp` `/ui` `/chat` `/tools/list` `/upload` 要求 URL 带 `?token=` 匹配才放行，用于「只允许指定 agent 访问」；留空则不鉴权（向后兼容）
+- 打包冒烟测试（`scripts/smoke_test_exe.py`）：打包完成后自动启动 exe 验证「健康检查 + 鉴权 + 工具注册」
+
+### 其他
+- 项目改名：PyPI 包名 / 命令 `edi-mcp` → `edi-grpc-mcp`，服务显示名 `EDA MCP` → `EDI gRPC MCP`（打包产物目录 `dist/edi-mcp/` 与 exe 名 `edi_mcp_server.exe` 保持不变）
 
 ## 0.1.7（2026-08-27）
 

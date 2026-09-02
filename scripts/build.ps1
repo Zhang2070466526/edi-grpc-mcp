@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 Push-Location $PSScriptRoot\..
 $root = Get-Location
 
-Write-Host "=== EDA MCP Build ===" -ForegroundColor Cyan
+Write-Host "=== EDI gRPC MCP Build ===" -ForegroundColor Cyan
 
 # ── 阈值 ──
 $MAX_DIR_MB  = 250
@@ -56,7 +56,7 @@ if (Test-Path $srcEnv) {
     }
 }
 $envContent = @"
-# EDA MCP configuration - edit paths for this computer
+# EDI gRPC MCP configuration - edit paths for this computer
 EDA_GRPC_SERVER=127.0.0.1:50055
 # EDI exe path: leave empty to auto-detect (EDI.exe > EDA-PMDS.exe > CAIS.exe)
 EDI_PATH=

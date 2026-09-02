@@ -1,5 +1,5 @@
 [project]
-name = "edi-mcp"
+name = "edi-grpc-mcp"
 version = "0.1.8"
 description = "Local MCP server wrapping EDI gRPC and ANSYS HFSS tools for EDA engineering"
 readme = "README.md"
@@ -31,7 +31,7 @@ dependencies = [
 ]
 
 [project.scripts]
-edi-mcp = "start_servers:main"
+edi-grpc-mcp = "start_servers:main"
 
 [build-system]
 requires = ["hatchling"]

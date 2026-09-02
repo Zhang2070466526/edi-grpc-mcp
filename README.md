@@ -1,4 +1,4 @@
-# EDI MCP 服务
+# EDI gRPC MCP 服务
 
 [![PyPI](https://img.shields.io/pypi/v/edi-mcp?label=PyPI)](https://pypi.org/project/edi-mcp/)
 
@@ -34,7 +34,7 @@ AI 客户端 (Claude Code / OpenClaw)
    │  Streamable HTTP (stateless) 或 stdio
    │  POST /mcp  │  initialize → tools/list → tools/call
    ▼
-EDI MCP 服务 (FastMCP, 48 工具, 5 Resource, 5 Prompt)
+EDI gRPC MCP 服务 (FastMCP, 48 工具, 5 Resource, 5 Prompt)
    │
    ├── EDA gRPC 工具 (19) ──→ EDI 客户端 (127.0.0.1:50055)
    │     FetchEvent ← PerformAction 异步模型，增量 ads_output
@@ -60,9 +60,9 @@ EDI MCP 服务 (FastMCP, 48 工具, 5 Resource, 5 Prompt)
 ### 安装
 
 ```powershell
-pip install edi-mcp
+pip install edi-grpc-mcp
 ```
-或源码：`git clone <repo-url> && cd mcp-grpc && uv sync`
+或源码：`git clone <repo-url> && cd edi-grpc-mcp && uv sync`
 
 ### 配置
 
@@ -86,9 +86,9 @@ OPENCLAW_WORKSPACE=          # 留空自动检测，或手动指定
 ### 启动
 
 ```powershell
-edi-mcp                    # Streamable HTTP，默认 50026
-edi-mcp --transport stdio  # Claude Code stdio 模式
-edi-mcp --port 9000        # 自定义端口
+edi-grpc-mcp                    # Streamable HTTP，默认 50026
+edi-grpc-mcp --transport stdio  # Claude Code stdio 模式
+edi-grpc-mcp --port 9000        # 自定义端口
 ```
 
 ### 验证
@@ -106,7 +106,7 @@ curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
 ```json
 // Claude Code (.mcp.json)
 { "mcpServers": { "eda": {
-    "command": "edi-mcp", "args": ["--transport", "stdio"]
+    "command": "edi-grpc-mcp", "args": ["--transport", "stdio"]
 } } }
 
 // OpenClaw
@@ -401,7 +401,7 @@ POST /chat
 ## 项目结构
 
 ```
-mcp-grpc/
+edi-grpc-mcp/
 │
 ├── proto/                              # protobuf 协议定义及编译产物
 │   ├── ecserver.proto                  #   gRPC 服务定义（ExternalCall, 16 种 EventType）

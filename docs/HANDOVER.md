@@ -1,4 +1,4 @@
-# EDA MCP 项目交接文档
+# EDI gRPC MCP 项目交接文档
 
 ## 目录
 
@@ -29,7 +29,7 @@
 
 ## 代码仓库
 
-D:\GitLabCode\mcp-grpc
+D:\GitLabCode\edi-grpc-mcp
 
 ## 目录结构
 
@@ -128,7 +128,7 @@ MCP_API_KEY=                              # 可选：留空不鉴权；配置后
 ## 启动方式
 
 ```powershell
-cd D:\GitLabCode\mcp-grpc
+cd D:\GitLabCode\edi-grpc-mcp
 uv run python start_servers.py                        # HTTP 模式（推荐）
 uv run python start_servers.py --transport stdio       # stdio 模式
 ```
@@ -168,7 +168,7 @@ uv publish
 
 首次使用需创建 `.pypirc` 配置 PyPI 令牌（已加入 `.gitignore`）。
 
-发布后用户通过 `pip install edi-mcp` 安装，通过 `edi-mcp` 命令启动。
+发布后用户通过 `pip install edi-grpc-mcp` 安装，通过 `edi-grpc-mcp` 命令启动。
 
 ### PyInstaller（免安装二进制包）
 

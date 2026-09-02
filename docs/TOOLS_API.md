@@ -1,4 +1,4 @@
-# EDI MCP API 参考
+# EDI gRPC MCP API 参考
 
 > 所有函数均可通过 `from servers.xxx import func` 直接调用，无需启动 MCP 服务。
 >
@@ -6,7 +6,7 @@
 
 ```python
 # 安装
-pip install edi-mcp
+pip install edi-grpc-mcp
 
 # 使用
 from servers.eda.project_manage import list_epp_projects

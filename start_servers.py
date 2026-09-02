@@ -1,4 +1,4 @@
-r"""EDI MCP 一键启动 — 统一入口。
+r"""EDI gRPC MCP 一键启动 — 统一入口。
 
 ═══════════════════════════════════════════════════════════
   工具注册见：servers/registry_server.py
@@ -223,7 +223,7 @@ def _run_http_server(port: int, transport: str = "streamable-http") -> None:
                    grpc="online" if _grpc_ok else "offline")
 
     print("=" * 50)
-    print(f"  EDI MCP v{_server_ver}  (streamable-http, stateless)")
+    print(f"  EDI gRPC MCP v{_server_ver}  (streamable-http, stateless)")
     print(f"  UI:    http://{host}:{port}/ui")
     print(f"  MCP:   http://{host}:{port}/mcp")
     print(f"  Ready: http://{host}:{port}/ready")

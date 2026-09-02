@@ -23,7 +23,7 @@ from servers.multimodal_vision import OPENCLAW_WORKSPACE_PATH
 @mcp.resource(
     "edi://service/overview",
     name="Service Overview",
-    title="EDI MCP 服务概览",
+    title="EDI gRPC MCP 服务概览",
     description="当前 MCP 协议版本、服务能力、安全规则和 gRPC 目标。",
     mime_type="application/json",
 )
@@ -33,7 +33,7 @@ def resource_service_overview() -> dict[str, Any]:
     grpc_host = EDA_GRPC_SERVER or "127.0.0.1:50055"
 
     return {
-        "server_name": "EDI MCP",
+        "server_name": "EDI gRPC MCP",
         "server_version": SERVER_VERSION,
         "protocol_version": "2",     # gRPC 协议版本
         "tool_api_version": "3",    # 仿真器件工具 API 版本
@@ -65,14 +65,14 @@ def resource_simulation_components() -> dict[str, Any]:
 @mcp.resource(
     "edi://reference/operation-guide",
     name="Operation Guide",
-    title="EDI MCP 操作规则",
+    title="EDI gRPC MCP 操作规则",
     description="创建、修改、删除仿真器件和网表导入的安全约束。",
     mime_type="text/markdown",
 )
 def resource_operation_guide() -> str:
     """返回 Markdown 格式的操作规则。"""
     return (
-        "# EDI MCP 操作规则\n\n"
+        "# EDI gRPC MCP 操作规则\n\n"
         "- 查询工程时优先使用 `get_project_summary`。\n"
         "- 创建或修改仿真器件前先查询参数 Schema。\n"
         "- `create_simulation_component` 每次都会创建新实例。\n"
@@ -92,7 +92,7 @@ def resource_operation_guide() -> str:
 @mcp.resource(
     "edi://service/status",
     name="Service Status",
-    title="EDI MCP 实时状态",
+    title="EDI gRPC MCP 实时状态",
     description="当前 gRPC 通道状态、队列占用、通道缓存等运行时信息。",
     mime_type="application/json",
 )
@@ -129,7 +129,7 @@ def resource_service_status() -> dict[str, Any]:
 def resource_error_codes() -> str:
     """错误码词典：帮助 LLM 根据 status 选择合适的重试/排查策略。"""
     return (
-        "# EDI MCP 错误码词典\n\n"
+        "# EDI gRPC MCP 错误码词典\n\n"
         "| 状态 | 含义 | 建议动作 |\n"
         "|---|---|---|\n"
         "| SUCCEEDED | 任务成功完成 | — |\n"
