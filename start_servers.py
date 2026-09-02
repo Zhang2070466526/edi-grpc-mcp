@@ -29,6 +29,7 @@ import signal
 import socket
 import sys
 import threading
+import time
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -176,6 +177,43 @@ class _TokenAuthMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+def _find_port_pid(port: int) -> int | None:
+    """查找监听指定端口的进程 PID，找不到返回 None。"""
+    try:
+        import psutil
+        for conn in psutil.net_connections(kind="inet"):
+            if (conn.status == psutil.CONN_LISTEN
+                    and conn.laddr and conn.laddr.port == port):
+                return conn.pid
+    except (psutil.AccessDenied, OSError):
+        pass
+    return None
+
+
+def _kill_port_process(port: int) -> bool:
+    """结束监听指定端口的进程，成功返回 True（端口空闲也视为成功）。"""
+    pid = _find_port_pid(port)
+    if pid is None:
+        return True
+    try:
+        import psutil
+        proc = psutil.Process(pid)
+        name = proc.name()
+        print(f"端口 {port} 被 {name} (PID {pid}) 占用，正在结束...")
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except psutil.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=5)
+        return True
+    except psutil.NoSuchProcess:
+        return True  # 进程已退出
+    except (psutil.AccessDenied, OSError) as exc:
+        print(f"结束占用进程失败: {exc}")
+        return False
+
+
 def _run_http_server(port: int, transport: str = "streamable-http") -> None:
     """Streamable HTTP 模式入口。"""
     _install_shutdown_handlers()
@@ -190,15 +228,34 @@ def _run_http_server(port: int, transport: str = "streamable-http") -> None:
         print(f"WARNING: MCP_HOST={host} ignored, forcing 127.0.0.1 (local mode)")
         host = "127.0.0.1"
 
-    # 单实例检查
+    # 端口占用检查：被占用时自动结束占用进程，释放后继续启动
     _test = socket.socket()
     try:
         _test.settimeout(1)
-        if _test.connect_ex(("127.0.0.1", port)) == 0:
-            print(f"端口 {port} 已被占用，MCP 可能已在运行。")
-            sys.exit(1)
+        occupied = _test.connect_ex(("127.0.0.1", port)) == 0
     finally:
         _test.close()
+
+    if occupied:
+        print(f"端口 {port} 已被占用，尝试自动结束占用进程后重启...")
+        if not _kill_port_process(port):
+            print(f"无法结束占用端口 {port} 的进程，请手动处理。")
+            sys.exit(1)
+        # 等待端口释放（进程退出后端口可能短暂处于 TIME_WAIT）
+        deadline = time.monotonic() + 5
+        while True:
+            _test = socket.socket()
+            try:
+                _test.settimeout(1)
+                if _test.connect_ex(("127.0.0.1", port)) != 0:
+                    break
+            finally:
+                _test.close()
+            if time.monotonic() >= deadline:
+                print(f"端口 {port} 未能释放，请手动处理。")
+                sys.exit(1)
+            time.sleep(0.5)
+        print(f"端口 {port} 已释放，继续启动。")
 
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(
@@ -240,7 +297,7 @@ def _run_http_server(port: int, transport: str = "streamable-http") -> None:
     starlette_app = mcp.streamable_http_app()
     if _cfg.mcp_api_key:
         starlette_app.add_middleware(_TokenAuthMiddleware, expected_token=_cfg.mcp_api_key)
-        print("  Auth:   enabled (?token=... required on /mcp)")
+        print(f"  Auth:   enabled (?token={_cfg.mcp_api_key} required on /mcp)")
     else:
         print("  Auth:   disabled (MCP_API_KEY not set)")
 
