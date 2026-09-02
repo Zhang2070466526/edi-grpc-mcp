@@ -91,6 +91,9 @@ def compare_simulation_results(
     img_path = str(Path(img_path).expanduser().resolve())
     if csv_path:
         csv_path = str(Path(csv_path).expanduser().resolve())
+    if not Path(img_path).parent.is_dir():
+        return {"success": False, "error_code": "OUTPUT_DIRECTORY_NOT_FOUND",
+                "message": f"输出目录不存在: {Path(img_path).parent}"}
 
     # Step 1: export each RAW to temp CSV (serialized via runner)
     dep_key = dependency
@@ -138,12 +141,13 @@ def compare_simulation_results(
                 x_to_y[x] = y
             curves_aligned[i] = [x_to_y[float(p)] for p in common_x]
     else:
-        # interpolation — 检查参考 X 轴是否严格递增（np.interp 要求）
+        # interpolation — 所有文件 X 轴都需严格递增（np.interp 要求，否则结果未定义）
+        for i, (xv, _) in enumerate(raw_curves):
+            if not all(xv[j] < xv[j + 1] for j in range(len(xv) - 1)):
+                return {"success": False, "error_code": "INVALID_RAW_DATA",
+                        "message": f"interpolation 模式要求所有文件 X 轴严格递增，"
+                                   f"但 {labels[i]} 中存在无序或重复的依赖轴值"}
         ref_x, ref_y = raw_curves[reference_index]
-        if not all(ref_x[j] < ref_x[j + 1] for j in range(len(ref_x) - 1)):
-            return {"success": False, "error_code": "INVALID_RAW_DATA",
-                    "message": f"interpolation 模式要求参考文件 X 轴严格递增，"
-                               f"但 {labels[reference_index]} 中存在无序或重复的依赖轴值"}
         common_x = ref_x
         curves_aligned[reference_index] = ref_y
         for i, (xv, yv) in enumerate(raw_curves):
@@ -247,8 +251,11 @@ def _read_curve_csv_xy(path: str) -> tuple[list[float], list[float]]:
         if len(vals) < 2:
             continue
         try:
-            x_vals.append(float(vals[0]))
-            y_vals.append(float(vals[1]))
+            x = float(vals[0])
+            y = float(vals[1])
         except ValueError:
             continue
+        # 成对追加，避免 x 成功、y 失败导致两个列表长度错位
+        x_vals.append(x)
+        y_vals.append(y)
     return x_vals, y_vals

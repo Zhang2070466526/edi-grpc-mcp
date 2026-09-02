@@ -320,7 +320,7 @@
 
 ## 6. POST /upload — 文件上传
 
-**用途**：上传文件到临时目录，返回本地路径供 Chat 工具（如 `add_knowledge`、`analyze_image`）使用。
+**用途**：上传文件到临时目录，返回本地路径供 Chat 工具（如 `analyze_image`）使用。
 
 **请求体**（`Content-Type: multipart/form-data`）：
 - 表单字段 `file`：要上传的文件。

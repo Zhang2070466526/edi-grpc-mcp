@@ -377,7 +377,7 @@ def turbocharts_convert(
     #   - CSV：每条 VSWR 独立一次调用，避免数据丢失
     #   - 非 VSWR 曲线：合并为一次调用
     vswr_curves = re.findall(r'VSWR_S\[\d+,\d+\]', linename) if linename else []
-    non_vswr = re.sub(r'VSWR_S\[\d+,\d+\]', '', linename).strip('&') if linename else ''
+    non_vswr = re.sub(r'&+', '&', re.sub(r'VSWR_S\[\d+,\d+\]', '', linename)).strip('&') if linename else ''
     need_split = csv_path and len(vswr_curves) > 1  # 需要拆分：有 CSV 且多条 VSWR
 
     # ── 第 1 步：生成 PNG 图片（所有曲线一次性合并，VSWR 不受影响）──
@@ -406,7 +406,7 @@ def turbocharts_convert(
         vswr_artifacts = []
         for vswr in vswr_curves:
             csv_vswr = str(csv_dir / f"{csv_stem}_{vswr.replace('[','').replace(']','').replace(',','_')}{csv_ext}")
-            cmd_csv = _build_cmd(raw_path, img_path, chart_type, linename=vswr, dependency=dependency, csv_path=csv_vswr)
+            cmd_csv = _build_cmd(raw_path, img_path, chart_type, linename=vswr, dependency=dependency, csv_path=csv_vswr, ac_config=ac_config)
             proc = run_turbocharts(cmd_csv, timeout_seconds=120)
             if proc.returncode == 0 and Path(csv_vswr).exists():
                 artifacts.append({"type": "csv", "path": csv_vswr, "name": Path(csv_vswr).name,
@@ -414,7 +414,7 @@ def turbocharts_convert(
 
         # 非 VSWR 曲线 CSV
         if csv_non and non_vswr:
-            cmd_non = _build_cmd(raw_path, img_path, chart_type, linename=non_vswr, dependency=dependency, csv_path=csv_non)
+            cmd_non = _build_cmd(raw_path, img_path, chart_type, linename=non_vswr, dependency=dependency, csv_path=csv_non, ac_config=ac_config)
             proc = run_turbocharts(cmd_non, timeout_seconds=120)
             if proc.returncode == 0 and Path(csv_non).exists():
                 artifacts.append({"type": "csv", "path": csv_non, "name": Path(csv_non).name,

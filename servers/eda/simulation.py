@@ -264,6 +264,12 @@ def start_simulation_async(
     """
     resolved_path = validate_project_path(project_path)
 
+    # 与 call_grpc 的范围校验保持一致，避免非法超时值进入后台线程后静默失败
+    if timeout_seconds < 1 or timeout_seconds > 3600:
+        return {"success": False,
+                "error_code": "INVALID_PARAMETERS",
+                "message": "timeout_seconds 必须在 1-3600 之间"}
+
     task_id = str(uuid.uuid4())
     client_uuid = str(uuid.uuid4())
 
@@ -378,9 +384,12 @@ def get_simulation_async_result(task_id: str) -> dict[str, Any]:
 
     completed = _task_completed(task)
 
-    # 已完成 — 返回完整 result
+    # 已完成 — 返回完整 result；success 统一为「查询成功」语义（与 status 端点一致），
+    # 仿真任务成败看 task_success / status，避免两端点 success 语义相反
     if task["result"] is not None:
-        return dict(task["result"])
+        result = dict(task["result"])
+        result["success"] = True
+        return result
 
     # 运行中 — 返回当前状态和部分日志
     return {

@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 # CST 全局串行队列：求解（simulate）和结果导出（result_export）共用。
 # CST 一次只能跑一个会话，run_solver 与 execute_vba 不能并发。
-cst_runner = TaskRunner(name_prefix="cst")
+cst_runner = TaskRunner(name_prefix="cst", max_run_seconds=7200)
 
 
 def to_writable_copy(model_path: str) -> str:

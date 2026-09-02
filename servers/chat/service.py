@@ -58,7 +58,7 @@ from servers.eda.model_replace import replace_models_from_csv  # noqa: E402
 from servers.eda.edi_launcher import launch_edi  # noqa: E402
 from servers.turbocharts.compare_results import compare_simulation_results  # noqa: E402
 from servers.turbocharts.convert_raw import turbocharts_convert, list_result_curves  # noqa: E402
-from servers.multimodal_vision import show_image, copy_image_to_workspace, analyze_image, OPENCLAW_WORKSPACE_PATH, open_document, register_image_url  # noqa: E402
+from servers.multimodal_vision import show_image, analyze_image, OPENCLAW_WORKSPACE_PATH, open_document, register_image_url  # noqa: E402
 from servers.report import generate_simulation_report  # noqa: E402
 from servers.settings import get_settings  # noqa: E402
 from servers.metrics import record_tool_call  # noqa: E402
@@ -186,40 +186,8 @@ CHAT_TOOL_MAP, CHAT_TOOLS_SCHEMA = _auto_build_chat_tools()
 
 
 def _ensure_chat_tools() -> None:
-    """每次 Chat 请求时刷新工具列表（原地更新，所有引用可见）。
-    可选模块（如 knowledge）在 MCP 注册之后注入到 Chat 工具映射中。
-    """
+    """每次 Chat 请求时刷新工具列表（原地更新，所有引用可见）。"""
     new_map, new_schema = _auto_build_chat_tools()
-
-    # 注入知识库工具（不注册为 MCP 工具，仅 Chat 内部可用）
-    try:
-        from servers.knowledge.rag.rag_mcp_tools import (
-            search_knowledge, ask_knowledge, add_knowledge, list_knowledge_sources
-        )
-        new_map["search_knowledge"] = search_knowledge
-        new_map["ask_knowledge"] = ask_knowledge
-        new_map["add_knowledge"] = add_knowledge
-        new_map["list_knowledge_sources"] = list_knowledge_sources
-        new_schema.extend([
-            {"type": "function", "function": {"name": "search_knowledge",
-                "description": "语义检索知识库", "parameters": {"type": "object",
-                "properties": {"query": {"type": "string"}, "top_k": {"type": "integer"}},
-                "required": ["query"]}}},
-            {"type": "function", "function": {"name": "ask_knowledge",
-                "description": "基于知识库生成回答（检索 + LLM）", "parameters": {"type": "object",
-                "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
-            {"type": "function", "function": {"name": "add_knowledge",
-                "description": "向知识库追加文档", "parameters": {"type": "object",
-                "properties": {"content": {"type": "string"}, "file_path": {"type": "string"},
-                "source_name": {"type": "string"}}, "required": []}}},
-            {"type": "function", "function": {"name": "list_knowledge_sources",
-                "description": "列出已入库的文档来源", "parameters": {"type": "object",
-                "properties": {}, "required": []}}},
-        ])
-    except Exception as exc:
-        # 知识库是可选模块：依赖缺失（ImportError）或初始化异常（chroma.sqlite3 被锁/损坏等）
-        # 都应降级跳过，不能拖垮整个 Chat
-        _logger.warning("知识库工具注入失败，已跳过: %s", exc)
 
     CHAT_TOOL_MAP.clear()
     CHAT_TOOL_MAP.update(new_map)
@@ -431,13 +399,13 @@ class ChatService:
             ]
             for sid in expired:
                 del self._sessions[sid]
-            # 超过上限则删最旧的
+            # 超过上限则删最旧的（跳过正在持锁处理的会话，避免误删活跃会话）
             if len(self._sessions) > _MAX_SESSIONS:
-                sorted_ids = sorted(
-                    self._sessions.keys(),
-                    key=lambda sid: self._sessions[sid].updated_at,
-                )
-                for sid in sorted_ids[:len(self._sessions) - _MAX_SESSIONS]:
+                idle = [sid for sid, s in self._sessions.items()
+                        if not s.chat_lock.locked()]
+                idle.sort(key=lambda sid: self._sessions[sid].updated_at)
+                excess = len(self._sessions) - _MAX_SESSIONS
+                for sid in idle[:excess]:
                     del self._sessions[sid]
 
     # ── 主入口 ──
@@ -496,7 +464,7 @@ class ChatService:
         self, session: ChatSession, message: str, request_id: str,
     ) -> ChatResponse:
         """已持会话锁：执行多轮 LLM 工具调用闭环（最多 _MAX_ROUNDS 轮）。"""
-        _ensure_chat_tools()  # 每次请求刷新，包含可选模块（如 knowledge）
+        _ensure_chat_tools()  # 每次请求刷新
         activities: list[Activity] = []
         called_fingerprints: set[str] = set()
         media: list[dict] = []
@@ -996,7 +964,7 @@ def _tool_args_summary(tool_name: str, args: dict) -> str:
     parts = []
     for f in fields:
         val = args.get(f, "")
-        if val and isinstance(val, str) and "\\" in str(val):
+        if val and isinstance(val, str) and ("\\" in val or "/" in val):
             # 只记录文件名，不暴露完整路径中的用户名
             parts.append(f"{f}={Path(str(val)).name}")
         elif val:

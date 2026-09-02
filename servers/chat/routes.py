@@ -111,7 +111,8 @@ async def chat_endpoint(request: Request):
 # ── 文件上传 ──
 import tempfile  # noqa: E402
 import uuid as _uuid  # noqa: E402
-import shutil as _shutil  # noqa: E402
+
+_MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB 上传上限
 
 
 async def upload_file(request: Request):
@@ -130,8 +131,25 @@ async def upload_file(request: Request):
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest = dest_dir / safe_name
 
+        # 限制上传大小，避免超大文件耗尽磁盘
+        too_large = False
+        total = 0
         with open(dest, "wb") as f:
-            _shutil.copyfileobj(uploaded.file, f)
+            while True:
+                chunk = uploaded.file.read(1024 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > _MAX_UPLOAD_BYTES:
+                    too_large = True
+                    break
+                f.write(chunk)
+        if too_large:
+            try:
+                dest.unlink()
+            except OSError:
+                pass
+            return JSONResponse({"error": "file too large"}, status_code=413)
 
         return JSONResponse({
             "success": True,

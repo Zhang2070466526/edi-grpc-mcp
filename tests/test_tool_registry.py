@@ -28,6 +28,7 @@ def test_all_tools_registered():
         "replace_port_component", "attach_out_component",
         "replace_schematic_from_file",
         "list_schematic_components", "get_schematic_component_info",
+        "get_components_static_params",
         "open_hfss_project", "close_hfss_project", "launch_aedt", "get_hfss_project_info",
         "start_hfss_analysis_async", "get_hfss_analysis_status",
         "cst_solve_async", "cst_solve_query", "cst_export_snp",
@@ -70,9 +71,8 @@ def test_chat_tool_map_consistency():
     schema_names = set(t["function"]["name"] for t in CHAT_TOOLS_SCHEMA)
     map_names = set(CHAT_TOOL_MAP.keys())
 
-    # MAP ⊂ MCP（排除 Chat 专属工具，如知识库 RAG）
-    _chat_only = {"search_knowledge", "ask_knowledge", "add_knowledge", "list_knowledge_sources"}
-    only_in_map = map_names - mcp_tools - _chat_only
+    # MAP ⊂ MCP
+    only_in_map = map_names - mcp_tools
     assert not only_in_map, f"Chat MAP 中有未在 MCP 注册的工具: {sorted(only_in_map)}"
 
     # MAP ↔ SCHEMA 必须一致

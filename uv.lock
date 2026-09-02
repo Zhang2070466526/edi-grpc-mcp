@@ -422,7 +422,7 @@ wheels = [
 ]
 
 [[package]]
-name = "edi-mcp"
+name = "edi-grpc-mcp"
 version = "0.1.8"
 source = { editable = "." }
 dependencies = [

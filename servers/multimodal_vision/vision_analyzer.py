@@ -210,6 +210,8 @@ def analyze_image(
                        "图片分析未配置。请设置 VISION_API_KEY、VISION_BASE_URL 和 VISION_MODEL。",
                        retryable=False)
 
+    if not isinstance(max_tokens, int):
+        max_tokens = 2048
     max_tokens = max(128, min(max_tokens, 4096))
     if detail not in ("auto", "low", "high"):
         detail = "auto"

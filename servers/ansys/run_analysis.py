@@ -18,7 +18,7 @@ from servers import mcp
 
 # HFSS 全局串行队列：AEDT 是单实例桌面程序，同一时间只能跑一个仿真。
 # max_tasks 与原 _MAX_HFSS_TASKS=50 对齐；TTL 用 TaskRunner 默认 2h。
-hfss_runner = TaskRunner(name_prefix="hfss", max_tasks=50)
+hfss_runner = TaskRunner(name_prefix="hfss", max_tasks=50, max_run_seconds=7200)
 
 
 def _run_hfss_analysis_task(

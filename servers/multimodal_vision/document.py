@@ -95,7 +95,9 @@ def register_document_url(file_path: str, disposition: str = "inline") -> str:
     供其他模块（如报告生成器）在生成文档后直接返回预览链接。
     Token 10 分钟后过期，仅本机 127.0.0.1 可访问。
     """
-    _, url = _register_token(Path(file_path).resolve(), disposition)
+    # 复用 open_document 的路径校验，防止未来调用方传入任意本地路径被注册为可访问 token
+    path = _validate_path(file_path, _ALLOWED_EXTENSIONS)
+    _, url = _register_token(path, disposition)
     return url
 
 

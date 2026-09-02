@@ -48,5 +48,4 @@ dev = [
     "grpcio-tools>=1.82.1",
     "pyinstaller>=6.21.0",
     "pytest>=8.0",
-    # 知识库依赖（可选）：chromadb, langchain, langchain-community, dashscope
 ]

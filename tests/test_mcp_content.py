@@ -51,7 +51,7 @@ class TestResourcesDirect:
         assert isinstance(text, str)
         for keyword in ["TIMEOUT", "STREAM_DISCONNECTED",
                         "clear_before_import", "confirm_clear",
-                        "show_image", "copy_image_to_workspace"]:
+                        "show_image"]:
             assert keyword in text, f"Missing keyword: {keyword}"
 
 

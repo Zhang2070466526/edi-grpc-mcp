@@ -148,7 +148,7 @@ mcp_servers:
 
 ## OpenClaw 图片显示
 
-`show_image` 始终可用，返回 MCP ImageContent。`analyze_image` 调用视觉模型分析图片（配置 VISION_API_KEY 后自动开启，仅用户明确要求时使用，会上传到第三方）。`copy_image_to_workspace` 仅在 `OPENCLAW_WORKSPACE` 有效时注册。
+`show_image` 始终可用，返回 MCP ImageContent。`analyze_image` 调用视觉模型分析图片（配置 VISION_API_KEY 后自动开启，仅用户明确要求时使用，会上传到第三方）。`copy_image_to_workspace` 已暂时隐藏（当前不使用 OpenClaw）。
 
 > 不需要修改 `openclaw.json`，不需要 TOOLS.md，不需要 `[embed]`。
 
@@ -162,7 +162,9 @@ mcp_servers:
 
 **端口被占用？**
 
-MCP 服务默认监听 50026，如果端口已被上一个未退出的进程占用会导致启动失败。
+MCP 服务默认监听 50026。启动时会自动检测端口：若被上一个未退出的进程（如残留的 `edi_mcp_server.exe`）占用，会自动结束占用进程并继续启动，无需手动处理。
+
+仅当自动清理失败（如权限不足）时才需手动结束：
 
 1. 查找占用端口的进程：
 ```powershell

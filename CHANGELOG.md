@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.1.9（2026-09-02）
+
+### 新增
+- 器件固有参数查询工具 `get_components_static_params`（gRPC `GET_COMPONENTS_STATIC_PARAMS = 21`）：按器件 UUID 查询重量/尺寸/封装/厂商/成本，用于选型后的合理性检查；proto 重新编译生成枚举 21
+- 端口占用自动清理：`start_servers.py` 启动时若端口被占用，自动结束占用进程后继续启动（新增 `_find_port_pid` / `_kill_port_process`）
+- 启动日志打印访问令牌值：`Auth: enabled (?token=xxx required on /mcp)`，便于客户端直接复制 token
+
+### 修复
+- 修复 8 个中危 bug：`start_simulation_async` 超时未校验、`update_simulation_component` 丢弃查找错误、`launch_edi` 成功报失败、`compare_simulation_results` CSV 解析 x/y 错位与插值未校验非参考文件单调、`close_hfss_project` 关错项目、HFSS/CST runner 缺运行超时兜底、Chat 会话淘汰误删活跃会话、`/upload` 缺大小限制
+- 修复 5 个低危问题：`register_document_url` 绕过路径校验、VSWR 拆分残留连续 `&` 与丢 `ac_config`、`cst_export_snp` port_count 未校验、Chat 路径脱敏只处理反斜杠、`get_simulation_async_result` 端点 success 语义与 status 相反
+- 修复 2 个防御性问题：`analyze_image` max_tokens 类型校验、`compare_simulation_results` 输出目录校验
+- Chat 前端：修复鉴权启用后 fetch 不带 token 导致工具列表/聊天/上传 401 的问题；修复 session 失效后前端未同步新 `session_id` 导致多轮对话上下文断裂的问题
+
+### 重构
+- Chat 前端 UI 全面优化：整体视觉（圆角/阴影/间距）、侧栏工具分类重做、消息气泡加时间戳、顶栏 EDI 在线状态彩色圆点
+- 删除 RAG 知识库模块（`servers/knowledge/`，ChromaDB + DashScope，从未注册为 MCP 工具）
+- 隐藏 `copy_image_to_workspace`（暂不使用 OpenClaw，`OPENCLAW_WORKSPACE_PATH` 恒为 None，函数代码保留可恢复）
+
+### 测试
+- 新增 `tests/test_bugfixes.py`（21 个回归测试），全量 288 → 309 项
+
 ## 0.1.8（2026-09-01）
 
 ### 新增

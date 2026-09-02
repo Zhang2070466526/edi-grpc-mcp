@@ -93,11 +93,11 @@ PyPI: https://pypi.org/project/edi-mcp/  |  当前版本：0.1.8
 
 ## MCP 工具清单
 
-工具总数随版本变化（当前 48 个，含 1 个条件注册，以运行时 `/ready` 的 `tool_count` 为准），按功能分 11 类：
+工具总数随版本变化（当前 48 个，以运行时 `/ready` 的 `tool_count` 为准），按功能分 11 类：
 
 | 分类 | 数量 | 说明 |
 |---|---|---|
-| 工程管理 | 7 | 扫描 / 打开 / 关闭工程、查询器件、分析变量 |
+| 工程管理 | 8 | 扫描 / 打开 / 关闭工程、查询器件、分析变量 |
 | 仿真器件 | 10 | 器件 Schema、增删改、状态、网表导入、原理图加载 |
 | 仿真 | 7 | 同步 / 异步仿真、网表仿真、任务查询 |
 | 导出分析 | 2 | 导出网表、截图原理图 |
@@ -105,7 +105,7 @@ PyPI: https://pypi.org/project/edi-mcp/  |  当前版本：0.1.8
 | ANSYS HFSS | 6 | AEDT 工程开关、HFSS 异步仿真 |
 | CST 电磁仿真 | 5 | 异步求解 .cst、导出 S 参数 / 远场方向图 |
 | 图表 | 3 | RAW 曲线、转图、结果对比 |
-| 图片 | 3 | 显示、视觉分析、复制到工作区 |
+| 图片 | 2 | 显示、视觉分析 |
 | 文档 | 1 | 打开本地文档 |
 | 报告 | 1 | 生成仿真报告 |
 
@@ -145,7 +145,7 @@ gRPC 工具：AI 客户端 -> MCP 工具 -> grpc_client.call_grpc() -> PerformAc
 - 文件读取：允许并发（最多 4）
 - Turbocharts：BoundedSemaphore(1)
 - CST 求解：TaskRunner 单 worker 串行（异步任务队列）
-- 单实例控制：启动时检查端口
+- 单实例控制：启动时检查端口，被占用时自动结束占用进程再启动
 
 ## 测试
 
@@ -227,11 +227,14 @@ python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto 
 - 配置 `MCP_API_KEY` 后，`/mcp` `/ui` `/chat` `/tools/list` `/upload` 端点要求 URL 带 `?token=<key>` 匹配才放行，其余返回 401
 - 留空则不鉴权（向后兼容）；用于「只允许指定 agent 访问」的场景
 - 实现：`start_servers.py` 的 `_TokenAuthMiddleware` 中间件，绕开 `mcp.run()` 手动构建 Starlette app 后 `add_middleware`
+- 启动日志会打印 token 值（`Auth: enabled (?token=xxx required on /mcp)`），便于复制；Chat 前端从 `/ui?token=` 的 URL 提取 token，页面内 fetch 自动带上
 
 ### Chat 与工具注册
 - Chat 工具列表从 MCP 元数据自动生成，排除同步阻塞和 COM 依赖工具
 - 破坏性操作需用户确认（支持肯定词），5 分钟过期
 - 重启后旧 session 返回 Session not found，不伪造
+- Chat 前端 `/ui`：侧栏工具分类 + 搜索 + 折叠、消息气泡 + 时间戳、EDI 在线状态圆点、输入区全宽对齐
+- Chat 前端 session 连续性：后端在 session 失效时自动创建新 session 并返回新 id，前端同步更新，保证多轮对话上下文连续
 
 ---
 
@@ -282,7 +285,7 @@ python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto 
 
 ### 图片与文档
 31. show_image 始终返回 ImageContent，不依赖工作区
-32. copy_image_to_workspace 条件注册，自动检测顺序：edi-mcp 同级 rfclaw/.../workspace → ~/.openclaw/workspace
+32. copy_image_to_workspace 已暂时隐藏（不使用 OpenClaw），不检测工作区；恢复时改回 `OPENCLAW_WORKSPACE_PATH = _get_openclaw_workspace()`
 33. analyze_image 仅用户明确要求时调用，会上传到第三方
 34. open_document 生成 10 分钟 HTTP token，仅本机 127.0.0.1 可访问
 
@@ -315,19 +318,12 @@ python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto 
 50. URL 拼接双 `/v1` 修复、DashScope Omni 缺少 `modalities: ["text"]` 修复
 51. 默认 prompt 加强，content 数组兼容，短内容（<5 字符）拒绝
 
-### 知识库 (RAG)
-52. 可选模块：`servers/knowledge/`，基于 ChromaDB + DashScope 嵌入
-53. 4 个 MCP 工具：search / ask / add / list_knowledge
-54. 三层架构：VectorStoreService（存储）→ KnowledgeBaseService（业务）→ RagService（RAG 链）
-55. Streamlit 界面：`streamlit run servers/knowledge/knowledge_web.py`
-56. 安装依赖：`pip install chromadb langchain langchain-community langchain-text-splitters dashscope streamlit`
-
 ### CST 电磁仿真
-57. CST 官方 Python 接口通过注册表定位（CST DESIGN ENVIRONMENT_AMD64.exe），需本机安装 CST
-58. 求解与远场导出采用一次性会话（连接 → run_solver → 保存/导远场 → 关闭），不保持会话复用；导出 S 参数无会话直接读结果
-59. CST 求解/导出逻辑原在参考脚本 `cst_libraries.py` 中，现已全部抽取到 `simulate.py`（求解）与 `result_export.py`（S 参数 + 远场方向图），参考脚本已删除
-60. CST/HFSS 异步任务复用通用 `TaskRunner`（`servers/task_runner.py`）；EDA 仿真保留自有注册表（增量日志推送 + gRPC 回调 + ACCEPTED 状态是 TaskRunner 无法优雅承载的）
-61. CST 求解/导出统一走 `cst_runner` 串行队列（含 `cst_export_snp` 经 `run_sync` 同步执行），避免无会话读结果与求解会话并发
+52. CST 官方 Python 接口通过注册表定位（CST DESIGN ENVIRONMENT_AMD64.exe），需本机安装 CST
+53. 求解与远场导出采用一次性会话（连接 → run_solver → 保存/导远场 → 关闭），不保持会话复用；导出 S 参数无会话直接读结果
+54. CST 求解/导出逻辑原在参考脚本 `cst_libraries.py` 中，现已全部抽取到 `simulate.py`（求解）与 `result_export.py`（S 参数 + 远场方向图），参考脚本已删除
+55. CST/HFSS 异步任务复用通用 `TaskRunner`（`servers/task_runner.py`）；EDA 仿真保留自有注册表（增量日志推送 + gRPC 回调 + ACCEPTED 状态是 TaskRunner 无法优雅承载的）
+56. CST 求解/导出统一走 `cst_runner` 串行队列（含 `cst_export_snp` 经 `run_sync` 同步执行），避免无会话读结果与求解会话并发
 
 ## 维护人
 

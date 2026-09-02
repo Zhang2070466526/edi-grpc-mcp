@@ -107,25 +107,6 @@ a = Analysis(
         'IPython', 'jupyter', 'notebook',
         'matplotlib.tests',
         'numpy.tests',
-        # 知识库依赖（可选模块，不打包）
-        'chromadb', 'chromadb.*', 'chroma_utils',
-        'langchain', 'langchain_community', 'langchain_core',
-        'langchain_text_splitters', 'langchain_chroma',
-        'dashscope', 'dashscope.*',
-        'streamlit', 'streamlit.*',
-        'sentence_transformers', 'sentence_transformers.*',
-        'onnxruntime', 'onnxruntime.*', 'onnx',
-        'tokenizers', 'tokenizers.*',
-        'huggingface_hub', 'huggingface_hub.*',
-        'transformers', 'transformers.*',
-        'pypika', 'overrides', 'importlib_resources',
-        'mmh3', 'orjson', 'httptools',
-        'kubernetes', 'opentelemetry', 'opentelemetry.*',
-        'uvloop', 'watchfiles',
-        # ── 进一步精简 ──
-        # chromadb 的剩余传递依赖（知识库不打包）
-        'posthog', 'posthog.*', 'chroma_hnswlib', 'chroma_hnswlib.*',
-        'tenacity', 'langsmith', 'fastapi', 'fastapi.*', 'coloredlogs',
         # Pillow 可选格式插件（AVIF/BLP 未使用；保留 WebP 供 analyze_image 校验）
         'PIL.AvifImagePlugin', 'PIL.BlpImagePlugin',
         # matplotlib 3D 工具（未使用）

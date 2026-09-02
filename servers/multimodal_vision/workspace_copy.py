@@ -69,7 +69,10 @@ def _get_openclaw_workspace() -> Path | None:
     return None
 
 
-OPENCLAW_WORKSPACE_PATH = _get_openclaw_workspace()
+# 当前不使用 OpenClaw，暂时隐藏 copy_image_to_workspace：跳过工作区检测，
+# 使 OPENCLAW_WORKSPACE_PATH 恒为 None（工具因此不注册）。需要恢复时改回：
+#   OPENCLAW_WORKSPACE_PATH = _get_openclaw_workspace()
+OPENCLAW_WORKSPACE_PATH = None
 
 if OPENCLAW_WORKSPACE_PATH is not None:
     _logger.info("copy_image_to_workspace enabled")

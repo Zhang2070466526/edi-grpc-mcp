@@ -116,6 +116,8 @@ curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
 ```
 
 > 配置了 `MCP_API_KEY` 后，Streamable HTTP 客户端（OpenClaw、Hermes 等）的 URL 需带 `?token=` 才能访问，例如 `http://127.0.0.1:50026/mcp?token=xxx`，不带则返回 401。stdio 模式（Claude Code）不经过 HTTP，不受影响。
+>
+> 服务启动日志会打印 token 值（`Auth: enabled (?token=xxx required on /mcp)`），可直接复制。内置聊天界面通过 `http://127.0.0.1:50026/ui?token=xxx` 访问，页面内的请求会自动带上该 token。
 
 ---
 
@@ -143,7 +145,7 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 
 > 工具数量由运行时动态统计，此处为当前快照。权威值见 `/ready` 的 `tool_count`（或 `tests/test_tool_registry.py` 的 `required` 列表）。
 
-### 工程管理（7 个）
+### 工程管理（8 个）
 
 | 工具 | 说明 |
 |---|---|
@@ -154,6 +156,7 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 | `get_schematic_component_info` | 按实例名查询器件完整信息（gRPC） |
 | `get_project_summary` | 工程概览（元数据/原理图/仿真配置） |
 | `analyze_variables` | 分析变量定义、引用和 Sweep 配置 |
+| `get_components_static_params` | 查询器件固有参数（重量/尺寸/封装/厂商/成本） |
 
 ### 仿真器件（10 个）— 工具 API v3 / gRPC 协议 v2
 
@@ -227,7 +230,6 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 | `compare_simulation_results` | 多 RAW 同曲线对比叠图（Matplotlib） |
 | `show_image` | 返回 MCP ImageContent + 本地路径 |
 | `analyze_image` | 调用视觉模型分析图片内容 |
-| `copy_image_to_workspace`* | 复制到工作区（条件注册） |
 
 ### 报告与文档
 
@@ -236,7 +238,7 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 | `generate_simulation_report` | 仿真数据 → PDF/DOCX，自动返回 HTTP 预览链接 |
 | `open_document` | 打开本地文档（link 链接 / local 系统打开） |
 
-> \*条件注册。完整参数说明见 [工具 API](./docs/TOOLS_API.md)。
+> 完整参数说明见 [工具 API](./docs/TOOLS_API.md)。
 
 ---
 
@@ -464,12 +466,12 @@ edi-grpc-mcp/
 │   │   ├── simulate.py                 #     仿真求解（异步，一次性会话）
 │   │   └── result_export.py            #     结果导出（S 参数 / 远场方向图）
 │   │
-│   ├── multimodal_vision/              #   图片 + 视觉 + 文档 (6 个工具)
-│   │   ├── __init__.py                 #     条件注册 copy_image_to_workspace
+│   ├── multimodal_vision/              #   图片 + 视觉 + 文档 (5 个工具)
+│   │   ├── __init__.py                 #     copy_image_to_workspace（已隐藏）
 │   │   ├── validators.py               #     共享校验：图片路径/扩展名/Pillow 内容验证
 │   │   ├── image_display.py            #     show_image + HTTP /images/{token} 路由
 │   │   ├── vision_analyzer.py          #     analyze_image (OpenAI Vision API, Semaphore(2))
-│   │   ├── workspace_copy.py           #     copy_image_to_workspace + 工作区自动检测
+│   │   ├── workspace_copy.py           #     copy_image_to_workspace（已隐藏，暂不检测工作区）
 │   │   └── document.py                 #     open_document（link/local）+ /documents/{token}
 │   │
 │   ├── report/                         #   仿真报告渲染 (1 个工具)
@@ -592,9 +594,14 @@ powershell -File scripts/build.ps1  # PyInstaller
 
 ### 端口占用
 
+启动时会自动检测端口是否被占用：若被占用，自动结束占用进程（如残留的 `edi_mcp_server.exe`）并继续启动，无需手动处理。
+
+仅当自动清理失败（如权限不足）时才需手动结束：
+
 ```powershell
-netstat -ano | findstr 50026 && taskkill -f -pid <PID>
-taskkill -f -im edi_mcp_server.exe
+netstat -ano | findstr 50026              # 查找占用端口的 PID
+taskkill -f -pid <PID>                     # 强制结束该 PID
+taskkill -f -im edi_mcp_server.exe        # 或按进程名结束
 ```
 
 ### gRPC 状态
@@ -608,7 +615,7 @@ curl http://127.0.0.1:50026/ready    # 就绪检查
 ### 图片
 
 - `show_image` 始终可用，未配置工作区时提示用资源管理器打开
-- `copy_image_to_workspace` 条件注册，支持自动检测或 .env 配置
+- `copy_image_to_workspace` 已暂时隐藏（当前不使用 OpenClaw）
 - `analyze_image` 仅用户明确要求时调用，会上传到第三方
 
 ### 服务重启

@@ -702,7 +702,10 @@ def update_simulation_component(
 
     # Three-way type inference: explicit > disk > error
     explicit_type = component_type.strip() if component_type else ""
-    component, _ = _find_component_by_instance(resolved, instance_name)
+    component, find_err = _find_component_by_instance(resolved, instance_name)
+    # 空实例名 / 同名歧义必须立即报错，不能静默吞掉（COMPONENT_NOT_FOUND 可忽略，以支持显式 type + 未保存新器件）
+    if find_err and find_err.get("error_code") in ("EMPTY_INSTANCE_NAME", "AMBIGUOUS_INSTANCE_NAME"):
+        return find_err
     actual_type = component.get("type", "") if component else ""
 
     if actual_type:

@@ -13,7 +13,7 @@
 - **[三、参数目录与 Schema](#三参数目录与-Schema)**：目录设计动机、核心函数、动态参数模式
 - **[四、subprocess 命令行（3 个工具）](#四subprocess命令行3个工具)**：TurboCharts、RAW 曲线查询、结果对比、EDI 启动
 - **[五、COM 对象与 CST 官方接口（ANSYS 6 个 + CST 5 个）](#五COM对象与CST官方接口)**：COM 附着、AEDT 检测、锁文件管理、CST 接口
-- **[六、图片工具（3 个，1 个条件注册）](#六图片工具3个1个条件注册)**：show_image、工作区复制、视觉分析
+- **[六、图片工具（2 个）](#六图片工具2个)**：show_image、视觉分析
 - **[七、Chat 聊天服务](#七Chat聊天服务)**：会话管理、多轮闭环、工具 Schema、安全加固
 - **[八、Resources 与 Prompts](#八Resources与-Prompts)**：只读资源、可复用工作流
 - **[九、文档工具（1 个工具）](#九文档工具1个工具)**：open_document
@@ -650,7 +650,7 @@ CST 工具不走 ANSYS COM，而是用 CST 官方 Python 接口（`servers/cst/c
 
 ---
 
-## 六、图片工具（3 个，1 个条件注册）
+## 六、图片工具（2 个）
 
 ### 6.1 show_image
 
@@ -665,9 +665,9 @@ CST 工具不走 ANSYS COM，而是用 CST 官方 Python 接口（`servers/cst/c
    └─ >10MB → 只返回 TextContent（本地路径 + 查看建议）
 ```
 
-### 6.2 copy_image_to_workspace
+### 6.2 copy_image_to_workspace（已隐藏）
 
-条件注册（`OPENCLAW_WORKSPACE` 有效时，支持 `.env` 配置或自动检测：edi-mcp 同级 `rfclaw/openclaw-service/state/workspace`，回退到 `~/.openclaw/workspace`）。复制到 `{workspace}/media/edi/mcp-cache/`。
+当前不使用 OpenClaw，该工具已暂时隐藏（`OPENCLAW_WORKSPACE_PATH` 恒为 `None`，不检测工作区）。原条件注册逻辑：`OPENCLAW_WORKSPACE` 有效时支持 `.env` 配置或自动检测（edi-mcp 同级 `rfclaw/openclaw-service/state/workspace`，回退到 `~/.openclaw/workspace`），复制到 `{workspace}/media/edi/mcp-cache/`。
 
 返回关键字段：
 - `media_path`：相对工作区的路径（如 `media/edi/mcp-cache/S11.png`），客户端可直接用于 MEDIA 指令
@@ -1043,7 +1043,7 @@ failure_source 异常来源："mcp" 表示 MCP 自身异常，不是 EDI 业务�
 2. edi-mcp 同级 `rfclaw/openclaw-service/state/workspace`
 3. 用户目录 `~/.openclaw/workspace`（兜底）
 
-只要任一目录存在且有效，`copy_image_to_workspace` 即自动注册。
+（当前已隐藏：不执行检测，`OPENCLAW_WORKSPACE_PATH` 恒为 `None`。）
 
 ### 11.11 产物统一格式（artifacts）
 
@@ -1060,7 +1060,7 @@ failure_source 异常来源："mcp" 表示 MCP 自身异常，不是 EDI 业务�
 
 适用工具：`turbocharts_convert`、`capture_schematic`、`compare_simulation_results`、`generate_simulation_report`。
 
-`message` 用"已生成"，不用"已显示"——MCP 不保证客户端渲染成功。`copy_image_to_workspace` 额外返回 `media_path`（相对路径）和 `media_type`（MIME），便于客户端生成 MEDIA 指令。
+`message` 用"已生成"，不用"已显示"——MCP 不保证客户端渲染成功。
 
 ### 11.12 重启恢复机制
 
@@ -1135,7 +1135,7 @@ list_simulation_components / list_schematic_components ──(instance_name)─�
 get_project_summary + turbocharts_convert + capture_schematic + simulate_* ──> generate_simulation_report ──(PDF/DOCX)──> open_document
 ```
 
-### 12.1 工程管理（7 个）
+### 12.1 工程管理（8 个）
 
 | 工具 | 动机（为什么） | 解决的功能 | 依赖（输入来自） | 被依赖（输出供） |
 |---|---|---|---|---|
@@ -1146,6 +1146,7 @@ get_project_summary + turbocharts_convert + capture_schematic + simulate_* ─�
 | `get_schematic_component_info` | 按实例名单查器件详情（实时） | gRPC 单查器件完整信息 | `list_schematic_components`（instance_name） | LLM 查器件详情 |
 | `get_project_summary` | 一次看全工程概览，避免零散多轮查询 | 聚合元数据/原理图/器件/仿真配置/最新结果 | —（本地读） | LLM 了解全貌、`generate_simulation_report` |
 | `analyze_variables` | EDA 参数化设计依赖 Var/Sweep，需理解变量关系 | 分析 Var 定义、引用、Sweep 配置 | —（本地读） | LLM 理解参数化设计 |
+| `get_components_static_params` | 查器件物理固有参数（重量/尺寸/封装/厂商/成本） | 转发到 `POST /api/v1/components/static-params/`，返回 code/message/data | 选型列表的 `alternative_model_id` | LLM 查器件物理属性 |
 
 ### 12.2 仿真器件（10 个）
 
@@ -1218,13 +1219,12 @@ get_project_summary + turbocharts_convert + capture_schematic + simulate_* ─�
 | `cst_export_farfield` | 把远场方向图导出成 ASCII txt | 自动判断求解，导出远场 `.txt` | 已求解或配 farfield 监视器的 `.cst` | 后续画图/分析 |
 | `cst_export_farfield_query` | 查远场导出任务，一次拿进度+结果 | 返回进度，完成时附 txt 列表 | `cst_export_farfield`（task_id） | 后续画图/分析 |
 
-### 12.8 图片（3 个，1 个条件注册）
+### 12.8 图片（2 个）
 
 | 工具 | 动机 | 功能 | 依赖 | 被依赖 |
 |---|---|---|---|---|
 | `show_image` | 把本地图片返回给客户端渲染 | 返回 MCP ImageContent | — | 查看 `capture_schematic` 等生成的图片 |
 | `analyze_image` | 让视觉模型理解图片内容（如原理图） | 调用视觉模型分析 | —（图片路径） | 分析 `capture_schematic` 截图 |
-| `copy_image_to_workspace`（条件） | OpenClaw 需要图片在工作区目录 | 复制到工作区 media/edi | — | OpenClaw 附件发送 |
 
 ### 12.9 文档（1 个）
 

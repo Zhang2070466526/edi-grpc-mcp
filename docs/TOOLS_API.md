@@ -16,14 +16,14 @@ from servers.eda.project_manage import list_epp_projects
 
 ## 目录
 
-- **[工程管理（7 个）](#工程管理7个)**：扫描 / 打开 / 关闭工程、查询器件、分析变量
+- **[工程管理（8 个）](#工程管理8个)**：扫描 / 打开 / 关闭工程、查询器件、分析变量
 - **[仿真（7 个）](#仿真7个)**：同步 / 异步仿真、网表仿真、任务查询
 - **[导出与分析（2 个）](#导出与分析2个)**：导出网表、截图原理图
 - **[模型与启动（3 个）](#模型与启动3个)**：批量替换模型、启动 EDI、服务诊断
 - **[ANSYS HFSS（6 个）](#ansys-hfss6个)**：AEDT 工程开关、HFSS 异步仿真
 - **[CST 电磁仿真（5 个）](#cst电磁仿真5个)**：异步求解 .cst、导出 S 参数 / 远场方向图
 - **[图表（3 个）](#图表3个)**：RAW 曲线解析、转图、结果对比
-- **[图片（3 个，1 个条件注册）](#图片3个1个条件注册)**：显示图片、视觉分析、复制到工作区
+- **[图片（2 个）](#图片2个)**：显示图片、视觉分析
 - **[仿真器件管理（10 个）](#仿真器件管理10个协议-v3)**：器件 Schema、增删改、状态、网表导入、原理图加载
 - **[Resources & Prompts](#resources--prompts)**：只读资源 + 可复用工作流
 - **[文档（1 个）](#文档1个)**：打开本地文档
@@ -33,7 +33,7 @@ from servers.eda.project_manage import list_epp_projects
 
 ---
 
-## 工程管理（7 个）
+## 工程管理（8 个）
 
 ### `list_epp_projects`
 
@@ -174,6 +174,44 @@ get_schematic_component_info(project_path: str, instance_name: str, timeout_seco
     }
 }
 ```
+
+---
+
+### `get_components_static_params`
+
+```python
+from servers.eda.project_manage import get_components_static_params
+
+get_components_static_params(
+    original_uuids: list[str] | None = None,
+    original_uuid: str = "",
+    timeout_seconds: int = 60,
+) -> dict
+```
+
+查询器件的固有参数（重量、尺寸、封装、所属厂商、成本等）。UUID 来自选型列表（`replace_models_from_csv` 的 CSV）的 `alternative_model_id` 列。不需要打开工程，也不需要 `project_path`。gRPC 服务将请求转发到 `POST /api/v1/components/static-params/`，返回上游完整响应（code/message/data）。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `original_uuids` | list | 否 | None | 器件 UUID 数组（批量），与 `original_uuid` 二选一 |
+| `original_uuid` | str | 否 | "" | 单个器件 UUID，与 `original_uuids` 二选一 |
+| `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
+
+返回（gRPC 统一结构，业务字段在 `details` 中）：
+
+```python
+{
+    "success": True,
+    "status": "SUCCEEDED",
+    "details": {
+        "code": 200,
+        "message": "器件固有参数获取成功",
+        "data": [{"模型id": "...", "重量": "", "尺寸": "...", "封装": "", "所属厂商": "...", "成本": ""}, ...]
+    }
+}
+```
+
+`data` 与请求 UUID 顺序一一对应，未命中的 UUID 保留为 `null`。
 
 ---
 
@@ -832,7 +870,7 @@ compare_simulation_results(
 
 ---
 
-## 图片（3 个，1 个条件注册）
+## 图片（2 个）
 
 ### `show_image`
 
@@ -886,9 +924,9 @@ analyze_image(image_path: str, prompt: str = "请描述图片中的主要内容�
 
 ---
 
-### `copy_image_to_workspace`（条件注册）
+### `copy_image_to_workspace`（已隐藏）
 
-仅在 `OPENCLAW_WORKSPACE` 有效时注册（支持 `.env` 配置或自动检测）。复制到 `media/edi/mcp-cache/`。
+当前不使用 OpenClaw，该工具已暂时隐藏（不注册为 MCP 工具、不检测工作区）。原逻辑：仅在 `OPENCLAW_WORKSPACE` 有效时注册（支持 `.env` 配置或自动检测），复制到 `media/edi/mcp-cache/`。
 
 ```python
 from servers.multimodal_vision import copy_image_to_workspace

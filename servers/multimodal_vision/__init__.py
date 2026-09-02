@@ -12,7 +12,7 @@ from servers.multimodal_vision.workspace_copy import copy_image_to_workspace, OP
 from servers.multimodal_vision.vision_analyzer import analyze_image
 from servers.multimodal_vision.document import open_document, serve_document, register_document_url
 
-# 条件注册 copy_image_to_workspace
+# 条件注册 copy_image_to_workspace（当前已隐藏：OPENCLAW_WORKSPACE_PATH 恒为 None，故不注册）
 from servers import mcp
 if OPENCLAW_WORKSPACE_PATH is not None:
     mcp.tool()(copy_image_to_workspace)

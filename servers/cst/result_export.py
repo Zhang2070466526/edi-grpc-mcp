@@ -131,9 +131,12 @@ class CstResultExporter:
             raise RuntimeError("No valid S-Parameter items parsed: %s" % s_items)
         if port_count is None:
             port_count = max(max(i, j) for i, j in sp_map.keys())
+        if port_count < 1:
+            raise RuntimeError("port_count 必须是正整数，收到 %s" % port_count)
 
         stem = os.path.splitext(os.path.basename(model_path))[0]
         if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
             output_path = os.path.join(output_dir, stem + ".s{}p".format(port_count))
         else:
             output_path = os.path.splitext(model_path)[0] + ".s{}p".format(port_count)

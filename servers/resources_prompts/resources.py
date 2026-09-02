@@ -81,8 +81,6 @@ def resource_operation_guide() -> str:
         "- `set_component_active_state` 是确定性设置，不是状态切换。\n"
         "- `clear_before_import=true` 必须获得用户明确确认，同时传 `confirm_clear=true`。\n"
         "- `show_image` 使用原生 MCP ImageContent 返回图片，不复制文件，不输出 MEDIA 文本。\n"
-        "- `copy_image_to_workspace` 只在 OPENCLAW_WORKSPACE 配置有效时注册。\n"
-        "- 只有用户明确要求复制到工作区时才能调用 `copy_image_to_workspace`。\n"
         "- 不要检查或读取服务端环境变量。\n"
         "- 不要猜测工程文件路径，先通过 `list_epp_projects` 获取。\n"
         "- 产生输出文件（截图/图表/报告）或采用默认值时，先告知用户输出位置或默认值，询问是否需要调整。\n"

@@ -11,6 +11,7 @@
     analyze_variables             分析变量定义和引用关系
     list_schematic_components     查询原理图全部器件（gRPC）
     get_schematic_component_info  按实例名查询器件完整信息
+    get_components_static_params   查询器件固有参数（重量/尺寸/封装/厂商/成本）
 
   仿真：
     simulate_project              执行工程仿真（同步）
@@ -60,7 +61,7 @@
   图片：
     show_image                    读取本地图片，返回 MCP ImageContent
     analyze_image                 调用视觉模型分析图片内容
-    copy_image_to_workspace       条件注册，复制到 media/edi/mcp-cache/（需配置工作区）
+    copy_image_to_workspace       已隐藏（不使用 OpenClaw）
 
   文档：
     open_document                 打开本地文档（link 链接 / local 系统打开）
@@ -93,11 +94,6 @@ import servers.ansys.run_analysis         # noqa: F401
 import servers.multimodal_vision          # noqa: F401 — show_image + copy + analyze + open_document
 import servers.report                     # noqa: F401 — generate_simulation_report
 import servers.cst                        # noqa: F401 — cst_solve + cst_export_snp
-# 知识库暂不注册为 MCP 工具，仅 Chat 内部使用
-# try:
-#     import servers.knowledge
-# except ImportError:
-#     pass
 
 # Resources & Prompts
 import servers.resources_prompts      # noqa: F401 — @mcp.resource() / @mcp.prompt()

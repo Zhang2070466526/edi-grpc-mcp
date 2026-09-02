@@ -280,7 +280,19 @@ def close_hfss_project(
         _, desktop = _attach_aedt()
         names = list(desktop.GetProjectList())
 
-        target = project_name.strip() if project_name else (names[0] if names else "")
+        # 为空时关闭活动项目（而非 GetProjectList 的第一个，顺序不保证活动项目在首位）
+        if project_name.strip():
+            target = project_name.strip()
+        else:
+            target = ""
+            try:
+                active = desktop.GetActiveProject()
+                if active is not None:
+                    target = active.GetName()
+            except Exception:
+                pass
+            if not target:
+                target = names[0] if names else ""
         if not target:
             return {"success": False, "message": "没有可关闭的项目"}
 

@@ -71,7 +71,7 @@ def launch_edi(
     result: dict[str, Any] = {
         "process_started": True,
         "grpc_ready": False,
-        "success": False,
+        "success": True,
         "message": "EDI 已启动",
         "edi_path": str(exe_path),
         "grpc_server": EDA_GRPC_SERVER,
@@ -91,6 +91,7 @@ def launch_edi(
             except OSError:
                 time.sleep(1)
 
+        result["success"] = False
         result["message"] += "，gRPC 服务未在规定时间内就绪"
 
     return result

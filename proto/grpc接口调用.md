@@ -59,6 +59,7 @@ enum EventType {
   LIST_SCHEMATIC_COMPONENTS = 18;
   GET_SCHEMATIC_COMPONENT_INFO = 19;
   LOAD_SCHEMATIC_FROM_FILE = 20;
+  GET_COMPONENTS_STATIC_PARAMS = 21;
 }
 ```
 
@@ -82,6 +83,7 @@ enum EventType {
 - `LIST_SCHEMATIC_COMPONENTS`：查询指定工程唯一原理图上的全部器件信息。
 - `GET_SCHEMATIC_COMPONENT_INFO`：根据器件实例名查询指定器件的完整信息。
 - `LOAD_SCHEMATIC_FROM_FILE`：使用指定的 `schematic.ep` 整体替换工程唯一原理图。
+- `GET_COMPONENTS_STATIC_PARAMS`：转发器件固有参数查询，返回重量、尺寸、封装、所属厂商和成本等信息。
 
 ## 4. payload_json 示例
 
@@ -372,6 +374,33 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 - 加载、解析或保存失败时恢复调用前的原理图状态。
 - 该任务不复制模板目录中的 `model_data`、`symbol`、`match` 等依赖文件，也不触发模型库扫描；自定义器件必须已存在于当前工作区模型库，否则会沿用 `loadFromFile()` 的现有行为跳过无法创建的器件。
 
+### GET_COMPONENTS_STATIC_PARAMS
+
+批量查询：
+
+```json
+{
+  "original_uuids": [
+    "d0004c57-db4b-4587-b3c5-e82a07258cc7"
+  ]
+}
+```
+
+单条查询：
+
+```json
+{
+  "original_uuid": "d0004c57-db4b-4587-b3c5-e82a07258cc7"
+}
+```
+
+- `original_uuids` 与 `original_uuid` 必须且只能提供一个。
+- `original_uuids` 必须是至少包含一个非空字符串的数组；`original_uuid` 必须是非空字符串。
+- 该任务不需要 `project_path`，也不要求打开工程。
+- gRPC 服务将请求体原样转发到 `POST /api/v1/components/static-params/`。
+- 最终事件的 `payload_json` 是上游接口完整响应信封，保留 `code`、`message`、`data`，不增加或删除业务字段。
+- `data` 与请求 UUID 顺序一一对应，未命中的 UUID 保留为 `null`。
+
 ### REPLACE_PORT_COMPONENT
 
 ```json
@@ -511,6 +540,7 @@ enum ResultStatus {
 - `LIST_SCHEMATIC_COMPONENTS`：`project_path`、`component_count`、`components`
 - `GET_SCHEMATIC_COMPONENT_INFO`：`project_path`、`instance_name`；成功时额外包含 `component`
 - `LOAD_SCHEMATIC_FROM_FILE`：`project_path`、`schematic_path`、`component_count`、`net_segment_count`
+- `GET_COMPONENTS_STATIC_PARAMS`：上游接口原始响应对象，包含 `code`、`message`、`data`
 - `GENERATE_SCHEMATIC_FROM_NETLIST`：`project_path`、`netlist_path`、`schematic_path`、`clear_before_import`、`symbols_added`、`nets_added`、`lines_added`、`net_points_added`
 
 ## 8. SIMULATE_NETLIST 完整调用示例
@@ -946,6 +976,42 @@ enum ResultStatus {
   "payload_json": "{\"project_path\":\"C:/test/project.epp\",\"schematic_path\":\"C:/test/schematic.ep\",\"component_count\":12,\"net_segment_count\":4}"
 }
 ```
+
+### 9.10 获取器件固有参数
+
+批量查询请求：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-static-params-001",
+  "type": "GET_COMPONENTS_STATIC_PARAMS",
+  "payload_json": "{\"original_uuids\":[\"d0004c57-db4b-4587-b3c5-e82a07258cc7\",\"unknown-uuid\"]}"
+}
+```
+
+单条查询时可将 `payload_json` 改为：
+
+```json
+"{\"original_uuid\":\"d0004c57-db4b-4587-b3c5-e82a07258cc7\"}"
+```
+
+如果 Postman 未识别最新枚举，请重新导入 `ecserver.proto`，也可以临时将 `type` 填为数值 `21`。
+
+最终成功事件示例：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-static-params-001",
+  "event_type": "GET_COMPONENTS_STATIC_PARAMS",
+  "status": "RESULT_STATUS_SUCCESS",
+  "message": "器件固有参数获取成功",
+  "payload_json": "{\"code\":200,\"message\":\"器件固有参数获取成功\",\"data\":[{\"模型id\":\"d0004c57-db4b-4587-b3c5-e82a07258cc7\",\"重量\":\"\",\"尺寸\":\"3.60mm×1.60mm×0.07mm\",\"封装\":\"\",\"所属厂商\":\"电科13所第十七专业部\",\"成本\":\"\"},null]}"
+}
+```
+
+上游返回 `code == 200` 时事件状态为 `RESULT_STATUS_SUCCESS`；其他业务 `code` 对应 `RESULT_STATUS_FAILED`，但完整上游响应仍原样保存在 `payload_json`。网络超时、连接失败或响应不是 JSON 对象时，事件状态为失败，具体转发错误见事件 `message`。
 
 ## 10. 网表生成链路完整调用示例
 
