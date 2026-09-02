@@ -12,7 +12,7 @@
 from mcp.server.fastmcp import FastMCP
 from servers.settings import get_settings
 
-__version__ = "0.1.7"
+__version__ = "0.1.8"
 
 _settings = get_settings()
 

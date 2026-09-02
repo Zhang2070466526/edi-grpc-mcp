@@ -89,7 +89,7 @@ Python 3.12+ / uv 包管理 / FastMCP (mcp >= 1.0.0) / grpcio >= 1.81.0 / protob
 
 CST 电磁仿真依赖：CST 官方 Python 接口（cst.interface / cst.results，通过注册表定位，需本机安装 CST）
 
-PyPI: https://pypi.org/project/edi-mcp/  |  当前版本：0.1.7
+PyPI: https://pypi.org/project/edi-mcp/  |  当前版本：0.1.8
 
 ## MCP 工具清单
 
@@ -175,6 +175,7 @@ uv publish
 ```powershell
 powershell -File scripts/build.ps1
 # 输出: dist/edi-mcp/（含 edi_mcp_server.exe + start_server.bat + .env，约 90 MB）
+# 打包完成后自动跑 scripts/smoke_test_exe.py 冒烟测试（启动 exe → 健康检查 → 鉴权 → 工具注册），不通过则打包失败
 ```
 
 目录型打包，复制 `dist/edi-mcp/` 到目标电脑后创建 `.env` 即可运行。
@@ -332,6 +333,6 @@ python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto 
 
 - 负责人：--
 - 更新时间：2026-08-27
-- 当前版本：0.1.7
+- 当前版本：0.1.8
 
 

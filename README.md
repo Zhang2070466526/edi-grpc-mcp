@@ -569,6 +569,7 @@ uv run pytest tests/ -v          # 详细输出
 uv build && uv publish           # PyPI
 powershell -File scripts/build.ps1  # PyInstaller
 # → dist/edi-mcp/（edi_mcp_server.exe + _internal/ + .env）
+#   打包完成后自动冒烟测试（启动 exe → 健康检查 → 鉴权 → 工具注册）
 ```
 
 ---

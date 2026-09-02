@@ -46,6 +46,15 @@ $topFiles = @(Get-ChildItem $distDir -Recurse -File | Sort-Object Length -Descen
 
 # ── [6/7] 生成配置和启动脚本 ──
 Write-Host "[6/7] Generating config + launcher..." -ForegroundColor Yellow
+# 从开发机 .env 读取 MCP_API_KEY（不写死在脚本里，避免 token 进 git 历史）
+$apiKey = ""
+$srcEnv = Join-Path $root ".env"
+if (Test-Path $srcEnv) {
+    $line = Get-Content $srcEnv | Where-Object { $_ -match '^MCP_API_KEY=' } | Select-Object -First 1
+    if ($line) {
+        $apiKey = ($line -split '=', 2)[1].Trim()
+    }
+}
 $envContent = @"
 # EDA MCP configuration - edit paths for this computer
 EDA_GRPC_SERVER=127.0.0.1:50055
@@ -59,7 +68,7 @@ MCP_TRANSPORT=streamable-http
 MCP_HOST=127.0.0.1
 MCP_PORT=50026
 # Access token: /mcp /ui /chat require ?token= to match this value (leave empty to disable auth)
-MCP_API_KEY=mcp-9f6739b22e914752afc34dc0e7c4b647
+MCP_API_KEY=$apiKey
 # Optional: image vision analysis (enabled when all three are configured)
 VISION_API_KEY=
 VISION_BASE_URL=
@@ -123,6 +132,14 @@ if ($errors -gt 0) {
     Pop-Location; exit 1
 }
 
+# ── [8/8] 冒烟测试 ──
+Write-Host "[8/8] Smoke testing exe..." -ForegroundColor Yellow
+uv run python scripts/smoke_test_exe.py
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Build FAILED: exe smoke test failed" -ForegroundColor Red
+    Pop-Location; exit $LASTEXITCODE
+}
+Write-Host "Smoke test passed." -ForegroundColor Green
+
 Write-Host "Done. Output: dist/edi-mcp/ + dist/edi-mcp.zip" -ForegroundColor Green
-Write-Host "Verify: Run edi_mcp_server.exe then check http://127.0.0.1:50026/health" -ForegroundColor DarkGray
 Pop-Location
