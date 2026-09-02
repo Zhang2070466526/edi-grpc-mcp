@@ -4,7 +4,7 @@
       "command": "uv",
       "args": [
         "--directory",
-        "D:/GitLabCode/mcp-grpc",
+        "D:/GitLabCode/edi-grpc-mcp",
         "run",
         "python",
         "start_servers.py",

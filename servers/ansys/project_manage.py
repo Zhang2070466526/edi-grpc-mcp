@@ -17,7 +17,7 @@ from typing import Any
 import pythoncom
 
 from servers.ansys.config import (
-    AEDT_PATH, _AEDT_LOCK, _LAST_PID,
+    AEDT_PATH, _AEDT_LOCK,
     aedt_is_running, get_aedt_pids, query_desktop_state,
     cleanup_stale_project_lock, get_project_lock_path,
     _attach_aedt, logger,
@@ -25,6 +25,7 @@ from servers.ansys.config import (
 from servers.eda.config import validate_file
 from servers import mcp
 
+_LAST_PID: int | None = None  # MCP 最后一次启动的 AEDT 进程 PID
 _OPEN_PROJECT_PATHS: dict[str, str] = {}  # project_name -> project_path
 
 
@@ -130,14 +131,13 @@ def open_hfss_project(
                         "message": "工程已在 AEDT 中列出，但激活失败，请重试",
                     }
                 _OPEN_PROJECT_PATHS[project_name] = resolved
-                rc = cleanup_stale_project_lock(resolved) if lock_result["removed"] else {}
                 return {
                     "success": True, "status": "already_open",
                     "aedt_running": True, "project_opened": True, "verified": True,
                     "project_name": project_name, "project_path": resolved,
                     "method": "com", "duration_s": round(time.monotonic() - t0, 1),
                     "message": f"工程已打开并激活: {project_name}",
-                    **({"stale_lock_removed": True} if rc.get("removed") else {}),
+                    **({"stale_lock_removed": True} if lock_result["removed"] else {}),
                 }
 
             result = _com_open_project(resolved)

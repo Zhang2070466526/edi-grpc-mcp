@@ -36,8 +36,6 @@ _IMAGE_TOKENS: dict[str, dict[str, Any]] = {}
 _TOKEN_LOCK = threading.RLock()
 
 _MIME_TYPES = IMAGE_MIME_MAP
-# serve_image 用：图片 MIME + .svg（SVG 不在 IMAGE_MIME_MAP 中）
-_MEDIA_TYPES = {**IMAGE_MIME_MAP, ".svg": "image/svg+xml"}
 
 
 # ═══════════════════════════════════════════════════════════
@@ -142,7 +140,7 @@ async def serve_image(request: Request) -> FileResponse | JSONResponse:
     ext = image_path.suffix.lower()
     return FileResponse(
         image_path,
-        media_type=_MEDIA_TYPES.get(ext, "application/octet-stream"),
+        media_type=_MIME_TYPES.get(ext, "application/octet-stream"),
         filename=image_path.name,
         content_disposition_type="inline",
         headers={"Cache-Control": "private, max-age=600", "X-Content-Type-Options": "nosniff"},

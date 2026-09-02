@@ -295,7 +295,7 @@ def parse_components(schematic_text):
             params_raw = psi_entries[0][1]
 
         params = parse_paramsinfo(params_raw) if params_raw else {}
-        param_count = len(params) - 1 if "BasicParameters" in params else len(params)
+        param_count = len(params)
 
         comps.append({
             "component_id": comp_id,

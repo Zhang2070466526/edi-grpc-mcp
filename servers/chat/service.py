@@ -714,9 +714,6 @@ class ChatService:
         if func is None:
             return False, _tool_error("TOOL_EXECUTION_FAILED", f"未知工具: {tool_name}")
 
-        if isinstance(args, list):
-            return False, _tool_error("INVALID_PATH", f"{tool_name} 的参数格式错误，不应为数组")
-
         # 通用：空字符串拒绝
         for key, val in args.items():
             if isinstance(val, str) and val.strip() == "":

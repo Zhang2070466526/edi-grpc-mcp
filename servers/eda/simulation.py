@@ -199,9 +199,7 @@ def _run_sim_task(
             task["error"] = None if result.get("success") else result.get("message")
             task["finished_at"] = time.time()
             result["completed"] = True
-            # 不覆盖 gRPC 层已计算的 task_success：只有 outcome_known=True 时才有意义
-            if "task_success" not in result:
-                result["task_success"] = result.get("outcome_known") and result.get("status") == "SUCCEEDED"
+            # task_success 已由 gRPC 层 _terminal_result 计算，此处不重复推导
             # 最终 result 已含完整拼接日志，清 chunk 避免双份
             task["log_chunks"] = []
         _logger.info("task=%s status=%s outcome_known=%s task_success=%s",

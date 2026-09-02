@@ -45,15 +45,8 @@ class TaskRunner:
         atexit.register(self._shutdown)
 
     def _shutdown(self) -> None:
-        """进程退出时释放 executor，并把 worker 线程 daemon 化（避免 join 阻塞退出）。"""
+        """进程退出时释放 executor（worker 线程本就是 daemon，不会阻塞退出）。"""
         self._executor.shutdown(wait=False)
-        threads = getattr(self._executor, "_threads", None)
-        if threads:
-            for t in list(threads):
-                try:
-                    t.daemon = True
-                except Exception:
-                    pass
 
     # ── 提交 ──
 

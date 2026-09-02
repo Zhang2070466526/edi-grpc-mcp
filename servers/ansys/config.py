@@ -25,7 +25,6 @@ from servers.settings import get_settings  # noqa: E402 — 必须在 load_doten
 logger = logging.getLogger(__name__)
 
 _AEDT_LOCK = threading.RLock()
-_LAST_PID: int | None = None
 
 # -- 路径 --
 def _find_aedt() -> str:

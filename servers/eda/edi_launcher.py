@@ -39,8 +39,11 @@ def launch_edi(
     if not exe_path.is_file():
         raise FileNotFoundError(f"EDI.exe 不存在: {exe_path}")
 
-    host, port_str = EDA_GRPC_SERVER.rsplit(":", 1)
-    port = int(port_str)
+    try:
+        host, port_str = EDA_GRPC_SERVER.rsplit(":", 1)
+        port = int(port_str)
+    except ValueError:
+        raise ValueError(f"EDA_GRPC_SERVER 配置无效（需要 host:port）: {EDA_GRPC_SERVER}") from None
     already_running = False
     try:
         with socket.create_connection((host, port), timeout=1):

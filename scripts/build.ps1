@@ -1,5 +1,7 @@
 # edi_mcp_server 打包脚本
 $ErrorActionPreference = "Stop"
+# 清除可能残留的错误 VIRTUAL_ENV（如指向旧目录 mcp-grpc），避免 uv 输出 "does not match" 警告
+Remove-Item Env:VIRTUAL_ENV -ErrorAction SilentlyContinue
 Push-Location $PSScriptRoot\..
 $root = Get-Location
 
