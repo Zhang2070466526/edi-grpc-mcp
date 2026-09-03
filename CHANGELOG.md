@@ -6,6 +6,10 @@
 - 器件固有参数查询工具 `get_components_static_params`（gRPC `GET_COMPONENTS_STATIC_PARAMS = 21`）：按器件 UUID 查询重量/尺寸/封装/厂商/成本，用于选型后的合理性检查；proto 重新编译生成枚举 21
 - 端口占用自动清理：`start_servers.py` 启动时若端口被占用，自动结束占用进程后继续启动（新增 `_find_port_pid` / `_kill_port_process`）
 - 启动日志打印访问令牌值：`Auth: enabled (?token=xxx required on /mcp)`，便于客户端直接复制 token
+- 抗烧毁评估工具 `simulate_anti_burnout`（gRPC `SIMULATE_ANTI_BURNOUT = 22`）：对具备抗烧毁数据的器件执行输入功率仿真和风险评估；proto 重新编译生成枚举 22
+- 日志读取工具 `get_service_logs`：读取 EDI 服务端日志（`logs/eda_YYYY-MM-DD.log`）并分析异常（ERROR/WARN/异常堆栈统计，支持关键词/级别过滤，路径可由 `EDI_LOG_DIR` 配置）
+- 信号链路追踪工具 `get_signal_chain`：解析网表，按「节点↔器件接力」算法追踪信号流（源→负载），返回链路器件序列/角色/分支数（v1 只做结构，不做规格）
+- 工程创建工具 `create_project`（gRPC `CREATE_PROJECT = 23`）：按名称/作者/父目录创建新工程（不显示向导、不自动打开）；proto 重新编译生成枚举 23
 
 ### 修复
 - 修复 8 个中危 bug：`start_simulation_async` 超时未校验、`update_simulation_component` 丢弃查找错误、`launch_edi` 成功报失败、`compare_simulation_results` CSV 解析 x/y 错位与插值未校验非参考文件单调、`close_hfss_project` 关错项目、HFSS/CST runner 缺运行超时兜底、Chat 会话淘汰误删活跃会话、`/upload` 缺大小限制

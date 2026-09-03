@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import logging
 import os
 import signal
@@ -131,6 +132,7 @@ async def ready_check(request):
         }, status_code=503)
 
     tools = [t.name for t in mcp._tool_manager._tools.values()]
+    tools_hash = hashlib.md5(",".join(sorted(tools)).encode("utf-8")).hexdigest()[:8]
     try:
         host, port_str = _grpc.rsplit(":", 1)
         s = socket.socket()
@@ -147,6 +149,7 @@ async def ready_check(request):
         "version": _server_ver,
         "grpc": "online" if grpc_ok else "offline",
         "tool_count": len(tools),
+        "tools_hash": tools_hash,
         "started_at": SERVER_STARTED_AT,
     })
 

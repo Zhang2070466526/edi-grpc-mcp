@@ -60,6 +60,8 @@ enum EventType {
   GET_SCHEMATIC_COMPONENT_INFO = 19;
   LOAD_SCHEMATIC_FROM_FILE = 20;
   GET_COMPONENTS_STATIC_PARAMS = 21;
+  SIMULATE_ANTI_BURNOUT = 22;
+  CREATE_PROJECT = 23;
 }
 ```
 
@@ -84,6 +86,8 @@ enum EventType {
 - `GET_SCHEMATIC_COMPONENT_INFO`：根据器件实例名查询指定器件的完整信息。
 - `LOAD_SCHEMATIC_FROM_FILE`：使用指定的 `schematic.ep` 整体替换工程唯一原理图。
 - `GET_COMPONENTS_STATIC_PARAMS`：转发器件固有参数查询，返回重量、尺寸、封装、所属厂商和成本等信息。
+- `SIMULATE_ANTI_BURNOUT`：对工程原理图中具备抗烧毁数据的器件执行输入功率仿真和抗烧毁风险评估。
+- `CREATE_PROJECT`：按指定名称、作者和父目录创建新工程，不显示创建向导，也不自动打开工程。
 
 ## 4. payload_json 示例
 
@@ -401,6 +405,39 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 - 最终事件的 `payload_json` 是上游接口完整响应信封，保留 `code`、`message`、`data`，不增加或删除业务字段。
 - `data` 与请求 UUID 顺序一一对应，未命中的 UUID 保留为 `null`。
 
+### SIMULATE_ANTI_BURNOUT
+
+```json
+{
+  "project_path": "C:/path/to/project.epp"
+}
+```
+
+- `project_path` 必须指向已存在的 `.epp` 工程文件；工程已经打开时复用现有窗口，未打开时静默打开。
+- gRPC 调用只执行计算并返回结果，不主动显示或激活仿真结果窗口。
+- 服务端先查询器件的 `max_input_power`，最终 `results` 只包含 `isAntiBurnout == true` 的器件；不具备抗烧毁数据的器件不会参与评估，也不会出现在结果中。
+- 找不到有效 `P_nToneG`/`P_nTone` 激励源或激励源 `Freq[1]` 无效的器件不插入功率探针、不参与仿真，但仍返回该器件信息，并在 `result` 中写入具体原因。
+- 部分器件评估成功、部分器件失败时，最终事件仍为成功；每个器件的成功结论或失败原因统一放在自身的 `result` 字段中。
+- 工程打开、工程保存、抗烧毁参数查询、网表生成或仿真进程等整体流程失败时，最终事件为失败，具体原因位于事件 `message`，`payload_json` 为 `{}`。
+
+### CREATE_PROJECT
+
+```json
+{
+  "name": "demo_project",
+  "author": "JGL",
+  "path": "D:/projects"
+}
+```
+
+- `name` 必填，必须是合法的 Windows 文件名，且不能超过 255 个字符。
+- `name` 不允许首尾空白、尾部英文句点、控制字符以及 `< > : " / \\ | ? *`。
+- `name` 不允许使用 `CON`、`PRN`、`AUX`、`NUL`、`COM1`～`COM9`、`LPT1`～`LPT9` 等 Windows 保留名称，带扩展名形式同样禁止。
+- `author` 可选，为空或未提供时使用 `bm`。
+- `path` 可选，表示工程父目录，不是 `.epp` 文件路径；为空或未提供时使用当前工作空间的 `projects` 目录。
+- 工程文件路径为 `<path>/<name>/<name>.epp`。目标工程目录或 `.epp` 文件已经存在时创建失败，不覆盖已有内容。
+- 服务端直接调用 `NewProjectWizard::createProject(name, errorMsg, author, path)`，不显示向导，也不自动打开新工程。
+
 ### REPLACE_PORT_COMPONENT
 
 ```json
@@ -541,6 +578,8 @@ enum ResultStatus {
 - `GET_SCHEMATIC_COMPONENT_INFO`：`project_path`、`instance_name`；成功时额外包含 `component`
 - `LOAD_SCHEMATIC_FROM_FILE`：`project_path`、`schematic_path`、`component_count`、`net_segment_count`
 - `GET_COMPONENTS_STATIC_PARAMS`：上游接口原始响应对象，包含 `code`、`message`、`data`
+- `SIMULATE_ANTI_BURNOUT`：成功时仅包含 `results`；失败时为空对象 `{}`
+- `CREATE_PROJECT`：成功时包含 `project_path`；失败时为空对象 `{}`
 - `GENERATE_SCHEMATIC_FROM_NETLIST`：`project_path`、`netlist_path`、`schematic_path`、`clear_before_import`、`symbols_added`、`nets_added`、`lines_added`、`net_points_added`
 
 ## 8. SIMULATE_NETLIST 完整调用示例
@@ -1012,6 +1051,70 @@ enum ResultStatus {
 ```
 
 上游返回 `code == 200` 时事件状态为 `RESULT_STATUS_SUCCESS`；其他业务 `code` 对应 `RESULT_STATUS_FAILED`，但完整上游响应仍原样保存在 `payload_json`。网络超时、连接失败或响应不是 JSON 对象时，事件状态为失败，具体转发错误见事件 `message`。
+
+### 9.11 抗烧毁评估
+
+请求：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-anti-burnout-001",
+  "type": "SIMULATE_ANTI_BURNOUT",
+  "payload_json": "{\"project_path\":\"C:/test/project.epp\"}"
+}
+```
+
+如果 Postman 未识别最新枚举，请重新导入 `ecserver.proto`，也可以临时将 `type` 填为数值 `22`。
+
+部分器件成功、部分器件失败时的最终事件示例：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-anti-burnout-001",
+  "event_type": "SIMULATE_ANTI_BURNOUT",
+  "status": "RESULT_STATUS_SUCCESS",
+  "message": "抗烧毁评估完成",
+  "payload_json": "{\"results\":[{\"component_type\":\"Attenuator\",\"instance_name\":\"Attenuator1\",\"simulated_input_power\":\"12.4 dBm\",\"max_input_power\":\"1 W\",\"result\":\"无抗烧毁风险\"},{\"component_type\":\"BPFButterworth\",\"instance_name\":\"BPF1\",\"simulated_input_power\":\"\",\"max_input_power\":\"2 W\",\"result\":\"未找到有效的激励源\"}]}"
+}
+```
+
+`results` 中每个对象包含：
+
+- `component_type`：器件类型。
+- `instance_name`：器件实例名。
+- `simulated_input_power`：成功读取时为带单位的仿真输入功率；读取失败时为空字符串。
+- `max_input_power`：带单位的最大允许输入功率。
+- `result`：评估成功时为 `无抗烧毁风险` 或 `有抗烧毁风险`；该器件无法评估时为具体失败原因。
+
+### 9.12 创建工程
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-create-project-001",
+  "type": "CREATE_PROJECT",
+  "payload_json": "{\"name\":\"demo_project\",\"author\":\"JGL\",\"path\":\"D:/projects\"}"
+}
+```
+
+如果 Postman 未识别最新枚举，请重新导入 `ecserver.proto`，也可以临时将 `type` 填为数值 `23`。
+
+最终成功事件示例：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-create-project-001",
+  "event_type": "CREATE_PROJECT",
+  "status": "RESULT_STATUS_SUCCESS",
+  "message": "project created",
+  "payload_json": "{\"project_path\":\"D:/projects/demo_project/demo_project.epp\"}"
+}
+```
+
+目标工程已存在或名称不符合 Windows 命名规则时返回具体失败原因，不会覆盖已有工程。
 
 ## 10. 网表生成链路完整调用示例
 
