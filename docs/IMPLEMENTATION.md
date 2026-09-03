@@ -293,7 +293,7 @@ wire_params, error = _prepare_parameters(ct, parameters, op="update")
 
 ## 二、本地文件读取（6 个工具）
 
-这些工具不经过 gRPC，直接读取磁盘上的 `.epp` 工程文件。核心实现在 `servers/eda/config.py`。
+这些工具不经过 gRPC，直接读取磁盘上的 `.epp` 工程文件。核心实现在 `servers/eda/project_reader.py`。
 
 ### 2.1 .epp 工程格式
 
@@ -1246,7 +1246,7 @@ get_project_summary + turbocharts_convert + capture_schematic + simulate_* ─�
 
 有 6 个本地读取类工具的核心工作是「从磁盘文件里解析结构化数据」。它们不经过 gRPC，直接读 `.epp` 工程目录或 RAW 结果文件。下面是各自「解析什么文件、怎么解析、为什么解析」。
 
-**通用解析能力**（都在 `servers/eda/config.py`，被下面多个工具复用）：
+**通用解析能力**（都在 `servers/eda/project_reader.py`，被下面多个工具复用）：
 
 | 函数 | 作用 |
 |---|---|

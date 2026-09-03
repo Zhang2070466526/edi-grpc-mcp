@@ -566,7 +566,7 @@ capture_schematic(project_path: str, img_path: str, timeout_seconds: int = 60) -
 ### `get_signal_chain`
 
 ```python
-from servers.eda.design_export import get_signal_chain
+from servers.eda.signal_chain import get_signal_chain
 
 get_signal_chain(project_path: str, start_component: str = "",
                  direction: str = "forward", max_depth: int = 40,
@@ -643,7 +643,7 @@ launch_edi(edi_path: str = "", wait_for_grpc: bool = True, wait_timeout: int = 3
 ### `get_service_status`
 
 ```python
-from servers.eda.grpc_client import get_service_status
+from servers.eda.edi_launcher import get_service_status
 
 get_service_status() -> dict
 ```

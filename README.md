@@ -436,7 +436,7 @@ edi-grpc-mcp/
 │   │   ├── resources.py                #     5 个 Resource：服务概览 / 参数目录 / 操作规则 / 服务状态 / 错误码
 │   │   └── prompts.py                  #     5 个 Prompt：检查工程 / 执行仿真 / 配置器件 / 生成报告 / 错误诊断
 │   │
-│   ├── eda/                            #   EDI 工程工具 (29 个)
+│   ├── eda/                            #   EDI 工程工具 (34 个)
 │   │   ├── __init__.py                 #     公共 API re-export
 │   │   ├── config.py                   #     路径检测 / 环境变量加载
 │   │   ├── project_reader.py           #     ProjectReader + S-expression 解析器
@@ -629,3 +629,5 @@ curl http://127.0.0.1:50026/ready    # 就绪检查
 - 重启后旧 MCP session 失效，客户端重新 initialize
 - 仿真任务在内存中，重启后查询返回 TASK_NOT_FOUND
 - 不自动重放工具调用
+
+

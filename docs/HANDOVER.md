@@ -44,7 +44,7 @@ servers/
   resources_prompts/       # 5 个 Resource + 5 个 Prompt
   multimodal_vision/      # 图片 + 视觉分析 + 文档工具
   report/                 # 仿真报告生成
-  eda/                   # EDI 工程工具（29 个）
+  eda/                   # EDI 工程工具（34 个）
     __init__.py           # 公共 API + 工具清单
     config.py             # 配置 / 路径检测
     project_reader.py     # ProjectReader + S-expression 解析器
@@ -91,7 +91,7 @@ Python 3.12+ / uv 包管理 / FastMCP (mcp >= 1.0.0) / grpcio >= 1.81.0 / protob
 
 CST 电磁仿真依赖：CST 官方 Python 接口（cst.interface / cst.results，通过注册表定位，需本机安装 CST）
 
-PyPI: https://pypi.org/project/edi-mcp/  |  当前版本：0.1.8
+PyPI: https://pypi.org/project/edi-mcp/  |  当前版本：0.1.10
 
 ## MCP 工具清单
 
