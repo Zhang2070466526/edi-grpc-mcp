@@ -260,7 +260,7 @@ def _run_http_server(port: int, transport: str = "streamable-http") -> None:
             time.sleep(0.5)
         print(f"端口 {port} 已释放，继续启动。")
 
-    if sys.platform == "win32":
+    if sys.platform == "win32" and sys.version_info < (3, 14):
         asyncio.set_event_loop_policy(
             asyncio.WindowsSelectorEventLoopPolicy()
         )

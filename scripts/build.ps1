@@ -75,6 +75,10 @@ MCP_API_KEY=$apiKey
 VISION_API_KEY=
 VISION_BASE_URL=
 VISION_MODEL=
+# Optional: Chat AI (LLM multi-round tool calling). Leave empty to disable.
+LLM_API_KEY=
+LLM_BASE_URL=
+LLM_MODEL=
 # Optional: simulation report rendering
 REPORT_RENDER_URL=http://127.0.0.1:17867/api/v1/reports/render
 "@
