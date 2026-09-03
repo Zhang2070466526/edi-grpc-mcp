@@ -27,8 +27,10 @@ from pathlib import Path
 from typing import Any
 
 from proto import ecserver_pb2
-from servers.eda.grpc_client import call_grpc
-from servers.eda.config import ProjectReader, parse_components, validate_project_path, SIM_COMPONENT_TYPES
+from servers.eda.grpc_client import call_grpc, call_project_grpc
+from servers.eda.config import SIM_COMPONENT_TYPES
+from servers.eda.project_reader import ProjectReader, parse_components
+from servers.utils import require_nonempty, error_response
 from servers import mcp
 
 
@@ -101,14 +103,12 @@ def create_project(
         gRPC 统一返回结构，成功时 details 含 project_path。
     """
     if not name or not name.strip():
-        return {"success": False, "error_code": "INVALID_PARAMETERS",
-                "message": "工程名不能为空"}
+        return error_response("INVALID_PARAMETERS", "工程名不能为空")
     name = name.strip()
 
     # Windows 文件名非法字符（服务端还会做保留名等更完整校验）
     if any(c in name for c in '<>:"/\\|?*'):
-        return {"success": False, "error_code": "INVALID_PARAMETERS",
-                "message": f"工程名包含非法字符: {name}"}
+        return error_response("INVALID_PARAMETERS", f"工程名包含非法字符: {name}")
 
     payload: dict[str, Any] = {"name": name}
     if author.strip():
@@ -136,13 +136,7 @@ def open_edi_project(
         project_path: EDA 服务所在机器上的 .epp 工程文件绝对路径。
         timeout_seconds: 最长等待时间，默认 60 秒。
     """
-    resolved_path = validate_project_path(project_path)
-    return call_grpc(
-        ecserver_pb2.OPEN_PROJECT,
-        {"project_path": resolved_path},
-        timeout_seconds,
-        max_timeout_seconds=300,
-    )
+    return call_project_grpc(ecserver_pb2.OPEN_PROJECT, project_path, timeout_seconds)
 
 
 @mcp.tool()
@@ -158,13 +152,8 @@ def close_edi_project(
         need_save: 关闭前是否保存工程，默认 False。
         timeout_seconds: 最长等待时间，默认 60 秒。
     """
-    resolved_path = validate_project_path(project_path)
-    return call_grpc(
-        ecserver_pb2.CLOSE_PROJECT,
-        {"project_path": resolved_path, "need_save": need_save},
-        timeout_seconds,
-        max_timeout_seconds=300,
-    )
+    return call_project_grpc(ecserver_pb2.CLOSE_PROJECT, project_path, timeout_seconds,
+                             need_save=need_save)
 
 
 @mcp.tool()
@@ -351,13 +340,7 @@ def list_schematic_components(
              {"instance_name": "R1", "component_type": "R",
               "active_state": 0, "state": "NORMAL", "parameters": {...}}, ...]}}
     """
-    resolved_path = validate_project_path(project_path)
-    return call_grpc(
-        ecserver_pb2.LIST_SCHEMATIC_COMPONENTS,
-        {"project_path": resolved_path},
-        timeout_seconds,
-        max_timeout_seconds=300,
-    )
+    return call_project_grpc(ecserver_pb2.LIST_SCHEMATIC_COMPONENTS, project_path, timeout_seconds)
 
 
 @mcp.tool()
@@ -377,16 +360,12 @@ def get_schematic_component_info(
              "instance_name": "R1", "component_type": "R",
              "active_state": 0, "state": "NORMAL", "parameters": {...}}}}
     """
-    if not instance_name or not instance_name.strip():
-        return {"success": False, "error_code": "EMPTY_INSTANCE_NAME",
-                "message": "instance_name 不能为空"}
-    resolved_path = validate_project_path(project_path)
-    return call_grpc(
-        ecserver_pb2.GET_SCHEMATIC_COMPONENT_INFO,
-        {"project_path": resolved_path, "instance_name": instance_name.strip()},
-        timeout_seconds,
-        max_timeout_seconds=300,
-    )
+    instance_name, err = require_nonempty(instance_name, error_code="EMPTY_INSTANCE_NAME",
+                                          label="instance_name")
+    if err:
+        return err
+    return call_project_grpc(ecserver_pb2.GET_SCHEMATIC_COMPONENT_INFO, project_path,
+                             timeout_seconds, instance_name=instance_name)
 
 
 @mcp.tool()
@@ -412,22 +391,18 @@ def get_components_static_params(
         data 与请求 UUID 顺序一一对应，未命中的 UUID 保留为 null。
     """
     if original_uuids and original_uuid.strip():
-        return {"success": False, "error_code": "INVALID_PARAMETERS",
-                "message": "original_uuids 与 original_uuid 只能提供一个"}
+        return error_response("INVALID_PARAMETERS", "original_uuids 与 original_uuid 只能提供一个")
 
     if original_uuids is not None:
         if not original_uuids:
-            return {"success": False, "error_code": "INVALID_PARAMETERS",
-                    "message": "original_uuids 不能为空数组"}
+            return error_response("INVALID_PARAMETERS", "original_uuids 不能为空数组")
         if not all(isinstance(u, str) and u.strip() for u in original_uuids):
-            return {"success": False, "error_code": "INVALID_PARAMETERS",
-                    "message": "original_uuids 必须是非空字符串数组"}
+            return error_response("INVALID_PARAMETERS", "original_uuids 必须是非空字符串数组")
         payload = {"original_uuids": [u.strip() for u in original_uuids]}
     elif original_uuid.strip():
         payload = {"original_uuid": original_uuid.strip()}
     else:
-        return {"success": False, "error_code": "INVALID_PARAMETERS",
-                "message": "必须提供 original_uuids 或 original_uuid"}
+        return error_response("INVALID_PARAMETERS", "必须提供 original_uuids 或 original_uuid")
 
     return call_grpc(
         ecserver_pb2.GET_COMPONENTS_STATIC_PARAMS,

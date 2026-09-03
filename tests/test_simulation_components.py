@@ -632,12 +632,12 @@ class TestGrpcPayloads:
 
     def test_create_enum_and_payload(self):
         from servers.eda.simulation_components import create_simulation_component
-        with _VALIDATE_PATCH, _CALL_GRPC_PATCH as mock:
+        with patch("servers.eda.simulation_components.call_project_grpc",
+                   return_value=_MOCK_GRPC_OK) as mock:
             create_simulation_component("C:/test.epp", "HarmonicBalance")
             assert mock.call_args.args[0] == ecserver_pb2.CREATE_SIMULATION_COMPONENT
-            payload = mock.call_args.args[1]
-            assert payload["component_type"] == "HarmonicBalance"
-            assert "parameters" not in payload  # v2: no parameters in create
+            assert mock.call_args.args[1] == "C:/test.epp"
+            assert mock.call_args.kwargs["component_type"] == "HarmonicBalance"
 
     def test_create_empty_component_type_rejected(self):
         from servers.eda.simulation_components import create_simulation_component
@@ -700,12 +700,12 @@ class TestGrpcPayloads:
 
     def test_delete_enum_and_payload(self):
         from servers.eda.simulation_components import delete_simulation_component
-        with _VALIDATE_PATCH, _CALL_GRPC_PATCH as mock:
+        with patch("servers.eda.simulation_components.call_project_grpc",
+                   return_value=_MOCK_GRPC_OK) as mock:
             delete_simulation_component("C:/test.epp", "R1")
             assert mock.call_args.args[0] == ecserver_pb2.DELETE_SIMULATION_COMPONENT
-            payload = mock.call_args.args[1]
-            assert payload["instance_name"] == "R1"
-            assert "component_type" not in payload
+            assert mock.call_args.args[1] == "C:/test.epp"
+            assert mock.call_args.kwargs["instance_name"] == "R1"
 
     def test_delete_empty_name_rejected(self):
         from servers.eda.simulation_components import delete_simulation_component
@@ -716,11 +716,13 @@ class TestGrpcPayloads:
 
     def test_set_state_enum_and_payload(self):
         from servers.eda.simulation_components import set_component_active_state
-        with _VALIDATE_PATCH, _CALL_GRPC_PATCH as mock:
+        with patch("servers.eda.simulation_components.call_project_grpc",
+                   return_value=_MOCK_GRPC_OK) as mock:
             set_component_active_state("C:/test.epp", "R1", "disabled")
             assert mock.call_args.args[0] == ecserver_pb2.SET_COMPONENT_ACTIVE_STATE
-            payload = mock.call_args.args[1]
-            assert payload["state"] == "DISABLED"
+            assert mock.call_args.args[1] == "C:/test.epp"
+            assert mock.call_args.kwargs["state"] == "DISABLED"
+            assert mock.call_args.kwargs["instance_name"] == "R1"
 
     def test_set_state_invalid_rejected(self):
         from servers.eda.simulation_components import set_component_active_state

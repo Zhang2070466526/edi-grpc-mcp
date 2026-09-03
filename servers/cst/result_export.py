@@ -10,7 +10,7 @@ from typing import Any
 import numpy as np
 
 from servers import mcp
-from servers.utils import tool_error, validate_file
+from servers.utils import error_response, validate_file, submitted_response, queue_full_response
 from servers.cst.cst_api import CstApi, cst_runner, query_task, to_writable_copy
 
 # 远场方向图导出的 VBA 宏（Sub Main 格式）。
@@ -234,7 +234,7 @@ def cst_export_snp(
     try:
         snp_path = cst_runner.run_sync(_result_exporter.export_snp, resolved, output_dir, port_count)
     except Exception as exc:
-        return tool_error("CST_EXPORT_FAILED", str(exc))
+        return error_response("CST_EXPORT_FAILED", str(exc))
     return {"success": True, "snp_path": snp_path, "message": "S 参数已导出"}
 
 
@@ -260,8 +260,8 @@ def cst_export_farfield(model_path: str, output_dir: str = "") -> dict[str, Any]
         output_dir = os.path.dirname(os.path.abspath(resolved))
     task_id = cst_runner.submit(_result_exporter.export_farfield, resolved, output_dir)
     if task_id is None:
-        return tool_error("CST_QUEUE_FULL", "当前已有 CST 任务在进行，请稍后重试", retryable=True)
-    return {"success": True, "task_id": task_id, "status": "QUEUED", "message": "远场导出任务已提交"}
+        return queue_full_response("CST_QUEUE_FULL", message="当前已有 CST 任务在进行，请稍后重试")
+    return submitted_response(task_id, message="远场导出任务已提交")
 
 
 @mcp.tool()

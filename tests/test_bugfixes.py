@@ -46,10 +46,10 @@ def test_update_rejects_empty_instance_name(monkeypatch):
 
 def test_update_rejects_ambiguous_instance_name(monkeypatch):
     from servers.eda import simulation_components as sc
-    from servers.utils import tool_error
+    from servers.utils import error_response
     monkeypatch.setattr(sc, "validate_project_path", lambda p: p)
     monkeypatch.setattr(sc, "_find_component_by_instance",
-                        lambda p, n: (None, tool_error("AMBIGUOUS_INSTANCE_NAME", "发现多个同名器件")))
+                        lambda p, n: (None, error_response("AMBIGUOUS_INSTANCE_NAME", "发现多个同名器件")))
     r = sc.update_simulation_component(
         "C:/test.epp", "R1", {"Freq": {"value": "1", "unit": "GHz"}})
     assert r["success"] is False
@@ -387,14 +387,13 @@ def test_kill_port_process(monkeypatch):
 def test_simulate_anti_burnout_payload(monkeypatch):
     from servers.eda import simulation as sim
     from proto import ecserver_pb2
-    monkeypatch.setattr(sim, "validate_project_path", lambda p: p)
     calls = []
 
-    def _fake(task_type, payload, timeout, max_timeout_seconds=3600):
-        calls.append((task_type, payload))
+    def _fake(task_type, project_path, timeout_seconds, *, max_timeout_seconds=300, **extras):
+        calls.append((task_type, {"project_path": project_path, **extras}))
         return {"success": True, "status": "SUCCEEDED"}
 
-    monkeypatch.setattr(sim, "call_grpc", _fake)
+    monkeypatch.setattr(sim, "call_project_grpc", _fake)
     sim.simulate_anti_burnout("C:/test.epp")
     assert calls[-1][0] == ecserver_pb2.SIMULATE_ANTI_BURNOUT
     assert calls[-1][1] == {"project_path": "C:/test.epp"}
@@ -489,7 +488,7 @@ freqin=29
 
 
 def test_parse_netlist():
-    from servers.eda.design_export import _parse_netlist
+    from servers.eda.signal_chain import _parse_netlist
     comps, node_map, meta = _parse_netlist(_NETLIST_SAMPLE)
     assert set(comps) == {"PORT1", "NC10355C_29311", "TermG2"}
     assert comps["PORT1"]["role"] == "source"
@@ -501,7 +500,7 @@ def test_parse_netlist():
 
 
 def test_trace_chain():
-    from servers.eda.design_export import _parse_netlist, _trace_chain
+    from servers.eda.signal_chain import _parse_netlist, _trace_chain
     comps, node_map, _ = _parse_netlist(_NETLIST_SAMPLE)
     chain, branches, truncated = _trace_chain(comps, node_map, "PORT1", 40)
     assert chain == ["PORT1", "NC10355C_29311", "TermG2"]
@@ -510,7 +509,7 @@ def test_trace_chain():
 
 
 def test_get_signal_chain(tmp_path):
-    from servers.eda.design_export import get_signal_chain
+    from servers.eda.signal_chain import get_signal_chain
     proj = tmp_path / "1"
     proj.mkdir()
     epp = proj / "1.epp"
@@ -527,7 +526,7 @@ def test_get_signal_chain(tmp_path):
 
 def test_parse_netlist_attenuator():
     # Attenuator（衰减器）等非白名单器件类型也应纳入图
-    from servers.eda.design_export import _parse_netlist
+    from servers.eda.signal_chain import _parse_netlist
     netlist = (
         "Options ResourceUsage=yes\n"
         "Attenuator:Attenuator1 N__2 N__3 Loss=X dB\n"
@@ -541,7 +540,7 @@ def test_parse_netlist_attenuator():
 
 
 def test_get_signal_chain_empty_netlist(tmp_path):
-    from servers.eda.design_export import get_signal_chain
+    from servers.eda.signal_chain import get_signal_chain
     proj = tmp_path / "p"
     proj.mkdir()
     epp = proj / "p.epp"
@@ -554,7 +553,7 @@ def test_get_signal_chain_empty_netlist(tmp_path):
 
 def test_get_signal_chain_no_source(tmp_path):
     # 无激励源（两端都是负载）时，自动取第一个端口作为起点
-    from servers.eda.design_export import get_signal_chain
+    from servers.eda.signal_chain import get_signal_chain
     proj = tmp_path / "p"
     proj.mkdir()
     epp = proj / "p.epp"

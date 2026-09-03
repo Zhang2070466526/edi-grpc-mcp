@@ -29,8 +29,7 @@ from typing import Any
 import grpc
 
 from proto import ecserver_pb2, ecserver_pb2_grpc
-from servers import mcp
-from servers.eda.config import EDA_GRPC_SERVER
+from servers.eda.config import EDA_GRPC_SERVER, validate_project_path
 
 _logger = logging.getLogger("eda.grpc_client")
 
@@ -55,43 +54,15 @@ _channel_cache: dict[str, grpc.Channel] = {}
 _channel_lock = threading.Lock()
 
 
-def _is_queue_busy() -> bool:
-    """EDA 执行槽是否被占用。"""
+def is_queue_busy() -> bool:
+    """EDA 执行槽是否被占用（只读诊断接口）。"""
     return _queue_busy
 
 
-def _get_cached_channel(target: str) -> grpc.Channel | None:
+def get_cached_channel(target: str) -> grpc.Channel | None:
     """线程安全地读取缓存的 channel（不触发重建）。"""
     with _channel_lock:
         return _channel_cache.get(target)
-
-
-@mcp.tool()
-def get_service_status() -> dict[str, Any]:
-    """返回 EDI gRPC 通道状态和队列占用信息（只读，不占执行槽位），用于诊断：通道是否健康、是否有任务在排队。
-
-    用法："EDI 服务正常吗"、"检查 gRPC 连接状态"、"有没有任务在排队"
-
-    Returns:
-        {"grpc_target": "127.0.0.1:50055", "channel_state": "ready/unhealthy/unknown",
-         "channel_cached": True, "queue_locked": False, "max_receive_mb": 256}
-    """
-    target = EDA_GRPC_SERVER
-    ch = _get_cached_channel(target)
-    state = "unknown"
-    if ch is not None:
-        try:
-            grpc.channel_ready_future(ch).result(timeout=1)
-            state = "ready"
-        except (grpc.FutureTimeoutError, grpc.RpcError):
-            state = "unhealthy"
-    return {
-        "grpc_target": target,
-        "channel_state": state,
-        "channel_cached": ch is not None,
-        "queue_locked": _is_queue_busy(),
-        "max_receive_mb": 256,
-    }
 
 
 def _get_channel(target: str) -> grpc.Channel:
@@ -575,3 +546,29 @@ def _call_grpc_unlocked(
         # ── 确保事件流释放 ──
         if event_stream is not None:
             event_stream.cancel()
+
+
+def call_project_grpc(
+    task_type: int,
+    project_path: str,
+    timeout_seconds: int,
+    *,
+    max_timeout_seconds: int = 300,
+    **payload_extras: Any,
+) -> dict[str, Any]:
+    """校验工程路径后调用 gRPC，消除「validate + call_grpc 三段式」样板。
+
+    大多数 EDA gRPC 工具的 payload 都以 project_path 为核心字段，额外字段通过
+    payload_extras 传入（如 need_save、instance_name、component_type 等）。
+
+    用法：
+        return call_project_grpc(ecserver_pb2.CLOSE_PROJECT, project_path,
+                                 timeout_seconds, need_save=need_save)
+    """
+    resolved = validate_project_path(project_path)
+    return call_grpc(
+        task_type,
+        {"project_path": resolved, **payload_extras},
+        timeout_seconds,
+        max_timeout_seconds=max_timeout_seconds,
+    )

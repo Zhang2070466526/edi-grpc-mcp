@@ -12,6 +12,7 @@ import logging
 import psutil
 import threading
 import winreg
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,17 @@ from servers.settings import get_settings  # noqa: E402 — 必须在 load_doten
 logger = logging.getLogger(__name__)
 
 _AEDT_LOCK = threading.RLock()
+
+
+@contextmanager
+def com_session():
+    """COM 初始化上下文管理器：自动 CoInitialize / CoUninitialize。"""
+    pythoncom.CoInitialize()
+    try:
+        yield
+    finally:
+        pythoncom.CoUninitialize()
+
 
 # -- 路径 --
 def _find_aedt() -> str:
@@ -93,30 +105,28 @@ def _attach_aedt():
 
 def query_desktop_state() -> dict[str, Any]:
     """附着现有 AEDT，返回纯字典。绝不创建新实例。"""
-    pythoncom.CoInitialize()
-    try:
-        _, desktop = _attach_aedt()
-        projects = list(desktop.GetProjectList())
-        active = desktop.GetActiveProject()
-        active_name = active.GetName() if active is not None else ""
-        active_design = ""
-        if active is not None:
-            try:
-                d = active.GetActiveDesign()
-                if d is not None:
-                    active_design = d.GetName()
-            except Exception:
-                pass
-        return {
-            "connected": True,
-            "projects": projects,
-            "active_project": active_name,
-            "active_design": active_design,
-        }
-    except Exception as exc:
-        return {"connected": False, "error": str(exc)}
-    finally:
-        pythoncom.CoUninitialize()
+    with com_session():
+        try:
+            _, desktop = _attach_aedt()
+            projects = list(desktop.GetProjectList())
+            active = desktop.GetActiveProject()
+            active_name = active.GetName() if active is not None else ""
+            active_design = ""
+            if active is not None:
+                try:
+                    d = active.GetActiveDesign()
+                    if d is not None:
+                        active_design = d.GetName()
+                except Exception:
+                    pass
+            return {
+                "connected": True,
+                "projects": projects,
+                "active_project": active_name,
+                "active_design": active_design,
+            }
+        except Exception as exc:
+            return {"connected": False, "error": str(exc)}
 
 
 def get_setup_module(design):

@@ -41,17 +41,17 @@ class TestValidateFile:
 
 class TestToolError:
     def test_basic(self):
-        from servers.utils import tool_error
-        assert tool_error("CODE", "msg") == {"success": False, "error_code": "CODE", "message": "msg"}
+        from servers.utils import error_response
+        assert error_response("CODE", "msg") == {"success": False, "error_code": "CODE", "message": "msg"}
 
     def test_retryable(self):
-        from servers.utils import tool_error
-        r = tool_error("CODE", "msg", retryable=True)
+        from servers.utils import error_response
+        r = error_response("CODE", "msg", retryable=True)
         assert r["retryable"] is True
 
     def test_extra(self):
-        from servers.utils import tool_error
-        r = tool_error("CODE", "msg", detail="x")
+        from servers.utils import error_response
+        r = error_response("CODE", "msg", detail="x")
         assert r["details"] == {"detail": "x"}
 
 

@@ -46,15 +46,17 @@ servers/
   report/                 # 仿真报告生成
   eda/                   # EDI 工程工具（29 个）
     __init__.py           # 公共 API + 工具清单
-    config.py             # 配置 + ProjectReader + S-expression
+    config.py             # 配置 / 路径检测
+    project_reader.py     # ProjectReader + S-expression 解析器
     grpc_client.py        # gRPC 通信层（FetchEvent → PerformAction）
     project_manage.py     # 工程管理（7 工具）
     simulation.py         # 仿真（7 工具）
     simulation_components.py  # 仿真器件（10 工具）
     simulation_component_catalog.json  # 参数目录 v2.0
     design_export.py      # 网表/截图（2 工具）
+    signal_chain.py       # 信号链路追踪（1 工具）
     model_replace.py      # 模型替换（1 工具）
-    edi_launcher.py       # 启动 EDI（1 工具）
+    edi_launcher.py       # 启动 EDI + 服务诊断（3 工具）
   turbocharts/
     config.py             # run_turbocharts（信号量串行）
     convert_raw.py        # RAW 转图 + 曲线查询（2 工具）
@@ -328,7 +330,7 @@ python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto 
 ## 维护人
 
 - 负责人：--
-- 更新时间：2026-08-27
-- 当前版本：0.1.8
+- 更新时间：2026-09-03
+- 当前版本：0.1.10
 
 

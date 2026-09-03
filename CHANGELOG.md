@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.10（2026-09-03）
+
+### 重构
+- 错误响应统一：`tool_error` 重命名为 `error_response`，全部手写 `{"success": False, "error_code", "message"}` 字典改为 `error_response()`（~35 处），额外上下文字段统一归入 `details` 子对象
+- 响应构建器归位：`submitted_response` / `queue_full_response` 从 `task_runner.py` 移到 `utils.py`，与 `error_response` 聚为「统一响应构建」section；`utils.py` 按职责重排为 6 个带标题的 section
+- 新增 `servers/eda/project_reader.py`：`ProjectReader` + S-expression 解析器（`parse_sexp`/`parse_components`/`parse_paramsinfo`/`_walk_find`/`_kv`）从 `config.py` 拆出，`config.py` 回归纯配置
+- 新增 `servers/eda/signal_chain.py`：`get_signal_chain` 及网表解析/追踪辅助函数从 `design_export.py` 拆出
+- 诊断工具归位：`get_service_status` 从 `grpc_client.py`（内部通信层）移到 `edi_launcher.py` 与 `get_service_logs` 聚合；`grpc_client` 公开 `is_queue_busy` / `get_cached_channel` 只读诊断接口
+- 新增 `call_project_grpc()` helper：消除「validate_project_path + call_grpc」三段式样板，5 个模块复用；新增 `require_nonempty` / `build_artifact` helper
+- 新增 `TokenStore`（`servers/token_registry.py`）：图片/文档临时 token 存储去重（替换 image_display/document 各自近重复实现）
+- 新增 `com_session()` 上下文管理器：ANSYS COM `CoInitialize`/`CoUninitialize` 去重
+- 死代码清理：删除冗余 `validate_local_file`、6 处死 import（含 `settings.py` 的 `sys`、`workspace_copy.py` 的 `mcp` 等）
+
 ## 0.1.9（2026-09-02）
 
 ### 新增

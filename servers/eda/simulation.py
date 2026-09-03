@@ -39,8 +39,9 @@ from typing import Any
 _logger = logging.getLogger("eda.simulation")
 
 from proto import ecserver_pb2
-from servers.eda.grpc_client import call_grpc
+from servers.eda.grpc_client import call_grpc, call_project_grpc
 from servers.eda.config import validate_file, validate_project_path
+from servers.utils import error_response, submitted_response
 from servers import mcp
 
 # -- 异步仿真任务注册表 --
@@ -57,9 +58,11 @@ atexit.register(_SIM_EXECUTOR.shutdown, wait=False)
 _TASK_TTL = 7200
 
 # list_eda_tasks 的合法状态过滤值（模块级常量，避免每次调用重建）
-_VALID_TASK_STATUSES = {"QUEUED", "QUEUE_TIMEOUT", "ACCEPTED", "RUNNING", "SUCCEEDED",
-                        "FAILED", "TIMEOUT", "STREAM_DISCONNECTED", "REJECTED",
-                        "PROTOCOL_MISMATCH", "GRPC_UNAVAILABLE"}
+_VALID_TASK_STATUSES = {
+    "QUEUED", "QUEUE_TIMEOUT", "ACCEPTED", "RUNNING", "SUCCEEDED",
+    "FAILED", "TIMEOUT", "STREAM_DISCONNECTED", "REJECTED",
+    "PROTOCOL_MISMATCH", "GRPC_UNAVAILABLE"
+}
 
 
 def _prune_tasks_locked() -> None:
@@ -170,11 +173,11 @@ def _handle_sim_event(task_id: str, update: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 def _run_sim_task(
-    task_id: str,
-    client_uuid: str,
-    project_path: str,
-    log_source: str,
-    timeout_seconds: int,
+        task_id: str,
+        client_uuid: str,
+        project_path: str,
+        log_source: str,
+        timeout_seconds: int,
 ) -> None:
     """后台线程执行体：调用 call_grpc 跑仿真，把最终结果写回任务注册表。"""
     try:
@@ -240,9 +243,9 @@ def _run_sim_task(
 
 @mcp.tool()
 def start_simulation_async(
-    project_path: str,
-    log_source: str = "mcp_client",
-    timeout_seconds: int = 600,
+        project_path: str,
+        log_source: str = "mcp_client",
+        timeout_seconds: int = 600,
 ) -> dict[str, Any]:
     """启动异步仿真，立即返回 task_id 供get_simulation_async_status后续查询进度。
 
@@ -264,9 +267,7 @@ def start_simulation_async(
 
     # 与 call_grpc 的范围校验保持一致，避免非法超时值进入后台线程后静默失败
     if timeout_seconds < 1 or timeout_seconds > 3600:
-        return {"success": False,
-                "error_code": "INVALID_PARAMETERS",
-                "message": "timeout_seconds 必须在 1-3600 之间"}
+        return error_response("INVALID_PARAMETERS", "timeout_seconds 必须在 1-3600 之间")
 
     task_id = str(uuid.uuid4())
     client_uuid = str(uuid.uuid4())
@@ -278,9 +279,8 @@ def start_simulation_async(
         pending = sum(1 for t in _sim_tasks.values()
                       if t.get("status") in ("QUEUED", "ACCEPTED", "RUNNING"))
         if pending >= 8:
-            return {"success": False,
-                    "error_code": "SIMULATION_QUEUE_FULL",
-                    "message": f"当前已有 {pending} 个仿真任务在进行或排队，请稍后重试"}
+            return error_response("SIMULATION_QUEUE_FULL",
+                              f"当前已有 {pending} 个仿真任务在进行或排队，请稍后重试")
 
         _sim_tasks[task_id] = {
             "task_id": task_id,
@@ -309,13 +309,7 @@ def start_simulation_async(
 
     _logger.info("task=%s status=QUEUED project=%s timeout=%ds",
                  task_id[:12], resolved_path, timeout_seconds)
-    return {
-        "success": True,
-        "task_id": task_id,
-        "client_uuid": client_uuid,
-        "status": "QUEUED",
-        "message": "仿真任务已创建",
-    }
+    return submitted_response(task_id, client_uuid=client_uuid, message="仿真任务已创建")
 
 
 @mcp.tool()
@@ -408,9 +402,9 @@ def get_simulation_async_result(task_id: str) -> dict[str, Any]:
 
 @mcp.tool()
 def simulate_project(
-    project_path: str,
-    log_source: str = "mcp_client",
-    timeout_seconds: int = 600,
+        project_path: str,
+        log_source: str = "mcp_client",
+        timeout_seconds: int = 600,
 ) -> dict[str, Any]:
     """同步执行 EDA 工程仿真，阻塞等待完成。长仿真建议用 start_simulation_async。
 
@@ -430,19 +424,14 @@ def simulate_project(
         {"success": True, "completed": True, "outcome_known": True,
          "status": "SUCCEEDED", "result_path": ".../result.raw", "ads_output": "..."}
     """
-    resolved_path = validate_project_path(project_path)
-    return call_grpc(
-        ecserver_pb2.SIMULATE_PROJECT,
-        {"project_path": resolved_path, "log_source": log_source},
-        timeout_seconds,
-        max_timeout_seconds=3600,
-    )
+    return call_project_grpc(ecserver_pb2.SIMULATE_PROJECT, project_path, timeout_seconds,
+                             max_timeout_seconds=3600, log_source=log_source)
 
 
 @mcp.tool()
 def simulate_anti_burnout(
-    project_path: str,
-    timeout_seconds: int = 600,
+        project_path: str,
+        timeout_seconds: int = 600,
 ) -> dict[str, Any]:
     """对工程原理图中具备抗烧毁数据的器件执行输入功率仿真和抗烧毁风险评估。
 
@@ -459,19 +448,18 @@ def simulate_anti_burnout(
         gRPC 统一返回结构，业务字段（results）在 details 中；每个结果项含
         component_type / instance_name / simulated_input_power / max_input_power / result。
     """
-    resolved_path = validate_project_path(project_path)
-    return call_grpc(
+    return call_project_grpc(
         ecserver_pb2.SIMULATE_ANTI_BURNOUT,
-        {"project_path": resolved_path},
+        project_path,
         timeout_seconds,
-        max_timeout_seconds=3600,
+        max_timeout_seconds=3600
     )
 
 
 @mcp.tool()
 def simulate_netlist(
-    netlist_path: str,
-    timeout_seconds: int = 600,
+        netlist_path: str,
+        timeout_seconds: int = 600,
 ) -> dict[str, Any]:
     """仿真指定 netlist.log 文件，不需打开 .epp 工程。返回 RAW 结果+日志。
 
@@ -493,9 +481,9 @@ def simulate_netlist(
 
 @mcp.tool()
 def simulate_netlist_with_ads(
-    netlist_path: str,
-    ads_path: str = "",
-    timeout_seconds: int = 120,
+        netlist_path: str,
+        ads_path: str = "",
+        timeout_seconds: int = 120,
 ) -> dict[str, Any]:
     """调用 ADS 仿真控制器。
 
@@ -530,9 +518,7 @@ def list_eda_tasks(status: str = "") -> dict[str, Any]:
     """
     status_filter = status.strip().upper()
     if status_filter and status_filter not in _VALID_TASK_STATUSES:
-        return {"success": False,
-                "error_code": "INVALID_STATUS",
-                "message": f"无效状态: {status}，可选: {sorted(_VALID_TASK_STATUSES)}"}
+        return error_response("INVALID_STATUS", f"无效状态: {status}，可选: {sorted(_VALID_TASK_STATUSES)}")
     _prune_tasks()
     snapshot_ids: list[str] = []
     with _sim_lock:

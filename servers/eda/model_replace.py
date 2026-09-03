@@ -8,8 +8,8 @@ from __future__ import annotations
 from typing import Any
 
 from proto import ecserver_pb2
-from servers.eda.grpc_client import call_grpc
-from servers.eda.config import validate_file, validate_project_path
+from servers.eda.grpc_client import call_project_grpc
+from servers.eda.config import validate_file
 from servers import mcp
 
 
@@ -33,11 +33,6 @@ def replace_models_from_csv(
     Returns:
         gRPC 统一返回结构：{"success": True, "completed": True, "status": "SUCCEEDED", ...}
     """
-    resolved_path = validate_project_path(project_path)
     resolved_csv = validate_file(csv_path, (".csv",))
-    return call_grpc(
-        ecserver_pb2.MODEL_REPLACE,
-        {"project_path": resolved_path, "csv_path": resolved_csv},
-        timeout_seconds,
-        max_timeout_seconds=300,
-    )
+    return call_project_grpc(ecserver_pb2.MODEL_REPLACE, project_path, timeout_seconds,
+                             csv_path=resolved_csv)

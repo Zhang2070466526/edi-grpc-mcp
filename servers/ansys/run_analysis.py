@@ -14,6 +14,7 @@ from servers.ansys.config import (
 )
 from servers.eda.config import validate_file
 from servers.task_runner import TaskRunner
+from servers.utils import submitted_response
 from servers import mcp
 
 # HFSS 全局串行队列：AEDT 是单实例桌面程序，同一时间只能跑一个仿真。
@@ -160,11 +161,8 @@ def start_hfss_analysis_async(
         return {"success": False, "status": "task_limit_reached",
                 "message": "HFSS 任务数已达上限，请稍后重试"}
 
-    return {
-        "success": True, "task_id": task_id, "status": "QUEUED",
-        "project_name": project_name, "design_name": design_name,
-        "setup_name": setup_name, "message": "HFSS 仿真任务已提交",
-    }
+    return submitted_response(task_id, project_name=project_name, design_name=design_name,
+                              setup_name=setup_name, message="HFSS 仿真任务已提交")
 
 
 @mcp.tool()

@@ -14,7 +14,7 @@ import tempfile
 import winreg
 
 from servers.task_runner import TaskRunner
-from servers.utils import tool_error
+from servers.utils import error_response
 
 logger = logging.getLogger(__name__)
 
@@ -71,10 +71,10 @@ def query_task(
     """统一的异步任务查询返回体：进度 + 完成时附结果字段。
 
     snap 为 None 返回 TASK_NOT_FOUND；运行中返回进度快照；成功时在快照上附
-    success_key 字段；失败返回 tool_error。供各 *_query 工具复用，消除同构模板。
+    success_key 字段；失败返回 error_response。供各 *_query 工具复用，消除同构模板。
     """
     if snap is None:
-        return tool_error("TASK_NOT_FOUND", not_found_msg)
+        return error_response("TASK_NOT_FOUND", not_found_msg)
     payload = status_payload(task_id, snap)
     if snap.get("finished_at") is None:
         payload["message"] = running_msg
@@ -83,7 +83,7 @@ def query_task(
         payload[success_key] = snap["result"]
         payload["message"] = success_msg
         return payload
-    return tool_error(fail_code, snap.get("error") or fail_msg)
+    return error_response(fail_code, snap.get("error") or fail_msg)
 
 
 class CstApi:

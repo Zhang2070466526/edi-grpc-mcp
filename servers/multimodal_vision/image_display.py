@@ -10,9 +10,6 @@ from __future__ import annotations
 
 import base64
 import logging
-import secrets
-import threading
-import time
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +19,7 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse
 
 from servers import mcp
-from servers.utils import get_server_base_url
+from servers.token_registry import TokenStore
 from servers.multimodal_vision.validators import validate_image_path, IMAGE_MIME_MAP
 from servers.multimodal_vision.workspace_copy import OPENCLAW_WORKSPACE_PATH
 
@@ -30,10 +27,7 @@ load_dotenv()
 _logger = logging.getLogger("multimodal.display")
 
 _MAX_NATIVE_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
-_TOKEN_TTL = 600
-
-_IMAGE_TOKENS: dict[str, dict[str, Any]] = {}
-_TOKEN_LOCK = threading.RLock()
+_image_store = TokenStore(route="/images")
 
 _MIME_TYPES = IMAGE_MIME_MAP
 
@@ -97,27 +91,11 @@ def show_image(image_path: str) -> list[Any]:
 # HTTP Token — 供 Chat 界面渲染图片
 # ═══════════════════════════════════════════════════════════
 
-def _base_url() -> str:
-    """返回当前 HTTP 服务的 base URL。"""
-    return get_server_base_url()
-
-
 def register_image_url(img_path: str) -> str:
     """注册图片临时 Token（10 分钟有效），供 Chat 前端通过 /images/{token} 访问。"""
     p = validate_image_path(img_path)
-    _cleanup_expired()
-    token = secrets.token_urlsafe(24)
-    with _TOKEN_LOCK:
-        _IMAGE_TOKENS[token] = {"path": str(p), "expires_at": time.time() + _TOKEN_TTL}
-    return f"{_base_url()}/images/{token}"
-
-
-def _cleanup_expired() -> None:
-    """清理已过期的图片 Token。"""
-    now = time.time()
-    with _TOKEN_LOCK:
-        for t in [t for t, v in _IMAGE_TOKENS.items() if v["expires_at"] < now]:
-            del _IMAGE_TOKENS[t]
+    _, url = _image_store.register(str(p))
+    return url
 
 
 # ═══════════════════════════════════════════════════════════
@@ -127,9 +105,7 @@ def _cleanup_expired() -> None:
 async def serve_image(request: Request) -> FileResponse | JSONResponse:
     """GET /images/{token} — 根据 Token 返回图片文件，10 分钟过期。"""
     token = request.path_params.get("token", "")
-    _cleanup_expired()
-    with _TOKEN_LOCK:
-        entry = _IMAGE_TOKENS.get(token)
+    entry = _image_store.lookup(token)
     if entry is None:
         return JSONResponse({"error": "not found or expired"}, status_code=404)
 

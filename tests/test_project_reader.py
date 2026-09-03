@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from servers.eda.config import parse_sexp, _kv, _walk_find, parse_paramsinfo, parse_components, ProjectReader
+from servers.eda.project_reader import parse_sexp, _kv, _walk_find, parse_paramsinfo, parse_components, ProjectReader
 
 
 def test_parse_sexp_simple():

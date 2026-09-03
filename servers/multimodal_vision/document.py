@@ -8,9 +8,6 @@ from __future__ import annotations
 
 import logging
 import os
-import secrets
-import threading
-import time
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +16,8 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse
 
 from servers import mcp
-from servers.utils import get_server_base_url, is_network_path
+from servers.token_registry import TokenStore
+from servers.utils import is_network_path, error_response
 
 load_dotenv()
 _logger = logging.getLogger("multimodal.document")
@@ -29,10 +27,7 @@ _ALLOWED_EXTENSIONS = {
     ".pdf", ".doc", ".docx", ".xls", ".xlsx",
     ".ppt", ".pptx", ".txt", ".csv", ".rtf",
 }
-_TOKEN_TTL = 600
-
-_DOC_TOKENS: dict[str, dict[str, Any]] = {}
-_TOKEN_LOCK = threading.RLock()
+_doc_store = TokenStore(route="/documents")
 
 _MIME_TYPES: dict[str, tuple[str, str]] = {
     ".pdf": ("application/pdf", "inline"),
@@ -63,32 +58,6 @@ def _validate_path(file_path: str, allowed: set[str]) -> Path:
 # Token 管理
 # ═══════════════════════════════════════════════════════════
 
-def _cleanup_expired() -> None:
-    """清理已过期的文档 Token。"""
-    now = time.time()
-    with _TOKEN_LOCK:
-        for t in [t for t, v in _DOC_TOKENS.items() if v["expires_at"] < now]:
-            del _DOC_TOKENS[t]
-
-
-def _base_url() -> str:
-    """返回当前 HTTP 服务的 base URL。"""
-    return get_server_base_url()
-
-
-def _register_token(path: Path, disposition: str) -> tuple[str, str]:
-    """注册一个文档临时 Token，返回 (token, url)。"""
-    _cleanup_expired()
-    token = secrets.token_urlsafe(24)
-    with _TOKEN_LOCK:
-        _DOC_TOKENS[token] = {
-            "path": str(path),
-            "disposition": disposition,
-            "expires_at": time.time() + _TOKEN_TTL,
-        }
-    return token, f"{_base_url()}/documents/{token}"
-
-
 def register_document_url(file_path: str, disposition: str = "inline") -> str:
     """为本地文档注册临时 HTTP 访问 Token，返回可访问的 URL。
 
@@ -97,7 +66,7 @@ def register_document_url(file_path: str, disposition: str = "inline") -> str:
     """
     # 复用 open_document 的路径校验，防止未来调用方传入任意本地路径被注册为可访问 token
     path = _validate_path(file_path, _ALLOWED_EXTENSIONS)
-    _, url = _register_token(path, disposition)
+    _, url = _doc_store.register(str(path), disposition=disposition)
     return url
 
 
@@ -130,11 +99,11 @@ def open_document(
     try:
         path = _validate_path(file_path, _ALLOWED_EXTENSIONS)
     except PermissionError as e:
-        return {"success": False, "error_code": "INVALID_PATH", "message": str(e)}
+        return error_response("INVALID_PATH", str(e))
     except FileNotFoundError as e:
-        return {"success": False, "error_code": "FILE_NOT_FOUND", "message": str(e)}
+        return error_response("FILE_NOT_FOUND", str(e))
     except ValueError as e:
-        return {"success": False, "error_code": "UNSUPPORTED_FORMAT", "message": str(e)}
+        return error_response("UNSUPPORTED_FORMAT", str(e))
 
     if mode not in ("link", "local"):
         mode = "link"
@@ -144,9 +113,8 @@ def open_document(
         try:
             os.startfile(str(path))
         except OSError as exc:
-            return {"success": False,
-                    "error_code": "DEFAULT_APPLICATION_UNAVAILABLE",
-                    "message": f"系统没有可用于打开该文件的默认程序: {exc}"}
+            return error_response("DEFAULT_APPLICATION_UNAVAILABLE",
+                              f"系统没有可用于打开该文件的默认程序: {exc}")
         return {
             "success": True,
             "status": "OPEN_REQUESTED",
@@ -181,9 +149,7 @@ def open_document(
 async def serve_document(request: Request) -> FileResponse | JSONResponse:
     """GET /documents/{token} — 根据 Token 返回文档文件，10 分钟过期。"""
     token = request.path_params.get("token", "")
-    _cleanup_expired()
-    with _TOKEN_LOCK:
-        entry = _DOC_TOKENS.get(token)
+    entry = _doc_store.lookup(token)
     if entry is None:
         return JSONResponse({"error": "not found or expired"}, status_code=404)
 

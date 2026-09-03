@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from servers.eda.config import TURBOCHARTS_PATH
-from servers.utils import build_file_link, validate_file
+from servers.utils import build_artifact, build_file_link, error_response, validate_file
 from servers.turbocharts.config import run_turbocharts
 from servers import mcp
 
@@ -246,16 +246,13 @@ def list_result_curves(result_path: str) -> dict[str, Any]:
     try:
         resolved = validate_file(result_path)
     except (FileNotFoundError, ValueError) as e:
-        return {"success": False, "error_code": "FILE_NOT_FOUND", "message": str(e)}
+        return error_response("FILE_NOT_FOUND", str(e))
 
     result = _parse_raw_header(resolved)
 
     if result.get("error") and not result.get("datasets"):
-        return {"success": False,
-                "error_code": "UNSUPPORTED_RAW_FORMAT",
-                "message": result["error"],
-                "result_path": resolved,
-                "format": result.get("format", "unknown")}
+        return error_response("UNSUPPORTED_RAW_FORMAT", result["error"],
+                          result_path=resolved, format=result.get("format", "unknown"))
 
     response: dict = {
         "success": True,
@@ -386,8 +383,7 @@ def turbocharts_convert(
     result = run_turbocharts(cmd_img, timeout_seconds=120)
     img_generated = Path(img_path).exists()
     if img_generated:
-        artifacts.append({"type": "image", "path": img_path, "name": Path(img_path).name,
-                          "generated_by": "turbocharts_convert"})
+        artifacts.append(build_artifact("image", img_path, "turbocharts_convert"))
 
     # ── 第 2 步：CSV 导出（自动拆分 VSWR） ──
     if need_split:
@@ -409,16 +405,14 @@ def turbocharts_convert(
             cmd_csv = _build_cmd(raw_path, img_path, chart_type, linename=vswr, dependency=dependency, csv_path=csv_vswr, ac_config=ac_config)
             proc = run_turbocharts(cmd_csv, timeout_seconds=120)
             if proc.returncode == 0 and Path(csv_vswr).exists():
-                artifacts.append({"type": "csv", "path": csv_vswr, "name": Path(csv_vswr).name,
-                                  "generated_by": "turbocharts_convert"})
+                artifacts.append(build_artifact("csv", csv_vswr, "turbocharts_convert"))
 
         # 非 VSWR 曲线 CSV
         if csv_non and non_vswr:
             cmd_non = _build_cmd(raw_path, img_path, chart_type, linename=non_vswr, dependency=dependency, csv_path=csv_non, ac_config=ac_config)
             proc = run_turbocharts(cmd_non, timeout_seconds=120)
             if proc.returncode == 0 and Path(csv_non).exists():
-                artifacts.append({"type": "csv", "path": csv_non, "name": Path(csv_non).name,
-                                  "generated_by": "turbocharts_convert"})
+                artifacts.append(build_artifact("csv", csv_non, "turbocharts_convert"))
 
         warnings.append(f"VSWR 曲线已自动拆分为 {len(vswr_curves)} 次 CSV 导出：{', '.join(vswr_curves)}")
     elif csv_path:
@@ -426,8 +420,7 @@ def turbocharts_convert(
         cmd_csv = _build_cmd(raw_path, img_path, chart_type, linename=linename, dependency=dependency, csv_path=csv_path, ac_config=ac_config)
         r = run_turbocharts(cmd_csv, timeout_seconds=120)
         if r.returncode == 0 and Path(csv_path).exists():
-            artifacts.append({"type": "csv", "path": csv_path, "name": Path(csv_path).name,
-                              "generated_by": "turbocharts_convert"})
+            artifacts.append(build_artifact("csv", csv_path, "turbocharts_convert"))
 
     # CSV 完整性提示
     csv_count = sum(1 for a in artifacts if a["type"] == "csv")

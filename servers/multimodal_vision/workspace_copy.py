@@ -17,7 +17,6 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from servers import mcp
 from servers.settings import get_settings
 from servers.multimodal_vision.validators import validate_image_path, IMAGE_MIME_MAP
 

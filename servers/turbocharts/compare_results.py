@@ -20,7 +20,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from servers.eda.config import TURBOCHARTS_PATH
-from servers.utils import build_file_link
+from servers.utils import build_artifact, build_file_link, error_response
 from servers.turbocharts.config import run_turbocharts
 from servers import mcp
 
@@ -54,34 +54,28 @@ def compare_simulation_results(
         reference_index: interpolation 模式下的参考文件索引。
     """
     if not Path(TURBOCHARTS_PATH).is_file():
-        return {
-            "success": False,
-            "error_code": "FILE_NOT_FOUND",
-            "message": f"turbocharts_app.exe 不存在: {TURBOCHARTS_PATH}",
-        }
+        return error_response("FILE_NOT_FOUND", f"turbocharts_app.exe 不存在: {TURBOCHARTS_PATH}")
 
     file_count = len(result_paths)
     if file_count < 2 or file_count > 8:
-        return {"success": False, "error_code": "INVALID_PARAMETERS", "message": "result_paths 需要 2-8 个文件"}
+        return error_response("INVALID_PARAMETERS", "result_paths 需要 2-8 个文件")
 
     if alignment not in ("intersection", "interpolation"):
-        return {"success": False, "error_code": "INVALID_PARAMETERS",
-                "message": "alignment 必须是 intersection 或 interpolation"}
+        return error_response("INVALID_PARAMETERS", "alignment 必须是 intersection 或 interpolation")
 
     if reference_index < 0 or reference_index >= file_count:
-        return {"success": False, "error_code": "INVALID_PARAMETERS",
-                "message": f"reference_index={reference_index} 超出范围（0-{file_count - 1}）"}
+        return error_response("INVALID_PARAMETERS", f"reference_index={reference_index} 超出范围（0-{file_count - 1}）")
 
     for raw_path in result_paths:
         if not Path(raw_path).is_file():
-            return {"success": False, "error_code": "FILE_NOT_FOUND", "message": f"RAW 文件不存在: {raw_path}"}
+            return error_response("FILE_NOT_FOUND", f"RAW 文件不存在: {raw_path}")
 
     if labels is None:
         labels = [Path(raw_path).stem for raw_path in result_paths]
     if len(labels) != file_count:
-        return {"success": False, "error_code": "INVALID_PARAMETERS", "message": "labels 数量与 result_paths 不一致"}
+        return error_response("INVALID_PARAMETERS", "labels 数量与 result_paths 不一致")
     if not all(isinstance(lb, str) for lb in labels):
-        return {"success": False, "error_code": "INVALID_PARAMETERS", "message": "labels 每个元素必须是字符串"}
+        return error_response("INVALID_PARAMETERS", "labels 每个元素必须是字符串")
 
     _logger.info("compare_results files=%d curve=%s type=%s align=%s ref=%d csv=%s",
                  file_count, curve, chart_type, alignment, reference_index,
@@ -92,8 +86,7 @@ def compare_simulation_results(
     if csv_path:
         csv_path = str(Path(csv_path).expanduser().resolve())
     if not Path(img_path).parent.is_dir():
-        return {"success": False, "error_code": "OUTPUT_DIRECTORY_NOT_FOUND",
-                "message": f"输出目录不存在: {Path(img_path).parent}"}
+        return error_response("OUTPUT_DIRECTORY_NOT_FOUND", f"输出目录不存在: {Path(img_path).parent}")
 
     # Step 1: export each RAW to temp CSV (serialized via runner)
     dep_key = dependency
@@ -114,15 +107,12 @@ def compare_simulation_results(
 
             result_proc = run_turbocharts(cmd, timeout_seconds=60)
             if result_proc.returncode != 0:
-                return {
-                    "success": False,
-                    "error_code": "TOOL_EXECUTION_FAILED",
-                    "message": f"turbocharts 导出 {rp} 失败: {result_proc.stderr[:200]}",
-                }
+                return error_response("TOOL_EXECUTION_FAILED",
+                                  f"turbocharts 导出 {rp} 失败: {result_proc.stderr[:200]}")
 
             x_vals, y_vals = _read_curve_csv_xy(tmp_csv)
             if not x_vals:
-                return {"success": False, "error_code": "INVALID_RAW_DATA", "message": f"无法解析 {rp} 的 CSV 数据"}
+                return error_response("INVALID_RAW_DATA", f"无法解析 {rp} 的 CSV 数据")
             raw_curves.append((x_vals, y_vals))
 
     # Step 2: align data (preserve original index order)
@@ -133,7 +123,7 @@ def compare_simulation_results(
         x_sets = [set(xv) for xv, _ in raw_curves]
         common_x = sorted(set.intersection(*x_sets))
         if not common_x:
-            return {"success": False, "error_code": "INVALID_RAW_DATA", "message": "所有 RAW 文件没有共同的依赖轴数据点"}
+            return error_response("INVALID_RAW_DATA", "所有 RAW 文件没有共同的依赖轴数据点")
         for i, (xv, yv) in enumerate(raw_curves):
             # 使用 last-wins 去重：重复 X 值取最后一个（与 zip→dict 行为一致）
             x_to_y: dict[float, float] = {}
@@ -144,9 +134,8 @@ def compare_simulation_results(
         # interpolation — 所有文件 X 轴都需严格递增（np.interp 要求，否则结果未定义）
         for i, (xv, _) in enumerate(raw_curves):
             if not all(xv[j] < xv[j + 1] for j in range(len(xv) - 1)):
-                return {"success": False, "error_code": "INVALID_RAW_DATA",
-                        "message": f"interpolation 模式要求所有文件 X 轴严格递增，"
-                                   f"但 {labels[i]} 中存在无序或重复的依赖轴值"}
+                return error_response("INVALID_RAW_DATA",
+                                  f"interpolation 模式要求所有文件 X 轴严格递增，但 {labels[i]} 中存在无序或重复的依赖轴值")
         ref_x, ref_y = raw_curves[reference_index]
         common_x = ref_x
         curves_aligned[reference_index] = ref_y
@@ -208,11 +197,9 @@ def compare_simulation_results(
 
     artifacts: list[dict] = []
     if img_ok:
-        artifacts.append({"type": "image", "path": img_path, "name": Path(img_path).name,
-                          "generated_by": "compare_simulation_results"})
+        artifacts.append(build_artifact("image", img_path, "compare_simulation_results"))
     if csv_ok:
-        artifacts.append({"type": "csv", "path": csv_path, "name": Path(csv_path).name,
-                          "generated_by": "compare_simulation_results"})
+        artifacts.append(build_artifact("csv", csv_path, "compare_simulation_results"))
 
     result = {
         "success": img_ok,

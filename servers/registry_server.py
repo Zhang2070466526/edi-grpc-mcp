@@ -89,6 +89,7 @@ import servers.eda.project_manage       # noqa: F401
 import servers.eda.simulation            # noqa: F401
 import servers.eda.simulation_components # noqa: F401
 import servers.eda.design_export         # noqa: F401
+import servers.eda.signal_chain          # noqa: F401
 import servers.eda.model_replace         # noqa: F401
 import servers.eda.edi_launcher          # noqa: F401
 import servers.turbocharts.compare_results  # noqa: F401

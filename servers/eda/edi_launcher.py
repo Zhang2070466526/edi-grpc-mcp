@@ -12,8 +12,12 @@ import time
 from pathlib import Path
 from typing import Any
 
+import grpc
+
 from servers.eda.config import EDA_GRPC_SERVER, EDI_PATH
 from servers.settings import get_settings
+from servers.eda.grpc_client import get_cached_channel, is_queue_busy
+from servers.utils import error_response
 from servers import mcp
 
 
@@ -143,8 +147,7 @@ def get_service_logs(
             reverse=True,
         )
         if not candidates:
-            return {"success": False, "error_code": "LOG_NOT_FOUND",
-                    "message": f"日志目录下没有日志文件: {log_dir}"}
+            return error_response("LOG_NOT_FOUND", f"日志目录下没有日志文件: {log_dir}")
         log_file = candidates[0]
         fallback_note = f"当天日志不存在，已读取最近日志 {log_file.name}"
 
@@ -152,8 +155,7 @@ def get_service_logs(
         with open(log_file, "r", encoding="utf-8", errors="replace") as f:
             all_lines = f.read().splitlines()
     except OSError as exc:
-        return {"success": False, "error_code": "LOG_READ_ERROR",
-                "message": f"读取日志失败: {exc}"}
+        return error_response("LOG_READ_ERROR", f"读取日志失败: {exc}")
 
     total = len(all_lines)
 
@@ -207,4 +209,32 @@ def get_service_logs(
         "warning_count": warning_count,
         "exception_lines": exception_lines[-20:],
         "message": message,
+    }
+
+
+@mcp.tool()
+def get_service_status() -> dict[str, Any]:
+    """返回 EDI gRPC 通道状态和队列占用信息（只读，不占执行槽位），用于诊断：通道是否健康、是否有任务在排队。
+
+    用法："EDI 服务正常吗"、"检查 gRPC 连接状态"、"有没有任务在排队"
+
+    Returns:
+        {"grpc_target": "127.0.0.1:50055", "channel_state": "ready/unhealthy/unknown",
+         "channel_cached": True, "queue_locked": False, "max_receive_mb": 256}
+    """
+    target = EDA_GRPC_SERVER
+    ch = get_cached_channel(target)
+    state = "unknown"
+    if ch is not None:
+        try:
+            grpc.channel_ready_future(ch).result(timeout=1)
+            state = "ready"
+        except (grpc.FutureTimeoutError, grpc.RpcError):
+            state = "unhealthy"
+    return {
+        "grpc_target": target,
+        "channel_state": state,
+        "channel_cached": ch is not None,
+        "queue_locked": is_queue_busy(),
+        "max_receive_mb": 256,
     }

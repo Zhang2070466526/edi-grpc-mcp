@@ -28,13 +28,12 @@ from typing import Any
 
 from proto import ecserver_pb2
 from servers.eda.config import (
-    ProjectReader,
-    parse_components,
     validate_project_path,
     SIM_COMPONENT_TYPES,
 )
-from servers.eda.grpc_client import call_grpc
-from servers.utils import is_network_path, tool_error
+from servers.eda.project_reader import ProjectReader, parse_components
+from servers.eda.grpc_client import call_grpc, call_project_grpc
+from servers.utils import is_network_path, require_nonempty, error_response
 from servers import mcp
 
 _logger = logging.getLogger("sim_components")
@@ -70,8 +69,8 @@ def _catalog_component(component_type: str) -> dict:
 # ═══════════════════════════════════════════════════════════
 
 def _resolve_parameter_schema(
-    component_type: str,
-    parameter_name: str,
+        component_type: str,
+        parameter_name: str,
 ) -> tuple[dict | None, str]:
     """Resolve a public parameter name to its schema and wire name.
 
@@ -111,11 +110,11 @@ def _resolve_parameter_schema(
 
 
 def _prepare_parameters(
-    component_type: str,
-    parameters: dict,
-    operation: str,
-    *,
-    allow_empty: bool,
+        component_type: str,
+        parameters: dict,
+        operation: str,
+        *,
+        allow_empty: bool,
 ) -> tuple[dict | None, dict | None]:
     """Validate and convert public parameters to wire parameters.
 
@@ -140,26 +139,26 @@ def _prepare_parameters(
     """
     if not isinstance(parameters, dict):
         return None, _param_error("INVALID_PARAMETERS",
-                                   "parameters 必须是对象", component_type)
+                                  "parameters 必须是对象", component_type)
 
     cat = _load_catalog()
     if not cat:
         return None, _param_error("COMPONENT_SCHEMA_UNAVAILABLE",
-                                   "仿真控件参数目录加载失败", component_type)
+                                  "仿真控件参数目录加载失败", component_type)
 
     comp = _catalog_component(component_type)
     if not comp:
         return None, _param_error("UNSUPPORTED_COMPONENT_TYPE",
-                                   f"不支持的控件类型: {component_type}",
-                                   component_type,
-                                   supported_types=sorted(_COMPONENT_TYPES))
+                                  f"不支持的控件类型: {component_type}",
+                                  component_type,
+                                  supported_types=sorted(_COMPONENT_TYPES))
 
     # Empty check
     if not parameters:
         if allow_empty:
             return {}, None
         return None, _param_error("INVALID_PARAMETERS",
-                                   "parameters 必须是非空对象", component_type)
+                                  "parameters 必须是非空对象", component_type)
 
     # Parameter schema
     schemas: dict[str, tuple[dict, str]] = {}
@@ -167,21 +166,21 @@ def _prepare_parameters(
         schema, wire = _resolve_parameter_schema(component_type, pname)
         if schema is None:
             return None, _param_error("UNSUPPORTED_PARAMETER",
-                                       f"{component_type} 不支持参数: {pname}",
-                                       component_type, parameter=pname,
-                                       supported_parameters=_supported_param_names(component_type))
+                                      f"{component_type} 不支持参数: {pname}",
+                                      component_type, parameter=pname,
+                                      supported_parameters=_supported_param_names(component_type))
         schemas[pname] = (schema, wire)
 
     # Permission check
     for pname, (schema, wire) in schemas.items():
         if operation == "create" and not schema.get("create_allowed", False):
             return None, _param_error("CREATE_PARAMETER_NOT_ALLOWED",
-                                       f"{component_type}.{pname} 不允许在创建时设置",
-                                       component_type, parameter=pname)
+                                      f"{component_type}.{pname} 不允许在创建时设置",
+                                      component_type, parameter=pname)
         if operation == "update" and not schema.get("update_allowed", False):
             return None, _param_error("UPDATE_PARAMETER_NOT_ALLOWED",
-                                       f"{component_type}.{pname} 不允许更新",
-                                       component_type, parameter=pname)
+                                      f"{component_type}.{pname} 不允许更新",
+                                      component_type, parameter=pname)
 
     # Value validation
     wire_params: dict = {}
@@ -191,33 +190,33 @@ def _prepare_parameters(
         # Must be dict
         if not isinstance(pval, dict):
             return None, _param_error("INVALID_PARAMETER_VALUE",
-                                       f"参数 {pname} 的值必须是对象 {{\"value\": ...}}",
-                                       component_type, parameter=pname)
+                                      f"参数 {pname} 的值必须是对象 {{\"value\": ...}}",
+                                      component_type, parameter=pname)
 
         # Only "value" and "unit" allowed
         extra = set(pval.keys()) - {"value", "unit"}
         if extra:
             return None, _param_error("INVALID_PARAMETER_VALUE",
-                                       f"参数 {pname} 包含多余字段: {', '.join(sorted(extra))}",
-                                       component_type, parameter=pname)
+                                      f"参数 {pname} 包含多余字段: {', '.join(sorted(extra))}",
+                                      component_type, parameter=pname)
 
         # "value" required
         if "value" not in pval:
             return None, _param_error("MISSING_VALUE",
-                                       f"参数 {pname} 缺少 value",
-                                       component_type, parameter=pname)
+                                      f"参数 {pname} 缺少 value",
+                                      component_type, parameter=pname)
 
         raw_value = pval["value"]
 
         # value must not be null, array, or object
         if raw_value is None:
             return None, _param_error("INVALID_VALUE",
-                                       f"参数 {pname} 的 value 不能为 null",
-                                       component_type, parameter=pname)
+                                      f"参数 {pname} 的 value 不能为 null",
+                                      component_type, parameter=pname)
         if isinstance(raw_value, (list, dict)):
             return None, _param_error("INVALID_VALUE",
-                                       f"参数 {pname} 的 value 必须是标量",
-                                       component_type, parameter=pname)
+                                      f"参数 {pname} 的 value 必须是标量",
+                                      component_type, parameter=pname)
 
         # Type validation
         vt = schema.get("value_type", "string")
@@ -226,48 +225,48 @@ def _prepare_parameters(
                 num = float(str(raw_value))
             except (ValueError, TypeError):
                 return None, _param_error("INVALID_VALUE",
-                                           f"参数 {pname} 的值必须是 {vt}",
-                                           component_type, parameter=pname)
+                                          f"参数 {pname} 的值必须是 {vt}",
+                                          component_type, parameter=pname)
             if not math.isfinite(num):
                 return None, _param_error("INVALID_VALUE",
-                                           f"参数 {pname} 的值不能是 NaN 或 Infinity",
-                                           component_type, parameter=pname)
+                                          f"参数 {pname} 的值不能是 NaN 或 Infinity",
+                                          component_type, parameter=pname)
             if vt == "integer" and not num.is_integer():
                 return None, _param_error("INVALID_VALUE",
-                                           f"参数 {pname} 的值必须是整数",
-                                           component_type, parameter=pname)
+                                          f"参数 {pname} 的值必须是整数",
+                                          component_type, parameter=pname)
 
         # Enum check
         ev = schema.get("enum_values", [])
         if ev and str(raw_value) not in ev:
             return None, _param_error("INVALID_ENUM_VALUE",
-                                       f"参数 {pname} 的值必须是 {'/'.join(ev)}",
-                                       component_type, parameter=pname,
-                                       allowed_values=ev)
+                                      f"参数 {pname} 的值必须是 {'/'.join(ev)}",
+                                      component_type, parameter=pname,
+                                      allowed_values=ev)
 
         # Unit validation
         unit_required = schema.get("unit_required", False)
         if unit_required and "unit" not in pval:
             return None, _param_error("MISSING_UNIT",
-                                       f"参数 {pname} 需要 unit",
-                                       component_type, parameter=pname)
+                                      f"参数 {pname} 需要 unit",
+                                      component_type, parameter=pname)
         if not unit_required and "unit" in pval:
             return None, _param_error("UNSUPPORTED_UNIT",
-                                       f"参数 {pname} 不需要 unit",
-                                       component_type, parameter=pname)
+                                      f"参数 {pname} 不需要 unit",
+                                      component_type, parameter=pname)
 
         if "unit" in pval:
             unit_val = pval["unit"]
             if not isinstance(unit_val, str) or not unit_val.strip():
                 return None, _param_error("UNSUPPORTED_UNIT",
-                                           f"参数 {pname} 的 unit 必须是有效字符串",
-                                           component_type, parameter=pname)
+                                          f"参数 {pname} 的 unit 必须是有效字符串",
+                                          component_type, parameter=pname)
             allowed = schema.get("units", [])
             if allowed and unit_val not in allowed:
                 return None, _param_error("UNSUPPORTED_UNIT",
-                                           f"参数 {pname} 不支持单位 {unit_val}",
-                                           component_type, parameter=pname,
-                                           allowed_units=allowed)
+                                          f"参数 {pname} 不支持单位 {unit_val}",
+                                          component_type, parameter=pname,
+                                          allowed_units=allowed)
 
         # Detect duplicate (alias conflict): Freq → Freq[1] + Freq[1] → Freq[1]
         if wire_name in wire_params:
@@ -278,10 +277,10 @@ def _prepare_parameters(
                 pname,
             )
             return None, _param_error("DUPLICATE_PARAMETER_ALIAS",
-                                       f"参数 {pname} 和 {conflicting} 映射到同一个底层参数 {wire_name}",
-                                       component_type, parameter=pname,
-                                       conflicting_parameter=conflicting,
-                                       wire_name=wire_name)
+                                      f"参数 {pname} 和 {conflicting} 映射到同一个底层参数 {wire_name}",
+                                      component_type, parameter=pname,
+                                      conflicting_parameter=conflicting,
+                                      wire_name=wire_name)
 
         wire_params[wire_name] = pval
 
@@ -352,8 +351,8 @@ def _from_wire_parameters(component_type: str, parameters: dict) -> dict:
 # ═══════════════════════════════════════════════════════════
 
 def _find_component_by_instance(
-    project_path: str,
-    instance_name: str,
+        project_path: str,
+        instance_name: str,
 ) -> tuple[dict | None, dict | None]:
     """Locate a component by its instance name in saved project files.
 
@@ -361,17 +360,14 @@ def _find_component_by_instance(
     """
     target = instance_name.strip()
     if not target:
-        return None, tool_error("EMPTY_INSTANCE_NAME",
-                                       "instance_name 不能为空")
+        return None, error_response("EMPTY_INSTANCE_NAME", "instance_name 不能为空")
 
     try:
         reader = ProjectReader(project_path)
     except FileNotFoundError:
-        return None, tool_error("PROJECT_NOT_FOUND",
-                                       "工程文件不存在")
+        return None, error_response("PROJECT_NOT_FOUND", "工程文件不存在")
     except ValueError:
-        return None, tool_error("INVALID_PROJECT_PATH",
-                                       "project_path 必须是 .epp 文件")
+        return None, error_response("INVALID_PROJECT_PATH", "project_path 必须是 .epp 文件")
 
     matches: list[dict] = []
     for sname in reader.list_schematics() or []:
@@ -384,19 +380,22 @@ def _find_component_by_instance(
             matches.append({**comp, "schematic": sname})
 
     if not matches:
-        return None, tool_error("COMPONENT_NOT_FOUND",
-                                       f"在已保存工程中未找到器件实例 {target}",
-                                       hint="请确认 EDI 中已保存工程，或使用 list_simulation_components 查看当前器件")
+        return None, error_response("COMPONENT_NOT_FOUND",
+                                f"在已保存工程中未找到器件实例 {target}",
+                                hint="请确认 EDI 中已保存工程，或使用 list_simulation_components 查看当前器件")
 
     if len(matches) > 1:
-        return None, tool_error("AMBIGUOUS_INSTANCE_NAME",
-                                       f"发现多个名为 {target} 的器件",
-                                       details={"matches": [
-                                           {"schematic": m["schematic"],
-                                            "component_type": m.get("type", ""),
-                                            "component_id": m.get("component_id", "")}
-                                           for m in matches
-                                       ]})
+        return None, error_response("AMBIGUOUS_INSTANCE_NAME",
+                                f"发现多个名为 {target} 的器件",
+                                details={
+                                    "matches": [
+                                        {"schematic": m["schematic"],
+                                         "component_type": m.get("type", ""),
+                                         "component_id": m.get("component_id", "")}
+                                        for m in matches
+                                    ]
+                                }
+                                )
 
     return matches[0], None
 
@@ -406,8 +405,8 @@ def _find_component_by_instance(
 # ═══════════════════════════════════════════════════════════
 
 def _format_component_parameters(
-    component_type: str,
-    paramsinfo: dict,
+        component_type: str,
+        paramsinfo: dict,
 ) -> dict:
     """Build public-facing parameter dict from raw paramsinfo.
 
@@ -445,19 +444,19 @@ def _format_component_parameters(
 # ═══════════════════════════════════════════════════════════
 
 def _param_error(
-    code: str,
-    message: str,
-    component_type: str = "",
-    parameter: str = "",
-    **extra,
+        code: str,
+        message: str,
+        component_type: str = "",
+        parameter: str = "",
+        **extra,
 ) -> dict:
-    """构建器件参数校验错误响应（等价于 tool_error + 参数 details）。"""
+    """构建器件参数校验错误响应（等价于 error_response + 参数 details）。"""
     kwargs = dict(extra)
     if component_type:
         kwargs["component_type"] = component_type
     if parameter:
         kwargs["parameter"] = parameter
-    return tool_error(code, message, **kwargs)
+    return error_response(code, message, **kwargs)
 
 
 def _find_sim_components(project_path: str, component_type: str = "", schematic_name: str = "",
@@ -514,8 +513,8 @@ def _find_sim_components(project_path: str, component_type: str = "", schematic_
 
 @mcp.tool()
 def get_simulation_component_schema(
-    component_type: str,
-    parameter_name: str = "",
+        component_type: str,
+        parameter_name: str = "",
 ) -> dict[str, Any]:
     """查询已建模器件类型的参数 Schema 和权限。
 
@@ -528,25 +527,19 @@ def get_simulation_component_schema(
     """
     catalog = _load_catalog()
     if not catalog:
-        return {"success": False,
-                "error_code": "COMPONENT_SCHEMA_UNAVAILABLE",
-                "message": "参数目录加载失败"}
+        return error_response("COMPONENT_SCHEMA_UNAVAILABLE", "参数目录加载失败")
 
     comp = _catalog_component(component_type)
     if not comp:
-        return {"success": False,
-                "error_code": "UNSUPPORTED_COMPONENT_TYPE",
-                "message": f"不支持的控件类型: {component_type}",
-                "supported_component_types": sorted(_COMPONENT_TYPES)}
+        return error_response("UNSUPPORTED_COMPONENT_TYPE", f"不支持的控件类型: {component_type}",
+                          supported_component_types=sorted(_COMPONENT_TYPES))
 
     params = comp.get("parameters", {})
     if parameter_name:
         schema, _ = _resolve_parameter_schema(component_type, parameter_name)
         if schema is None:
-            return {"success": False,
-                    "error_code": "UNSUPPORTED_PARAMETER",
-                    "message": f"{component_type} 不支持参数 {parameter_name}",
-                    "supported_parameters": _supported_param_names(component_type)}
+            return error_response("UNSUPPORTED_PARAMETER", f"{component_type} 不支持参数 {parameter_name}",
+                              supported_parameters=_supported_param_names(component_type))
         params = {parameter_name: schema}
 
     return {
@@ -566,13 +559,13 @@ def get_simulation_component_schema(
 
 @mcp.tool()
 def list_simulation_components(
-    project_path: str,
-    component_type: str = "",
-    name_contains: str = "",
-    schematic_name: str = "",
-    offset: int = 0,
-    limit: int = 100,
-    include_hidden: bool = False,
+        project_path: str,
+        component_type: str = "",
+        name_contains: str = "",
+        schematic_name: str = "",
+        offset: int = 0,
+        limit: int = 100,
+        include_hidden: bool = False,
 ) -> dict[str, Any]:
     """列出已保存工程中的全部器件及参数（含 wire→public 参数名映射）。
 
@@ -596,11 +589,9 @@ def list_simulation_components(
     try:
         reader = ProjectReader(project_path)
     except FileNotFoundError:
-        return {"success": False, "error_code": "PROJECT_NOT_FOUND",
-                "message": "工程文件不存在"}
+        return error_response("PROJECT_NOT_FOUND", "工程文件不存在")
     except ValueError:
-        return {"success": False, "error_code": "INVALID_PROJECT_PATH",
-                "message": "project_path 必须是 .epp 文件"}
+        return error_response("INVALID_PROJECT_PATH", "project_path 必须是 .epp 文件")
     components = _find_sim_components(project_path, component_type, schematic_name=schematic_name,
                                       include_hidden=include_hidden, reader=reader)
     if name_contains:
@@ -634,9 +625,9 @@ def list_simulation_components(
 
 @mcp.tool()
 def create_simulation_component(
-    project_path: str,
-    component_type: str,
-    timeout_seconds: int = 120,
+        project_path: str,
+        component_type: str,
+        timeout_seconds: int = 120,
 ) -> dict[str, Any]:
     """使用 EDI 器件工厂默认参数创建器件。
 
@@ -648,19 +639,10 @@ def create_simulation_component(
         component_type: EDI 器件工厂类型名。
         timeout_seconds: 最长等待秒数。
     """
-    resolved = validate_project_path(project_path)
-    ct = component_type.strip()
-    if not ct:
-        return {"success": False,
-                "error_code": "INVALID_PARAMETERS",
-                "message": "component_type 不能为空"}
-
-    return call_grpc(
-        ecserver_pb2.CREATE_SIMULATION_COMPONENT,
-        {"project_path": resolved, "component_type": ct},
-        timeout_seconds,
-        max_timeout_seconds=300,
-    )
+    ct, err = require_nonempty(component_type, label="component_type")
+    if err:
+        return err
+    return call_project_grpc(ecserver_pb2.CREATE_SIMULATION_COMPONENT, project_path, timeout_seconds, component_type=ct)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -669,11 +651,11 @@ def create_simulation_component(
 
 @mcp.tool()
 def update_simulation_component(
-    project_path: str,
-    instance_name: str,
-    parameters: dict,
-    component_type: str = "",
-    timeout_seconds: int = 120,
+        project_path: str,
+        instance_name: str,
+        parameters: dict,
+        component_type: str = "",
+        timeout_seconds: int = 120,
 ) -> dict[str, Any]:
     """按实例名更新器件参数。
 
@@ -696,9 +678,7 @@ def update_simulation_component(
     resolved = validate_project_path(project_path)
 
     if not isinstance(parameters, dict) or not parameters:
-        return {"success": False,
-                "error_code": "INVALID_PARAMETERS",
-                "message": "parameters 必须是非空对象"}
+        return error_response("INVALID_PARAMETERS", "parameters 必须是非空对象")
 
     # Three-way type inference: explicit > disk > error
     explicit_type = component_type.strip() if component_type else ""
@@ -711,12 +691,8 @@ def update_simulation_component(
     if actual_type:
         # Instance found on disk — validate consistency with explicit type
         if explicit_type and explicit_type != actual_type:
-            return {"success": False,
-                    "error_code": "COMPONENT_TYPE_MISMATCH",
-                    "message": (
-                        f"{instance_name} 的实际类型为 {actual_type}，"
-                        f"但请求提供了 {explicit_type}"
-                    )}
+            return error_response("COMPONENT_TYPE_MISMATCH",
+                              f"{instance_name} 的实际类型为 {actual_type}，但请求提供了 {explicit_type}")
         ct = actual_type
 
     elif explicit_type:
@@ -724,12 +700,8 @@ def update_simulation_component(
         ct = explicit_type
 
     else:
-        return {"success": False,
-                "error_code": "COMPONENT_TYPE_REQUIRED",
-                "message": (
-                    f"无法从已保存工程识别 {instance_name} 的类型；"
-                    "请先保存工程，或显式提供 component_type"
-                )}
+        return error_response("COMPONENT_TYPE_REQUIRED",
+                          f"无法从已保存工程识别 {instance_name} 的类型；请先保存工程，或显式提供 component_type")
 
     # Catalog types (SP/HB/XDB): do wire-conversion via _prepare_parameters
     # Other types (Sweep, P_nToneG, Var, etc.): send as-is, EDI validates
@@ -743,9 +715,7 @@ def update_simulation_component(
         # Basic validation — EDI handles business rules for non-catalog types
         for k, v in parameters.items():
             if not isinstance(v, dict) or "value" not in v:
-                return {"success": False,
-                        "error_code": "INVALID_PARAMETERS",
-                        "message": f"参数 {k} 必须是 {{\"value\": ...}} 格式"}
+                return error_response("INVALID_PARAMETERS", f"参数 {k} 必须是 {{\"value\": ...}} 格式")
         wire_params = parameters
 
     return call_grpc(
@@ -764,11 +734,11 @@ def update_simulation_component(
 
 @mcp.tool()
 def replace_port_component(
-    project_path: str,
-    target_instance_name: str,
-    replacement_component_type: str,
-    parameters: dict | None = None,
-    timeout_seconds: int = 300,
+        project_path: str,
+        target_instance_name: str,
+        replacement_component_type: str,
+        parameters: dict | None = None,
+        timeout_seconds: int = 300,
 ) -> dict[str, Any]:
     """将原理图中的端口器件替换为另一种类型。
 
@@ -785,21 +755,15 @@ def replace_port_component(
     resolved = validate_project_path(project_path)
 
     if not target_instance_name.strip():
-        return {"success": False,
-                "error_code": "EMPTY_INSTANCE_NAME",
-                "message": "target_instance_name 不能为空"}
+        return error_response("EMPTY_INSTANCE_NAME", "target_instance_name 不能为空")
 
     rct = replacement_component_type.strip()
     if rct not in ("TermG", "P_nToneG"):
-        return {"success": False,
-                "error_code": "UNSUPPORTED_COMPONENT_TYPE",
-                "message": f"replacement_component_type 仅支持 TermG / P_nToneG"}
+        return error_response("UNSUPPORTED_COMPONENT_TYPE", "replacement_component_type 仅支持 TermG / P_nToneG")
 
     params = {} if parameters is None else parameters
     if not isinstance(params, dict):
-        return {"success": False,
-                "error_code": "INVALID_PARAMETERS",
-                "message": "parameters 必须是对象"}
+        return error_response("INVALID_PARAMETERS", "parameters 必须是对象")
 
     return call_grpc(
         ecserver_pb2.REPLACE_PORT_COMPONENT,
@@ -818,9 +782,9 @@ def replace_port_component(
 
 @mcp.tool()
 def delete_simulation_component(
-    project_path: str,
-    instance_name: str,
-    timeout_seconds: int = 120,
+        project_path: str,
+        instance_name: str,
+        timeout_seconds: int = 120,
 ) -> dict[str, Any]:
     """按实例名删除原理图器件及其连接线。
 
@@ -834,20 +798,12 @@ def delete_simulation_component(
         instance_name: 要删除的器件实例名（如 "R1"、"SP2"）。
         timeout_seconds: 最长等待秒数。
     """
-    resolved = validate_project_path(project_path)
-
-    if not instance_name.strip():
-        return {"success": False,
-                "error_code": "EMPTY_INSTANCE_NAME",
-                "message": "instance_name 不能为空"}
-
-    return call_grpc(
-        ecserver_pb2.DELETE_SIMULATION_COMPONENT,
-        {"project_path": resolved,
-         "instance_name": instance_name.strip()},
-        timeout_seconds,
-        max_timeout_seconds=300,
-    )
+    instance_name, err = require_nonempty(instance_name, error_code="EMPTY_INSTANCE_NAME",
+                                          label="instance_name")
+    if err:
+        return err
+    return call_project_grpc(ecserver_pb2.DELETE_SIMULATION_COMPONENT, project_path,
+                             timeout_seconds, instance_name=instance_name)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -856,10 +812,10 @@ def delete_simulation_component(
 
 @mcp.tool()
 def set_component_active_state(
-    project_path: str,
-    instance_name: str,
-    state: str,
-    timeout_seconds: int = 120,
+        project_path: str,
+        instance_name: str,
+        state: str,
+        timeout_seconds: int = 120,
 ) -> dict[str, Any]:
     """确定性设置器件状态为 NORMAL、DISABLED 或 SHORTED。
 
@@ -872,28 +828,17 @@ def set_component_active_state(
         state: 目标状态，只接受 "NORMAL" / "DISABLED" / "SHORTED"（大小写不敏感）。
         timeout_seconds: 最长等待秒数。
     """
-    resolved = validate_project_path(project_path)
-
     normalized = state.strip().upper()
     if normalized not in _ACTIVE_STATES:
-        return {"success": False,
-                "error_code": "INVALID_ACTIVE_STATE",
-                "message": f"无效状态: {state}，仅支持 NORMAL / DISABLED / SHORTED",
-                "allowed_states": sorted(_ACTIVE_STATES)}
+        return error_response("INVALID_ACTIVE_STATE", f"无效状态: {state}，仅支持 NORMAL / DISABLED / SHORTED",
+                          allowed_states=sorted(_ACTIVE_STATES))
 
-    if not instance_name.strip():
-        return {"success": False,
-                "error_code": "EMPTY_INSTANCE_NAME",
-                "message": "instance_name 不能为空"}
-
-    return call_grpc(
-        ecserver_pb2.SET_COMPONENT_ACTIVE_STATE,
-        {"project_path": resolved,
-         "instance_name": instance_name.strip(),
-         "state": normalized},
-        timeout_seconds,
-        max_timeout_seconds=300,
-    )
+    instance_name, err = require_nonempty(instance_name, error_code="EMPTY_INSTANCE_NAME",
+                                          label="instance_name")
+    if err:
+        return err
+    return call_project_grpc(ecserver_pb2.SET_COMPONENT_ACTIVE_STATE, project_path,
+                             timeout_seconds, instance_name=instance_name, state=normalized)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -902,11 +847,11 @@ def set_component_active_state(
 
 @mcp.tool()
 def generate_schematic_from_netlist(
-    project_path: str,
-    netlist_path: str,
-    clear_before_import: bool = False,
-    confirm_clear: bool = False,
-    timeout_seconds: int = 300,
+        project_path: str,
+        netlist_path: str,
+        clear_before_import: bool = False,
+        confirm_clear: bool = False,
+        timeout_seconds: int = 300,
 ) -> dict[str, Any]:
     """将网表文件导入工程生成 main 原理图。
 
@@ -923,9 +868,7 @@ def generate_schematic_from_netlist(
 
     netlist = Path(netlist_path).expanduser().resolve()
     if not netlist.is_file():
-        return {"success": False,
-                "error_code": "FILE_NOT_FOUND",
-                "message": f"网表文件不存在: {netlist}"}
+        return error_response("FILE_NOT_FOUND", f"网表文件不存在: {netlist}")
 
     # Clear-before-import safety gate
     if clear_before_import and not confirm_clear:
@@ -939,12 +882,10 @@ def generate_schematic_from_netlist(
         except Exception:
             pass
 
-        return {"success": False,
-                "error_code": "CLEAR_CONFIRMATION_REQUIRED",
-                "message": ("clear_before_import=true 会清空 main 原理图的全部器件；"
-                            "确认后请同时传 confirm_clear=true"),
-                "existing_component_count": existing_count,
-                "warning": "本操作将清空 main 原理图"}
+        return error_response("CLEAR_CONFIRMATION_REQUIRED",
+                          "clear_before_import=true 会清空 main 原理图的全部器件；确认后请同时传 confirm_clear=true",
+                          existing_component_count=existing_count,
+                          warning="本操作将清空 main 原理图")
 
     return call_grpc(
         ecserver_pb2.GENERATE_SCHEMATIC_FROM_NETLIST,
@@ -962,9 +903,9 @@ def generate_schematic_from_netlist(
 
 @mcp.tool()
 def replace_schematic_from_file(
-    project_path: str,
-    schematic_path: str,
-    timeout_seconds: int = 300,
+        project_path: str,
+        schematic_path: str,
+        timeout_seconds: int = 300,
 ) -> dict[str, Any]:
     """从 .ep 文件整体替换原理图（对应 gRPC LOAD_SCHEMATIC_FROM_FILE）。
 
@@ -983,26 +924,18 @@ def replace_schematic_from_file(
 
     # 必填校验：不能为空
     if not schematic_path or not schematic_path.strip():
-        return {"success": False,
-                "error_code": "INVALID_PATH",
-                "message": "schematic_path 不能为空"}
+        return error_response("INVALID_PATH", "schematic_path 不能为空")
 
     sch_path = Path(schematic_path).expanduser().resolve()
 
     # 仅允许本地文件，拒绝网络路径（UNC）
     if is_network_path(sch_path):
-        return {"success": False,
-                "error_code": "INVALID_PATH",
-                "message": f"禁止访问网络路径: {sch_path}"}
+        return error_response("INVALID_PATH", f"禁止访问网络路径: {sch_path}")
 
     if not sch_path.is_file():
-        return {"success": False,
-                "error_code": "FILE_NOT_FOUND",
-                "message": f"原理图文件不存在: {sch_path}"}
+        return error_response("FILE_NOT_FOUND", f"原理图文件不存在: {sch_path}")
     if sch_path.suffix.lower() != ".ep":
-        return {"success": False,
-                "error_code": "INVALID_PATH",
-                "message": "schematic_path 必须是 .ep 文件"}
+        return error_response("INVALID_PATH", "schematic_path 必须是 .ep 文件")
 
     return call_grpc(
         ecserver_pb2.LOAD_SCHEMATIC_FROM_FILE,
@@ -1019,10 +952,10 @@ def replace_schematic_from_file(
 
 @mcp.tool()
 def attach_out_component(
-    project_path: str,
-    target_instance_name: str,
-    pin_index: int | None = None,
-    timeout_seconds: int = 120,
+        project_path: str,
+        target_instance_name: str,
+        pin_index: int | None = None,
+        timeout_seconds: int = 120,
 ) -> dict[str, Any]:
     """为目标器件引脚挂载一个 Out 器件，并自动连线。
 
@@ -1035,28 +968,17 @@ def attach_out_component(
         pin_index: 0 开始的目标引脚编号。单引脚器件可省略。
         timeout_seconds: 最长等待秒数（默认 120）。
     """
-    if not target_instance_name or not target_instance_name.strip():
-        return {"success": False,
-                "error_code": "EMPTY_INSTANCE_NAME",
-                "message": "target_instance_name 不能为空"}
+    target_instance_name, err = require_nonempty(target_instance_name,
+                                                 error_code="EMPTY_INSTANCE_NAME",
+                                                 label="target_instance_name")
+    if err:
+        return err
 
     if pin_index is not None and (not isinstance(pin_index, int) or pin_index < 0):
-        return {"success": False,
-                "error_code": "INVALID_PARAMETERS",
-                "message": "pin_index 必须是非负整数"}
+        return error_response("INVALID_PARAMETERS", "pin_index 必须是非负整数")
 
-    resolved = validate_project_path(project_path)
-
-    payload: dict[str, Any] = {
-        "project_path": resolved,
-        "target_instance_name": target_instance_name.strip(),
-    }
+    extras = {"target_instance_name": target_instance_name}
     if pin_index is not None:
-        payload["pin_index"] = pin_index
-
-    return call_grpc(
-        ecserver_pb2.ATTACH_OUT_COMPONENT,
-        payload,
-        timeout_seconds,
-        max_timeout_seconds=300,
-    )
+        extras["pin_index"] = pin_index
+    return call_project_grpc(ecserver_pb2.ATTACH_OUT_COMPONENT, project_path,
+                             timeout_seconds, **extras)

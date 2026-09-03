@@ -421,7 +421,7 @@ edi-grpc-mcp/
 │   │                                   #   同时注册 8 条 HTTP 自定义路由
 │   ├── utils.py                        #   公共工具层
 │   │                                   #     validate_file() — 文件校验
-│   │                                   #     tool_error() — 统一错误响应
+│   │                                   #     error_response() — 统一错误响应（submitted_response / queue_full_response 同处）
 │   │                                   #     build_file_link() — file:// + Markdown 链接
 │   │                                   #     get_server_base_url() — 运行时地址
 │   │                                   #     set_server_address() — CLI 参数覆盖
@@ -438,7 +438,8 @@ edi-grpc-mcp/
 │   │
 │   ├── eda/                            #   EDI 工程工具 (29 个)
 │   │   ├── __init__.py                 #     公共 API re-export
-│   │   ├── config.py                   #     路径检测 / S-expression 解析器 / ProjectReader
+│   │   ├── config.py                   #     路径检测 / 环境变量加载
+│   │   ├── project_reader.py           #     ProjectReader + S-expression 解析器
 │   │   ├── grpc_client.py              #     gRPC 通信层：FetchEvent + PerformAction 异步模型
 │   │   │                               #     全局 _EDA_LOCK 串行锁，增量 ads_output 收集
 │   │   │                               #     _terminal_result() 统一返回结构
@@ -449,8 +450,9 @@ edi-grpc-mcp/
 │   │   │                               #     11 步参数校验管线 + wire↔public 名称映射
 │   │   ├── simulation_component_catalog.json  # SP/HB/XDB 参数目录 v2.0
 │   │   ├── design_export.py            #     网表查看 + 原理图截图 (2 工具)
+│   │   ├── signal_chain.py             #     信号链路追踪（节点接力算法）(1 工具)
 │   │   ├── model_replace.py            #     CSV 批量模型替换 (1 工具)
-│   │   └── edi_launcher.py             #     启动 EDI 客户端 + gRPC 就绪轮询 (1 工具)
+│   │   └── edi_launcher.py             #     启动 EDI + 服务诊断/日志读取 (3 工具)
 │   │
 │   ├── turbocharts/                    #   ADS RAW 图表工具 (3 个)
 │   │   ├── __init__.py                 #     公共 API re-export
