@@ -76,6 +76,55 @@ def list_epp_projects(folder_path: str) -> dict[str, Any]:
 
 
 @mcp.tool()
+def create_project(
+    name: str,
+    author: str = "",
+    path: str = "",
+    timeout_seconds: int = 60,
+) -> dict[str, Any]:
+    """创建新的 EDI 工程（不显示创建向导，也不自动打开）。
+
+    用法："创建一个名为 demo 的工程"、"在 D:/projects 下创建 test 工程"
+
+    重要约束：工程名必须由用户明确提供，缺失时先询问用户，不得自行编造。
+
+    工程文件路径为 <path>/<name>/<name>.epp；目标已存在或名称不符合 Windows 命名
+    规则时创建失败、不覆盖已有内容。
+
+    Args:
+        name: 工程名（必填，合法的 Windows 文件名）。
+        author: 作者（可选，空则默认 bm）。
+        path: 工程父目录（可选，空则用工作区 projects 目录）。
+        timeout_seconds: 最长等待时间，默认 60。
+
+    Returns:
+        gRPC 统一返回结构，成功时 details 含 project_path。
+    """
+    if not name or not name.strip():
+        return {"success": False, "error_code": "INVALID_PARAMETERS",
+                "message": "工程名不能为空"}
+    name = name.strip()
+
+    # Windows 文件名非法字符（服务端还会做保留名等更完整校验）
+    if any(c in name for c in '<>:"/\\|?*'):
+        return {"success": False, "error_code": "INVALID_PARAMETERS",
+                "message": f"工程名包含非法字符: {name}"}
+
+    payload: dict[str, Any] = {"name": name}
+    if author.strip():
+        payload["author"] = author.strip()
+    if path.strip():
+        payload["path"] = path.strip()
+
+    return call_grpc(
+        ecserver_pb2.CREATE_PROJECT,
+        payload,
+        timeout_seconds,
+        max_timeout_seconds=300,
+    )
+
+
+@mcp.tool()
 def open_edi_project(
         project_path: str,
         timeout_seconds: int = 60,

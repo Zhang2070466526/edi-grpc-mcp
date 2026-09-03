@@ -8,7 +8,7 @@
 
 ## 为什么用这个项目
 
-电子设计自动化（EDA）工具通常需要人工在图形界面中操作——打开工程、配置器件、执行仿真、导出结果。本项目将这些操作封装为 48 个 MCP 工具，接入 Claude Code 或 OpenClaw 后，只需用自然语言描述需求，AI 就能自动完成：
+电子设计自动化（EDA）工具通常需要人工在图形界面中操作——打开工程、配置器件、执行仿真、导出结果。本项目将这些操作封装为 52 个 MCP 工具，接入 Claude Code 或 OpenClaw 后，只需用自然语言描述需求，AI 就能自动完成：
 
 > "帮我看看 C:/Projects 下有哪些 .epp 工程，打开第一个，查看 S 参数仿真器件的配置，设置频率 1-10GHz、步长 0.1GHz，然后跑仿真"
 
@@ -34,7 +34,7 @@ AI 客户端 (Claude Code / OpenClaw)
    │  Streamable HTTP (stateless) 或 stdio
    │  POST /mcp  │  initialize → tools/list → tools/call
    ▼
-EDI gRPC MCP 服务 (FastMCP, 48 工具, 5 Resource, 5 Prompt)
+EDI gRPC MCP 服务 (FastMCP, 52 工具, 5 Resource, 5 Prompt)
    │
    ├── EDA gRPC 工具 (19) ──→ EDI 客户端 (127.0.0.1:50055)
    │     FetchEvent ← PerformAction 异步模型，增量 ads_output
@@ -98,7 +98,7 @@ curl http://127.0.0.1:50026/health     # 进程 + gRPC 状态
 → {"status":"ok","mcp_ready":true,"eda_grpc_ready":true}
 
 curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
-→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":48}
+→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":52}
 ```
 
 ### 客户端接入
@@ -125,7 +125,7 @@ curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
 
 | 方式 | 说明 |
 |---|---|
-| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 48 个工具 |
+| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 52 个工具 |
 | **聊天界面** | 浏览器访问 `http://127.0.0.1:50026/ui`，内置 LLM 多轮工具闭环 |
 | **Python 调用** | `from servers.eda import list_epp_projects` 直接调用 |
 
@@ -141,15 +141,16 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 
 ---
 
-## 工具一览（48 个）
+## 工具一览（52 个）
 
 > 工具数量由运行时动态统计，此处为当前快照。权威值见 `/ready` 的 `tool_count`（或 `tests/test_tool_registry.py` 的 `required` 列表）。
 
-### 工程管理（8 个）
+### 工程管理（9 个）
 
 | 工具 | 说明 |
 |---|---|
 | `list_epp_projects` | 扫描文件夹中的 .epp 工程 |
+| `create_project` | 创建新的 .epp 工程 |
 | `open_edi_project` | 打开 .epp 工程 |
 | `close_edi_project` | 关闭工程 |
 | `list_schematic_components` | 查询原理图全部器件（gRPC，含完整参数） |
@@ -173,7 +174,7 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 | `attach_out_component` | 为器件引脚挂载 Out 器件并自动连线 |
 | `replace_schematic_from_file` | 从 .ep 文件整体替换原理图 |
 
-### 仿真（7 个）
+### 仿真（8 个）
 
 | 工具 | 说明 |
 |---|---|
@@ -184,6 +185,7 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 | `simulate_project` | 执行工程仿真（同步阻塞） |
 | `simulate_netlist` | 仿真网表文件 |
 | `simulate_netlist_with_ads` | 调用 ADS 仿真控制器 |
+| `simulate_anti_burnout` | 抗烧毁仿真与风险评估 |
 
 ### 导出与分析
 
@@ -191,6 +193,7 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 |---|---|
 | `export_project_netlist` | 查看/导出工程网表 |
 | `capture_schematic` | 截取原理图为图片 |
+| `get_signal_chain` | 追踪信号链路（节点接力算法） |
 
 ### 模型与启动
 
@@ -199,6 +202,7 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 | `replace_models_from_csv` | 按 CSV 批量替换模型 |
 | `launch_edi` | 启动 EDI 客户端并等待 gRPC 就绪 |
 | `get_service_status` | 返回 gRPC 通道状态、队列信息 |
+| `get_service_logs` | 读取 EDI 服务端日志并分析异常 |
 
 ### ANSYS HFSS（6 个）
 
@@ -258,7 +262,7 @@ Streamable HTTP 模式启用 `stateless_http=True`，服务不保留 MCP 会话�
 | 路由 | 方法 | 说明 | 响应示例 |
 |---|---|---|---|
 | `/health` | GET | 进程存活 + gRPC 连接状态 | `{"status":"ok","mcp_ready":true,"eda_grpc_ready":true}` |
-| `/ready` | GET | 服务是否完成初始化（启动中返回 503） | `{"status":"ready","transport":"streamable-http","stateless":true,"tool_count":48}` |
+| `/ready` | GET | 服务是否完成初始化（启动中返回 503） | `{"status":"ready","transport":"streamable-http","stateless":true,"tool_count":52}` |
 | `/mcp` | POST | MCP 协议端点（Streamable HTTP） | MCP JSON-RPC 响应 |
 | `/ui` | GET | 内置聊天界面 | HTML 页面 |
 | `/chat` | POST | 聊天 API（LLM 多轮工具闭环） | `{"success":true,"reply":"...","activities":[...]}` |
@@ -487,7 +491,7 @@ edi-grpc-mcp/
 │
 ├── docs/                               # 项目文档
 │   ├── DEPLOY.md                       #   部署指南（打包产物使用、客户端配置）
-│   ├── TOOLS_API.md                    #   工具 API（48 个工具完整签名+返回值示例）
+│   ├── TOOLS_API.md                    #   工具 API（52 个工具完整签名+返回值示例）
 │   ├── HTTP_API.md                     #   HTTP 接口（请求体、响应体、成功/失败情况）
 │   ├── IMPLEMENTATION.md               #   实现原理（通信类型、校验管线、并发控制、工具动机与依赖）
 │   ├── HANDOVER.md                     #   交接文档（架构设计、技术栈、47 条注意事项）
@@ -581,7 +585,7 @@ powershell -File scripts/build.ps1  # PyInstaller
 | 文档 | 说明 |
 |---|---|
 | [部署指南](./docs/DEPLOY.md) | 打包产物使用、客户端配置 |
-| [工具 API](./docs/TOOLS_API.md) | 全部 48 个工具参数、返回值、示例 |
+| [工具 API](./docs/TOOLS_API.md) | 全部 52 个工具参数、返回值、示例 |
 | [HTTP 接口](./docs/HTTP_API.md) | 全部 HTTP 路由的请求体、响应体、成功/失败情况 |
 | [实现原理](./docs/IMPLEMENTATION.md) | 5 种通信类型、校验管线、并发控制、工具动机与依赖 |
 | [交接文档](./docs/HANDOVER.md) | 架构设计、技术栈、扩展开发、47 条注意事项 |

@@ -5,6 +5,7 @@
 
   工程管理：
     list_epp_projects             扫描文件夹中的 .epp 工程
+    create_project                创建新的 .epp 工程
     open_edi_project              打开 .epp 工程
     close_edi_project             关闭 .epp 工程
     get_project_summary           工程概览
@@ -21,6 +22,7 @@
     list_eda_tasks                列出异步仿真任务
     simulate_netlist              仿真网表，返回 RAW 结果
     simulate_netlist_with_ads     调用 ADS 仿真控制器
+    simulate_anti_burnout         抗烧毁仿真与风险评估
     list_simulation_components    查询仿真器件
     get_simulation_component_schema  查询器件参数 schema
     create_simulation_component   新增仿真器件
@@ -35,6 +37,7 @@
   分析：
     export_project_netlist        查看/导出工程网表
     capture_schematic             截取原理图为图片
+    get_signal_chain              追踪信号链路（节点接力算法）
 
   模型：
     replace_models_from_csv       按 CSV 批量替换模型
@@ -42,6 +45,7 @@
   启动：
     launch_edi                    启动 EDI 客户端
     get_service_status            返回 gRPC 通道状态、队列信息
+    get_service_logs              读取 EDI 服务端日志并分析异常
 
   ANSYS：
     open_hfss_project             打开 .aedt HFSS 项目

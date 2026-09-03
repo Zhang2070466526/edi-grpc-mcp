@@ -9,6 +9,7 @@ r"""Web 路由 — /health, /chat, /ui, /tools/list, /。
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from pathlib import Path
 
 from starlette.requests import Request
@@ -64,6 +65,8 @@ async def health_check(request: Request):
     """GET /health — 健康检查：gRPC + TurboCharts 状态 + 版本号。"""
     eda_ready = await _check_tcp(EDA_GRPC_SERVER)
     turbocharts_ready = bool(TURBOCHARTS_PATH) and Path(TURBOCHARTS_PATH).is_file()
+    tools = sorted(t.name for t in mcp._tool_manager._tools.values())
+    tools_hash = hashlib.md5(",".join(tools).encode("utf-8")).hexdigest()[:8]
     return JSONResponse({
         "status": "ok" if eda_ready else "degraded",
         "version": _ver,
@@ -71,6 +74,8 @@ async def health_check(request: Request):
         "eda_grpc_ready": eda_ready,
         "turbocharts_ready": turbocharts_ready,
         "eda_grpc_server": EDA_GRPC_SERVER,
+        "tool_count": len(tools),
+        "tools_hash": tools_hash,
     })
 
 

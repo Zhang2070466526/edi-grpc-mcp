@@ -5,6 +5,7 @@ r"""EDA 启动工具 — 启动 EDI 客户端并等待 gRPC 服务就绪。
 
 from __future__ import annotations
 
+import datetime
 import socket
 import subprocess
 import time
@@ -12,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from servers.eda.config import EDA_GRPC_SERVER, EDI_PATH
+from servers.settings import get_settings
 from servers import mcp
 
 
@@ -98,3 +100,111 @@ def launch_edi(
         result["message"] += "，gRPC 服务未在规定时间内就绪"
 
     return result
+
+
+@mcp.tool()
+def get_service_logs(
+    lines: int = 50,
+    keyword: str = "",
+    level: str = "",
+) -> dict[str, Any]:
+    """读取 EDI 服务端日志，检查运行异常（含 ERROR/WARN/异常堆栈分析）。
+
+    用法："看看 EDI 服务有没有报错"、"查一下 EDI 最近的日志"
+
+    读取 EDI 软件目录下 logs/eda_YYYY-MM-DD.log（当天），支持按关键词/级别过滤，
+    并统计 ERROR / WARN / 异常堆栈，便于快速判断服务是否异常。
+
+    Args:
+        lines: 返回最后 N 行（默认 50，范围 1-500）。
+        keyword: 关键词过滤（空则不过滤，大小写不敏感）。
+        level: 日志级别过滤（DEBUG / INFO / WARN / ERROR，空则不过滤）。
+
+    Returns:
+        {"success": True, "log_file": "...", "total_lines": 123, "lines": [...],
+         "matched_lines": 42, "error_count": 5, "warning_count": 8,
+         "exception_lines": [...], "message": "..."}
+    """
+    lines = max(1, min(int(lines), 500))
+    level = (level or "").strip().upper()
+    keyword = (keyword or "").strip()
+
+    log_dir = Path(get_settings().edi_log_dir).expanduser()
+    today_log = log_dir / f"eda_{datetime.date.today():%Y-%m-%d}.log"
+
+    # 每次调用都动态检测：优先读今天的日志；当天不存在则回退到最新的一份
+    fallback_note = ""
+    if today_log.is_file():
+        log_file = today_log
+    else:
+        candidates = sorted(
+            log_dir.glob("eda_*.log"),
+            key=lambda p: (p.stat().st_mtime, p.name),
+            reverse=True,
+        )
+        if not candidates:
+            return {"success": False, "error_code": "LOG_NOT_FOUND",
+                    "message": f"日志目录下没有日志文件: {log_dir}"}
+        log_file = candidates[0]
+        fallback_note = f"当天日志不存在，已读取最近日志 {log_file.name}"
+
+    try:
+        with open(log_file, "r", encoding="utf-8", errors="replace") as f:
+            all_lines = f.read().splitlines()
+    except OSError as exc:
+        return {"success": False, "error_code": "LOG_READ_ERROR",
+                "message": f"读取日志失败: {exc}"}
+
+    total = len(all_lines)
+
+    def _line_level(line: str) -> str:
+        up = line.upper()
+        if "TRACEBACK" in up or "EXCEPTION" in up or "ERROR" in up or "FAIL" in up:
+            return "ERROR"
+        if "WARN" in up:
+            return "WARN"
+        if "INFO" in up:
+            return "INFO"
+        if "DEBUG" in up:
+            return "DEBUG"
+        return ""
+
+    error_count = 0
+    warning_count = 0
+    exception_lines: list[str] = []
+    matched: list[str] = []
+
+    for ln in all_lines:
+        lvl = _line_level(ln)
+        if lvl == "ERROR":
+            error_count += 1
+        elif lvl == "WARN":
+            warning_count += 1
+        if "EXCEPTION" in ln.upper() or "TRACEBACK" in ln.upper():
+            exception_lines.append(ln)
+
+        if level and lvl != level:
+            continue
+        if keyword and keyword.lower() not in ln.lower():
+            continue
+        matched.append(ln)
+
+    if error_count or warning_count:
+        message = (f"日志共 {total} 行，发现 {error_count} 个错误、"
+                   f"{warning_count} 个警告。")
+    else:
+        message = f"日志共 {total} 行，未发现明显错误。"
+    if fallback_note:
+        message += " " + fallback_note
+
+    return {
+        "success": True,
+        "log_file": str(log_file),
+        "total_lines": total,
+        "matched_lines": len(matched),
+        "lines": matched[-lines:],
+        "error_count": error_count,
+        "warning_count": warning_count,
+        "exception_lines": exception_lines[-20:],
+        "message": message,
+    }

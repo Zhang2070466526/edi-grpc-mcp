@@ -2,7 +2,7 @@
 
 每个 MCP 工具按底层通信方式分为 5 种实现类型：gRPC 远程调用、本地文件读取、subprocess 命令行、COM 对象、内存服务。本文逐一说明每种工具的协议交互、数据结构、校验流程、错误处理和设计决策。
 >
-> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（48 个工具接口）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由）。
+> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（52 个工具接口）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由）。
 
 ---
 
@@ -1135,11 +1135,12 @@ list_simulation_components / list_schematic_components ──(instance_name)─�
 get_project_summary + turbocharts_convert + capture_schematic + simulate_* ──> generate_simulation_report ──(PDF/DOCX)──> open_document
 ```
 
-### 12.1 工程管理（8 个）
+### 12.1 工程管理（9 个）
 
 | 工具 | 动机（为什么） | 解决的功能 | 依赖（输入来自） | 被依赖（输出供） |
 |---|---|---|---|---|
 | `list_epp_projects` | AI 不知道工作区有哪些工程，一切操作的入口 | 扫描 `.epp` 工程返回路径清单 | —（入口工具） | 几乎所有需要 `project_path` 的工具 |
+| `create_project` | AI 需要新建工程 | 按名称/作者/父目录创建工程 | — | 后续打开/仿真等操作的前提 |
 | `open_edi_project` | gRPC 操作要求工程已在 EDI 打开 | 打开工程到 EDI | `list_epp_projects`（工程路径） | 仿真/器件操作/截图/网表等 |
 | `close_edi_project` | 释放 EDI 资源、落盘保存 | 关闭工程（可选保存） | `list_epp_projects`（工程路径） | —（收尾操作） |
 | `list_schematic_components` | 本地读磁盘看不到 EDI 未保存修改和运行态 | gRPC 实时列器件（含 active_state/state） | 已打开的工程 | LLM 判断器件实时状态 |
@@ -1163,7 +1164,7 @@ get_project_summary + turbocharts_convert + capture_schematic + simulate_* ─�
 | `attach_out_component` | 给器件引脚挂 Out 器件观察输出 | 挂载 Out 并自动连线 | `list_schematic_components`（instance_name） | — |
 | `replace_schematic_from_file` | 用现成 .ep 文件整体替换原理图 | 整体替换原理图 | 现成 schematic.ep 文件 | — |
 
-### 12.3 仿真（7 个）
+### 12.3 仿真（8 个）
 
 | 工具 | 动机 | 功能 | 依赖 | 被依赖 |
 |---|---|---|---|---|
@@ -1174,21 +1175,24 @@ get_project_summary + turbocharts_convert + capture_schematic + simulate_* ─�
 | `list_eda_tasks` | 看有哪些仿真在跑/排队 | 列出异步任务 | — | LLM 判断仿真状态 |
 | `simulate_netlist` | 不打开工程直接仿真网表 | 仿真网表，归档 result.raw | `export_project_netlist`（netlist 文件） | `list_result_curves`/`turbocharts_convert` |
 | `simulate_netlist_with_ads` | 直接调 ADS 控制器 | ADS 仿真网表 | `export_project_netlist`（netlist 文件） | — |
+| `simulate_anti_burnout` | 评估器件的抗烧毁风险 | 对具备抗烧毁数据的器件执行输入功率仿真和风险评估 | 已打开的工程 | LLM 判断器件抗烧毁风险 |
 
-### 12.4 导出分析（2 个）
+### 12.4 导出分析（3 个）
 
 | 工具 | 动机 | 功能 | 依赖 | 被依赖 |
 |---|---|---|---|---|
 | `export_project_netlist` | 查看/导出工程网表 | 导出网表文件路径 | `open_edi_project` | `simulate_netlist`/`generate_schematic_from_netlist` |
 | `capture_schematic` | 截图原理图供分析/报告 | 截取原理图为图片 | `open_edi_project` | `generate_simulation_report`、`show_image`/`analyze_image` |
+| `get_signal_chain` | 理解信号如何从源流到负载 | 解析网表，节点接力追踪链路 | 网表（本地/gRPC） | `simulate_anti_burnout`（抗烧毁评估前置）、LLM 理解链路 |
 
-### 12.5 模型 / 启动 / 诊断（3 个）
+### 12.5 模型 / 启动 / 诊断（4 个）
 
 | 工具 | 动机 | 功能 | 依赖 | 被依赖 |
 |---|---|---|---|---|
 | `replace_models_from_csv` | 批量替换元件模型（CSV 驱动） | 按 CSV 批量替换 | CSV 文件 | — |
 | `launch_edi` | 确保 EDI 在运行（gRPC 可用） | 启动 EDI 并等 gRPC 就绪 | — | 所有 gRPC 工具（前提） |
 | `get_service_status` | 诊断 gRPC 通道/队列健康 | 只读查通道状态和队列占用 | — | `troubleshoot_edi_error` Prompt、LLM 诊断 |
+| `get_service_logs` | 诊断 EDI 服务运行异常 | 读取服务端日志并统计 ERROR/WARN/异常堆栈 | `EDI_LOG_DIR` 日志目录 | LLM 诊断 |
 
 ### 12.6 图表（3 个）
 

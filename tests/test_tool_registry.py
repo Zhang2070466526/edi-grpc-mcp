@@ -9,14 +9,16 @@ def test_all_tools_registered():
     from start_servers import mcp
     tools = list(mcp._tool_manager._tools.keys())
     required = [
-        "list_epp_projects", "open_edi_project", "close_edi_project",
+        "list_epp_projects", "create_project", "open_edi_project", "close_edi_project",
         "get_project_summary",
         "simulate_project", "simulate_netlist", "simulate_netlist_with_ads",
+        "simulate_anti_burnout",
         "compare_simulation_results",
         "start_simulation_async", "get_simulation_async_status", "get_simulation_async_result",
         "list_eda_tasks",
-        "export_project_netlist", "capture_schematic",
+        "export_project_netlist", "capture_schematic", "get_signal_chain",
         "replace_models_from_csv", "launch_edi", "get_service_status",
+        "get_service_logs",
         "list_result_curves", "turbocharts_convert",
         "show_image", "analyze_image", "analyze_variables",
         "generate_simulation_report",

@@ -380,3 +380,222 @@ def test_kill_port_process(monkeypatch):
     assert ss._kill_port_process(50026) is True
     fake_proc.terminate.assert_called_once()
     fake_proc.wait.assert_called()
+
+
+# ── SIMULATE_ANTI_BURNOUT 新工具 ───────────────────────────────
+
+def test_simulate_anti_burnout_payload(monkeypatch):
+    from servers.eda import simulation as sim
+    from proto import ecserver_pb2
+    monkeypatch.setattr(sim, "validate_project_path", lambda p: p)
+    calls = []
+
+    def _fake(task_type, payload, timeout, max_timeout_seconds=3600):
+        calls.append((task_type, payload))
+        return {"success": True, "status": "SUCCEEDED"}
+
+    monkeypatch.setattr(sim, "call_grpc", _fake)
+    sim.simulate_anti_burnout("C:/test.epp")
+    assert calls[-1][0] == ecserver_pb2.SIMULATE_ANTI_BURNOUT
+    assert calls[-1][1] == {"project_path": "C:/test.epp"}
+
+
+# ── get_service_logs 新工具 ─────────────────────────────────────
+
+def test_get_service_logs(tmp_path, monkeypatch):
+    import datetime
+    from types import SimpleNamespace
+    from servers.eda import edi_launcher as el
+
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    log_file = log_dir / f"eda_{datetime.date.today():%Y-%m-%d}.log"
+    log_file.write_text(
+        "2026-09-03 10:00:00 INFO 启动服务\n"
+        "2026-09-03 10:01:00 WARN 连接超时\n"
+        "2026-09-03 10:02:00 ERROR 仿真失败\n"
+        "2026-09-03 10:03:00 ERROR Exception: Traceback\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(el, "get_settings", lambda: SimpleNamespace(edi_log_dir=str(log_dir)))
+
+    r = el.get_service_logs(lines=10)
+    assert r["success"] is True
+    assert r["total_lines"] == 4
+    assert r["error_count"] == 2
+    assert r["warning_count"] == 1
+    assert len(r["lines"]) == 4
+    assert "2 个错误" in r["message"]
+
+    # 关键词过滤
+    r2 = el.get_service_logs(keyword="失败")
+    assert r2["matched_lines"] == 1
+    assert "仿真失败" in r2["lines"][0]
+
+    # level 过滤
+    r3 = el.get_service_logs(level="ERROR")
+    assert r3["matched_lines"] == 2
+
+
+def test_get_service_logs_not_found(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from servers.eda import edi_launcher as el
+    monkeypatch.setattr(el, "get_settings",
+                        lambda: SimpleNamespace(edi_log_dir=str(tmp_path / "nonexistent")))
+    r = el.get_service_logs()
+    assert r["success"] is False
+    assert r["error_code"] == "LOG_NOT_FOUND"
+
+
+def test_get_service_logs_fallback(tmp_path, monkeypatch):
+    import datetime
+    from types import SimpleNamespace
+    from servers.eda import edi_launcher as el
+
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    # 只放昨天（及更早）的日志，今天的不存在 → 应回退到最新
+    yesterday = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    older = (datetime.date.today() - datetime.timedelta(days=3)).strftime("%Y-%m-%d")
+    (log_dir / f"eda_{older}.log").write_text("ERROR 旧错误\n", encoding="utf-8")
+    (log_dir / f"eda_{yesterday}.log").write_text("ERROR 昨天的错误\n", encoding="utf-8")
+    monkeypatch.setattr(el, "get_settings", lambda: SimpleNamespace(edi_log_dir=str(log_dir)))
+
+    r = el.get_service_logs(lines=10)
+    assert r["success"] is True
+    assert yesterday in r["log_file"], "应回退到最新（昨天）的日志"
+    assert "最近日志" in r["message"], "message 应带 fallback 提示"
+    assert r["error_count"] == 1
+
+
+# ── get_signal_chain 信号链路追踪 ─────────────────────────────
+
+_NETLIST_SAMPLE = """Options ResourceUsage=yes
+
+AmplifierDevice:NC10355C_29311 N__2 Out1 Bits="0"  Model="NC10355C_2931"  Temp=25
+
+Port:PORT1 N__2 0 Num=1 Z=50 Ohm P[1]=polar(dbmtow(-20),0)
+
+S_Param:SP1 CalcS=yes SweepPlan="SP1_stim"
+SweepPlan:SP1_stim Start=29 GHz Stop=31 GHz
+OutputPlan:SP1_Output Type="Output"
+
+Port:TermG2 Out1 0 Num=2 Z=50 Ohm
+
+;<VAR>
+freqin=29
+;</VAR>
+"""
+
+
+def test_parse_netlist():
+    from servers.eda.design_export import _parse_netlist
+    comps, node_map, meta = _parse_netlist(_NETLIST_SAMPLE)
+    assert set(comps) == {"PORT1", "NC10355C_29311", "TermG2"}
+    assert comps["PORT1"]["role"] == "source"
+    assert comps["TermG2"]["role"] == "load"
+    assert comps["NC10355C_29311"]["model"] == "NC10355C_2931"
+    assert "N__2" in node_map and "Out1" in node_map
+    # 控制块（S_Param/SweepPlan/OutputPlan/VAR）应被跳过
+    assert meta["skipped_lines"] >= 6
+
+
+def test_trace_chain():
+    from servers.eda.design_export import _parse_netlist, _trace_chain
+    comps, node_map, _ = _parse_netlist(_NETLIST_SAMPLE)
+    chain, branches, truncated = _trace_chain(comps, node_map, "PORT1", 40)
+    assert chain == ["PORT1", "NC10355C_29311", "TermG2"]
+    assert branches == 0
+    assert truncated is False
+
+
+def test_get_signal_chain(tmp_path):
+    from servers.eda.design_export import get_signal_chain
+    proj = tmp_path / "1"
+    proj.mkdir()
+    epp = proj / "1.epp"
+    epp.write_text("EDI-PROJECT")
+    (proj / "netlist.log").write_text(_NETLIST_SAMPLE, encoding="utf-8")
+
+    r = get_signal_chain(str(epp))
+    assert r["success"] is True
+    assert [c["instance"] for c in r["chain"]] == ["PORT1", "NC10355C_29311", "TermG2"]
+    assert r["chain"][0]["role"] == "source"
+    assert r["chain"][-1]["role"] == "load"
+    assert r["branch_count"] == 0
+
+
+def test_parse_netlist_attenuator():
+    # Attenuator（衰减器）等非白名单器件类型也应纳入图
+    from servers.eda.design_export import _parse_netlist
+    netlist = (
+        "Options ResourceUsage=yes\n"
+        "Attenuator:Attenuator1 N__2 N__3 Loss=X dB\n"
+        "Port:TermG1 N__2 0 Num=1 Z=50 Ohm\n"
+        "Port:TermG2 N__3 0 Num=2 Z=50 Ohm\n"
+    )
+    comps, node_map, _ = _parse_netlist(netlist)
+    assert "Attenuator1" in comps
+    assert comps["Attenuator1"]["type"] == "Attenuator"
+    assert "TermG1" in comps and "TermG2" in comps
+
+
+def test_get_signal_chain_empty_netlist(tmp_path):
+    from servers.eda.design_export import get_signal_chain
+    proj = tmp_path / "p"
+    proj.mkdir()
+    epp = proj / "p.epp"
+    epp.write_text("EDI-PROJECT")
+    (proj / "netlist.log").write_text("Options ResourceUsage=yes\n", encoding="utf-8")
+    r = get_signal_chain(str(epp))
+    assert r["success"] is False
+    assert r["error_code"] == "NETLIST_EMPTY"
+
+
+def test_get_signal_chain_no_source(tmp_path):
+    # 无激励源（两端都是负载）时，自动取第一个端口作为起点
+    from servers.eda.design_export import get_signal_chain
+    proj = tmp_path / "p"
+    proj.mkdir()
+    epp = proj / "p.epp"
+    epp.write_text("EDI-PROJECT")
+    (proj / "netlist.log").write_text(
+        "Attenuator:Attenuator1 N__2 N__3 Loss=X dB\n"
+        "Port:TermG1 N__2 0 Num=1 Z=50 Ohm\n"
+        "Port:TermG2 N__3 0 Num=2 Z=50 Ohm\n",
+        encoding="utf-8",
+    )
+    r = get_signal_chain(str(epp))
+    assert r["success"] is True
+    assert [c["instance"] for c in r["chain"]] == ["TermG1", "Attenuator1", "TermG2"]
+
+
+# ── create_project 新工具 ─────────────────────────────────────
+
+def test_create_project_validation(monkeypatch):
+    from servers.eda import project_manage as pm
+    # 空名称 → 拒绝
+    r = pm.create_project("  ")
+    assert r["success"] is False and r["error_code"] == "INVALID_PARAMETERS"
+    # 非法字符 → 拒绝
+    r = pm.create_project("a/b")
+    assert r["success"] is False and r["error_code"] == "INVALID_PARAMETERS"
+
+
+def test_create_project_payload(monkeypatch):
+    from servers.eda import project_manage as pm
+    from proto import ecserver_pb2
+    calls = []
+
+    def _fake(task_type, payload, timeout, max_timeout_seconds=300):
+        calls.append((task_type, payload))
+        return {"success": True, "status": "SUCCEEDED"}
+
+    monkeypatch.setattr(pm, "call_grpc", _fake)
+    # 完整参数
+    pm.create_project("demo", author="JGL", path="D:/projects")
+    assert calls[-1][0] == ecserver_pb2.CREATE_PROJECT
+    assert calls[-1][1] == {"name": "demo", "author": "JGL", "path": "D:/projects"}
+    # 只传 name（author/path 空则不进 payload）
+    pm.create_project("demo")
+    assert calls[-1][1] == {"name": "demo"}

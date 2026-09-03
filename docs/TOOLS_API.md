@@ -16,10 +16,10 @@ from servers.eda.project_manage import list_epp_projects
 
 ## 目录
 
-- **[工程管理（8 个）](#工程管理8个)**：扫描 / 打开 / 关闭工程、查询器件、分析变量
-- **[仿真（7 个）](#仿真7个)**：同步 / 异步仿真、网表仿真、任务查询
-- **[导出与分析（2 个）](#导出与分析2个)**：导出网表、截图原理图
-- **[模型与启动（3 个）](#模型与启动3个)**：批量替换模型、启动 EDI、服务诊断
+- **[工程管理（9 个）](#工程管理9个)**：创建 / 扫描 / 打开 / 关闭工程、查询器件、分析变量
+- **[仿真（8 个）](#仿真8个)**：同步 / 异步仿真、网表仿真、抗烧毁评估、任务查询
+- **[导出与分析（3 个）](#导出与分析3个)**：导出网表、截图原理图、信号链路追踪
+- **[模型与启动（4 个）](#模型与启动4个)**：批量替换模型、启动 EDI、服务诊断、日志读取
 - **[ANSYS HFSS（6 个）](#ansys-hfss6个)**：AEDT 工程开关、HFSS 异步仿真
 - **[CST 电磁仿真（5 个）](#cst电磁仿真5个)**：异步求解 .cst、导出 S 参数 / 远场方向图
 - **[图表（3 个）](#图表3个)**：RAW 曲线解析、转图、结果对比
@@ -33,7 +33,7 @@ from servers.eda.project_manage import list_epp_projects
 
 ---
 
-## 工程管理（8 个）
+## 工程管理（9 个）
 
 ### `list_epp_projects`
 
@@ -59,6 +59,30 @@ list_epp_projects(folder_path: str) -> dict
         {"name": "demo1", "path": "C:/Users/JGL/EDI-Workspace/demo1.epp", "size": 0},
     ]
 }
+```
+
+---
+
+### `create_project`
+
+```python
+from servers.eda.project_manage import create_project
+
+create_project(name: str, author: str = "", path: str = "", timeout_seconds: int = 60) -> dict
+```
+
+创建新的 EDI 工程（不显示创建向导、不自动打开）。工程文件路径为 `<path>/<name>/<name>.epp`。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `name` | str | 是 | — | 工程名（合法 Windows 文件名） |
+| `author` | str | 否 | "" | 作者（空则默认 bm） |
+| `path` | str | 否 | "" | 工程父目录（空则用工作区 projects 目录） |
+| `timeout_seconds` | int | 否 | 60 | 最长等待时间 |
+
+返回（gRPC 统一结构，成功时 `details` 含 `project_path`）：
+```python
+{"success": True, "status": "SUCCEEDED", "details": {"project_path": "D:/projects/demo_project/demo_project.epp"}}
 ```
 
 ---
@@ -270,7 +294,7 @@ analyze_variables(project_path: str) -> dict
 
 ---
 
-## 仿真（7 个）
+## 仿真（8 个）
 
 ### `simulate_project`
 
@@ -444,6 +468,41 @@ simulate_netlist_with_ads(netlist_path: str, ads_path: str = "", timeout_seconds
 
 ---
 
+### `simulate_anti_burnout`
+
+```python
+from servers.eda.simulation import simulate_anti_burnout
+
+simulate_anti_burnout(project_path: str, timeout_seconds: int = 600) -> dict
+```
+
+对工程原理图中具备抗烧毁数据的器件执行输入功率仿真和抗烧毁风险评估。服务端只计算并返回结果，不主动显示仿真窗口。`results` 只包含 `isAntiBurnout==true` 的器件；部分器件评估失败时整体仍成功，每个器件的结论/原因在各自的 `result` 字段。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `project_path` | str | 是 | — | `.epp` 工程文件绝对路径 |
+| `timeout_seconds` | int | 否 | 600 | 最长等待秒数 |
+
+返回（gRPC 统一结构，业务字段在 `details` 中）：
+
+```python
+{
+    "success": True,
+    "status": "SUCCEEDED",
+    "details": {
+        "results": [
+            {"component_type": "Attenuator", "instance_name": "Attenuator1",
+             "simulated_input_power": "12.4 dBm", "max_input_power": "1 W",
+             "result": "无抗烧毁风险"},
+        ]
+    }
+}
+```
+
+每个结果项的 `result`：评估成功为 `无抗烧毁风险` / `有抗烧毁风险`，无法评估时为具体失败原因。
+
+---
+
 ### `list_eda_tasks`
 
 ```python
@@ -467,7 +526,7 @@ list_eda_tasks(status: str = "") -> dict
 
 ---
 
-## 导出与分析（2 个）
+## 导出与分析（3 个）
 
 ### `export_project_netlist`
 
@@ -504,7 +563,46 @@ capture_schematic(project_path: str, img_path: str, timeout_seconds: int = 60) -
 
 ---
 
-## 模型与启动（3 个）
+### `get_signal_chain`
+
+```python
+from servers.eda.design_export import get_signal_chain
+
+get_signal_chain(project_path: str, start_component: str = "",
+                 direction: str = "forward", max_depth: int = 40,
+                 timeout_seconds: int = 60) -> dict
+```
+
+追踪工程原理图的信号链路（节点接力算法，从源到负载）。读取网表，按「节点↔器件交替接力」追踪信号流方向。v1 只返回链路结构（器件序列/角色/分支数），不含增益/插损等规格。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `project_path` | str | 是 | — | `.epp` 文件绝对路径 |
+| `start_component` | str | 否 | "" | 起始器件实例名，留空自动找激励源（无激励源则取第一个端口） |
+| `direction` | str | 否 | "forward" | 追踪方向（forward/backward） |
+| `max_depth` | int | 否 | 40 | 最大追踪深度（防环路死循环） |
+| `timeout_seconds` | int | 否 | 60 | gRPC 网表导出超时 |
+
+返回：
+```python
+{
+    "success": True,
+    "start": "PORT1",
+    "chain": [
+        {"instance": "PORT1", "type": "Port", "role": "source", "model": ""},
+        {"instance": "NC10355C_29311", "type": "AmplifierDevice", "role": "device", "model": "NC10355C_2931"},
+        {"instance": "TermG2", "type": "Port", "role": "load", "model": ""},
+    ],
+    "branch_count": 0,
+    "truncated": false,
+    "warning": "",
+    "skipped_lines": 8,
+}
+```
+
+---
+
+## 模型与启动（4 个）
 
 ### `replace_models_from_csv`
 
@@ -557,6 +655,41 @@ get_service_status() -> dict
 {"grpc_target": "127.0.0.1:50055", "channel_state": "ready/unhealthy/unknown",
  "channel_cached": True, "queue_locked": False, "max_receive_mb": 256}
 ```
+
+---
+
+### `get_service_logs`
+
+```python
+from servers.eda.edi_launcher import get_service_logs
+
+get_service_logs(lines: int = 50, keyword: str = "", level: str = "") -> dict
+```
+
+读取 EDI 服务端日志（`logs/eda_YYYY-MM-DD.log`，当天），检查运行异常。支持按关键词/级别过滤，并统计 ERROR / WARN / 异常堆栈。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `lines` | int | 否 | 50 | 返回最后 N 行（1-500） |
+| `keyword` | str | 否 | "" | 关键词过滤（大小写不敏感） |
+| `level` | str | 否 | "" | 级别过滤（DEBUG/INFO/WARN/ERROR） |
+
+返回：
+```python
+{
+    "success": True,
+    "log_file": "C:/Program Files (x86)/EDI/logs/eda_2026-09-03.log",
+    "total_lines": 1280,
+    "matched_lines": 42,
+    "lines": ["...", "..."],
+    "error_count": 5,
+    "warning_count": 8,
+    "exception_lines": ["Traceback ...", "..."],
+    "message": "日志共 1280 行，发现 5 个错误、8 个警告。",
+}
+```
+
+日志路径由 `.env` 的 `EDI_LOG_DIR` 配置，默认 `C:\Program Files (x86)\EDI\logs`。
 
 ---
 
@@ -1095,7 +1228,7 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 
 ## Resources & Prompts
 
-除了 Tool（启动时动态统计，当前 48 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
+除了 Tool（启动时动态统计，当前 52 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
 
 ### Resources（5 个）
 
