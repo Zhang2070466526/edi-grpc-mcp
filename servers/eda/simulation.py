@@ -40,8 +40,8 @@ _logger = logging.getLogger("eda.simulation")
 
 from proto import ecserver_pb2
 from servers.eda.grpc_client import call_grpc, call_project_grpc
-from servers.eda.config import validate_file, validate_project_path
-from servers.utils import error_response, submitted_response
+from servers.eda.config import validate_project_path
+from servers.utils import error_response, submitted_response, validate_file
 from servers import mcp
 
 # -- 异步仿真任务注册表 --

@@ -9,7 +9,7 @@ from typing import Any
 
 from proto import ecserver_pb2
 from servers.eda.grpc_client import call_project_grpc
-from servers.eda.config import validate_file
+from servers.utils import validate_file
 from servers import mcp
 
 

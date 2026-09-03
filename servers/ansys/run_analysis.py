@@ -12,9 +12,8 @@ from servers.ansys.config import (
     aedt_is_running, get_setup_module,
     _attach_aedt,
 )
-from servers.eda.config import validate_file
 from servers.task_runner import TaskRunner
-from servers.utils import submitted_response
+from servers.utils import submitted_response, validate_file
 from servers import mcp
 
 # HFSS 全局串行队列：AEDT 是单实例桌面程序，同一时间只能跑一个仿真。

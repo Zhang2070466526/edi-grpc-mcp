@@ -52,7 +52,8 @@ EDI_PATH = _settings.edi_path or _find_first(*_EDI_CANDIDATES)
 TURBOCHARTS_PATH = _settings.turbocharts_path or _find_first(*_TC_CANDIDATES)
 
 
-from servers.utils import validate_file  # noqa: F401 — re-export
+from servers.utils import validate_file
+
 
 def validate_project_path(project_path: str) -> str:
     """校验 .epp 工程路径，返回规范化后的绝对路径。"""

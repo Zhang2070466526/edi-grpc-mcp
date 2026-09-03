@@ -1,6 +1,6 @@
 # EDI gRPC MCP 服务
 
-[![PyPI](https://img.shields.io/pypi/v/edi-mcp?label=PyPI)](https://pypi.org/project/edi-mcp/)
+[![PyPI](https://img.shields.io/pypi/v/edi-grpc-mcp?label=PyPI)](https://pypi.org/project/edi-grpc-mcp/)
 
 **让 AI 客户端通过自然语言操作 EDA 工程，从扫描工程到生成仿真报告，一条龙闭环。**
 

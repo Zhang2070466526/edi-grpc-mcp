@@ -33,7 +33,7 @@
 ```json
 {
     "status": "ok",
-    "version": "0.1.10",
+    "version": "0.1.7",
     "mcp_ready": true,
     "eda_grpc_ready": true,
     "turbocharts_ready": true,
@@ -62,7 +62,7 @@
     "status": "ready",
     "transport": "streamable-http",
     "stateless": true,
-    "version": "0.1.10",
+    "version": "0.1.7",
     "grpc": "online",
     "tool_count": 52,
     "started_at": 1750000000.0

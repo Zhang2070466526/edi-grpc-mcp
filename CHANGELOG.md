@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.10（2026-09-03）
+## 2026-09-03
 
 ### 重构
 - 错误响应统一：`tool_error` 重命名为 `error_response`，全部手写 `{"success": False, "error_code", "message"}` 字典改为 `error_response()`（~35 处），额外上下文字段统一归入 `details` 子对象
@@ -13,7 +13,7 @@
 - 新增 `com_session()` 上下文管理器：ANSYS COM `CoInitialize`/`CoUninitialize` 去重
 - 死代码清理：删除冗余 `validate_local_file`、6 处死 import（含 `settings.py` 的 `sys`、`workspace_copy.py` 的 `mcp` 等）
 
-## 0.1.9（2026-09-02）
+## 2026-09-02
 
 ### 新增
 - 器件固有参数查询工具 `get_components_static_params`（gRPC `GET_COMPONENTS_STATIC_PARAMS = 21`）：按器件 UUID 查询重量/尺寸/封装/厂商/成本，用于选型后的合理性检查；proto 重新编译生成枚举 21
@@ -38,7 +38,7 @@
 ### 测试
 - 新增 `tests/test_bugfixes.py`（21 个回归测试），全量 288 → 309 项
 
-## 0.1.8（2026-09-01）
+## 2026-09-01
 
 ### 新增
 - MCP 访问令牌鉴权（`MCP_API_KEY`）：配置后 `/mcp` `/ui` `/chat` `/tools/list` `/upload` 要求 URL 带 `?token=` 匹配才放行，用于「只允许指定 agent 访问」；留空则不鉴权（向后兼容）
@@ -47,7 +47,7 @@
 ### 其他
 - 项目改名：PyPI 包名 / 命令 `edi-mcp` → `edi-grpc-mcp`，服务显示名 `EDA MCP` → `EDI gRPC MCP`（打包产物目录 `dist/edi-mcp/` 与 exe 名 `edi_mcp_server.exe` 保持不变）
 
-## 0.1.7（2026-08-27）
+## 2026-08-27
 
 ### 新增
 - CST 电磁仿真模块（`servers/cst/`，5 个工具）：异步求解、S 参数导出、远场方向图导出（自动判断是否已求解）、任务查询

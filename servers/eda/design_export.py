@@ -21,7 +21,7 @@ from typing import Any
 
 from proto import ecserver_pb2
 from servers.eda.grpc_client import call_project_grpc
-from servers.utils import build_file_link, error_response
+from servers.utils import build_artifact, build_file_link, error_response
 from servers import mcp
 
 
@@ -63,9 +63,7 @@ def capture_schematic(
     img_ok = Path(img_resolved).is_file()
     if result.get("success") and img_ok:
         result["img_generated"] = True
-        result["artifacts"] = [{"type": "image", "path": img_resolved,
-                                "name": Path(img_resolved).name,
-                                "generated_by": "capture_schematic"}]
+        result["artifacts"] = [build_artifact("image", img_resolved, "capture_schematic")]
         result["message"] = "原理图已截图。"
         result.update(build_file_link(img_resolved, "打开原理图"))
     return result

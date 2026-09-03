@@ -22,7 +22,7 @@ from servers.ansys.config import (
     cleanup_stale_project_lock, get_project_lock_path,
     _attach_aedt, logger,
 )
-from servers.eda.config import validate_file
+from servers.utils import validate_file
 from servers import mcp
 
 _LAST_PID: int | None = None  # MCP 最后一次启动的 AEDT 进程 PID

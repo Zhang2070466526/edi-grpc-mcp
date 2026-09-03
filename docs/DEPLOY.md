@@ -1,7 +1,7 @@
 # 部署指南 — 打包产物使用 & 智能体对接
 
 > 面向最终用户：如何部署打包好的 `edi-mcp.zip`，以及配置 AI 客户端接入 MCP 服务。
-> PyPI：<https://pypi.org/project/edi-mcp/>
+> PyPI：<https://pypi.org/project/edi-grpc-mcp/>
 
 ---
 

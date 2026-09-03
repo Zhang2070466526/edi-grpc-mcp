@@ -1,6 +1,6 @@
 [project]
 name = "edi-grpc-mcp"
-version = "0.1.8"
+version = "0.1.7"
 description = "Local MCP server wrapping EDI gRPC and ANSYS HFSS tools for EDA engineering"
 readme = "README.md"
 requires-python = ">=3.10"

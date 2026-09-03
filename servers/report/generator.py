@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 
 from servers import mcp
 from servers.settings import get_settings
-from servers.utils import build_file_link, is_network_path, error_response
+from servers.utils import build_artifact, build_file_link, is_network_path, error_response
 from servers.multimodal_vision.document import register_document_url
 
 _error = error_response  # 别名，内部校验函数使用
@@ -389,9 +389,7 @@ def generate_simulation_report(
         "file_path": str(expected_output),
         "file_type": data.get("file_type", file_type),
         "file_size": actual_size,
-        "artifacts": [{"type": file_type, "path": str(expected_output),
-                       "name": Path(str(expected_output)).name,
-                       "generated_by": "generate_simulation_report"}],
+        "artifacts": [build_artifact(file_type, str(expected_output), "generate_simulation_report")],
         "preview_url": preview_url,
         "markdown_link": md_link,
         "message": f"报告已生成：{md_link}\n\n本地路径：{expected_output}\n\n链接 10 分钟有效，仅本机可访问。",
