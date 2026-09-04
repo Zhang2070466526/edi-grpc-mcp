@@ -4,12 +4,14 @@
 都挂在这个实例上。整个项目通过 `from servers import mcp` 引用它。
 
 子包：
-  - servers.eda : EDA gRPC 服务（工程、网表、仿真）
+  - servers.eda : EDA gRPC 服务（工程、网表、仿真、模型、信号链）
   - servers.turbocharts : turbocharts_app 图表生成
   - servers.ansys : ANSYS HFSS 工具（COM 附着）
   - servers.cst : CST 电磁仿真（求解 / S 参数 / 远场方向图导出）
-  - servers.multimodal_vision : 图片显示 / 工作区复制 / 视觉分析
+  - servers.multimodal_vision : 图片显示 / 视觉分析 / 文档访问
   - servers.report : 仿真报告生成
+  - servers.resources_prompts : MCP Resources & Prompts（6 Resource + 8 Prompt）
+  - servers.chat : 聊天模块（会话管理、LLM 工具闭环）
 """
 
 # FastMCP：MCP 框架的核心类，用于创建 MCP 服务器实例。

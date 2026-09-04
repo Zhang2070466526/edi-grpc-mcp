@@ -434,10 +434,14 @@ edi-grpc-mcp/
 │   │                                   #   所有环境变量收敛于此，启动时 validate()
 │   ├── task_runner.py                  #   通用异步任务队列（EDA/HFSS/CST 复用，单 worker 串行）
 │   │
-│   ├── resources_prompts/              #   MCP Resource & Prompt
-│   │   ├── __init__.py                 #     导入触发 @mcp.resource() / @mcp.prompt() 注册
-│   │   ├── resources.py                #     6 个 Resource：服务概览 / 实时状态 / 工程目录 / 参数目录 / 操作规则 / 错误码
-│   │   └── prompts.py                  #     8 个 Prompt：检查工程 / 仿真 / 配置器件 / 报告 / 诊断 / 抗烧毁 / 选型 / 信号链
+│   ├── resources_prompts/              #   MCP Resource & Prompt（6 Resource + 8 Prompt）
+│   │   ├── __init__.py                 #     注册入口（import 下面 6 模块触发注册）
+│   │   ├── resources_service.py        #     服务状态类（概览 / 状态 / 工程目录）
+│   │   ├── resources_reference.py      #     参考类（参数目录 / 操作规则 / 错误码）
+│   │   ├── prompts_project.py          #     工程类（检查 / 信号链）
+│   │   ├── prompts_simulation.py       #     仿真类（仿真 / 抗烧毁）
+│   │   ├── prompts_component.py        #     器件类（配置 / 选型）
+│   │   └── prompts_report.py           #     报告类（报告 / 诊断）
 │   │
 │   ├── eda/                            #   EDI 工程工具 (34 个)
 │   │   ├── __init__.py                 #     公共 API re-export

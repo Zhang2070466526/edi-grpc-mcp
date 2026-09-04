@@ -8,22 +8,23 @@
 
 ## 目录
 
-- **[一、gRPC 远程调用（19 个工具）](#一gRPC远程调用19个工具)**：通信协议、call_grpc 统一入口、11 步参数校验管线
+- **[一、gRPC 远程调用（25 个工具）](#一gRPC远程调用25个工具)**：通信协议、call_grpc 统一入口、11 步参数校验管线
 - **[二、本地文件读取（6 个工具）](#二本地文件读取6个工具)**：.epp 格式、S-expression 解析、参数格式化
-- **[三、参数目录与 Schema](#三参数目录与-Schema)**：目录设计动机、核心函数、动态参数模式
-- **[四、subprocess 命令行（3 个工具）](#四subprocess命令行3个工具)**：TurboCharts、RAW 曲线查询、结果对比、EDI 启动
-- **[五、COM 对象与 CST 官方接口（ANSYS 6 个 + CST 5 个）](#五COM对象与CST官方接口)**：COM 附着、AEDT 检测、锁文件管理、CST 接口
-- **[六、图片工具（2 个）](#六图片工具2个)**：show_image、视觉分析
-- **[七、Chat 聊天服务](#七Chat聊天服务)**：会话管理、多轮闭环、工具 Schema、安全加固
-- **[八、Resources 与 Prompts](#八Resources与-Prompts)**：只读资源、可复用工作流
-- **[九、文档工具（1 个工具）](#九文档工具1个工具)**：open_document
-- **[十、报告渲染（1 个工具）](#十报告渲染1个工具)**：16 步校验、调用流程
-- **[十一、跨层设计原则](#十一跨层设计原则)**：校验分层、错误码、并发、outcome_known、日志等
-- **[十二、工具设计动机与数据依赖](#十二工具设计动机与数据依赖)**：每个工具的动机 / 功能 / 依赖 / 底层机制
+- **[三、内存服务（4 个工具）](#三内存服务4个工具)**：异步任务状态查询、服务诊断
+- **[四、参数目录与 Schema](#四参数目录与-Schema)**：目录设计动机、核心函数、动态参数模式
+- **[五、subprocess 命令行（4 个工具）](#五subprocess命令行4个工具)**：TurboCharts、RAW 曲线查询、结果对比、EDI 启动
+- **[六、COM 对象与 CST 官方接口（ANSYS 6 个 + CST 5 个）](#六COM对象与CST官方接口)**：COM 附着、AEDT 检测、锁文件管理、CST 接口
+- **[七、图片工具（2 个）](#七图片工具2个)**：show_image、视觉分析
+- **[八、Chat 聊天服务](#八Chat聊天服务)**：会话管理、多轮闭环、工具 Schema、安全加固
+- **[九、Resources 与 Prompts](#九Resources与-Prompts)**：只读资源、可复用工作流
+- **[十、文档工具（1 个工具）](#十文档工具1个工具)**：open_document
+- **[十一、报告渲染（1 个工具）](#十一报告渲染1个工具)**：16 步校验、调用流程
+- **[十二、跨层设计原则](#十二跨层设计原则)**：校验分层、错误码、并发、outcome_known、日志等
+- **[十三、工具设计动机与数据依赖](#十三工具设计动机与数据依赖)**：每个工具的动机 / 功能 / 依赖 / 底层机制
 
 ---
 
-## 一、gRPC 远程调用（19 个工具）
+## 一、gRPC 远程调用（25 个工具）
 
 所有操作 EDI 工程和仿真器件的工具共享同一套 gRPC 通信模型。核心实现在 `servers/eda/grpc_client.py`（通信层）和 `servers/eda/simulation_components.py`（参数校验层）。
 
@@ -407,7 +408,20 @@ if ".." in name or "/" in name or "\\" in name:
 
 ---
 
-## 三、参数目录与 Schema
+## 三、内存服务（4 个工具）
+
+读内存/运行时状态的工具，不调 gRPC、不读磁盘文件：
+
+| 工具 | 数据源 | 说明 |
+|---|---|---|
+| `get_simulation_async_status` | `_sim_tasks` 内存注册表 | 查询异步仿真进度和增量日志 |
+| `get_simulation_async_result` | `_sim_tasks` | 获取异步仿真最终结果 |
+| `list_eda_tasks` | `_sim_tasks` | 列出当前异步仿真任务 |
+| `get_service_status` | gRPC channel 缓存 + queue busy 标志 | 诊断通道健康度和队列占用 |
+
+---
+
+## 四、参数目录与 Schema
 
 参数目录 `simulation_component_catalog.json`（v2.0.0）是 MCP 层对 EDI 参数知识的本地编码。它不替代 EDI 的校验，而是让 **MCP 在本地完成大部分参数校验**，减少无效 gRPC 调用和错误轮次。
 
@@ -451,7 +465,7 @@ HB 和 XDB 支持多音设置，需要多组 `Freq[n]`/`Order[n]`。目录用 `p
 
 ---
 
-## 四、subprocess 命令行（3 个工具）
+## 五、subprocess 命令行（4 个工具）
 
 ### 4.1 TurboCharts
 
@@ -570,7 +584,7 @@ Values:
 
 ---
 
-## 五、COM 对象与 CST 官方接口（ANSYS 6 个 + CST 5 个）
+## 六、COM 对象与 CST 官方接口（ANSYS 6 个 + CST 5 个）
 
 核心实现在 `servers/ansys/config.py`（进程检测/COM 附着/锁文件管理）。
 
@@ -653,7 +667,7 @@ CST 工具不走 ANSYS COM，而是用 CST 官方 Python 接口（`servers/cst/c
 
 ---
 
-## 六、图片工具（2 个）
+## 七、图片工具（2 个）
 
 ### 6.1 show_image
 
@@ -731,7 +745,7 @@ VISION_MAX_IMAGE_MB=10
 
 ---
 
-## 七、Chat 聊天服务
+## 八、Chat 聊天服务
 
 核心实现在 `servers/chat/service.py`。支持 LLM 多轮工具调用闭环。
 
@@ -815,9 +829,9 @@ Chat 工具列表和 Schema 从 MCP 注册表自动生成（`_auto_build_chat_to
 
 ---
 
-## 八、Resources 与 Prompts
+## 九、Resources 与 Prompts
 
-MCP 协议除了 Tool，还定义了 Resource（只读上下文）和 Prompt（可复用工作流模板）。实现在 `servers/resources_prompts/`（resources.py + prompts.py）。
+MCP 协议除了 Tool，还定义了 Resource（只读上下文）和 Prompt（可复用工作流模板）。实现在 `servers/resources_prompts/`（按语义拆为 resources_service / resources_reference / prompts_project / prompts_simulation / prompts_component / prompts_report 六个文件）。
 
 ### 8.1 Resources
 
@@ -853,7 +867,7 @@ workspace_enabled = OPENCLAW_WORKSPACE_PATH is not None
 
 ---
 
-## 九、文档工具（1 个工具）
+## 十、文档工具（1 个工具）
 
 `open_document` 实现在 `servers/multimodal_vision/document.py`，支持 link / local 两种模式。
 
@@ -868,7 +882,7 @@ workspace_enabled = OPENCLAW_WORKSPACE_PATH is not None
 
 ---
 
-## 十、报告渲染（1 个工具）
+## 十一、报告渲染（1 个工具）
 
 `generate_simulation_report` 生成本地仿真报告（PDF/DOCX）。核心实现在 `servers/report/generator.py`。
 
@@ -907,7 +921,7 @@ REPORT_RENDER_TIMEOUT_SECONDS=45
 
 ---
 
-## 十一、跨层设计原则
+## 十二、跨层设计原则
 
 ### 11.1 参数校验分层
 
@@ -1117,7 +1131,7 @@ Chat 工具调用日志对路径做脱敏处理（只记录文件名），不暴
 
 ---
 
-## 十二、工具设计动机与数据依赖
+## 十三、工具设计动机与数据依赖
 
 > 本节从「为什么需要这个工具」的视角，说明每个工具的设计动机、它解决的问题，以及它与其它工具的数据依赖关系（谁为它提供输入、它的输出供谁使用）。实现细节见上文对应章节。
 

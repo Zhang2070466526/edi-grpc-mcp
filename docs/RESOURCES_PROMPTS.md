@@ -16,11 +16,11 @@
 
 ### 注册机制
 
-两者都在 `servers/resources_prompts/` 目录：
+两者都在 `servers/resources_prompts/` 目录，按语义拆为 6 个文件：
 
-- `resources.py` — 每个 Resource 用 `@mcp.resource(uri, name, title, description, mime_type)` 装饰器定义
-- `prompts.py` — 每个 Prompt 用 `@mcp.prompt(name, title, description)` 装饰器定义
-- `__init__.py` — import 这两个模块，触发装饰器注册（与工具的 `@mcp.tool()` 同理）
+- `resources_service.py` / `resources_reference.py` — Resource，用 `@mcp.resource(uri, name, title, description, mime_type)` 装饰器定义
+- `prompts_project.py` / `prompts_simulation.py` / `prompts_component.py` / `prompts_report.py` — Prompt，用 `@mcp.prompt(name, title, description)` 装饰器定义
+- `__init__.py` — import 这 6 个模块，触发装饰器注册（与工具的 `@mcp.tool()` 同理）
 
 `servers/registry_server.py` 里的 `import servers.resources_prompts` 是最终触发点。装饰器在 import 时执行，把 Resource/Prompt 注册到 FastMCP 实例，无需手动维护清单。
 
