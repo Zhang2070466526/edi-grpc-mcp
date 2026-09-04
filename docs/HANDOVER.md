@@ -41,10 +41,10 @@ servers/
   utils.py                # 公共工具函数
   settings.py             # 统一配置加载
   task_runner.py          # 通用异步任务队列（EDA/HFSS/CST 复用）
-  resources_prompts/       # 5 个 Resource + 5 个 Prompt
+  resources_prompts/       # 6 个 Resource + 8 个 Prompt
   multimodal_vision/      # 图片 + 视觉分析 + 文档工具
   report/                 # 仿真报告生成
-  eda/                   # EDI 工程工具（34 个）
+  eda/                   # EDI 工程工具（37 个）
     __init__.py           # 公共 API + 工具清单
     config.py             # 配置 / 路径检测
     project_reader.py     # ProjectReader + S-expression 解析器
@@ -56,6 +56,7 @@ servers/
     design_export.py      # 网表/截图（2 工具）
     signal_chain.py       # 信号链路追踪（1 工具）
     model_replace.py      # 模型替换（1 工具）
+    model_search.py       # 模型库查询（3 工具）
     edi_launcher.py       # 启动 EDI + 服务诊断（3 工具）
   turbocharts/
     config.py             # run_turbocharts（信号量串行）
@@ -95,7 +96,7 @@ PyPI: https://pypi.org/project/edi-grpc-mcp/  |  当前版本：0.1.7
 
 ## MCP 工具清单
 
-工具总数随版本变化（当前 52 个，以运行时 `/ready` 的 `tool_count` 为准），按功能分 11 类：
+工具总数随版本变化（当前 55 个，以运行时 `/ready` 的 `tool_count` 为准），按功能分 11 类：
 
 | 分类 | 数量 | 说明 |
 |---|---|---|
@@ -103,7 +104,7 @@ PyPI: https://pypi.org/project/edi-grpc-mcp/  |  当前版本：0.1.7
 | 仿真器件 | 10 | 器件 Schema、增删改、状态、网表导入、原理图加载 |
 | 仿真 | 8 | 同步 / 异步仿真、网表仿真、抗烧毁评估、任务查询 |
 | 导出分析 | 3 | 导出网表、截图原理图、信号链路追踪 |
-| 模型 / 启动 / 诊断 | 4 | 模型替换、启动 EDI、服务诊断、日志读取 |
+| 模型 / 启动 / 诊断 | 7 | 模型替换、启动 EDI、服务诊断、日志读取 |
 | ANSYS HFSS | 6 | AEDT 工程开关、HFSS 异步仿真 |
 | CST 电磁仿真 | 5 | 异步求解 .cst、导出 S 参数 / 远场方向图 |
 | 图表 | 3 | RAW 曲线、转图、结果对比 |

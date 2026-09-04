@@ -867,6 +867,45 @@ class TestFindSimComponents:
 
 
 # ═══════════════════════════════════════════════════════════
+# 10.5 list_simulation_components summary_only 裁剪
+# ═══════════════════════════════════════════════════════════
+
+class TestListSummaryOnly:
+    """测试 list_simulation_components 的 summary_only 裁剪逻辑。"""
+
+    def test_summary_only_strips_parameters(self, monkeypatch):
+        from pathlib import Path
+        from servers.eda import simulation_components as sc
+
+        class FakeReader:
+            def __init__(self, path):
+                self.epp_path = Path(path)
+
+            def list_schematics(self):
+                return ["main"]
+
+            def read_schematic(self, name):
+                return f"fake:{name}"
+
+        monkeypatch.setattr(sc, "ProjectReader", FakeReader)
+        monkeypatch.setattr(sc, "parse_components", lambda raw: [{
+            "name": "R1", "type": "R", "component_id": "u1", "model_id": "m1",
+            "paramsinfo": {"R": {"value": "50", "unit": "Ohm"}},
+            "pin_count": 2, "parameter_count": 1,
+        }])
+
+        # 默认返回完整字段（含 parameters）
+        full = sc.list_simulation_components("fake.epp")
+        assert "parameters" in full["components"][0]
+
+        # summary_only=True 只保留 4 个核心字段，裁掉 parameters
+        summary = sc.list_simulation_components("fake.epp", summary_only=True)
+        comp = summary["components"][0]
+        assert set(comp.keys()) == {"component_type", "instance_name", "model_id", "pin_count"}
+        assert "parameters" not in comp
+
+
+# ═══════════════════════════════════════════════════════════
 # 11. replace_schematic_from_file 工具
 # ═══════════════════════════════════════════════════════════
 

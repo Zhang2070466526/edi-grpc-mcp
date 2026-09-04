@@ -8,7 +8,7 @@
 
 ## 为什么用这个项目
 
-电子设计自动化（EDA）工具通常需要人工在图形界面中操作——打开工程、配置器件、执行仿真、导出结果。本项目将这些操作封装为 52 个 MCP 工具，接入 Claude Code 或 OpenClaw 后，只需用自然语言描述需求，AI 就能自动完成：
+电子设计自动化（EDA）工具通常需要人工在图形界面中操作——打开工程、配置器件、执行仿真、导出结果。本项目将这些操作封装为 55 个 MCP 工具，接入 Claude Code 或 OpenClaw 后，只需用自然语言描述需求，AI 就能自动完成：
 
 > "帮我看看 C:/Projects 下有哪些 .epp 工程，打开第一个，查看 S 参数仿真器件的配置，设置频率 1-10GHz、步长 0.1GHz，然后跑仿真"
 
@@ -34,9 +34,9 @@ AI 客户端 (Claude Code / OpenClaw)
    │  Streamable HTTP (stateless) 或 stdio
    │  POST /mcp  │  initialize → tools/list → tools/call
    ▼
-EDI gRPC MCP 服务 (FastMCP, 52 工具, 5 Resource, 5 Prompt)
+EDI gRPC MCP 服务 (FastMCP, 55 工具, 6 Resource, 8 Prompt)
    │
-   ├── EDA gRPC 工具 (19) ──→ EDI 客户端 (127.0.0.1:50055)
+   ├── EDA gRPC 工具 (37) ──→ EDI 客户端 (127.0.0.1:50055)
    │     FetchEvent ← PerformAction 异步模型，增量 ads_output
    │
    ├── TurboCharts (3) ──→ turbocharts_app.exe (subprocess)
@@ -98,7 +98,7 @@ curl http://127.0.0.1:50026/health     # 进程 + gRPC 状态
 → {"status":"ok","mcp_ready":true,"eda_grpc_ready":true}
 
 curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
-→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":52}
+→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":55}
 ```
 
 ### 客户端接入
@@ -125,7 +125,7 @@ curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
 
 | 方式 | 说明 |
 |---|---|
-| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 52 个工具 |
+| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 55 个工具 |
 | **聊天界面** | 浏览器访问 `http://127.0.0.1:50026/ui`，内置 LLM 多轮工具闭环 |
 | **Python 调用** | `from servers.eda import list_epp_projects` 直接调用 |
 
@@ -141,7 +141,7 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 
 ---
 
-## 工具一览（52 个）
+## 工具一览（55 个）
 
 > 工具数量由运行时动态统计，此处为当前快照。权威值见 `/ready` 的 `tool_count`（或 `tests/test_tool_registry.py` 的 `required` 列表）。
 
@@ -200,6 +200,9 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 | 工具 | 说明 |
 |---|---|
 | `replace_models_from_csv` | 按 CSV 批量替换模型 |
+| `get_model_category_params` | 获取模型分类及参数列表 |
+| `search_public_models` | 按子类查询公共模型库 |
+| `search_personal_models` | 按子类查询个人模型库 |
 | `launch_edi` | 启动 EDI 客户端并等待 gRPC 就绪 |
 | `get_service_status` | 返回 gRPC 通道状态、队列信息 |
 | `get_service_logs` | 读取 EDI 服务端日志并分析异常 |
@@ -262,7 +265,7 @@ Streamable HTTP 模式启用 `stateless_http=True`，服务不保留 MCP 会话�
 | 路由 | 方法 | 说明 | 响应示例 |
 |---|---|---|---|
 | `/health` | GET | 进程存活 + gRPC 连接状态 | `{"status":"ok","mcp_ready":true,"eda_grpc_ready":true}` |
-| `/ready` | GET | 服务是否完成初始化（启动中返回 503） | `{"status":"ready","transport":"streamable-http","stateless":true,"tool_count":52}` |
+| `/ready` | GET | 服务是否完成初始化（启动中返回 503） | `{"status":"ready","transport":"streamable-http","stateless":true,"tool_count":55}` |
 | `/mcp` | POST | MCP 协议端点（Streamable HTTP） | MCP JSON-RPC 响应 |
 | `/ui` | GET | 内置聊天界面 | HTML 页面 |
 | `/chat` | POST | 聊天 API（LLM 多轮工具闭环） | `{"success":true,"reply":"...","activities":[...]}` |
@@ -410,7 +413,7 @@ POST /chat
 edi-grpc-mcp/
 │
 ├── proto/                              # protobuf 协议定义及编译产物
-│   ├── ecserver.proto                  #   gRPC 服务定义（ExternalCall, 16 种 EventType）
+│   ├── ecserver.proto                  #   gRPC 服务定义（ExternalCall, 27 种 EventType）
 │   ├── ecserver_pb2.py                 #   protobuf 编译消息类
 │   ├── ecserver_pb2_grpc.py            #   protobuf 编译 Stub/Servicer
 │   └── grpc接口调用.md                 #   gRPC 协议完整文档（含 payload 示例）
@@ -433,8 +436,8 @@ edi-grpc-mcp/
 │   │
 │   ├── resources_prompts/              #   MCP Resource & Prompt
 │   │   ├── __init__.py                 #     导入触发 @mcp.resource() / @mcp.prompt() 注册
-│   │   ├── resources.py                #     5 个 Resource：服务概览 / 参数目录 / 操作规则 / 服务状态 / 错误码
-│   │   └── prompts.py                  #     5 个 Prompt：检查工程 / 执行仿真 / 配置器件 / 生成报告 / 错误诊断
+│   │   ├── resources.py                #     6 个 Resource：服务概览 / 实时状态 / 工程目录 / 参数目录 / 操作规则 / 错误码
+│   │   └── prompts.py                  #     8 个 Prompt：检查工程 / 仿真 / 配置器件 / 报告 / 诊断 / 抗烧毁 / 选型 / 信号链
 │   │
 │   ├── eda/                            #   EDI 工程工具 (34 个)
 │   │   ├── __init__.py                 #     公共 API re-export
@@ -493,9 +496,10 @@ edi-grpc-mcp/
 │
 ├── docs/                               # 项目文档
 │   ├── DEPLOY.md                       #   部署指南（打包产物使用、客户端配置）
-│   ├── TOOLS_API.md                    #   工具 API（52 个工具完整签名+返回值示例）
+│   ├── TOOLS_API.md                    #   工具 API（55 个工具完整签名+返回值示例）
 │   ├── HTTP_API.md                     #   HTTP 接口（请求体、响应体、成功/失败情况）
 │   ├── IMPLEMENTATION.md               #   实现原理（通信类型、校验管线、并发控制、工具动机与依赖）
+│   ├── RESOURCES_PROMPTS.md            #   Resource & Prompt 说明（6 Resource + 8 Prompt 的用途与实现）
 │   ├── HANDOVER.md                     #   交接文档（架构设计、技术栈、47 条注意事项）
 │   └── EDI系统接口与外部调用汇总.md    #   EDI 系统全量对外接口
 │
@@ -587,9 +591,10 @@ powershell -File scripts/build.ps1  # PyInstaller
 | 文档 | 说明 |
 |---|---|
 | [部署指南](./docs/DEPLOY.md) | 打包产物使用、客户端配置 |
-| [工具 API](./docs/TOOLS_API.md) | 全部 52 个工具参数、返回值、示例 |
+| [工具 API](./docs/TOOLS_API.md) | 全部 55 个工具参数、返回值、示例 |
 | [HTTP 接口](./docs/HTTP_API.md) | 全部 HTTP 路由的请求体、响应体、成功/失败情况 |
 | [实现原理](./docs/IMPLEMENTATION.md) | 5 种通信类型、校验管线、并发控制、工具动机与依赖 |
+| [Resource & Prompt](./docs/RESOURCES_PROMPTS.md) | 6 Resource + 8 Prompt 的用途、功能与实现 |
 | [交接文档](./docs/HANDOVER.md) | 架构设计、技术栈、扩展开发、47 条注意事项 |
 | [gRPC 协议](./proto/grpc接口调用.md) | ExternalCall 接口调用说明 |
 | [EDI 系统接口汇总](./docs/EDI系统接口与外部调用汇总.md) | EDI 全量对外接口 |

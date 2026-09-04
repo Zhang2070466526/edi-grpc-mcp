@@ -2,6 +2,13 @@
 
 ## 2026-09-03
 
+### 新增
+- 模型库查询工具（3 个，gRPC `GET_MODEL_CATEGORY_PARAMS=24` / `SEARCH_PUBLIC_MODELS=25` / `SEARCH_PERSONAL_MODELS=26`）：`get_model_category_params`（获取模型分类及参数列表）、`search_public_models` / `search_personal_models`（按子类查询公共/个人模型库）；proto 重新编译生成枚举 24/25/26，工具总数 52 → 55
+
+### 修复
+- 修复打包产物鉴权失效：`start_servers.py` 里 `from servers.settings import get_settings` 在 `load_dotenv` 之前，导致 `servers/__init__.py` 的 `get_settings()` 先执行并被 `lru_cache` 缓存空的 `mcp_api_key`（frozen 下 env_file 路径不存在、环境变量尚未加载），冒烟测试「不带 token」返回 406 而非 401；将 `load_dotenv` 移到 import servers 之前
+- `start_servers.py` 事件循环策略加版本守卫（`sys.version_info < (3, 14)`），消除 Python 3.14+ 的 `WindowsSelectorEventLoopPolicy`/`set_event_loop_policy` 弃用告警
+
 ### 重构
 - 错误响应统一：`tool_error` 重命名为 `error_response`，全部手写 `{"success": False, "error_code", "message"}` 字典改为 `error_response()`（~35 处），额外上下文字段统一归入 `details` 子对象
 - 响应构建器归位：`submitted_response` / `queue_full_response` 从 `task_runner.py` 移到 `utils.py`，与 `error_response` 聚为「统一响应构建」section；`utils.py` 按职责重排为 6 个带标题的 section

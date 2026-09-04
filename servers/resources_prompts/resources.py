@@ -1,8 +1,9 @@
 """MCP Resources — 只读上下文，客户端通过 resources/list 和 resources/read 访问。
 
-5 个 Resource：
+6 个 Resource：
   edi://service/overview              — 服务版本、协议版本、gRPC 目标、安全规则
-  edi://service/status                — 实时运行时状态（gRPC 通道、队列占用）
+  edi://service/status                — 实时运行时状态（gRPC 通道、队列占用、工具指纹）
+  edi://projects                      — 工作区工程目录清单（名称/路径/大小）
   edi://reference/simulation-components — 仿真器件参数目录（与 get_schema 同源）
   edi://reference/operation-guide     — 操作安全约束（创建/删除/导入规则）
   edi://reference/error-codes         — 错误码词典（状态码→含义→建议动作）
@@ -10,6 +11,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import grpc
@@ -114,6 +116,8 @@ def resource_service_status() -> dict[str, Any]:
         "channel_state": state,
         "channel_cached": ch is not None,
         "queue_locked": is_queue_busy(),
+        "tool_count": len(_current_tools_names()),
+        "tools_hash": _current_tools_hash(),
     }
 
 
@@ -147,3 +151,46 @@ def resource_error_codes() -> str:
         "- 非幂等操作（create/delete/generate）禁止自动重试。\n"
         "- 查询类操作（list/get_status）可以安全重试一次。\n"
     )
+
+
+def _projects_dir() -> str:
+    """返回工作区工程目录（settings 配置优先，否则自动检测 ~/EDI-Workspace/projects）。"""
+    from servers.settings import get_settings
+    p = get_settings().projects_dir
+    if p:
+        return p
+    return str(Path.home() / "EDI-Workspace" / "projects")
+
+
+def _current_tools_names() -> list[str]:
+    """返回当前已注册工具的排序名列表（与 /ready 的 tools_hash 同一数据源）。"""
+    from servers import mcp
+    return sorted(t.name for t in mcp._tool_manager._tools.values())
+
+
+def _current_tools_hash() -> str:
+    """工具集版本指纹（与 /ready 的 tools_hash 同一算法：md5(sorted 名)[:8]）。"""
+    import hashlib
+    return hashlib.md5(",".join(_current_tools_names()).encode()).hexdigest()[:8]
+
+
+@mcp.resource(
+    "edi://projects",
+    name="Projects Directory",
+    title="工作区工程目录",
+    description="工作区所有 .epp 工程：名称/路径/大小。",
+    mime_type="application/json",
+)
+def resource_projects_directory() -> dict[str, Any]:
+    """扫描工作区 projects 目录，返回精简工程清单（不读原理图内容）。"""
+    from servers.eda.project_manage import list_epp_projects
+    root = _projects_dir()
+    result = list_epp_projects(str(root))
+    return {
+        "workspace": str(root),
+        "count": result.get("count", 0),
+        "projects": [
+            {"name": p["name"], "path": p["path"], "size": p.get("size", 0)}
+            for p in result.get("projects", [])
+        ],
+    }

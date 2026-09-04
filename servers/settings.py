@@ -57,6 +57,8 @@ class Settings(BaseSettings):
     turbocharts_path: str = ""
     aedt_path: str = ""
     edi_log_dir: str = r"C:\Program Files (x86)\EDI\logs"
+    # 工作区工程目录（edi://projects resource 用），留空自动检测 ~/EDI-Workspace/projects
+    projects_dir: str = ""
 
     # ── LLM / Chat ──
     llm_api_key: str = ""

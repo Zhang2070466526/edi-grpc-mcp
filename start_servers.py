@@ -31,6 +31,7 @@ import socket
 import sys
 import threading
 import time
+import uvicorn
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -39,13 +40,17 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+# load_dotenv 必须在 import servers 之前：否则 servers/__init__.py 的
+# get_settings() 会先执行并被 lru_cache 缓存，frozen 下 env_file 路径不存在、
+# 环境变量尚未加载，导致读到空的 mcp_api_key。
 if getattr(sys, "frozen", False):
     load_dotenv(Path(sys.executable).parent / ".env")
 else:
     load_dotenv()
 
-# -- 配置（从统一配置读取）--
 from servers.settings import get_settings
+
+# -- 配置（从统一配置读取）--
 _cfg = get_settings()
 DEFAULT_TRANSPORT = _cfg.mcp_transport
 DEFAULT_HOST = _cfg.mcp_host
@@ -62,7 +67,7 @@ if _cfg_issues:
 from servers import mcp, __version__ as _server_ver
 from servers.eda.config import EDA_GRPC_SERVER as _grpc_cfg_addr
 from servers.utils import set_server_address
-import servers.registry_server  #  — 触发工具注册
+import servers.registry_server  # — 触发工具注册
 
 # ── 运行时状态 ──
 _server_ready = threading.Event()
@@ -304,7 +309,6 @@ def _run_http_server(port: int, transport: str = "streamable-http") -> None:
     else:
         print("  Auth:   disabled (MCP_API_KEY not set)")
 
-    import uvicorn
     uvicorn.run(starlette_app, host=host, port=port, log_level="info")
 
     # 正常退出

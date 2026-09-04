@@ -622,6 +622,58 @@ replace_models_from_csv(project_path: str, csv_path: str, timeout_seconds: int =
 
 ---
 
+### `get_model_category_params`
+
+```python
+from servers.eda.model_search import get_model_category_params
+
+get_model_category_params(timeout_seconds: int = 60) -> dict
+```
+
+获取模型管理模块的全部子类及对应参数列表。不需要打开工程，也不需要 `project_path`。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
+
+---
+
+### `search_public_models`
+
+```python
+from servers.eda.model_search import search_public_models
+
+search_public_models(sub_type: str, filters: list | None = None, timeout_seconds: int = 60) -> dict
+```
+
+按子类查询公共模型库。`sub_type` 是模型子类 ID（非空字符串），`filters` 数组原样转发给模型服务。返回裁剪响应（`code`/`message`/`data`）。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `sub_type` | str | 是 | — | 模型子类 ID（如 "61"） |
+| `filters` | list | 否 | [] | 过滤条件数组（原样转发） |
+| `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
+
+---
+
+### `search_personal_models`
+
+```python
+from servers.eda.model_search import search_personal_models
+
+search_personal_models(sub_type: str, filters: list | None = None, timeout_seconds: int = 60) -> dict
+```
+
+按子类查询个人模型库。参数与返回结构同 `search_public_models`。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `sub_type` | str | 是 | — | 模型子类 ID（如 "61"） |
+| `filters` | list | 否 | [] | 过滤条件数组（原样转发） |
+| `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
+
+---
+
 ### `launch_edi`
 
 ```python
@@ -1228,7 +1280,7 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 
 ## Resources & Prompts
 
-除了 Tool（启动时动态统计，当前 52 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
+除了 Tool（启动时动态统计，当前 55 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
 
 ### Resources（5 个）
 

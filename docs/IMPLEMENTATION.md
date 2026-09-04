@@ -2,7 +2,7 @@
 
 每个 MCP 工具按底层通信方式分为 5 种实现类型：gRPC 远程调用、本地文件读取、subprocess 命令行、COM 对象、内存服务。本文逐一说明每种工具的协议交互、数据结构、校验流程、错误处理和设计决策。
 >
-> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（52 个工具接口）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由）。
+> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（55 个工具接口）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由）。
 
 ---
 
@@ -29,7 +29,7 @@
 
 ### 1.1 通信协议
 
-EDI 服务通过 `proto/ecserver.proto` 定义了 `ExternalCall` 服务，当前协议版本 v2，16 种事件类型：
+EDI 服务通过 `proto/ecserver.proto` 定义了 `ExternalCall` 服务，当前协议版本 v2，27 种事件类型：
 
 ```proto
 service ExternalCall {
@@ -288,6 +288,9 @@ wire_params, error = _prepare_parameters(ct, parameters, op="update")
 | `export_project_netlist` | VIEW_PROJECT_NETLIST(3) | 仅校验 `project_path` |
 | `capture_schematic` | CAPTURE_SCHEMATIC(7) | 额外校验 `img_path` 扩展名（PNG/JPG/BMP/SVG）和路径 resolve |
 | `replace_models_from_csv` | MODEL_REPLACE(6) | 额外校验 `csv_path` 存在且后缀 `.csv` |
+| `get_model_category_params` | GET_MODEL_CATEGORY_PARAMS(24) | 无业务参数，`payload_json` 为空对象 |
+| `search_public_models` | SEARCH_PUBLIC_MODELS(25) | `sub_type` 非空；`filters` 数组原样转发 |
+| `search_personal_models` | SEARCH_PERSONAL_MODELS(26) | 同 `search_public_models` |
 
 ---
 

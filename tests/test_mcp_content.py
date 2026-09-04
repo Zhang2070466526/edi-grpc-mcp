@@ -18,7 +18,7 @@ import pytest
 
 
 # ═══════════════════════════════════════════════════════════
-# 1. 直接调用测试 — 覆盖所有 3 Resources + 4 Prompts
+# 1. 直接调用测试 — 覆盖 Resources 与 Prompts 的返回值结构/字段/安全约束
 # ═══════════════════════════════════════════════════════════
 
 class TestResourcesDirect:
@@ -106,6 +106,31 @@ class TestPromptsDirect:
             "C:/test.epp", "nonexistent", "")
         assert "错误" in msgs[0]["content"]
         assert "nonexistent" in msgs[0]["content"]
+
+    def test_assess_anti_burnout(self):
+        from servers.resources_prompts.prompts import prompt_assess_anti_burnout
+        msgs = prompt_assess_anti_burnout("C:/test.epp")
+        text = msgs[0]["content"]
+        assert "simulate_anti_burnout" in text
+        assert "裕量" in text
+        assert "max_input_power" in text
+
+    def test_select_component(self):
+        from servers.resources_prompts.prompts import prompt_select_component
+        msgs = prompt_select_component("61", "低噪声放大器")
+        text = msgs[0]["content"]
+        assert "search_public_models" in text
+        assert "search_personal_models" in text
+        assert "replace_models_from_csv" in text
+        assert "依次" in text
+        assert "model_uuid" in text
+
+    def test_analyze_signal_chain(self):
+        from servers.resources_prompts.prompts import prompt_analyze_signal_chain
+        msgs = prompt_analyze_signal_chain("C:/test.epp")
+        text = msgs[0]["content"]
+        assert "get_signal_chain" in text
+        assert "export_project_netlist" in text
 
 
 # ═══════════════════════════════════════════════════════════
@@ -253,3 +278,38 @@ class TestMcpProtocolSmoke:
             assert "get_project_summary" in text
         finally:
             _stop_server(proc)
+
+
+# ═══════════════════════════════════════════════════════════
+# 3. get_model_category_params 的 categories_only 裁剪
+# ═══════════════════════════════════════════════════════════
+
+class TestModelSearchCategoriesOnly:
+    """测试 get_model_category_params 的 categories_only 裁剪逻辑。"""
+
+    def test_categories_only_strips_params(self, monkeypatch):
+        from servers.eda import model_search as ms
+        result = {
+            "success": True,
+            "details": {"data": [
+                {"id": "61", "name": "低噪放", "params": [{"p": 1}, {"p": 2}]},
+                {"id": "62", "name": "功放", "params": [{"p": 3}]},
+            ]},
+        }
+        monkeypatch.setattr(ms, "call_grpc", lambda *a, **k: result)
+        r = ms.get_model_category_params(categories_only=True)
+        data = r["details"]["data"]
+        assert set(data[0].keys()) == {"id", "name"}
+        assert "params" not in data[0]
+
+    def test_categories_only_off_returns_full(self, monkeypatch):
+        from servers.eda import model_search as ms
+        result = {
+            "success": True,
+            "details": {"data": [
+                {"id": "61", "name": "低噪放", "params": [{"p": 1}]},
+            ]},
+        }
+        monkeypatch.setattr(ms, "call_grpc", lambda *a, **k: result)
+        r = ms.get_model_category_params()  # 默认 categories_only=False
+        assert "params" in r["details"]["data"][0]

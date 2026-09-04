@@ -566,6 +566,7 @@ def list_simulation_components(
         offset: int = 0,
         limit: int = 100,
         include_hidden: bool = False,
+        summary_only: bool = False,
 ) -> dict[str, Any]:
     """列出已保存工程中的全部器件及参数（含 wire→public 参数名映射）。
 
@@ -585,6 +586,9 @@ def list_simulation_components(
         offset: 分页偏移（默认 0）。
         limit: 每页数量（默认 100，最大 500）。
         include_hidden: 是否包含 Visible=false 的隐藏参数（默认 False）。
+        summary_only: 为 True 时每个器件只保留 component_type/instance_name/model_id/pin_count，
+            裁掉 parameters 等大字段（用于选型/清单等只需器件标识的场景）；需要完整参数时不传此参数或用
+            get_schematic_component_info 单点查询。
     """
     try:
         reader = ProjectReader(project_path)
@@ -606,6 +610,14 @@ def list_simulation_components(
     offset = max(0, offset)
     limit = max(1, min(limit, 500))
     paged = components[offset:offset + limit]
+
+    if summary_only:
+        paged = [{
+            "component_type": c["component_type"],
+            "instance_name": c["instance_name"],
+            "model_id": c.get("model_id", ""),
+            "pin_count": c.get("pin_count", 0),
+        } for c in paged]
 
     return {
         "success": True,

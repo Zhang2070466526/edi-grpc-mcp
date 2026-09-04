@@ -41,6 +41,9 @@
 
   模型：
     replace_models_from_csv       按 CSV 批量替换模型
+    get_model_category_params     获取模型分类及参数列表
+    search_public_models          查询公共模型库
+    search_personal_models        查询个人模型库
 
   启动：
     launch_edi                    启动 EDI 客户端
@@ -91,6 +94,7 @@ import servers.eda.simulation_components # noqa: F401
 import servers.eda.design_export         # noqa: F401
 import servers.eda.signal_chain          # noqa: F401
 import servers.eda.model_replace         # noqa: F401
+import servers.eda.model_search           # noqa: F401
 import servers.eda.edi_launcher          # noqa: F401
 import servers.turbocharts.compare_results  # noqa: F401
 import servers.turbocharts.convert_raw   # noqa: F401

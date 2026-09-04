@@ -62,6 +62,9 @@ enum EventType {
   GET_COMPONENTS_STATIC_PARAMS = 21;
   SIMULATE_ANTI_BURNOUT = 22;
   CREATE_PROJECT = 23;
+  GET_MODEL_CATEGORY_PARAMS = 24;
+  SEARCH_PUBLIC_MODELS = 25;
+  SEARCH_PERSONAL_MODELS = 26;
 }
 ```
 
@@ -88,6 +91,9 @@ enum EventType {
 - `GET_COMPONENTS_STATIC_PARAMS`：转发器件固有参数查询，返回重量、尺寸、封装、所属厂商和成本等信息。
 - `SIMULATE_ANTI_BURNOUT`：对工程原理图中具备抗烧毁数据的器件执行输入功率仿真和抗烧毁风险评估。
 - `CREATE_PROJECT`：按指定名称、作者和父目录创建新工程，不显示创建向导，也不自动打开工程。
+- `GET_MODEL_CATEGORY_PARAMS`：获取模型管理模块的全部子类及对应参数列表。
+- `SEARCH_PUBLIC_MODELS`：按子类和过滤条件查询公共模型库。
+- `SEARCH_PERSONAL_MODELS`：按子类和过滤条件查询个人模型库。
 
 ## 4. payload_json 示例
 
@@ -438,6 +444,40 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 - 工程文件路径为 `<path>/<name>/<name>.epp`。目标工程目录或 `.epp` 文件已经存在时创建失败，不覆盖已有内容。
 - 服务端直接调用 `NewProjectWizard::createProject(name, errorMsg, author, path)`，不显示向导，也不自动打开新工程。
 
+### GET_MODEL_CATEGORY_PARAMS
+
+```json
+{}
+```
+
+- 该任务不接收业务参数，`payload_json` 必须是空 JSON 对象。
+- 服务端调用 `GrpcApiManager::CategoryParams`，成功时将返回数组放入 `data` 字段。
+
+### SEARCH_PUBLIC_MODELS
+
+```json
+{
+  "sub_type": "61",
+  "filters": []
+}
+```
+
+- `sub_type` 必须是非空字符串。
+- `filters` 必须是数组，数组内部内容原样转发，不由 gRPC 层解释。
+- 服务端调用 `GrpcApiManager::SearchPublic`，返回内容经过现有 `TrimSearchResponse` 规则裁剪。
+
+### SEARCH_PERSONAL_MODELS
+
+```json
+{
+  "sub_type": "61",
+  "filters": []
+}
+```
+
+- 参数规则与 `SEARCH_PUBLIC_MODELS` 相同。
+- 服务端调用 `GrpcApiManager::SearchPersonal`，返回内容经过现有 `TrimSearchResponse` 规则裁剪。
+
 ### REPLACE_PORT_COMPONENT
 
 ```json
@@ -580,6 +620,9 @@ enum ResultStatus {
 - `GET_COMPONENTS_STATIC_PARAMS`：上游接口原始响应对象，包含 `code`、`message`、`data`
 - `SIMULATE_ANTI_BURNOUT`：成功时仅包含 `results`；失败时为空对象 `{}`
 - `CREATE_PROJECT`：成功时包含 `project_path`；失败时为空对象 `{}`
+- `GET_MODEL_CATEGORY_PARAMS`：成功时包含 `data` 数组；失败时 `data` 为空数组
+- `SEARCH_PUBLIC_MODELS`：模型服务返回的裁剪响应对象，包含 `code`、`message`、`data`
+- `SEARCH_PERSONAL_MODELS`：模型服务返回的裁剪响应对象，包含 `code`、`message`、`data`
 - `GENERATE_SCHEMATIC_FROM_NETLIST`：`project_path`、`netlist_path`、`schematic_path`、`clear_before_import`、`symbols_added`、`nets_added`、`lines_added`、`net_points_added`
 
 ## 8. SIMULATE_NETLIST 完整调用示例
@@ -1115,6 +1158,75 @@ enum ResultStatus {
 ```
 
 目标工程已存在或名称不符合 Windows 命名规则时返回具体失败原因，不会覆盖已有工程。
+
+### 9.13 获取模型分类参数
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-category-params-001",
+  "type": "GET_MODEL_CATEGORY_PARAMS",
+  "payload_json": "{}"
+}
+```
+
+如果 Postman 未识别最新枚举，请重新导入 `ecserver.proto`，也可以临时将 `type` 填为数值 `24`。
+
+最终成功事件示例：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-category-params-001",
+  "event_type": "GET_MODEL_CATEGORY_PARAMS",
+  "status": "RESULT_STATUS_SUCCESS",
+  "message": "model category params retrieved",
+  "payload_json": "{\"data\":[...]}"
+}
+```
+
+### 9.14 查询公共模型库
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-search-public-001",
+  "type": "SEARCH_PUBLIC_MODELS",
+  "payload_json": "{\"sub_type\":\"61\",\"filters\":[]}"
+}
+```
+
+如果 Postman 未识别最新枚举，请重新导入 `ecserver.proto`，也可以临时将 `type` 填为数值 `25`。
+
+最终成功事件中的 `payload_json` 示例：
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "count": 1,
+    "total_pages": 1,
+    "current_page": 1,
+    "results": []
+  }
+}
+```
+
+### 9.15 查询个人模型库
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-search-personal-001",
+  "type": "SEARCH_PERSONAL_MODELS",
+  "payload_json": "{\"sub_type\":\"61\",\"filters\":[]}"
+}
+```
+
+如果 Postman 未识别最新枚举，请重新导入 `ecserver.proto`，也可以临时将 `type` 填为数值 `26`。返回结构与 `SEARCH_PUBLIC_MODELS` 相同。
+
+三个任务都不需要 `project_path`，也不要求打开工程。网络超时、连接失败、HTTP 状态异常或响应解析失败时，最终事件状态为 `RESULT_STATUS_FAILED`，具体原因位于事件 `message`。搜索接口上游返回的 `code != 200` 时同样标记为失败，并保留完整裁剪响应对象。
 
 ## 10. 网表生成链路完整调用示例
 

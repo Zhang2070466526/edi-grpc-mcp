@@ -31,6 +31,7 @@ def test_all_tools_registered():
         "replace_schematic_from_file",
         "list_schematic_components", "get_schematic_component_info",
         "get_components_static_params",
+        "get_model_category_params", "search_public_models", "search_personal_models",
         "open_hfss_project", "close_hfss_project", "launch_aedt", "get_hfss_project_info",
         "start_hfss_analysis_async", "get_hfss_analysis_status",
         "cst_solve_async", "cst_solve_query", "cst_export_snp",

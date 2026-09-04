@@ -1,11 +1,14 @@
 """MCP Prompts — 可复用工作流模板，用户通过 prompts/get 主动选择。
 
-5 个 Prompt：
+8 个 Prompt：
   inspect_edi_project       — 只读检查：概览→变量→器件→仿真配置
   run_and_review_simulation — 异步仿真+日志分析，含轮询限制
   configure_simulation_component — Schema→参数映射→确认→创建/更新
   create_simulation_report  — 查询工程→生成曲线→渲染 PDF/DOCX
   troubleshoot_edi_error    — 错误诊断：读 error-codes → 查服务状态 → 建议动作
+  assess_anti_burnout       — 抗烧毁评估：仿真→按裕量排序→结论
+  select_component          — 器件选型：分类→搜索→对比→推荐→替换
+  analyze_signal_chain      — 信号链分析：追踪链路→逐级说明
 """
 
 from __future__ import annotations
@@ -292,3 +295,84 @@ def prompt_troubleshoot_edi_error(
         ]
 
     return [{"role": "user", "content": "\n".join(steps)}]
+
+
+@mcp.prompt(
+    name="assess_anti_burnout",
+    title="评估器件抗烧毁风险",
+    description="对工程执行抗烧毁仿真并按功率裕量排序输出结论。",
+)
+def prompt_assess_anti_burnout(project_path: str) -> list[dict[str, Any]]:
+    """抗烧毁评估工作流模板。
+
+    Args:
+        project_path: .epp 工程文件绝对路径。
+    """
+    return [{"role": "user", "content": (
+        f"请对工程 {project_path} 执行抗烧毁评估。\n\n"
+        "步骤：\n"
+        "1. 调用 `simulate_anti_burnout` 执行评估（timeout 默认 600s）。\n"
+        "2. 若返回『抗烧毁仿真网表处理失败』：提示用户检查 PORT1 功率是否异常（>40dBm 会导致仿真溢出），"
+        "或链路是否为多通道合路（该场景服务端可能不支持）。\n"
+        "3. 成功时解析 results：按 (simulated_input_power - max_input_power) 裕量升序排列，"
+        "标注最接近限值的器件。\n"
+        "4. 汇总表格：器件 | 仿真输入功率 | 最大允许 | 裕量 | 判定。\n\n"
+        "重要：max_input_power 单位可能是 dBm 或 W，比较前统一换算成 dBm。"
+    )}]
+
+
+@mcp.prompt(
+    name="select_component",
+    title="器件选型",
+    description="按需求从公共/个人模型库选型：分类→搜索→过滤→对比→推荐→生成替换清单。",
+)
+def prompt_select_component(sub_type_id: str, requirement: str) -> list[dict[str, Any]]:
+    """器件选型工作流模板。
+
+    Args:
+        sub_type_id: 模型子类 ID（如 "61"）。
+        requirement: 选型需求描述（频率/增益/NF 等）。
+    """
+    return [{"role": "user", "content": (
+        f"请按需求「{requirement}」从模型库选型（子类 {sub_type_id}）。\n\n"
+        "步骤：\n"
+        "1. 调用 `get_model_category_params(categories_only=true)` 确认子类（精简返回，避免大结果）。\n"
+        "2. 依次调用 `search_public_models` 与 `search_personal_models`（sub_type 相同；"
+        "   EDA gRPC 串行执行，不要并行调用）。\n"
+        "3. 从需求提取过滤条件（频率/增益/NF 等），在结果中筛选。\n"
+        "4. 对候选调 `get_components_static_params`（把搜索结果里的 `model_uuid` 值作为 `original_uuid` 参数传入；\n"
+        "   二者值相同仅参数名不同，选型结果里没有 `alternative_model_id` 字段）查厂商/尺寸/封装。\n"
+        "5. 输出对比表：型号 | 厂商 | 关键参数 | 尺寸 | 来源(公共/个人)。\n"
+        "6. 给出推荐及理由，不编造参数。\n"
+        "7. 若用户确认要替换到工程：先调 `list_simulation_components(summary_only=true)` "
+        "拿工程现有器件的三列（不编造，以实际返回为准）：\n"
+        "   `component_type→original_model_type`、`instance_name→original_model_name`、`model_id→original_model_id`。\n"
+        "8. 生成 CSV（列 original_model_type/name/id + alternative_model_type/name/id），"
+        "调用 `replace_models_from_csv` 应用到工程。\n"
+        "   未确认前只输出推荐，不执行替换。"
+    )}]
+
+
+@mcp.prompt(
+    name="analyze_signal_chain",
+    title="信号链分析",
+    description="追踪工程信号链路并解释各级器件作用与功率流。",
+)
+def prompt_analyze_signal_chain(project_path: str, start: str = "PORT1") -> list[dict[str, Any]]:
+    """信号链分析工作流模板。
+
+    Args:
+        project_path: .epp 工程文件绝对路径。
+        start: 起始器件实例名（默认 PORT1）。
+    """
+    return [{"role": "user", "content": (
+        f"请分析工程 {project_path} 从 {start} 开始的信号链路。\n\n"
+        "步骤：\n"
+        "0. 若工程近期跑过 simulate_anti_burnout：先调 `export_project_netlist` 刷新干净网表"
+        "（抗烧毁流程会把 PowerPin 虚拟节点写进本地 netlist.log，污染追踪源）。\n"
+        "1. 调用 `get_signal_chain`（project_path, start_component=start）获取链路。\n"
+        "2. 说明每级器件作用（LNA/衰减器/移相器/功放/功分器）。\n"
+        "3. 若结果含 warning（PowerPin 污染），提示用户先重新导出网表再追踪。\n"
+        "4. 有仿真结果时结合 result.raw 说明各级实际功率。\n"
+        "5. 输出：文本链路图 + 各级说明表。"
+    )}]
