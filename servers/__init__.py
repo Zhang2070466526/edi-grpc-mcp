@@ -24,7 +24,7 @@ from servers.settings import get_settings
 
 # 版本号：需与 pyproject.toml 里的 version 保持一致。
 # /ready、/health 等端点和 Resource 会返回这个版本号。
-__version__ = "0.1.7"
+__version__ = "0.1.8"
 
 # 全局配置单例：所有环境变量（EDA_GRPC_SERVER、LLM_*、VISION_* 等）都从这里读。
 # lru_cache 保证整个进程只加载一次、所有模块共享同一个 Settings 对象。

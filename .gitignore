@@ -1,5 +1,6 @@
 .venv/
 .uv-cache/
+.tools/
 __pycache__/
 *.pyc
 .idea/
