@@ -1,29 +1,24 @@
-# EDI gRPC MCP 服务
+# EDI gRPC MCP
+
+> **让 AI 用自然语言驱动 EDA 设计与仿真** —— 一句话完成「打开工程 → 配置器件 → 跑仿真 → 出报告」，三大仿真引擎统一封装。
 
 [![PyPI](https://img.shields.io/pypi/v/edi-grpc-mcp?label=PyPI)](https://pypi.org/project/edi-grpc-mcp/)
+[![Python](https://img.shields.io/badge/python-3.10+-blue)]()
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**让 AI 客户端通过自然语言操作 EDA 工程，从扫描工程到生成仿真报告，一条龙闭环。**
+## ✨ 亮点
 
----
+- 🛠️ **55 个 MCP 工具** — 工程管理 / 仿真 / 器件配置 / 模型选型 / 信号链分析，全链路覆盖
+- ⚡ **三大仿真引擎** — EDI gRPC · ANSYS HFSS · CST，一个服务统一封装
+- 🧠 **自然语言驱动** — 接入 Claude Code / OpenClaw，告别鼠标点击
+- 🔒 **本地安全** — 全本地运行，工程数据不出机器
+- 📈 **异步仿真 + 实时日志** — task_id 追踪，支持长时间任务
 
-## 为什么用这个项目
-
-电子设计自动化（EDA）工具通常需要人工在图形界面中操作——打开工程、配置器件、执行仿真、导出结果。本项目将这些操作封装为 55 个 MCP 工具，接入 Claude Code 或 OpenClaw 后，只需用自然语言描述需求，AI 就能自动完成：
+### 一句话示例
 
 > "帮我看看 C:/Projects 下有哪些 .epp 工程，打开第一个，查看 S 参数仿真器件的配置，设置频率 1-10GHz、步长 0.1GHz，然后跑仿真"
 
 MCP 服务自动完成：扫描工程 → 打开 → 查询器件 → 更新参数 → 启动异步仿真 → 返回 task_id → 查询进度 → 获取结果。
-
-**核心价值：**
-
-| 价值 | 说明 |
-|---|---|
-| **自然语言驱动** | 不需要记命令、不点鼠标，用自然语言描述需求即可操作 EDA 工程 |
-| **全流程闭环** | 从工程扫描到仿真执行到报告生成，一条龙自动完成 |
-| **本地安全** | 所有服务和文件都在本机，不依赖云端，不传工程数据出去 |
-| **AI 友好** | 参数 Schema 本地校验，减少无效调用轮次；误差提示明确，模型可据此修正 |
-| **生产可用** | 异步仿真 + 实时日志 + task_id 追踪 + 优雅关闭，支持长时间仿真任务 |
-| **可扩展** | 纯 Python，FastMCP 框架，新增工具只需添加装饰器即可自动注册 |
 
 ---
 
@@ -275,19 +270,20 @@ Streamable HTTP 模式启用 `stateless_http=True`，服务不保留 MCP 会话�
 | `/upload` | POST | 文件上传（multipart/form-data） | `{"success":true,"file_path":"C:/...","file_name":"..."}` |
 | `/metrics` | GET | 运行时指标（Prometheus 格式） | 见 HTTP_API.md |
 
-### MCP Resources（5 个，只读上下文）
+### MCP Resources（6 个，只读上下文）
 
 客户端通过 `resources/list` 和 `resources/read` 访问。
 
 | URI | MIME | 说明 |
 |---|---|---|
 | `edi://service/overview` | `application/json` | 服务版本、gRPC 协议 v2、工具 API v3、安全规则、工作区状态 |
+| `edi://service/status` | `application/json` | 实时运行时状态（gRPC 通道、队列占用、工具指纹） |
+| `edi://projects` | `application/json` | 工作区工程目录清单（名称/路径/大小） |
 | `edi://reference/simulation-components` | `application/json` | SP/HB/XDB 参数目录，与 `get_simulation_component_schema` 同源 |
 | `edi://reference/operation-guide` | `text/markdown` | 操作安全约束：创建/删除/网表导入规则 |
-| `edi://service/status` | `application/json` | 实时运行时状态（gRPC 通道、队列占用） |
 | `edi://reference/error-codes` | `text/markdown` | gRPC 状态码词典及建议动作 |
 
-### MCP Prompts（5 个，可复用工作流）
+### MCP Prompts（8 个，可复用工作流）
 
 | Prompt | 参数 | 说明 |
 |---|---|---|
@@ -296,6 +292,9 @@ Streamable HTTP 模式启用 `stateless_http=True`，服务不保留 MCP 会话�
 | `configure_simulation_component` | `project_path`, `action`, `component_type`, `instance_name`, `requirements` | Schema → 参数映射 → 确认 → 创建/更新 |
 | `create_simulation_report` | `project_path`, `output_path`, `overwrite` | 查询工程 → 确认结果 → 生成曲线 → 渲染 PDF/DOCX |
 | `troubleshoot_edi_error` | `status`, `error_code` | 按状态码查错误词典、检查服务状态、给排查建议 |
+| `assess_anti_burnout` | `project_path` | 抗烧毁评估并按功率裕量排序 |
+| `select_component` | `sub_type_id`, `requirement` | 从公共/个人模型库选型（含替换闭环） |
+| `analyze_signal_chain` | `project_path`, `start` | 追踪信号链路并逐级说明 |
 
 ---
 
@@ -605,7 +604,7 @@ powershell -File scripts/build.ps1  # PyInstaller
 
 ---
 
-## FAQ
+## 常见问题
 
 ### 端口占用
 
