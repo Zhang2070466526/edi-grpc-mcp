@@ -83,6 +83,7 @@ _DESTRUCTIVE_CHAT_TOOLS = {
     "replace_models_from_csv",
     "replace_port_component",
     "replace_schematic_from_file",   # 整体替换原理图，无条件确认
+    "clear_schematic",               # 清空原理图，无条件确认
     "close_edi_project",          # 确认时需要 need_save=true
     "generate_simulation_report",  # 确认时需要 overwrite=true
 }
@@ -585,7 +586,7 @@ class ChatService:
                                                 reply=f"参数校验失败: {validation_result.get('error', {}).get('detail', '')}",
                                                 context=self._build_context(session))
                         # 清空原理图：Chat 层补 confirm_clear=True，不信任模型传入
-                        if tool_name == "generate_schematic_from_netlist":
+                        if tool_name in ("generate_schematic_from_netlist", "clear_schematic"):
                             validation_result["confirm_clear"] = True
                         pending = _create_pending(tool_name, validation_result)
                         session.pending_action = pending

@@ -1,7 +1,8 @@
-"""EDA 模型库查询工具 — 获取模型分类参数 + 查询公共/个人模型库。
+"""EDA 模型库工具 — 模型分类/查询/搜索 + MMS 导入 + 性能器件放置。
 
-三个工具均为只读查询，不需要 project_path、不要求打开工程，返回模型服务的
-裁剪响应（code/message/data）。
+五个工具均围绕模型库领域：前三个为只读查询（不需要 project_path），
+load_performance_component_from_mms 从 MMS 导入性能模型到本地模型库，
+add_performance_component 将工作区模型库中的 Component 放置到原理图。
 """
 
 from __future__ import annotations
@@ -9,8 +10,9 @@ from __future__ import annotations
 from typing import Any
 
 from proto import ecserver_pb2
+from servers.eda.config import validate_project_path
 from servers.eda.grpc_client import call_grpc
-from servers.utils import require_nonempty
+from servers.utils import require_nonempty, require_position
 from servers import mcp
 
 
@@ -119,6 +121,82 @@ def search_personal_models(
     return call_grpc(
         ecserver_pb2.SEARCH_PERSONAL_MODELS,
         payload,
+        timeout_seconds,
+        max_timeout_seconds=300,
+    )
+
+
+@mcp.tool()
+def load_performance_component_from_mms(
+        original_uuid: str,
+        timeout_seconds: int = 90,
+) -> dict[str, Any]:
+    """从 MMS 下载性能模型并导入当前工作区本地模型库。
+
+    用法："从 MMS 导入这个性能模型 <uuid>"
+
+    使用程序当前已加载的工作区，无需 .epp、project_path 或工作区路径，不要求打开
+    工程。下载、解压并校验 library.ep 后合并至本地模型库，随后复制仿真文件并
+    发起模型库重新扫描（下载超时 60 秒）。
+
+    注意：成功只表示导入函数返回成功、已发起扫描，不代表异步扫描完成；导入后
+    需等待模型库扫描完成再调用 add_performance_component，否则可能查不到 Component。
+
+    Args:
+        original_uuid: MMS 原始模型 UUID（非空字符串，格式按 Uuid::isValid 校验）。
+        timeout_seconds: 最长等待秒数，默认 90。
+
+    Returns:
+        gRPC 统一返回结构，成功提示或失败原因在 message 中。
+    """
+    original_uuid, err = require_nonempty(original_uuid, label="original_uuid")
+    if err:
+        return err
+    return call_grpc(
+        ecserver_pb2.LOAD_PERFORMANCE_COMPONENT_FROM_MMS,
+        {"original_uuid": original_uuid},
+        timeout_seconds,
+        max_timeout_seconds=300,
+    )
+
+
+@mcp.tool()
+def add_performance_component(
+        project_path: str,
+        component_uuid: str,
+        position: dict,
+        timeout_seconds: int = 120,
+) -> dict[str, Any]:
+    """将工作区模型库中的 Component 放置到指定工程原理图并保存。
+
+    用法："把性能器件 <uuid> 放到 (100,200)"
+
+    component_uuid 为工作区模型库中的 Component UUID，不能假定等于 MMS 的
+    original_uuid。坐标会吸附到网格。不自动下载模型、不额外设置参数、不自动
+    避让重叠、不返回器件实例名。
+
+    注意：load_performance_component_from_mms 导入后需等待模型库扫描完成再调用
+    本工具，否则可能暂时查不到 Component。
+
+    Args:
+        project_path: .epp 工程文件绝对路径。
+        component_uuid: 工作区模型库中的 Component UUID（非空字符串）。
+        position: 场景坐标对象 {"x": 100, "y": 200}（x/y 均为有限数值）。
+        timeout_seconds: 最长等待秒数，默认 120。
+
+    Returns:
+        gRPC 统一返回结构，成功提示或失败原因在 message 中。
+    """
+    resolved = validate_project_path(project_path)
+    component_uuid, err = require_nonempty(component_uuid, label="component_uuid")
+    if err:
+        return err
+    pos, err = require_position(position)
+    if err:
+        return err
+    return call_grpc(
+        ecserver_pb2.ADD_PERFORMANCE_COMPONENT,
+        {"project_path": resolved, "component_uuid": component_uuid, "position": pos},
         timeout_seconds,
         max_timeout_seconds=300,
     )

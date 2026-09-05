@@ -1,4 +1,4 @@
-r"""EDA gRPC MCP 工具包 -- 通过 ExternalCall gRPC 操作 EDI 工程（37 个工具）。
+r"""EDA gRPC MCP 工具包 -- 通过 ExternalCall gRPC 操作 EDI 工程（46 个工具）。
 
 按文件列工具与用途：
 
@@ -54,15 +54,28 @@ signal_chain.py — 信号链追踪（1 工具）
 model_replace.py — 模型替换（1 工具）
     replace_models_from_csv  根据 CSV 文件批量替换元件模型
 
-model_search.py — 模型库查询（3 工具）
-    get_model_category_params  获取模型分类及参数列表
-    search_public_models       按子类查询公共模型库
-    search_personal_models     按子类查询个人模型库
+model_library.py — 模型库（5 工具）
+    get_model_category_params           获取模型分类及参数列表
+    search_public_models                按子类查询公共模型库
+    search_personal_models              按子类查询个人模型库
+    load_performance_component_from_mms 从 MMS 导入性能模型到本地模型库
+    add_performance_component           将模型库 Component 放置到原理图
 
 edi_launcher.py — 启动/诊断（3 工具）
     launch_edi          启动 EDI 客户端并等待 gRPC 就绪
     get_service_status  返回 gRPC 通道状态、队列占用
     get_service_logs    读取 EDI 服务端日志并分析异常
+
+workspace_ops.py — 工作区（3 工具）
+    create_workspace                       创建工作区（不自动切换）
+    switch_workspace                       设置下次启动使用的工作区
+    get_current_workspace                  查询当前实际加载的工作区目录
+
+schematic_ops.py — 原理图扩展操作（4 工具）
+    list_ideal_components     列出内置器件类型及说明
+    add_ideal_component       按指定坐标新增内置器件
+    clear_schematic           清空原理图（破坏性，需 confirm_clear）
+    add_wire                  连接两个器件的指定引脚
 """
 
 # -- 工程管理 --
@@ -116,11 +129,13 @@ from servers.eda.signal_chain import get_signal_chain  # noqa: F401
 # -- 模型替换 --
 from servers.eda.model_replace import replace_models_from_csv  # noqa: F401
 
-# -- 模型库查询 --
-from servers.eda.model_search import (  # noqa: F401
+# -- 模型库 --
+from servers.eda.model_library import (  # noqa: F401
     get_model_category_params,
     search_public_models,
     search_personal_models,
+    load_performance_component_from_mms,
+    add_performance_component,
 )
 
 # -- 启动/诊断 --
@@ -128,4 +143,19 @@ from servers.eda.edi_launcher import (  # noqa: F401
     launch_edi,
     get_service_status,
     get_service_logs,
+)
+
+# -- 工作区 --
+from servers.eda.workspace_ops import (  # noqa: F401
+    create_workspace,
+    switch_workspace,
+    get_current_workspace,
+)
+
+# -- 原理图扩展操作 --
+from servers.eda.schematic_ops import (  # noqa: F401
+    list_ideal_components,
+    add_ideal_component,
+    clear_schematic,
+    add_wire,
 )

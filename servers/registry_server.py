@@ -44,11 +44,24 @@
     get_model_category_params     获取模型分类及参数列表
     search_public_models          查询公共模型库
     search_personal_models        查询个人模型库
+    load_performance_component_from_mms  从 MMS 导入性能模型
+    add_performance_component     放置模型库性能器件
 
   启动：
     launch_edi                    启动 EDI 客户端
     get_service_status            返回 gRPC 通道状态、队列信息
     get_service_logs              读取 EDI 服务端日志并分析异常
+
+  工作区：
+    create_workspace              创建工作区（不自动切换）
+    switch_workspace              设置下次启动使用的工作区
+    get_current_workspace         查询当前实际加载的工作区目录
+
+  原理图扩展：
+    list_ideal_components         列出内置器件类型
+    add_ideal_component           按指定坐标新增内置器件
+    clear_schematic               清空原理图（破坏性，需确认）
+    add_wire                      连接两个器件的指定引脚
 
   ANSYS：
     open_hfss_project             打开 .aedt HFSS 项目
@@ -94,7 +107,9 @@ import servers.eda.simulation_components # noqa: F401
 import servers.eda.design_export         # noqa: F401
 import servers.eda.signal_chain          # noqa: F401
 import servers.eda.model_replace         # noqa: F401
-import servers.eda.model_search           # noqa: F401
+import servers.eda.model_library          # noqa: F401
+import servers.eda.workspace_ops         # noqa: F401
+import servers.eda.schematic_ops         # noqa: F401
 import servers.eda.edi_launcher          # noqa: F401
 import servers.turbocharts.compare_results  # noqa: F401
 import servers.turbocharts.convert_raw   # noqa: F401

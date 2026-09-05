@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 import threading
 import time
 from dataclasses import dataclass
@@ -47,6 +48,23 @@ def require_nonempty(value: str, *, error_code: str = "INVALID_PARAMETERS",
     if not s:
         return "", error_response(error_code, f"{label or '参数'} 不能为空")
     return s, None
+
+
+def require_position(position: Any) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """校验并规范化场景坐标对象，返回 (position, 错误)。
+
+    position 必须是 {"x": .., "y": ..} 形式的对象，x/y 为有限数值（拒绝 bool、
+    字符串、NaN/Inf）。返回只含 x/y 的字典；非法时返回统一错误字典。
+    """
+    if not isinstance(position, dict):
+        return None, error_response("INVALID_PARAMETERS", "position 必须是对象 {x, y}")
+    x, y = position.get("x"), position.get("y")
+    if (not isinstance(x, (int, float)) or isinstance(x, bool)
+            or not isinstance(y, (int, float)) or isinstance(y, bool)):
+        return None, error_response("INVALID_PARAMETERS", "position 的 x、y 必须是有限数值")
+    if not (math.isfinite(x) and math.isfinite(y)):
+        return None, error_response("INVALID_PARAMETERS", "position 的 x、y 必须是有限数值")
+    return {"x": x, "y": y}, None
 
 
 # ── 统一响应构建 ──
