@@ -85,6 +85,20 @@ class TestRequirePosition:
             assert pos is None and err["error_code"] == "INVALID_PARAMETERS"
 
 
+class TestRequireUuid:
+    def test_valid(self):
+        from servers.utils import require_uuid
+        u = "12345678-1234-4234-8234-123456789abc"
+        v, err = require_uuid(u)
+        assert err is None and v == u
+
+    def test_rejects_invalid(self):
+        from servers.utils import require_uuid
+        for bad in ("not-a-uuid", "12345", "uuid-1", ""):
+            v, err = require_uuid(bad)
+            assert v == "" and err["error_code"] == "INVALID_PARAMETERS"
+
+
 class TestBuildFileLink:
     def test_markdown_link(self, tmp_path):
         from servers.utils import build_file_link

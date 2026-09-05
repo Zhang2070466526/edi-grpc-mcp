@@ -60,11 +60,11 @@ class TestResourcesDirect:
         ws = tmp_path / "EDI-Workspace"
         (ws / "projects").mkdir(parents=True)
         monkeypatch.setattr(
-            "servers.eda.workspace_ops.get_current_workspace",
+            "servers.resources_prompts.resources_service.get_current_workspace",
             lambda: {"success": True, "details": {"workspace_path": str(ws)}},
         )
         monkeypatch.setattr(
-            "servers.eda.project_manage.list_epp_projects",
+            "servers.resources_prompts.resources_service.list_epp_projects",
             lambda folder: {"success": True, "count": 1, "projects": [
                 {"name": "demo", "path": str(ws / "projects" / "demo" / "demo.epp"), "size": 0}
             ]},
@@ -79,7 +79,7 @@ class TestResourcesDirect:
         """GET_CURRENT_WORKSPACE 失败时返回空清单 + warning，不猜测目录。"""
         from servers.resources_prompts.resources_service import resource_projects_directory
         monkeypatch.setattr(
-            "servers.eda.workspace_ops.get_current_workspace",
+            "servers.resources_prompts.resources_service.get_current_workspace",
             lambda: {"success": False, "status": "GRPC_UNAVAILABLE"},
         )
         r = resource_projects_directory()
