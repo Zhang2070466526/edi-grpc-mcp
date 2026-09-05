@@ -65,6 +65,15 @@ enum EventType {
   GET_MODEL_CATEGORY_PARAMS = 24;
   SEARCH_PUBLIC_MODELS = 25;
   SEARCH_PERSONAL_MODELS = 26;
+  LIST_IDEAL_COMPONENTS = 27;
+  CREATE_WORKSPACE = 28;
+  SWITCH_WORKSPACE = 29;
+  LOAD_PERFORMANCE_COMPONENT_FROM_MMS = 30;
+  ADD_PERFORMANCE_COMPONENT = 31;
+  ADD_IDEAL_COMPONENT = 32;
+  CLEAR_SCHEMATIC = 33;
+  ADD_WIRE = 34;
+  GET_CURRENT_WORKSPACE = 35;
 }
 ```
 
@@ -94,6 +103,15 @@ enum EventType {
 - `GET_MODEL_CATEGORY_PARAMS`：获取模型管理模块的全部子类及对应参数列表。
 - `SEARCH_PUBLIC_MODELS`：按子类和过滤条件查询公共模型库。
 - `SEARCH_PERSONAL_MODELS`：按子类和过滤条件查询个人模型库。
+- `LIST_IDEAL_COMPONENTS`：列出内置器件类型及其简要说明。
+- `CREATE_WORKSPACE`：创建工作区，不自动切换。
+- `SWITCH_WORKSPACE`：设置下次启动使用的工作区，当前工作区保持不变。
+  - `LOAD_PERFORMANCE_COMPONENT_FROM_MMS`：下载性能模型并导入当前工作区本地模型库（MMS是模型管理系统一个web页面）。
+- `ADD_PERFORMANCE_COMPONENT`：将工作区模型库中的 Component 放置到指定工程原理图并保存。
+- `ADD_IDEAL_COMPONENT`：按指定场景坐标新增内置器件，使用工厂默认参数，不自动排布。
+- `CLEAR_SCHEMATIC`：清空指定工程原理图中的全部器件和网段，并保存工程。
+- `ADD_WIRE`：连接指定工程内两个器件的指定引脚，按需创建或合并网段并保存。
+- `GET_CURRENT_WORKSPACE`：查询程序当前实际加载的工作区目录。
 
 ## 4. payload_json 示例
 
@@ -190,6 +208,21 @@ enum EventType {
 - 参数更新或动态参数新增统一使用 `UPDATE_SIMULATION_COMPONENT`。
 - 每次调用都创建新器件，同类型器件可以存在多个。服务端根据工厂默认器件名自动分配未占用的实例名，并在最终事件的 `instance_name` 中返回。
 - 工厂无法创建指定类型时，最终事件返回失败原因，原理图不会新增器件。
+
+#### 与 ADD_IDEAL_COMPONENT 的区别
+
+两个任务独立存在，`ADD_IDEAL_COMPONENT` 不替代、不修改 `CREATE_SIMULATION_COMPONENT`。
+
+| 对比项 | CREATE_SIMULATION_COMPONENT（11） | ADD_IDEAL_COMPONENT（32） |
+| --- | --- | --- |
+| 必填业务参数 | `project_path`、`component_type` | `project_path`、`component_type`、`position.x`、`position.y` |
+| 放置位置 | 服务端决定，优先纵向排列，列满后换列 | 严格使用请求的场景坐标，不吸附网格 |
+| 避让 | 将器件及可见参数文字纳入包围盒，检测与已有器件的重叠 | 不自动避让，重叠时仍在指定位置创建 |
+| 布局起点 | 有带引脚器件时从电路右侧开始，否则使用默认起点 | 完全由 `position` 决定 |
+| 成功 payload | `project_path`、`component_type`、`action`、`instance_name` | `instance_name` |
+| 适用场景 | 不关心精确位置，希望服务端自动排布 | 客户端已规划布局，需要指定位置 |
+
+两者均通过 `SI_Factory` 创建器件，支持工厂注册类型（不限于仿真控制器），使用默认参数、分配不重复的实例名、初始化文字布局并保存工程；均不接收 `parameters`，参数修改使用 `UPDATE_SIMULATION_COMPONENT`。都允许同类型器件存在多个，工程已打开时复用窗口。
 
 #### CREATE_SIMULATION_COMPONENT 支持的器件
 
@@ -478,6 +511,129 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 - 参数规则与 `SEARCH_PUBLIC_MODELS` 相同。
 - 服务端调用 `GrpcApiManager::SearchPersonal`，返回内容经过现有 `TrimSearchResponse` 规则裁剪。
 
+### LIST_IDEAL_COMPONENTS
+
+```json
+{}
+```
+
+- 该任务不接收业务参数，`payload_json` 必须是空 JSON 对象。
+- 数据直接读取 `ComponentToolBar` 使用的 `symbolDescriptionMap`，不需要打开工程。
+- 每项包含 `component_type` 和 `description`。
+
+### GET_CURRENT_WORKSPACE
+
+```json
+{}
+```
+
+- `payload_json` 必须是空 JSON 对象，不需要工程路径或其他业务参数。
+- 返回程序当前实际加载的工作区目录，不修改任何状态。
+- 如果此前调用了 `SWITCH_WORKSPACE` 但尚未重启，本接口仍返回当前工作区，而不是下次启动将使用的路径。
+- 成功事件的 `payload_json` 包含 `workspace_path`。
+
+### ADD_WIRE
+
+```json
+{
+  "project_path": "D:/projects/test/test.epp",
+  "first_instance_name": "R1",
+  "first_pin_index": 0,
+  "second_instance_name": "C1",
+  "second_pin_index": 0
+}
+```
+
+- 五个业务字段均必填。`project_path` 为服务端已有的 `.epp` 文件；已打开则复用窗口，否则按现有流程打开。
+- 两个 `instance_name` 字段是原理图上的器件实例名，非器件类型或 UUID，必须为非空字符串。
+- 两个 `pin_index` 字段必须为 0～2147483647 范围内的整数，并对应器件实际存在的引脚索引；不是界面显示的端口名称。不接受字符串、小数、负数、布尔值或省略字段。
+- UI 线程调用 `connectPinsFromExternalCall`，检查器件和引脚是否存在，拒绝同一引脚自连接。活动命令组未结束时返回 `schematic editor is busy`。
+- 两引脚均未连接时创建网段；仅一端已连接时接入该网段；两端属于不同网段时合并并添加连线。直接连接两引脚，不提供折线路径规划、器件或线段避让，也不自动连接交叉线。
+- 两端已属于同一网段时返回成功，提示“两个引脚已连接，无需重复添加”；不保证两端存在直接线段，此分支不新增连线、不额外保存。
+- 新增连线及网段合并作为一个可撤销操作，提交后保存工程；保存失败时撤销本次操作。成功提示“连线添加成功，工程已保存”。
+- 最终事件 `payload_json` 始终为 `"{}"`；失败原因通过 `message` 返回，例如器件或引脚不存在、保存失败。
+
+### CLEAR_SCHEMATIC
+
+```json
+{
+  "project_path": "D:/projects/test/test.epp"
+}
+```
+
+- 仅需提供服务端已有的 `.epp` 工程路径，沿用一个工程一个原理图的约定；已打开则复用窗口，否则按现有流程打开。
+- 调用即表示确认清空，不额外弹出确认窗口。删除全部器件（含控制器、Var、Out）、符号列表中的独立文本，以及全部网段、连线和连接点。
+- 不删除工程或原理图文件、模型库及历史仿真结果，不改变原理图名称、UUID 和网格设置。
+- UI 线程执行一个可撤销命令组，先移除网段再移除器件；保存失败时撤销本次清空，恢复内存中的内容。后续手动撤销恢复的内容需再次保存才能写入文件。
+- 正在执行画线、预放置等命令组时返回 `schematic editor is busy`；原理图已为空时仍保存并返回成功，不撤销之前的操作。
+- 最终事件 `payload_json` 为 `"{}"`。成功提示“原理图已清空，工程已保存”，失败原因位于 `message`。
+
+### ADD_IDEAL_COMPONENT
+
+```json
+{
+  "project_path": "D:/projects/test/test.epp",
+  "component_type": "R",
+  "position": { "x": 100, "y": 200 }
+}
+```
+
+- `project_path` 必须是服务端已有的 `.epp` 文件；`component_type` 必须为非空字符串、区分大小写，支持范围同 `CREATE_SIMULATION_COMPONENT` 的工厂注册类型列表。
+- `position` 必填，`x`、`y` 均必须为有限数值，不能省略、使用字符串或用顶层 `x`、`y` 替代。它们是原理图场景坐标，不是屏幕坐标。
+- 严格按指定坐标放置，不做网格吸附、自动排布或重叠避让；不影响旧任务的自动布局行为。
+- 携带 `parameters` 会被拒绝且不会创建器件，后续参数设置使用 `UPDATE_SIMULATION_COMPONENT`。
+- 创建后初始化文字位置，避免参数文字停留在图案上；TermG、P_nTone、P_nToneG、Pin 的编号沿用现有编号分配规则。
+- 成功保存后返回 `instance_name`；不支持的类型、编辑器忙碌、保存失败等通过失败事件的 `message` 返回，失败 payload 为 `{}`。
+
+### ADD_PERFORMANCE_COMPONENT
+
+```json
+{
+  "project_path": "D:/projects/test/test.epp",
+  "component_uuid": "12345678-1234-4234-8234-123456789abc",
+  "position": { "x": 100, "y": 200 }
+}
+```
+
+- 三个字段均必填。`project_path` 必须是服务端已有的 `.epp` 文件；已打开则复用工程窗口，否则按现有流程打开。
+- `component_uuid` 为工作区模型库中的 Component UUID，按 `Uuid::isValid()` 校验，不能假定它等于 MMS 的 `original_uuid`。
+- `position` 必须为对象，`x`、`y` 均为有限数值，不能使用字符串或省略。坐标是原理图场景坐标，不是屏幕坐标，原函数会将其吸附到网格。
+- UI 线程直接调用 `SchematicEditor::placeComponentFromExternalCall`：查找 Component 最新版本，使用第一个符号变体中的第一个符号，通过撤销命令放置并保存工程。
+- 不自动下载模型、不额外设置参数、不自动避让重叠、不返回器件实例名。模型不存在、编辑器忙碌、缺少符号或保存失败时返回具体原因。
+- `LOAD_PERFORMANCE_COMPONENT_FROM_MMS` 导入后需等待模型库扫描完成，再调用本接口，否则可能暂时查不到 Component。
+- 最终事件 `payload_json` 为 `"{}"`；成功提示“性能器件添加成功，工程已保存”，失败原因位于 `message`。
+
+### LOAD_PERFORMANCE_COMPONENT_FROM_MMS
+
+```json
+{
+  "original_uuid": "12345678-1234-4234-8234-123456789abc"
+}
+```
+
+- `original_uuid` 为必填字符串，表示 MMS 原始模型 UUID，格式按 `Uuid::isValid()` 校验。不接收 UUID 数组。
+- 使用程序当前已加载的工作区，无需 `.epp`、`project_path` 或工作区路径，不要求打开工程。调用 `SWITCH_WORKSPACE` 后、重启前仍导入当前工作区。
+- 直接调用 `GrpcApiManager::loadPerformanceComponentFromMms`，沿用当前 MMS 地址及登录凭证；下载超时为 60 秒。
+- 下载、解压并校验 `library.ep` 后，合并至当前工作区本地模型库；库中已有文件跳过、不覆盖。随后复制 `.json`、`.ds`、`.imt`、`.net` 仿真文件至仿真模型目录（同名目标文件覆盖），调用 `AppHelper::callHpeesofsimX()` 并发起模型库重新扫描。
+- 不向原理图放置器件。成功只表示导入函数返回成功、已发起扫描，不代表异步扫描完成。
+- 沿用原函数临时文件清理行为；导入失败不保证回滚已复制的文件。
+- 最终事件 `payload_json` 为 `"{}"`；成功提示“性能模型导入成功，已发起模型库刷新”，失败原因通过 `message` 返回。
+
+### CREATE_WORKSPACE / SWITCH_WORKSPACE
+
+```json
+{
+  "path": "D:/EDI-Workspace-New"
+}
+```
+
+- `path` 必须为非空字符串，指向服务端机器上的工作区目录，不是 `.epp` 文件；建议使用绝对路径。
+- 无需 `project_path`，不要求打开工程。直接调用 `GrpcApiManager::createWorkspace` / `switchWorkspace`。
+- 创建时沿用原函数校验：路径无效、已有合法工作区或目标目录非空则失败；创建成功不会自动切换工作区。
+- 切换目标必须是已存在且兼容的工作区；仅保存最近使用的工作区路径，下次启动程序时生效，不关闭工程、不自动重启、不弹出窗口。
+- 最终事件 `payload_json` 为 `"{}"`。创建成功提示“工作区创建成功”；切换成功提示“工作区路径已设置，下次启动程序时生效，当前工作区保持不变”。
+- 参数校验不通过时 `PerformAction` 返回失败；已受理任务执行失败时通过 `RESULT_STATUS_FAILED` 事件的 `message` 返回函数提供的具体原因。
+
 ### REPLACE_PORT_COMPONENT
 
 ```json
@@ -623,6 +779,14 @@ enum ResultStatus {
 - `GET_MODEL_CATEGORY_PARAMS`：成功时包含 `data` 数组；失败时 `data` 为空数组
 - `SEARCH_PUBLIC_MODELS`：模型服务返回的裁剪响应对象，包含 `code`、`message`、`data`
 - `SEARCH_PERSONAL_MODELS`：模型服务返回的裁剪响应对象，包含 `code`、`message`、`data`
+- `LIST_IDEAL_COMPONENTS`：`component_count`、`components`；每项包含 `component_type`、`description`
+- `CREATE_WORKSPACE` / `SWITCH_WORKSPACE`：最终事件为 `{}`，成功提示或失败原因位于 `message`
+- `LOAD_PERFORMANCE_COMPONENT_FROM_MMS`：最终事件为 `{}`，导入成功提示或具体失败原因位于 `message`
+- `ADD_PERFORMANCE_COMPONENT`：最终事件为 `{}`，添加成功提示或具体失败原因位于 `message`
+- `ADD_IDEAL_COMPONENT`：成功返回 `instance_name`，失败返回 `{}`，具体原因位于 `message`
+- `CLEAR_SCHEMATIC`：最终事件为 `{}`，清空成功提示或具体失败原因位于 `message`
+- `ADD_WIRE`：最终事件为 `{}`，新增成功、已连接提示或具体失败原因位于 `message`
+- `GET_CURRENT_WORKSPACE`：`workspace_path`，当前实际加载的工作区目录
 - `GENERATE_SCHEMATIC_FROM_NETLIST`：`project_path`、`netlist_path`、`schematic_path`、`clear_before_import`、`symbols_added`、`nets_added`、`lines_added`、`net_points_added`
 
 ## 8. SIMULATE_NETLIST 完整调用示例
@@ -1227,6 +1391,256 @@ enum ResultStatus {
 如果 Postman 未识别最新枚举，请重新导入 `ecserver.proto`，也可以临时将 `type` 填为数值 `26`。返回结构与 `SEARCH_PUBLIC_MODELS` 相同。
 
 三个任务都不需要 `project_path`，也不要求打开工程。网络超时、连接失败、HTTP 状态异常或响应解析失败时，最终事件状态为 `RESULT_STATUS_FAILED`，具体原因位于事件 `message`。搜索接口上游返回的 `code != 200` 时同样标记为失败，并保留完整裁剪响应对象。
+
+### 9.16 查询内置器件类型
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-list-ideal-components-001",
+  "type": "LIST_IDEAL_COMPONENTS",
+  "payload_json": "{}"
+}
+```
+
+如果 Postman 未识别最新枚举，请重新导入 `ecserver.proto`，也可以临时将 `type` 填为数值 `27`。
+
+最终成功事件示例：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-list-ideal-components-001",
+  "event_type": "LIST_IDEAL_COMPONENTS",
+  "status": "RESULT_STATUS_SUCCESS",
+  "message": "ideal components listed",
+  "payload_json": "{\"component_count\":2,\"components\":[{\"component_type\":\"C\",\"description\":\"理想器件：电容\"},{\"component_type\":\"R\",\"description\":\"理想器件：电阻\"}]}"
+}
+```
+
+实际返回 `symbolDescriptionMap` 中的全部条目，`QMap` 按 `component_type` 排序；示例仅展示两个器件。
+
+### 9.17 创建工作区
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "create-workspace-001",
+  "type": "CREATE_WORKSPACE",
+  "payload_json": "{\"path\":\"D:/EDI-Workspace-New\"}"
+}
+```
+
+最终成功事件：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "create-workspace-001",
+  "event_type": "CREATE_WORKSPACE",
+  "status": "RESULT_STATUS_SUCCESS",
+  "message": "工作区创建成功",
+  "payload_json": "{}"
+}
+```
+
+### 9.18 设置下次启动使用的工作区
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "switch-workspace-001",
+  "type": "SWITCH_WORKSPACE",
+  "payload_json": "{\"path\":\"D:/EDI-Workspace-New\"}"
+}
+```
+
+最终成功事件：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "switch-workspace-001",
+  "event_type": "SWITCH_WORKSPACE",
+  "status": "RESULT_STATUS_SUCCESS",
+  "message": "工作区路径已设置，下次启动程序时生效，当前工作区保持不变",
+  "payload_json": "{}"
+}
+```
+
+请先建立 `FetchEvent` 订阅，`PerformAction` 返回 `task accepted` 只表示已受理，最终结果以订阅事件为准。失败事件状态为 `RESULT_STATUS_FAILED`，`message` 为具体原因，`payload_json` 为 `"{}"`。Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `28` / `29`。
+
+### 9.19 从 MMS 导入性能模型
+
+先通过 `FetchEvent` 订阅同一 `client_uuid`，再提交 `PerformAction`：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "load-performance-component-001",
+  "type": "LOAD_PERFORMANCE_COMPONENT_FROM_MMS",
+  "payload_json": "{\"original_uuid\":\"12345678-1234-4234-8234-123456789abc\"}"
+}
+```
+
+请将示例 UUID 替换为 MMS 中实际存在的原始模型 UUID。Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `30`。
+
+最终成功事件：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "load-performance-component-001",
+  "event_type": "LOAD_PERFORMANCE_COMPONENT_FROM_MMS",
+  "status": "RESULT_STATUS_SUCCESS",
+  "message": "性能模型导入成功，已发起模型库刷新",
+  "payload_json": "{}"
+}
+```
+
+公共字段、JSON 或 UUID 校验失败时，`PerformAction` 直接返回失败。任务受理后，下载超时、HTTP 错误、解压失败、缺少 `library.ep` 或文件复制失败等通过 `RESULT_STATUS_FAILED` 事件返回，`message` 为具体原因，`payload_json` 为 `"{}"`。
+
+### 9.20 添加性能器件至原理图
+
+先通过 `FetchEvent` 订阅同一 `client_uuid`，再提交 `PerformAction`：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "add-performance-component-001",
+  "type": "ADD_PERFORMANCE_COMPONENT",
+  "payload_json": "{\"project_path\":\"D:/projects/test/test.epp\",\"component_uuid\":\"12345678-1234-4234-8234-123456789abc\",\"position\":{\"x\":100,\"y\":200}}"
+}
+```
+
+将工程路径和 Component UUID 替换为实际数据。Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `31`。
+
+最终成功事件：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "add-performance-component-001",
+  "event_type": "ADD_PERFORMANCE_COMPONENT",
+  "status": "RESULT_STATUS_SUCCESS",
+  "message": "性能器件添加成功，工程已保存",
+  "payload_json": "{}"
+}
+```
+
+请求校验失败时 `PerformAction` 直接返回失败。任务受理后的执行错误通过 `RESULT_STATUS_FAILED` 事件返回，`message` 为具体原因，`payload_json` 为 `"{}"`。
+
+### 9.21 按指定坐标新增内置器件
+
+先使用相同 `client_uuid` 建立 `FetchEvent` 订阅，再提交 `PerformAction`：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "add-ideal-component-001",
+  "type": "ADD_IDEAL_COMPONENT",
+  "payload_json": "{\"project_path\":\"D:/projects/test/test.epp\",\"component_type\":\"R\",\"position\":{\"x\":100,\"y\":200}}"
+}
+```
+
+最终成功事件示例（器件名以实际分配结果为准）：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "add-ideal-component-001",
+  "event_type": "ADD_IDEAL_COMPONENT",
+  "status": "RESULT_STATUS_SUCCESS",
+  "message": "理想器件添加成功，工程已保存",
+  "payload_json": "{\"instance_name\":\"R1\"}"
+}
+```
+
+Postman 需重新导入最新 `ecserver.proto`，也可将 `type` 填为数值 `32`。请求校验失败时 `PerformAction` 直接返回失败；任务受理后的错误通过 `RESULT_STATUS_FAILED` 事件返回。
+
+### 9.22 清空原理图
+
+**此操作会清空指定工程的原理图并保存。** 请确认工程路径。先以相同 `client_uuid` 建立 `FetchEvent` 订阅，再提交 `PerformAction`：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "clear-schematic-001",
+  "type": "CLEAR_SCHEMATIC",
+  "payload_json": "{\"project_path\":\"D:/projects/test/test.epp\"}"
+}
+```
+
+最终成功事件：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "clear-schematic-001",
+  "event_type": "CLEAR_SCHEMATIC",
+  "status": "RESULT_STATUS_SUCCESS",
+  "message": "原理图已清空，工程已保存",
+  "payload_json": "{}"
+}
+```
+
+Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `33`。请求校验失败由 `PerformAction` 直接返回；已受理任务的执行错误通过 `RESULT_STATUS_FAILED` 事件的 `message` 返回。
+
+### 9.23 连接两个器件的引脚
+
+先建立相同 `client_uuid` 的 `FetchEvent` 订阅，再提交 `PerformAction`：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "add-wire-001",
+  "type": "ADD_WIRE",
+  "payload_json": "{\"project_path\":\"D:/projects/test/test.epp\",\"first_instance_name\":\"R1\",\"first_pin_index\":0,\"second_instance_name\":\"C1\",\"second_pin_index\":0}"
+}
+```
+
+最终新增成功事件：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "add-wire-001",
+  "event_type": "ADD_WIRE",
+  "status": "RESULT_STATUS_SUCCESS",
+  "message": "连线添加成功，工程已保存",
+  "payload_json": "{}"
+}
+```
+
+Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `34`。请求字段校验失败时 `PerformAction` 直接返回失败；任务执行失败通过 `RESULT_STATUS_FAILED` 事件返回具体原因。同网段重复请求返回成功，`message` 为“两个引脚已连接，无需重复添加”。
+
+### 9.24 查询当前工作区目录
+
+先建立相同 `client_uuid` 的 `FetchEvent` 订阅，再提交：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "get-current-workspace-001",
+  "type": "GET_CURRENT_WORKSPACE",
+  "payload_json": "{}"
+}
+```
+
+最终成功事件示例：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "get-current-workspace-001",
+  "event_type": "GET_CURRENT_WORKSPACE",
+  "status": "RESULT_STATUS_SUCCESS",
+  "message": "当前工作区目录获取成功",
+  "payload_json": "{\"workspace_path\":\"D:/EDI-Workspace\"}"
+}
+```
+
+Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `35`。
 
 ## 10. 网表生成链路完整调用示例
 
