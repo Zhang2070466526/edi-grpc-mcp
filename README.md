@@ -539,22 +539,26 @@ edi-grpc-mcp/
 │   └── EDI系统接口与外部调用汇总.md    #   EDI 系统全量对外接口
 │
 ├── tests/                              # 测试套件 (358 项)
+│   ├── test_simulation_components.py   #   90 项：参数目录/Schema/校验管线/wire转换
 │   ├── test_chat_service.py            #   28 项：会话/校验/重复调用/上下文/show_image
-│   ├── test_simulation_components.py   #   89 项：参数目录/Schema/校验管线/wire转换
-│   ├── test_simulation.py              #   17 项：任务注册表/事件回调/生命周期
 │   ├── test_grpc_client.py             #   24 项：终端结果/日志累积/异常处理
 │   ├── test_report_generator.py        #   26 项：输出路径/模型名/spec_table/charts/components
-│   ├── test_mcp_content.py             #   13 项：Resources/Prompts 直接调用+MCP协议冒烟
+│   ├── test_simulation.py              #   17 项：任务注册表/事件回调/生命周期
+│   ├── test_mcp_content.py             #   20 项：Resources/Prompts 直接调用+MCP协议冒烟
 │   ├── test_tool_registry.py           #   7 项：完整工具注册+Chat一致性的双重验证
 │   ├── test_project_reader.py          #   5 项：S-expression 解析/元件提取
 │   ├── test_component_tools.py         #   4 项：list/过滤/分页/参数查询
 │   ├── test_compare_results.py         #   2 项：多 RAW 对比对齐/插值参考轴
 │   ├── test_task_runner.py             #   9 项：异步队列生命周期/队列满/清理
-│   ├── test_cst.py                     #   22 项：共享函数/静态解析/查询返回/导出流程 mock
+│   ├── test_cst.py                     #   23 项：共享函数/静态解析/查询返回/导出流程 mock
 │   ├── test_turbocharts_runner.py      #   3 项：串行执行器超时范围
-│   ├── test_utils.py                   #   12 项：文件校验/错误响应/地址管理/链接生成
-│   ├── test_settings.py                #   10 项：环境变量读取/范围限制/启动校验
+│   ├── test_utils.py                   #   19 项：文件校验/错误响应/地址管理/链接生成/require_position/require_uuid
+│   ├── test_settings.py                #   9 项：环境变量读取/范围限制/启动校验
 │   ├── test_ansys.py                   #   9 项：HFSS 队列迁移后逻辑（mock COM/AEDT）
+│   ├── test_bugfixes.py                #   33 项：历史 bug 修复回归测试
+│   ├── test_token_auth.py              #   5 项：MCP 访问令牌鉴权
+│   ├── test_extended_ops.py            #   14 项：工作区/模型库/原理图扩展工具 payload/校验
+│   ├── test_schematic_library.py       #   9 项：原理图库/导出工具 payload/校验
 │   └── test_health.py                  #   2 项：TCP 检查
 │
 ├── scripts/                            # 构建与启动脚本
@@ -584,7 +588,7 @@ edi-grpc-mcp/
 | `test_grpc_client.py` | 终端结果构建 / 日志累积 / 任务隔离 / 异常处理 / 协议不匹配 | 24 |
 | `test_report_generator.py` | 输出路径 / 模型名 / spec_table / charts / components / timeout | 26 |
 | `test_simulation.py` | 任务注册表 / 事件回调 / TaskLifecycle / TASK_NOT_FOUND | 17 |
-| `test_mcp_content.py` | Resources 结构 / Prompts 参数校验 / MCP 协议 list/read/get | 18 |
+| `test_mcp_content.py` | Resources 结构 / Prompts 参数校验 / MCP 协议 list/read/get | 20 |
 | `test_tool_registry.py` | 完整注册验证 / Chat 一致性 / 破坏性工具 / 工具数动态统计 | 7 |
 | `test_project_reader.py` | S-expression 解析 / 元件提取 | 5 |
 | `test_component_tools.py` | 元件列表 / 类型过滤 / 分页 / 参数查询 | 4 |
@@ -593,11 +597,13 @@ edi-grpc-mcp/
 | `test_compare_results.py` | 多 RAW 对比对齐 / 插值参考轴校验 | 2 |
 | `test_task_runner.py` | 异步队列生命周期 / 结果写回 / 队列满 / 清理 | 9 |
 | `test_cst.py` | 共享函数 / 静态解析 / 查询返回结构 / 导出流程 mock | 23 |
-| `test_utils.py` | 文件校验 / 错误响应 / 地址管理 / 链接生成 | 12 |
+| `test_utils.py` | 文件校验 / 错误响应 / 地址管理 / 链接生成 / require_position / require_uuid | 19 |
 | `test_settings.py` | 环境变量读取 / 范围限制 / 启动校验 | 9 |
 | `test_ansys.py` | HFSS 队列迁移后逻辑（mock COM / AEDT） | 9 |
 | `test_bugfixes.py` | 历史 bug 修复回归测试 | 33 |
 | `test_token_auth.py` | MCP 访问令牌鉴权（token 中间件） | 5 |
+| `test_extended_ops.py` | 工作区 / 模型库 / 原理图扩展工具 payload / 校验 | 14 |
+| `test_schematic_library.py` | 原理图库 / 导出工具 payload / 校验 | 9 |
 
 ```powershell
 uv run pytest -q                 # 全量 358 项
