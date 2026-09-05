@@ -78,13 +78,17 @@ def resource_service_status() -> dict[str, Any]:
     }
 
 
-def _projects_dir() -> str:
-    """返回工作区工程目录（settings 配置优先，否则自动检测 ~/EDI-Workspace/projects）。"""
-    from servers.settings import get_settings
-    p = get_settings().projects_dir
-    if p:
-        return p
-    return str(Path.home() / "EDI-Workspace" / "projects")
+def _current_workspace() -> str:
+    """通过 GET_CURRENT_WORKSPACE 查询当前实际加载的工作区目录（以接口返回为准）。
+
+    不再本地猜测 ~/EDI-Workspace/projects，也不读 projects_dir 配置：
+    接口返回什么目录，就用什么目录当工作区。
+    """
+    from servers.eda.workspace_ops import get_current_workspace
+    result = get_current_workspace()
+    if not result.get("success"):
+        return ""
+    return (result.get("details") or {}).get("workspace_path", "")
 
 
 def _current_tools_names() -> list[str]:
@@ -103,16 +107,29 @@ def _current_tools_hash() -> str:
     "edi://projects",
     name="Projects Directory",
     title="工作区工程目录",
-    description="工作区所有 .epp 工程：名称/路径/大小。",
+    description="当前工作区所有 .epp 工程：名称/路径/大小。",
     mime_type="application/json",
 )
 def resource_projects_directory() -> dict[str, Any]:
-    """扫描工作区 projects 目录，返回精简工程清单（不读原理图内容）。"""
+    """查询当前工作区（GET_CURRENT_WORKSPACE）并扫描其 projects 子目录。"""
     from servers.eda.project_manage import list_epp_projects
-    root = _projects_dir()
-    result = list_epp_projects(str(root))
+    workspace = _current_workspace()
+    if not workspace:
+        return {
+            "workspace": "",
+            "projects_dir": "",
+            "count": 0,
+            "projects": [],
+            "warning": "未获取到当前工作区（EDI 未运行或 GET_CURRENT_WORKSPACE 失败）",
+        }
+    projects_dir = Path(workspace) / "projects"
+    if projects_dir.is_dir():
+        result = list_epp_projects(str(projects_dir))
+    else:
+        result = {"count": 0, "projects": []}
     return {
-        "workspace": str(root),
+        "workspace": workspace,
+        "projects_dir": str(projects_dir),
         "count": result.get("count", 0),
         "projects": [
             {"name": p["name"], "path": p["path"], "size": p.get("size", 0)}
