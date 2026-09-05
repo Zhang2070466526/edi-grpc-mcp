@@ -74,6 +74,11 @@ enum EventType {
   CLEAR_SCHEMATIC = 33;
   ADD_WIRE = 34;
   GET_CURRENT_WORKSPACE = 35;
+  USE_SCHEMATIC_FROM_LIBRARY_CREATE_PROJECT = 36;
+  USE_SCHEMATIC_FROM_LIBRARY_IMPORT = 37;
+  SEARCH_SCHEMATIC_FROM_PUBLIC_LIBRARY = 38;
+  SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY = 39;
+  EXPORT_SCHEMATIC_COMPONENTS_TO_CSV = 40;
 }
 ```
 
@@ -106,12 +111,17 @@ enum EventType {
 - `LIST_IDEAL_COMPONENTS`：列出内置器件类型及其简要说明。
 - `CREATE_WORKSPACE`：创建工作区，不自动切换。
 - `SWITCH_WORKSPACE`：设置下次启动使用的工作区，当前工作区保持不变。
-  - `LOAD_PERFORMANCE_COMPONENT_FROM_MMS`：下载性能模型并导入当前工作区本地模型库（MMS是模型管理系统一个web页面）。
+- `LOAD_PERFORMANCE_COMPONENT_FROM_MMS`：从 MMS 下载性能模型并导入当前工作区本地模型库。
 - `ADD_PERFORMANCE_COMPONENT`：将工作区模型库中的 Component 放置到指定工程原理图并保存。
 - `ADD_IDEAL_COMPONENT`：按指定场景坐标新增内置器件，使用工厂默认参数，不自动排布。
 - `CLEAR_SCHEMATIC`：清空指定工程原理图中的全部器件和网段，并保存工程。
 - `ADD_WIRE`：连接指定工程内两个器件的指定引脚，按需创建或合并网段并保存。
 - `GET_CURRENT_WORKSPACE`：查询程序当前实际加载的工作区目录。
+- `USE_SCHEMATIC_FROM_LIBRARY_CREATE_PROJECT`：从在线原理图库下载内容，在当前工作区创建并打开新工程。
+- `USE_SCHEMATIC_FROM_LIBRARY_IMPORT`：从在线原理图库下载内容，替换指定工程的当前原理图。
+- `SEARCH_SCHEMATIC_FROM_PUBLIC_LIBRARY`：按拓扑描述查询公共原理图库。
+- `SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY`：按拓扑描述查询当前用户的个人原理图库。
+- `EXPORT_SCHEMATIC_COMPONENTS_TO_CSV`：将指定工程原理图中的有效器件信息导出为 CSV。
 
 ## 4. payload_json 示例
 
@@ -521,6 +531,54 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 - 数据直接读取 `ComponentToolBar` 使用的 `symbolDescriptionMap`，不需要打开工程。
 - 每项包含 `component_type` 和 `description`。
 
+### EXPORT_SCHEMATIC_COMPONENTS_TO_CSV
+
+```json
+{
+  "project_path": "D:/EDI-Workspace/projects/test/test.epp",
+  "save_path": "D:/exports/test-components.csv"
+}
+```
+
+- `project_path` 必须是服务端已有的 `.epp` 文件；服务端据此定位 `<工程目录>/schematics/main/schematic.ep`，不要求客户端传内部 `.ep` 路径。工程已打开则复用窗口，否则打开工程。
+- `save_path` 为服务端 CSV 输出文件路径，不能为空；未以 `.csv` 结尾时自动追加后缀。父目录必须已存在，接口不创建目录。
+- 同名文件存在时沿用 `slot_ModelOutputGrpc` 行为，直接截断并覆盖，不弹出确认窗口。
+- 导出函数读取磁盘上的 `schematic.ep`；已打开工程中尚未保存的编辑内容不会出现在 CSV 中。
+- CSV 列为 `original_model_type`、`original_model_name`、`original_model_id`、`alternative_model_type`、`alternative_model_name`、`alternative_model_id`。后三列留空，供后续模型替换填写。
+- 原始字段依次来自器件 `type`、实例 `name` 和 `component_uuid`。仿真控制器、端口、变量等 `EXCLUDED_TYPES` 中的类型不导出。
+- 成功 payload 返回最终绝对路径 `csv_path`；失败 payload 为 `{}`，原因位于 `message`。
+
+### SEARCH_SCHEMATIC_FROM_PUBLIC_LIBRARY / SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY
+
+```json
+{
+  "search_name": "功放"
+}
+```
+
+- 两个任务请求及返回结构相同，只是查询范围不同。`search_name` 必须存在且为字符串，允许空字符串；服务端固定转换成 `topology_description` 过滤条件，不接收客户端自定义 `filters`。
+- 公共库调用 `GrpcApiManager::SearchPublicSchematic`，个人库调用 `GrpcApiManager::SearchPersonalSchematic`；沿用当前登录用户的 Bearer Token。
+- 不需要 `project_path`、当前工作区或已打开工程。查询超时为 10 秒。
+- 成功 payload 包含 `count` 和 `results`；结果为空仍为成功。每条结果经 `TrimSchematicResults` 裁剪，只保留 `id`、`schematic_id`、`name`、`properties`。
+- 网络超时、HTTP 状态异常或 JSON 解析失败时返回失败，payload 为 `{}`，具体原因位于 `message`。
+- 当前下载接口按 URL 中的文件记录 UUID 下载，后续调用 `USE_SCHEMATIC_FROM_LIBRARY_*` 时使用搜索结果的 `id` 作为 `file_uuid`。
+
+### USE_SCHEMATIC_FROM_LIBRARY_CREATE_PROJECT / USE_SCHEMATIC_FROM_LIBRARY_IMPORT
+
+两个任务属于“使用在线原理图库原理图”的两种落地方式：
+
+| 对比项 | 创建新工程方式（36） | 导入已有工程方式（37） |
+| --- | --- | --- |
+| 任务类型 | `USE_SCHEMATIC_FROM_LIBRARY_CREATE_PROJECT` | `USE_SCHEMATIC_FROM_LIBRARY_IMPORT` |
+| 请求参数 | `file_uuid` | `file_uuid`、`project_path` |
+| 目标 | 当前工作区中新建工程并打开 | 替换指定工程的当前原理图并保存 |
+| 工程路径 | 由下载包名称和当前工作区决定 | 由客户端指定已有 `.epp` 文件 |
+| 已有目录 | 同名工程目录存在则失败，不覆盖 | 已打开工程复用窗口，否则打开 |
+
+`file_uuid` 必须是在线原理图文件的合法 UUID。两个任务都异步下载 ZIP、校验包内恰好一个 `.epp` 及 `schematics/main/schematic.ep`，安装随包模型、符号和仿真依赖；缺少 Component 时会从 MMS 下载并等待模型库扫描。同一工作区同时只允许一个在线原理图任务。下载超时 120 秒，模型库扫描超时 60 秒。
+
+最终成功 payload 统一包含 `project_path`、`schematic_uuid`、`component_count`、`net_segment_count`。失败 payload 为 `{}`，具体原因位于 `message`。`PerformAction` 返回 `task accepted` 仅表示受理，最终结果必须从 `FetchEvent` 获取。
+
 ### GET_CURRENT_WORKSPACE
 
 ```json
@@ -787,6 +845,9 @@ enum ResultStatus {
 - `CLEAR_SCHEMATIC`：最终事件为 `{}`，清空成功提示或具体失败原因位于 `message`
 - `ADD_WIRE`：最终事件为 `{}`，新增成功、已连接提示或具体失败原因位于 `message`
 - `GET_CURRENT_WORKSPACE`：`workspace_path`，当前实际加载的工作区目录
+- `USE_SCHEMATIC_FROM_LIBRARY_CREATE_PROJECT` / `USE_SCHEMATIC_FROM_LIBRARY_IMPORT`：成功返回 `project_path`、`schematic_uuid`、`component_count`、`net_segment_count`；失败返回 `{}`
+- `SEARCH_SCHEMATIC_FROM_PUBLIC_LIBRARY` / `SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY`：成功返回 `count` 和 `results`；每项包含 `id`、`schematic_id`、`name`、`properties`
+- `EXPORT_SCHEMATIC_COMPONENTS_TO_CSV`：成功返回最终文件路径 `csv_path`；失败返回 `{}`
 - `GENERATE_SCHEMATIC_FROM_NETLIST`：`project_path`、`netlist_path`、`schematic_path`、`clear_before_import`、`symbols_added`、`nets_added`、`lines_added`、`net_points_added`
 
 ## 8. SIMULATE_NETLIST 完整调用示例
@@ -1641,6 +1702,107 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `34`。请�
 ```
 
 Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `35`。
+
+### 9.25 从在线原理图库创建工程
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "use-schematic-create-001",
+  "type": "USE_SCHEMATIC_FROM_LIBRARY_CREATE_PROJECT",
+  "payload_json": "{\"file_uuid\":\"12345678-1234-4234-8234-123456789abc\"}"
+}
+```
+
+### 9.26 将在线原理图导入指定工程
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "use-schematic-import-001",
+  "type": "USE_SCHEMATIC_FROM_LIBRARY_IMPORT",
+  "payload_json": "{\"file_uuid\":\"12345678-1234-4234-8234-123456789abc\",\"project_path\":\"D:/EDI-Workspace/projects/test/test.epp\"}"
+}
+```
+
+成功事件的 `event_type` 与提交任务一致，示例 payload：
+
+```json
+{
+  "project_path": "D:/EDI-Workspace/projects/example/example.epp",
+  "schematic_uuid": "12345678-1234-4234-8234-123456789abc",
+  "component_count": 12,
+  "net_segment_count": 8
+}
+```
+
+创建工程成功提示“在线链路工程已打开”，导入成功提示“在线链路已导入并保存”。Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `36` / `37`。
+
+### 9.27 查询公共原理图库
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "search-public-schematic-001",
+  "type": "SEARCH_SCHEMATIC_FROM_PUBLIC_LIBRARY",
+  "payload_json": "{\"search_name\":\"功放\"}"
+}
+```
+
+### 9.28 查询个人原理图库
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "search-personal-schematic-001",
+  "type": "SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY",
+  "payload_json": "{\"search_name\":\"功放\"}"
+}
+```
+
+成功事件的 `event_type` 与请求类型一致，payload 示例：
+
+```json
+{
+  "count": 1,
+  "results": [
+    {
+      "id": "c07838c6-87d5-426a-a606-16e37cc7c837",
+      "schematic_id": "原理图逻辑标识",
+      "name": "功放链路",
+      "properties": {"topology_description": "功放"}
+    }
+  ]
+}
+```
+
+公共库成功提示“公共原理图库查询成功”，个人库成功提示“个人原理图库查询成功”。Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `38` / `39`。
+
+### 9.29 导出原理图器件信息 CSV
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "export-schematic-components-001",
+  "type": "EXPORT_SCHEMATIC_COMPONENTS_TO_CSV",
+  "payload_json": "{\"project_path\":\"D:/EDI-Workspace/projects/test/test.epp\",\"save_path\":\"D:/exports/test-components.csv\"}"
+}
+```
+
+最终成功事件：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "export-schematic-components-001",
+  "event_type": "EXPORT_SCHEMATIC_COMPONENTS_TO_CSV",
+  "status": "RESULT_STATUS_SUCCESS",
+  "message": "原理图器件信息导出成功",
+  "payload_json": "{\"csv_path\":\"D:/exports/test-components.csv\"}"
+}
+```
+
+Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `40`。请求校验失败由 `PerformAction` 直接返回；文件读取或写入失败通过 `RESULT_STATUS_FAILED` 事件返回。
 
 ## 10. 网表生成链路完整调用示例
 
