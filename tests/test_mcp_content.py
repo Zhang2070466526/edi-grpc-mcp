@@ -54,6 +54,39 @@ class TestResourcesDirect:
                         "show_image"]:
             assert keyword in text, f"Missing keyword: {keyword}"
 
+    def test_projects_resource_uses_current_workspace(self, monkeypatch, tmp_path):
+        """edi://projects 应通过 GET_CURRENT_WORKSPACE 获取工作区，而非本地猜测。"""
+        from servers.resources_prompts.resources_service import resource_projects_directory
+        ws = tmp_path / "EDI-Workspace"
+        (ws / "projects").mkdir(parents=True)
+        monkeypatch.setattr(
+            "servers.eda.workspace_ops.get_current_workspace",
+            lambda: {"success": True, "details": {"workspace_path": str(ws)}},
+        )
+        monkeypatch.setattr(
+            "servers.eda.project_manage.list_epp_projects",
+            lambda folder: {"success": True, "count": 1, "projects": [
+                {"name": "demo", "path": str(ws / "projects" / "demo" / "demo.epp"), "size": 0}
+            ]},
+        )
+        r = resource_projects_directory()
+        assert r["workspace"] == str(ws)
+        assert r["projects_dir"] == str(ws / "projects")
+        assert r["count"] == 1
+        assert r["projects"][0]["name"] == "demo"
+
+    def test_projects_resource_no_workspace(self, monkeypatch):
+        """GET_CURRENT_WORKSPACE 失败时返回空清单 + warning，不猜测目录。"""
+        from servers.resources_prompts.resources_service import resource_projects_directory
+        monkeypatch.setattr(
+            "servers.eda.workspace_ops.get_current_workspace",
+            lambda: {"success": False, "status": "GRPC_UNAVAILABLE"},
+        )
+        r = resource_projects_directory()
+        assert r["workspace"] == ""
+        assert r["count"] == 0
+        assert "warning" in r
+
 
 class TestPromptsDirect:
     def test_inspect_edi_project(self):
@@ -288,7 +321,7 @@ class TestModelSearchCategoriesOnly:
     """测试 get_model_category_params 的 categories_only 裁剪逻辑。"""
 
     def test_categories_only_strips_params(self, monkeypatch):
-        from servers.eda import model_search as ms
+        from servers.eda import model_library as ms
         result = {
             "success": True,
             "details": {"data": [
@@ -303,7 +336,7 @@ class TestModelSearchCategoriesOnly:
         assert "params" not in data[0]
 
     def test_categories_only_off_returns_full(self, monkeypatch):
-        from servers.eda import model_search as ms
+        from servers.eda import model_library as ms
         result = {
             "success": True,
             "details": {"data": [

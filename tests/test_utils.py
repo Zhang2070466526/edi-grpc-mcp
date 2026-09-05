@@ -55,6 +55,36 @@ class TestToolError:
         assert r["details"] == {"detail": "x"}
 
 
+class TestRequirePosition:
+    def test_valid(self):
+        from servers.utils import require_position
+        pos, err = require_position({"x": 100, "y": 200})
+        assert err is None and pos == {"x": 100, "y": 200}
+
+    def test_rejects_non_dict(self):
+        from servers.utils import require_position
+        for bad in (None, "x=1", [1, 2], 42):
+            pos, err = require_position(bad)
+            assert pos is None and err["error_code"] == "INVALID_PARAMETERS"
+
+    def test_rejects_missing_axis(self):
+        from servers.utils import require_position
+        pos, err = require_position({"x": 1})
+        assert pos is None and err["error_code"] == "INVALID_PARAMETERS"
+
+    def test_rejects_non_numeric(self):
+        from servers.utils import require_position
+        for bad in ({"x": "1", "y": 2}, {"x": 1, "y": "2"}, {"x": True, "y": 1}):
+            pos, err = require_position(bad)
+            assert pos is None and err["error_code"] == "INVALID_PARAMETERS"
+
+    def test_rejects_non_finite(self):
+        from servers.utils import require_position
+        for bad in ({"x": float("nan"), "y": 1}, {"x": 1, "y": float("inf")}):
+            pos, err = require_position(bad)
+            assert pos is None and err["error_code"] == "INVALID_PARAMETERS"
+
+
 class TestBuildFileLink:
     def test_markdown_link(self, tmp_path):
         from servers.utils import build_file_link
