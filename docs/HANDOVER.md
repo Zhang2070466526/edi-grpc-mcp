@@ -92,7 +92,7 @@ Python 3.12+ / uv 包管理 / FastMCP (mcp >= 1.0.0) / grpcio >= 1.81.0 / protob
 
 CST 电磁仿真依赖：CST 官方 Python 接口（cst.interface / cst.results，通过注册表定位，需本机安装 CST）
 
-PyPI: https://pypi.org/project/edi-grpc-mcp/  |  当前版本：0.1.7
+PyPI: https://pypi.org/project/edi-grpc-mcp/  |  当前版本：0.1.8
 
 ## MCP 工具清单
 
@@ -331,7 +331,7 @@ python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto 
 ## 维护人
 
 - 负责人：--
-- 更新时间：2026-09-03
-- 当前版本：0.1.7
+- 更新时间：2026-09-05
+- 当前版本：0.1.8
 
 

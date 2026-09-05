@@ -442,15 +442,15 @@ edi-grpc-mcp/
 │   │   ├── prompts_component.py        #     器件类（配置 / 选型）
 │   │   └── prompts_report.py           #     报告类（报告 / 诊断）
 │   │
-│   ├── eda/                            #   EDI 工程工具 (34 个)
+│   ├── eda/                            #   EDI 工程工具 (37 个)
 │   │   ├── __init__.py                 #     公共 API re-export
 │   │   ├── config.py                   #     路径检测 / 环境变量加载
 │   │   ├── project_reader.py           #     ProjectReader + S-expression 解析器
 │   │   ├── grpc_client.py              #     gRPC 通信层：FetchEvent + PerformAction 异步模型
 │   │   │                               #     全局 _EDA_LOCK 串行锁，增量 ads_output 收集
 │   │   │                               #     _terminal_result() 统一返回结构
-│   │   ├── project_manage.py           #     工程管理：扫描/打开/关闭/元件/概述/变量分析 (7 工具)
-│   │   ├── simulation.py               #     仿真引擎：同步/异步/网表/ADS 控制器 (7 工具)
+│   │   ├── project_manage.py           #     工程管理：扫描/创建/打开/关闭/元件/概述/变量分析/静态参数 (9 工具)
+│   │   ├── simulation.py               #     仿真引擎：同步/异步/网表/ADS 控制器/抗烧毁 (8 工具)
 │   │   │                               #     ThreadPoolExecutor(1) 串行执行，最多 8 个排队任务
 │   │   ├── simulation_components.py    #     仿真器件管理：10 工具（含 Out 挂载）
 │   │   │                               #     11 步参数校验管线 + wire↔public 名称映射
@@ -458,6 +458,7 @@ edi-grpc-mcp/
 │   │   ├── design_export.py            #     网表查看 + 原理图截图 (2 工具)
 │   │   ├── signal_chain.py             #     信号链路追踪（节点接力算法）(1 工具)
 │   │   ├── model_replace.py            #     CSV 批量模型替换 (1 工具)
+│   │   ├── model_search.py             #     模型库查询 (3 工具)
 │   │   └── edi_launcher.py             #     启动 EDI + 服务诊断/日志读取 (3 工具)
 │   │
 │   ├── turbocharts/                    #   ADS RAW 图表工具 (3 个)
@@ -506,7 +507,7 @@ edi-grpc-mcp/
 │   ├── HANDOVER.md                     #   交接文档（架构设计、技术栈、47 条注意事项）
 │   └── EDI系统接口与外部调用汇总.md    #   EDI 系统全量对外接口
 │
-├── tests/                              # 测试套件 (282 项)
+├── tests/                              # 测试套件 (326 项)
 │   ├── test_chat_service.py            #   28 项：会话/校验/重复调用/上下文/show_image
 │   ├── test_simulation_components.py   #   89 项：参数目录/Schema/校验管线/wire转换
 │   ├── test_simulation.py              #   17 项：任务注册表/事件回调/生命周期
@@ -547,12 +548,12 @@ edi-grpc-mcp/
 
 | 测试文件 | 覆盖范围 | 项数 |
 |---|---|---|
-| `test_simulation_components.py` | 参数目录 / Schema 查询 / 11 步校验 / wire 转换 / 权限 / 别名冲突 | 89 |
+| `test_simulation_components.py` | 参数目录 / Schema 查询 / 11 步校验 / wire 转换 / 权限 / 别名冲突 | 90 |
 | `test_chat_service.py` | 会话隔离 / 工具白名单 / 重复保护 / 上下文更新 / 消息裁剪 | 28 |
 | `test_grpc_client.py` | 终端结果构建 / 日志累积 / 任务隔离 / 异常处理 / 协议不匹配 | 24 |
 | `test_report_generator.py` | 输出路径 / 模型名 / spec_table / charts / components / timeout | 26 |
 | `test_simulation.py` | 任务注册表 / 事件回调 / TaskLifecycle / TASK_NOT_FOUND | 17 |
-| `test_mcp_content.py` | Resources 结构 / Prompts 参数校验 / MCP 协议 list/read/get | 13 |
+| `test_mcp_content.py` | Resources 结构 / Prompts 参数校验 / MCP 协议 list/read/get | 18 |
 | `test_tool_registry.py` | 完整注册验证 / Chat 一致性 / 破坏性工具 / 工具数动态统计 | 7 |
 | `test_project_reader.py` | S-expression 解析 / 元件提取 | 5 |
 | `test_component_tools.py` | 元件列表 / 类型过滤 / 分页 / 参数查询 | 4 |
@@ -560,20 +561,17 @@ edi-grpc-mcp/
 | `test_health.py` | TCP 连接检查 | 2 |
 | `test_compare_results.py` | 多 RAW 对比对齐 / 插值参考轴校验 | 2 |
 | `test_task_runner.py` | 异步队列生命周期 / 结果写回 / 队列满 / 清理 | 9 |
-| `test_cst.py` | 共享函数 / 静态解析 / 查询返回结构 / 导出流程 mock | 22 |
+| `test_cst.py` | 共享函数 / 静态解析 / 查询返回结构 / 导出流程 mock | 23 |
 | `test_utils.py` | 文件校验 / 错误响应 / 地址管理 / 链接生成 | 12 |
-| `test_settings.py` | 环境变量读取 / 范围限制 / 启动校验 | 10 |
+| `test_settings.py` | 环境变量读取 / 范围限制 / 启动校验 | 9 |
 | `test_ansys.py` | HFSS 队列迁移后逻辑（mock COM / AEDT） | 9 |
+| `test_bugfixes.py` | 历史 bug 修复回归测试 | 33 |
+| `test_token_auth.py` | MCP 访问令牌鉴权（token 中间件） | 5 |
 
 ```powershell
-uv run pytest -q                 # 全量 282 项
+uv run pytest -q                 # 全量 326 项
 uv run pytest tests/ -v          # 详细输出
 uv run pytest tests/test_simulation_components.py -v  # 单文件
-```
-
-```powershell
-uv run pytest -q                 # 全量 282 项
-uv run pytest tests/ -v          # 详细输出
 ```
 
 ---

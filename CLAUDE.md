@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Local MCP server (`edi-grpc-mcp`) that exposes 52 tools wrapping EDA/electromagnetic-simulation toolchains so AI clients (Claude Code, OpenClaw) can drive engineering projects via natural language. Windows-only, Python ≥3.10, FastMCP, `uv`-managed. Version in `servers/__init__.py:__version__` (must stay in sync with `pyproject.toml`).
+Local MCP server (`edi-grpc-mcp`) that exposes 55 tools wrapping EDA/electromagnetic-simulation toolchains so AI clients (Claude Code, OpenClaw) can drive engineering projects via natural language. Windows-only, Python ≥3.10, FastMCP, `uv`-managed. Version in `servers/__init__.py:__version__` (must stay in sync with `pyproject.toml`).
 
 Three simulation backends are wrapped in parallel, each with its own integration style:
 
@@ -23,7 +23,7 @@ uv run python start_servers.py
 uv run python start_servers.py --transport stdio    # Claude Code stdio mode
 uv run python start_servers.py --port 9000
 
-# Tests (282 items)
+# Tests (326 items)
 uv run pytest -q                                     # full suite
 uv run pytest tests/test_grpc_client.py -v           # single file
 uv run pytest tests/test_grpc_client.py::test_name -v # single test
