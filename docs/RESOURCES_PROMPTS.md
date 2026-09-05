@@ -43,8 +43,8 @@
 ### 3. `edi://projects` — 工作区工程目录
 
 - **用途**：让 LLM 无需翻文件系统就能知道「工作区有哪些工程」。
-- **干什么**：返回 `workspace` 目录 + `count` + 精简的 `projects` 列表（每个工程只有 name/path/size，不读原理图内容）。
-- **怎么实现**：`_projects_dir()` 确定目录——优先读 settings 的 `projects_dir`（env `PROJECTS_DIR`），留空自动检测 `%USERPROFILE%/EDI-Workspace/projects`；然后复用 `list_epp_projects(folder_path)` 扫描 `.epp` 文件，裁剪成精简清单返回。
+- **干什么**：返回 `workspace`（当前实际加载的工作区目录）+ `projects_dir`（其 `projects` 子目录）+ `count` + 精简的 `projects` 列表（每个工程只有 name/path/size，不读原理图内容）。
+- **怎么实现**：`_current_workspace()` 调用 `GET_CURRENT_WORKSPACE`（即 `get_current_workspace` 工具）拿到当前工作区目录，再扫描其 `projects` 子目录——**不本地猜测 `~/EDI-Workspace/projects`、不读 `projects_dir` 配置，接口返回什么目录就用什么**；复用 `list_epp_projects(folder_path)` 扫描 `.epp` 文件，裁剪成精简清单返回。工作区获取失败时返回空清单 + `warning`。
 
 ### 4. `edi://reference/simulation-components` — 仿真器件参数参考
 

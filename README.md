@@ -8,7 +8,7 @@
 
 ## ✨ 亮点
 
-- 🛠️ **55 个 MCP 工具** — 工程管理 / 仿真 / 器件配置 / 模型选型 / 信号链分析，全链路覆盖
+- 🛠️ **64 个 MCP 工具** — 工程管理 / 仿真 / 器件配置 / 模型选型 / 信号链分析，全链路覆盖
 - ⚡ **三大仿真引擎** — EDI gRPC · ANSYS HFSS · CST，一个服务统一封装
 - 🧠 **自然语言驱动** — 接入 Claude Code / OpenClaw，告别鼠标点击
 - 🔒 **本地安全** — 全本地运行，工程数据不出机器
@@ -29,9 +29,9 @@ AI 客户端 (Claude Code / OpenClaw)
    │  Streamable HTTP (stateless) 或 stdio
    │  POST /mcp  │  initialize → tools/list → tools/call
    ▼
-EDI gRPC MCP 服务 (FastMCP, 55 工具, 6 Resource, 8 Prompt)
+EDI gRPC MCP 服务 (FastMCP, 64 工具, 6 Resource, 8 Prompt)
    │
-   ├── EDA gRPC 工具 (37) ──→ EDI 客户端 (127.0.0.1:50055)
+   ├── EDA gRPC 工具 (46) ──→ EDI 客户端 (127.0.0.1:50055)
    │     FetchEvent ← PerformAction 异步模型，增量 ads_output
    │
    ├── TurboCharts (3) ──→ turbocharts_app.exe (subprocess)
@@ -93,7 +93,7 @@ curl http://127.0.0.1:50026/health     # 进程 + gRPC 状态
 → {"status":"ok","mcp_ready":true,"eda_grpc_ready":true}
 
 curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
-→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":55}
+→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":64}
 ```
 
 ### 客户端接入
@@ -120,7 +120,7 @@ curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
 
 | 方式 | 说明 |
 |---|---|
-| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 55 个工具 |
+| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 64 个工具 |
 | **聊天界面** | 浏览器访问 `http://127.0.0.1:50026/ui`，内置 LLM 多轮工具闭环 |
 | **Python 调用** | `from servers.eda import list_epp_projects` 直接调用 |
 
@@ -136,7 +136,7 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 
 ---
 
-## 工具一览（55 个）
+## 工具一览（64 个）
 
 > 工具数量由运行时动态统计，此处为当前快照。权威值见 `/ready` 的 `tool_count`（或 `tests/test_tool_registry.py` 的 `required` 列表）。
 
@@ -190,7 +190,7 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 | `capture_schematic` | 截取原理图为图片 |
 | `get_signal_chain` | 追踪信号链路（节点接力算法） |
 
-### 模型与启动
+### 模型库（6 个）
 
 | 工具 | 说明 |
 |---|---|
@@ -198,9 +198,33 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 | `get_model_category_params` | 获取模型分类及参数列表 |
 | `search_public_models` | 按子类查询公共模型库 |
 | `search_personal_models` | 按子类查询个人模型库 |
+| `load_performance_component_from_mms` | 从 MMS 导入性能模型到本地模型库 |
+| `add_performance_component` | 放置模型库中的性能器件到原理图 |
+
+### 启动 / 诊断（3 个）
+
+| 工具 | 说明 |
+|---|---|
 | `launch_edi` | 启动 EDI 客户端并等待 gRPC 就绪 |
 | `get_service_status` | 返回 gRPC 通道状态、队列信息 |
 | `get_service_logs` | 读取 EDI 服务端日志并分析异常 |
+
+### 工作区（3 个）
+
+| 工具 | 说明 |
+|---|---|
+| `create_workspace` | 创建工作区（不自动切换） |
+| `switch_workspace` | 设置下次启动使用的工作区 |
+| `get_current_workspace` | 查询当前实际加载的工作区目录 |
+
+### 原理图扩展（4 个）
+
+| 工具 | 说明 |
+|---|---|
+| `list_ideal_components` | 列出内置器件类型及说明 |
+| `add_ideal_component` | 按指定坐标新增内置器件 |
+| `clear_schematic` | 清空原理图（破坏性，需 confirm_clear） |
+| `add_wire` | 连接两个器件的指定引脚 |
 
 ### ANSYS HFSS（6 个）
 
@@ -260,7 +284,7 @@ Streamable HTTP 模式启用 `stateless_http=True`，服务不保留 MCP 会话�
 | 路由 | 方法 | 说明 | 响应示例 |
 |---|---|---|---|
 | `/health` | GET | 进程存活 + gRPC 连接状态 | `{"status":"ok","mcp_ready":true,"eda_grpc_ready":true}` |
-| `/ready` | GET | 服务是否完成初始化（启动中返回 503） | `{"status":"ready","transport":"streamable-http","stateless":true,"tool_count":55}` |
+| `/ready` | GET | 服务是否完成初始化（启动中返回 503） | `{"status":"ready","transport":"streamable-http","stateless":true,"tool_count":64}` |
 | `/mcp` | POST | MCP 协议端点（Streamable HTTP） | MCP JSON-RPC 响应 |
 | `/ui` | GET | 内置聊天界面 | HTML 页面 |
 | `/chat` | POST | 聊天 API（LLM 多轮工具闭环） | `{"success":true,"reply":"...","activities":[...]}` |
@@ -442,7 +466,7 @@ edi-grpc-mcp/
 │   │   ├── prompts_component.py        #     器件类（配置 / 选型）
 │   │   └── prompts_report.py           #     报告类（报告 / 诊断）
 │   │
-│   ├── eda/                            #   EDI 工程工具 (37 个)
+│   ├── eda/                            #   EDI 工程工具 (46 个)
 │   │   ├── __init__.py                 #     公共 API re-export
 │   │   ├── config.py                   #     路径检测 / 环境变量加载
 │   │   ├── project_reader.py           #     ProjectReader + S-expression 解析器
@@ -458,8 +482,10 @@ edi-grpc-mcp/
 │   │   ├── design_export.py            #     网表查看 + 原理图截图 (2 工具)
 │   │   ├── signal_chain.py             #     信号链路追踪（节点接力算法）(1 工具)
 │   │   ├── model_replace.py            #     CSV 批量模型替换 (1 工具)
-│   │   ├── model_search.py             #     模型库查询 (3 工具)
-│   │   └── edi_launcher.py             #     启动 EDI + 服务诊断/日志读取 (3 工具)
+│   │   ├── model_library.py            #     模型库：查询/MMS 导入/性能器件放置 (5 工具)
+│   │   ├── edi_launcher.py             #     启动 EDI + 服务诊断/日志读取 (3 工具)
+│   │   ├── workspace_ops.py            #     工作区：创建/切换/查询 (3 工具)
+│   │   └── schematic_ops.py            #     原理图扩展操作 (4 工具)
 │   │
 │   ├── turbocharts/                    #   ADS RAW 图表工具 (3 个)
 │   │   ├── __init__.py                 #     公共 API re-export
@@ -500,14 +526,14 @@ edi-grpc-mcp/
 │
 ├── docs/                               # 项目文档
 │   ├── DEPLOY.md                       #   部署指南（打包产物使用、客户端配置）
-│   ├── TOOLS_API.md                    #   工具 API（55 个工具完整签名+返回值示例）
+│   ├── TOOLS_API.md                    #   工具 API（64 个工具完整签名+返回值示例）
 │   ├── HTTP_API.md                     #   HTTP 接口（请求体、响应体、成功/失败情况）
 │   ├── IMPLEMENTATION.md               #   实现原理（通信类型、校验管线、并发控制、工具动机与依赖）
 │   ├── RESOURCES_PROMPTS.md            #   Resource & Prompt 说明（6 Resource + 8 Prompt 的用途与实现）
 │   ├── HANDOVER.md                     #   交接文档（架构设计、技术栈、47 条注意事项）
 │   └── EDI系统接口与外部调用汇总.md    #   EDI 系统全量对外接口
 │
-├── tests/                              # 测试套件 (326 项)
+├── tests/                              # 测试套件 (346 项)
 │   ├── test_chat_service.py            #   28 项：会话/校验/重复调用/上下文/show_image
 │   ├── test_simulation_components.py   #   89 项：参数目录/Schema/校验管线/wire转换
 │   ├── test_simulation.py              #   17 项：任务注册表/事件回调/生命周期
@@ -569,7 +595,7 @@ edi-grpc-mcp/
 | `test_token_auth.py` | MCP 访问令牌鉴权（token 中间件） | 5 |
 
 ```powershell
-uv run pytest -q                 # 全量 326 项
+uv run pytest -q                 # 全量 346 项
 uv run pytest tests/ -v          # 详细输出
 uv run pytest tests/test_simulation_components.py -v  # 单文件
 ```
@@ -592,7 +618,7 @@ powershell -File scripts/build.ps1  # PyInstaller
 | 文档 | 说明 |
 |---|---|
 | [部署指南](./docs/DEPLOY.md) | 打包产物使用、客户端配置 |
-| [工具 API](./docs/TOOLS_API.md) | 全部 55 个工具参数、返回值、示例 |
+| [工具 API](./docs/TOOLS_API.md) | 全部 64 个工具参数、返回值、示例 |
 | [HTTP 接口](./docs/HTTP_API.md) | 全部 HTTP 路由的请求体、响应体、成功/失败情况 |
 | [实现原理](./docs/IMPLEMENTATION.md) | 5 种通信类型、校验管线、并发控制、工具动机与依赖 |
 | [Resource & Prompt](./docs/RESOURCES_PROMPTS.md) | 6 Resource + 8 Prompt 的用途、功能与实现 |

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Local MCP server (`edi-grpc-mcp`) that exposes 55 tools wrapping EDA/electromagnetic-simulation toolchains so AI clients (Claude Code, OpenClaw) can drive engineering projects via natural language. Windows-only, Python ≥3.10, FastMCP, `uv`-managed. Version in `servers/__init__.py:__version__` (must stay in sync with `pyproject.toml`).
+Local MCP server (`edi-grpc-mcp`) that exposes 64 tools wrapping EDA/electromagnetic-simulation toolchains so AI clients (Claude Code, OpenClaw) can drive engineering projects via natural language. Windows-only, Python ≥3.10, FastMCP, `uv`-managed. Version in `servers/__init__.py:__version__` (must stay in sync with `pyproject.toml`).
 
 Three simulation backends are wrapped in parallel, each with its own integration style:
 
@@ -23,7 +23,7 @@ uv run python start_servers.py
 uv run python start_servers.py --transport stdio    # Claude Code stdio mode
 uv run python start_servers.py --port 9000
 
-# Tests (326 items)
+# Tests (346 items)
 uv run pytest -q                                     # full suite
 uv run pytest tests/test_grpc_client.py -v           # single file
 uv run pytest tests/test_grpc_client.py::test_name -v # single test
@@ -41,7 +41,7 @@ There is no linter/formatter configured. Tests are the verification surface.
 
 ## Architecture
 
-**Single global FastMCP instance.** `servers/__init__.py` creates `mcp = FastMCP(...)`. Tools are registered by `@mcp.tool()` decorators that run at import time. `servers/registry_server.py` is the import hub — importing each `servers/<module>/<file>` triggers registration, and it also wires custom HTTP routes. There is no central tool registry to update when adding a tool; the count (55) is dynamic and asserted by `tests/test_tool_registry.py` (`required` list — update it when adding/removing tools). `start_servers.py` is the CLI entrypoint, not where tools live.
+**Single global FastMCP instance.** `servers/__init__.py` creates `mcp = FastMCP(...)`. Tools are registered by `@mcp.tool()` decorators that run at import time. `servers/registry_server.py` is the import hub — importing each `servers/<module>/<file>` triggers registration, and it also wires custom HTTP routes. There is no central tool registry to update when adding a tool; the count (64) is dynamic and asserted by `tests/test_tool_registry.py` (`required` list — update it when adding/removing tools). `start_servers.py` is the CLI entrypoint, not where tools live.
 
 **Configuration is centralized.** `servers/settings.py` exposes a frozen `Settings` dataclass singleton via `get_settings()` (lru_cache). All env-var reads live there (`_read_str/_read_bool/_read_int`); modules must never call `os.getenv` directly. `.env` is loaded at import. Path fields store raw env values; auto-detection logic lives in each module's `config.py`, not in settings.
 

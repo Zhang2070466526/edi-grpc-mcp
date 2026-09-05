@@ -19,7 +19,10 @@ from servers.eda.project_manage import list_epp_projects
 - **[工程管理（9 个）](#工程管理9个)**：创建 / 扫描 / 打开 / 关闭工程、查询器件、分析变量
 - **[仿真（8 个）](#仿真8个)**：同步 / 异步仿真、网表仿真、抗烧毁评估、任务查询
 - **[导出与分析（3 个）](#导出与分析3个)**：导出网表、截图原理图、信号链路追踪
-- **[模型与启动（4 个）](#模型与启动4个)**：批量替换模型、启动 EDI、服务诊断、日志读取
+- **[模型库（6 个）](#模型库6个)**：模型分类/查询/搜索、MMS 导入、性能器件放置
+- **[工作区（3 个）](#工作区3个)**：创建 / 切换 / 查询当前工作区
+- **[原理图扩展（4 个）](#原理图扩展4个)**：内置器件、清空原理图、连线
+- **[启动 / 诊断（3 个）](#启动--诊断3个)**：启动 EDI、服务诊断、日志读取
 - **[ANSYS HFSS（6 个）](#ansys-hfss6个)**：AEDT 工程开关、HFSS 异步仿真
 - **[CST 电磁仿真（5 个）](#cst电磁仿真5个)**：异步求解 .cst、导出 S 参数 / 远场方向图
 - **[图表（3 个）](#图表3个)**：RAW 曲线解析、转图、结果对比
@@ -602,7 +605,7 @@ get_signal_chain(project_path: str, start_component: str = "",
 
 ---
 
-## 模型与启动（4 个）
+## 模型库（6 个）
 
 ### `replace_models_from_csv`
 
@@ -625,7 +628,7 @@ replace_models_from_csv(project_path: str, csv_path: str, timeout_seconds: int =
 ### `get_model_category_params`
 
 ```python
-from servers.eda.model_search import get_model_category_params
+from servers.eda.model_library import get_model_category_params
 
 get_model_category_params(timeout_seconds: int = 60) -> dict
 ```
@@ -641,7 +644,7 @@ get_model_category_params(timeout_seconds: int = 60) -> dict
 ### `search_public_models`
 
 ```python
-from servers.eda.model_search import search_public_models
+from servers.eda.model_library import search_public_models
 
 search_public_models(sub_type: str, filters: list | None = None, timeout_seconds: int = 60) -> dict
 ```
@@ -659,7 +662,7 @@ search_public_models(sub_type: str, filters: list | None = None, timeout_seconds
 ### `search_personal_models`
 
 ```python
-from servers.eda.model_search import search_personal_models
+from servers.eda.model_library import search_personal_models
 
 search_personal_models(sub_type: str, filters: list | None = None, timeout_seconds: int = 60) -> dict
 ```
@@ -673,6 +676,172 @@ search_personal_models(sub_type: str, filters: list | None = None, timeout_secon
 | `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
 
 ---
+
+### `load_performance_component_from_mms`
+
+```python
+from servers.eda.model_library import load_performance_component_from_mms
+
+load_performance_component_from_mms(original_uuid: str, timeout_seconds: int = 90) -> dict
+```
+
+从 MMS（模型管理系统）下载性能模型并导入当前工作区本地模型库。无需 `.epp`、`project_path` 或工作区路径，不要求打开工程。下载、解压并校验 `library.ep` 后合并至本地模型库，随后复制仿真文件并发起模型库重新扫描（下载超时 60 秒）。成功只表示已发起扫描，不代表异步扫描完成；导入后需等待扫描完成再调用 `add_performance_component`。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `original_uuid` | str | 是 | — | MMS 原始模型 UUID |
+| `timeout_seconds` | int | 否 | 90 | 最长等待秒数 |
+
+---
+
+### `add_performance_component`
+
+```python
+from servers.eda.model_library import add_performance_component
+
+add_performance_component(project_path: str, component_uuid: str, position: dict, timeout_seconds: int = 120) -> dict
+```
+
+将工作区模型库中的 Component 放置到指定工程原理图并保存。`component_uuid` 是模型库 Component UUID（非 MMS 的 original_uuid），坐标会吸附到网格。不自动下载模型、不设置参数、不避让重叠、不返回实例名。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `project_path` | str | 是 | — | `.epp` 文件绝对路径 |
+| `component_uuid` | str | 是 | — | 模型库 Component UUID |
+| `position` | dict | 是 | — | 场景坐标 `{"x": .., "y": ..}` |
+| `timeout_seconds` | int | 否 | 120 | 最长等待秒数 |
+
+---
+
+## 工作区（3 个）
+
+### `create_workspace`
+
+```python
+from servers.eda.workspace_ops import create_workspace
+
+create_workspace(path: str, timeout_seconds: int = 60) -> dict
+```
+
+创建一个新的工作区，不自动切换。路径无效、已有合法工作区或目标目录非空时失败。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `path` | str | 是 | — | 工作区目录绝对路径 |
+| `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
+
+---
+
+### `switch_workspace`
+
+```python
+from servers.eda.workspace_ops import switch_workspace
+
+switch_workspace(path: str, timeout_seconds: int = 60) -> dict
+```
+
+设置下次启动程序时使用的工作区，当前工作区保持不变。仅保存最近使用的工作区路径，下次启动生效。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `path` | str | 是 | — | 工作区目录绝对路径 |
+| `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
+
+---
+
+### `get_current_workspace`
+
+```python
+from servers.eda.workspace_ops import get_current_workspace
+
+get_current_workspace(timeout_seconds: int = 60) -> dict
+```
+
+查询程序当前实际加载的工作区目录。只读查询，不修改状态。若调用了 `switch_workspace` 但尚未重启，仍返回当前工作区（不是下次启动的路径）。成功时 `details` 含 `workspace_path`。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
+
+---
+
+## 原理图扩展（4 个）
+
+### `list_ideal_components`
+
+```python
+from servers.eda.schematic_ops import list_ideal_components
+
+list_ideal_components(timeout_seconds: int = 60) -> dict
+```
+
+列出内置器件类型及其简要说明。数据读取 ComponentToolBar 的 `symbolDescriptionMap`，不需要打开工程。每项含 `component_type` 和 `description`。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
+
+---
+
+### `add_ideal_component`
+
+```python
+from servers.eda.schematic_ops import add_ideal_component
+
+add_ideal_component(project_path: str, component_type: str, position: dict, timeout_seconds: int = 120) -> dict
+```
+
+按指定坐标新增内置器件，使用工厂默认参数，不自动排布。严格按场景坐标放置，不做网格吸附、自动排布或重叠避让。`component_type` 区分大小写，支持范围同 `create_simulation_component` 的工厂类型。不接收 `parameters`，后续用 `update_simulation_component` 设参。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `project_path` | str | 是 | — | `.epp` 文件绝对路径 |
+| `component_type` | str | 是 | — | 器件工厂注册类型名（如 "R"） |
+| `position` | dict | 是 | — | 场景坐标 `{"x": .., "y": ..}` |
+| `timeout_seconds` | int | 否 | 120 | 最长等待秒数 |
+
+---
+
+### `clear_schematic`
+
+```python
+from servers.eda.schematic_ops import clear_schematic
+
+clear_schematic(project_path: str, confirm_clear: bool = False, timeout_seconds: int = 300) -> dict
+```
+
+清空工程原理图中的全部器件和网段并保存（破坏性操作）。会删除全部器件（含控制器、Var、Out）、独立文本以及全部网段、连线和连接点。需显式传 `confirm_clear=True` 才会执行（双重确认）；调用即表示确认，不额外弹确认框。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `project_path` | str | 是 | — | `.epp` 文件绝对路径 |
+| `confirm_clear` | bool | 否 | False | 必须显式 True 才执行 |
+| `timeout_seconds` | int | 否 | 300 | 最长等待秒数 |
+
+---
+
+### `add_wire`
+
+```python
+from servers.eda.schematic_ops import add_wire
+
+add_wire(project_path: str, first_instance_name: str, first_pin_index: int, second_instance_name: str, second_pin_index: int, timeout_seconds: int = 120) -> dict
+```
+
+连接两个器件的指定引脚，按需创建或合并网段并保存。`pin_index` 是 0 开始的内部引脚编号（非界面端口名称），范围 0~2147483647。拒绝同一引脚自连接。新增连线及网段合并作为可撤销操作，提交后保存工程。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `project_path` | str | 是 | — | `.epp` 文件绝对路径 |
+| `first_instance_name` | str | 是 | — | 第一个器件实例名 |
+| `first_pin_index` | int | 是 | — | 第一个器件引脚编号（0 开始） |
+| `second_instance_name` | str | 是 | — | 第二个器件实例名 |
+| `second_pin_index` | int | 是 | — | 第二个器件引脚编号（0 开始） |
+| `timeout_seconds` | int | 否 | 120 | 最长等待秒数 |
+
+---
+
+## 启动 / 诊断（3 个）
 
 ### `launch_edi`
 
@@ -1280,9 +1449,9 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 
 ## Resources & Prompts
 
-除了 Tool（启动时动态统计，当前 55 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
+除了 Tool（启动时动态统计，当前 64 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
 
-### Resources（5 个）
+### Resources（6 个）
 
 | URI | MIME | 说明 |
 |---|---|---|
@@ -1294,7 +1463,7 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 
 > Resource 是只读上下文，由客户端主动拉取。标准 MCP 客户端可通过 `resources/list` 和 `resources/read` 访问。
 
-### Prompts（5 个）
+### Prompts（8 个）
 
 | Prompt | 参数 | 用途 |
 |---|---|---|
