@@ -8,6 +8,7 @@ from __future__ import annotations
 import math
 import threading
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -65,6 +66,18 @@ def require_position(position: Any) -> tuple[dict[str, Any] | None, dict[str, An
     if not (math.isfinite(x) and math.isfinite(y)):
         return None, error_response("INVALID_PARAMETERS", "position 的 x、y 必须是有限数值")
     return {"x": x, "y": y}, None
+
+
+def require_uuid(value: str, *, label: str = "uuid") -> tuple[str, dict[str, Any] | None]:
+    """校验字符串为合法 UUID（如 12345678-1234-4234-8234-123456789abc），返回 (stripped_value, error)。"""
+    s = (value or "").strip()
+    if not s:
+        return "", error_response("INVALID_PARAMETERS", f"{label} 不能为空")
+    try:
+        uuid.UUID(s)
+    except (ValueError, AttributeError):
+        return "", error_response("INVALID_PARAMETERS", f"{label} 不是合法的 UUID: {s}")
+    return s, None
 
 
 # ── 统一响应构建 ──

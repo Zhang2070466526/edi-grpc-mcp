@@ -1,8 +1,12 @@
-"""EDA 模型库工具 — 模型分类/查询/搜索 + MMS 导入 + 性能器件放置。
+"""EDA 模型库 / 原理图库工具 — 模型分类/搜索 + MMS 导入 + 原理图库搜索/使用。
 
-五个工具均围绕模型库领域：前三个为只读查询（不需要 project_path），
-load_performance_component_from_mms 从 MMS 导入性能模型到本地模型库，
-add_performance_component 将工作区模型库中的 Component 放置到原理图。
+模型库领域：get_model_category_params / search_public_models / search_personal_models
+为只读查询；load_performance_component_from_mms 从 MMS 导入性能模型；
+add_performance_component 将模型库 Component 放置到原理图。
+
+原理图库领域：search_schematic_from_public_library / search_schematic_from_personal_library
+搜索在线原理图库；use_schematic_from_library_create_project /
+use_schematic_from_library_import 用库内容创建 / 导入工程。
 """
 
 from __future__ import annotations
@@ -12,7 +16,7 @@ from typing import Any
 from proto import ecserver_pb2
 from servers.eda.config import validate_project_path
 from servers.eda.grpc_client import call_grpc
-from servers.utils import require_nonempty, require_position
+from servers.utils import require_nonempty, require_position, require_uuid
 from servers import mcp
 
 
@@ -56,6 +60,23 @@ def get_model_category_params(timeout_seconds: int = 60,
     return result
 
 
+def _search_models(
+        sub_type: str,
+        filters: list | None,
+        task_type: int,
+        timeout_seconds: int,
+) -> dict[str, Any]:
+    """按子类查询模型库（公共/个人复用，仅 task_type 不同）。"""
+    sub_type, err = require_nonempty(sub_type, label="sub_type")
+    if err:
+        return err
+    payload: dict[str, Any] = {
+        "sub_type": sub_type,
+        "filters": filters if filters is not None else [],
+    }
+    return call_grpc(task_type, payload, timeout_seconds, max_timeout_seconds=300)
+
+
 @mcp.tool()
 def search_public_models(
         sub_type: str,
@@ -76,19 +97,7 @@ def search_public_models(
     Returns:
         gRPC 统一返回结构，业务字段（code/message/data）在 details 中。
     """
-    sub_type, err = require_nonempty(sub_type, label="sub_type")
-    if err:
-        return err
-    payload: dict[str, Any] = {
-        "sub_type": sub_type,
-        "filters": filters if filters is not None else [],
-    }
-    return call_grpc(
-        ecserver_pb2.SEARCH_PUBLIC_MODELS,
-        payload,
-        timeout_seconds,
-        max_timeout_seconds=300,
-    )
+    return _search_models(sub_type, filters, ecserver_pb2.SEARCH_PUBLIC_MODELS, timeout_seconds)
 
 
 @mcp.tool()
@@ -111,19 +120,7 @@ def search_personal_models(
     Returns:
         gRPC 统一返回结构，业务字段（code/message/data）在 details 中。
     """
-    sub_type, err = require_nonempty(sub_type, label="sub_type")
-    if err:
-        return err
-    payload: dict[str, Any] = {
-        "sub_type": sub_type,
-        "filters": filters if filters is not None else [],
-    }
-    return call_grpc(
-        ecserver_pb2.SEARCH_PERSONAL_MODELS,
-        payload,
-        timeout_seconds,
-        max_timeout_seconds=300,
-    )
+    return _search_models(sub_type, filters, ecserver_pb2.SEARCH_PERSONAL_MODELS, timeout_seconds)
 
 
 @mcp.tool()
@@ -149,7 +146,7 @@ def load_performance_component_from_mms(
     Returns:
         gRPC 统一返回结构，成功提示或失败原因在 message 中。
     """
-    original_uuid, err = require_nonempty(original_uuid, label="original_uuid")
+    original_uuid, err = require_uuid(original_uuid, label="original_uuid")
     if err:
         return err
     return call_grpc(
@@ -188,7 +185,7 @@ def add_performance_component(
         gRPC 统一返回结构，成功提示或失败原因在 message 中。
     """
     resolved = validate_project_path(project_path)
-    component_uuid, err = require_nonempty(component_uuid, label="component_uuid")
+    component_uuid, err = require_uuid(component_uuid, label="component_uuid")
     if err:
         return err
     pos, err = require_position(position)
@@ -197,6 +194,123 @@ def add_performance_component(
     return call_grpc(
         ecserver_pb2.ADD_PERFORMANCE_COMPONENT,
         {"project_path": resolved, "component_uuid": component_uuid, "position": pos},
+        timeout_seconds,
+        max_timeout_seconds=300,
+    )
+
+
+def _search_schematic(search_name: str, task_type: int, timeout_seconds: int) -> dict[str, Any]:
+    """按拓扑描述查询原理图库（公共/个人复用，仅 task_type 不同）。"""
+    return call_grpc(
+        task_type,
+        {"search_name": search_name or ""},
+        timeout_seconds,
+        max_timeout_seconds=60,
+    )
+
+
+@mcp.tool()
+def search_schematic_from_public_library(
+        search_name: str,
+        timeout_seconds: int = 30,
+) -> dict[str, Any]:
+    """按拓扑描述查询公共原理图库。
+
+    用法："搜索公共原理图库"、"查一下有没有功放相关的原理图"
+
+    search_name 是必需的拓扑描述关键词，服务端固定转换为 topology_description
+    过滤条件，不接收自定义 filters。不需要 project_path、工作区或已打开工程。
+    使用本工具前应提示用户提供对应的拓扑描述。
+
+    Args:
+        search_name: 拓扑描述关键词（必需，如 "功放"）。
+        timeout_seconds: 最长等待秒数，默认 30（服务端查询超时 10 秒）。
+
+    Returns:
+        gRPC 统一返回结构，成功时 details 含 count 和 results
+        （每项 id/schematic_id/name/properties）。
+    """
+    return _search_schematic(search_name, ecserver_pb2.SEARCH_SCHEMATIC_FROM_PUBLIC_LIBRARY, timeout_seconds)
+
+
+@mcp.tool()
+def search_schematic_from_personal_library(
+        search_name: str,
+        timeout_seconds: int = 30,
+) -> dict[str, Any]:
+    """按拓扑描述查询个人原理图库。
+
+    用法："搜索我的原理图库"、"查一下个人库里的原理图"
+
+    search_name 是必需的拓扑描述关键词，使用前应提示用户提供对应拓扑描述。
+    参数与返回结构同 search_schematic_from_public_library，仅查询范围为个人库。
+
+    Args:
+        search_name: 拓扑描述关键词（必需，如 "功放"）。
+        timeout_seconds: 最长等待秒数，默认 30。
+    """
+    return _search_schematic(search_name, ecserver_pb2.SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY, timeout_seconds)
+
+
+@mcp.tool()
+def use_schematic_from_library_create_project(
+        file_uuid: str,
+        timeout_seconds: int = 180,
+) -> dict[str, Any]:
+    """从在线原理图库下载内容，在当前工作区创建并打开新工程。
+
+    用法："用原理图库里的这个原理图创建一个新工程"
+
+    file_uuid 是在线原理图文件的合法 UUID（取自搜索结果的 id）。服务端异步下载
+    ZIP、校验包内恰好一个 .epp 及 schematics/main/schematic.ep、安装随包模型/符号/
+    仿真依赖；缺少 Component 时从 MMS 下载并等待模型库扫描。下载超时 120 秒，
+    模型库扫描超时 60 秒。同名工程目录存在则失败、不覆盖。
+
+    Args:
+        file_uuid: 在线原理图文件的 UUID。
+        timeout_seconds: 最长等待秒数，默认 180。
+
+    Returns:
+        gRPC 统一返回结构，成功时 details 含 project_path/schematic_uuid/
+        component_count/net_segment_count。
+    """
+    file_uuid, err = require_uuid(file_uuid, label="file_uuid")
+    if err:
+        return err
+    return call_grpc(
+        ecserver_pb2.USE_SCHEMATIC_FROM_LIBRARY_CREATE_PROJECT,
+        {"file_uuid": file_uuid},
+        timeout_seconds,
+        max_timeout_seconds=300,
+    )
+
+
+@mcp.tool()
+def use_schematic_from_library_import(
+        file_uuid: str,
+        project_path: str,
+        timeout_seconds: int = 180,
+) -> dict[str, Any]:
+    """从在线原理图库下载内容，替换指定工程的当前原理图并保存。
+
+    用法："用原理图库里的这个原理图替换当前工程"
+
+    ⚠️ 此操作会替换指定工程的原理图，请确认 project_path。与 create 方式不同，
+    目标是客户端指定的已有 .epp 工程（已打开复用窗口，否则打开）。下载/扫描
+    超时与依赖安装规则同 use_schematic_from_library_create_project。
+
+    Args:
+        file_uuid: 在线原理图文件的 UUID。
+        project_path: .epp 工程文件绝对路径。
+        timeout_seconds: 最长等待秒数，默认 180。
+    """
+    file_uuid, err = require_uuid(file_uuid, label="file_uuid")
+    if err:
+        return err
+    resolved = validate_project_path(project_path)
+    return call_grpc(
+        ecserver_pb2.USE_SCHEMATIC_FROM_LIBRARY_IMPORT,
+        {"file_uuid": file_uuid, "project_path": resolved},
         timeout_seconds,
         max_timeout_seconds=300,
     )

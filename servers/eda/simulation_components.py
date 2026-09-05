@@ -986,7 +986,7 @@ def attach_out_component(
     if err:
         return err
 
-    if pin_index is not None and (not isinstance(pin_index, int) or pin_index < 0):
+    if pin_index is not None and (isinstance(pin_index, bool) or not isinstance(pin_index, int) or pin_index < 0):
         return error_response("INVALID_PARAMETERS", "pin_index 必须是非负整数")
 
     extras = {"target_instance_name": target_instance_name}

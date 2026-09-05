@@ -1,4 +1,4 @@
-r"""EDA gRPC MCP 工具包 -- 通过 ExternalCall gRPC 操作 EDI 工程（46 个工具）。
+r"""EDA gRPC MCP 工具包 -- 通过 ExternalCall gRPC 操作 EDI 工程（51 个工具）。
 
 按文件列工具与用途：
 
@@ -44,9 +44,10 @@ simulation_components.py — 仿真器件（10 工具）
     replace_schematic_from_file      从 .ep 文件整体替换原理图
     attach_out_component             为器件引脚挂载 Out 器件
 
-design_export.py — 网表/截图（2 工具）
-    export_project_netlist  查看/导出工程网表文件
-    capture_schematic       截取原理图并保存为图片
+design_export.py — 网表/截图/CSV（3 工具）
+    export_project_netlist             查看/导出工程网表文件
+    capture_schematic                  截取原理图并保存为图片
+    export_schematic_components_to_csv 导出器件为 CSV（供模型替换）
 
 signal_chain.py — 信号链追踪（1 工具）
     get_signal_chain  解析网表按「节点↔器件接力」追踪信号流
@@ -54,12 +55,16 @@ signal_chain.py — 信号链追踪（1 工具）
 model_replace.py — 模型替换（1 工具）
     replace_models_from_csv  根据 CSV 文件批量替换元件模型
 
-model_library.py — 模型库（5 工具）
+model_library.py — 模型库 / 原理图库（9 工具）
     get_model_category_params           获取模型分类及参数列表
     search_public_models                按子类查询公共模型库
     search_personal_models              按子类查询个人模型库
     load_performance_component_from_mms 从 MMS 导入性能模型到本地模型库
     add_performance_component           将模型库 Component 放置到原理图
+    search_schematic_from_public_library       按拓扑描述查询公共原理图库
+    search_schematic_from_personal_library     按拓扑描述查询个人原理图库
+    use_schematic_from_library_create_project  用原理图库内容创建新工程
+    use_schematic_from_library_import          用原理图库内容替换工程原理图
 
 edi_launcher.py — 启动/诊断（3 工具）
     launch_edi          启动 EDI 客户端并等待 gRPC 就绪
@@ -117,10 +122,11 @@ from servers.eda.simulation_components import (  # noqa: F401
     attach_out_component,
 )
 
-# -- 网表/截图 --
+# -- 网表/截图/CSV --
 from servers.eda.design_export import (  # noqa: F401
     export_project_netlist,
     capture_schematic,
+    export_schematic_components_to_csv,
 )
 
 # -- 信号链追踪 --
@@ -129,13 +135,17 @@ from servers.eda.signal_chain import get_signal_chain  # noqa: F401
 # -- 模型替换 --
 from servers.eda.model_replace import replace_models_from_csv  # noqa: F401
 
-# -- 模型库 --
+# -- 模型库 / 原理图库 --
 from servers.eda.model_library import (  # noqa: F401
     get_model_category_params,
     search_public_models,
     search_personal_models,
     load_performance_component_from_mms,
     add_performance_component,
+    search_schematic_from_public_library,
+    search_schematic_from_personal_library,
+    use_schematic_from_library_create_project,
+    use_schematic_from_library_import,
 )
 
 # -- 启动/诊断 --

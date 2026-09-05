@@ -11,9 +11,13 @@ from pathlib import Path
 from typing import Any
 
 import grpc
+import hashlib
 
 from servers import mcp, __version__ as SERVER_VERSION
 from servers.eda.config import EDA_GRPC_SERVER
+from servers.eda.grpc_client import get_cached_channel, is_queue_busy
+from servers.eda.project_manage import list_epp_projects
+from servers.eda.workspace_ops import get_current_workspace
 from servers.multimodal_vision import OPENCLAW_WORKSPACE_PATH
 
 
@@ -56,8 +60,6 @@ def resource_service_overview() -> dict[str, Any]:
 )
 def resource_service_status() -> dict[str, Any]:
     """返回运行时状态，与 get_service_status 共享数据源。"""
-    from servers.eda.grpc_client import get_cached_channel, is_queue_busy
-
     target = EDA_GRPC_SERVER
     ch = get_cached_channel(target)
     state = "unknown"
@@ -84,7 +86,6 @@ def _current_workspace() -> str:
     不再本地猜测 ~/EDI-Workspace/projects，也不读 projects_dir 配置：
     接口返回什么目录，就用什么目录当工作区。
     """
-    from servers.eda.workspace_ops import get_current_workspace
     result = get_current_workspace()
     if not result.get("success"):
         return ""
@@ -93,13 +94,11 @@ def _current_workspace() -> str:
 
 def _current_tools_names() -> list[str]:
     """返回当前已注册工具的排序名列表（与 /ready 的 tools_hash 同一数据源）。"""
-    from servers import mcp
     return sorted(t.name for t in mcp._tool_manager._tools.values())
 
 
 def _current_tools_hash() -> str:
     """工具集版本指纹（与 /ready 的 tools_hash 同一算法：md5(sorted 名)[:8]）。"""
-    import hashlib
     return hashlib.md5(",".join(_current_tools_names()).encode()).hexdigest()[:8]
 
 
@@ -112,7 +111,6 @@ def _current_tools_hash() -> str:
 )
 def resource_projects_directory() -> dict[str, Any]:
     """查询当前工作区（GET_CURRENT_WORKSPACE）并扫描其 projects 子目录。"""
-    from servers.eda.project_manage import list_epp_projects
     workspace = _current_workspace()
     if not workspace:
         return {

@@ -34,18 +34,23 @@
     attach_out_component            为器件引脚挂载 Out 器件
     replace_schematic_from_file        从 .ep 文件整体替换原理图
 
-  分析：
+  分析 / 导出：
     export_project_netlist        查看/导出工程网表
     capture_schematic             截取原理图为图片
+    export_schematic_components_to_csv  导出器件为 CSV（供模型替换）
     get_signal_chain              追踪信号链路（节点接力算法）
 
-  模型：
+  模型库 / 原理图库：
     replace_models_from_csv       按 CSV 批量替换模型
     get_model_category_params     获取模型分类及参数列表
     search_public_models          查询公共模型库
     search_personal_models        查询个人模型库
     load_performance_component_from_mms  从 MMS 导入性能模型
     add_performance_component     放置模型库性能器件
+    search_schematic_from_public_library      查询公共原理图库
+    search_schematic_from_personal_library    查询个人原理图库
+    use_schematic_from_library_create_project 用原理图库内容创建新工程
+    use_schematic_from_library_import         用原理图库内容替换工程原理图
 
   启动：
     launch_edi                    启动 EDI 客户端
@@ -98,7 +103,11 @@
 
 from __future__ import annotations
 
+from starlette.responses import PlainTextResponse
+
 from servers import mcp  # noqa: E402 — 全局 MCP 实例
+from servers.metrics import get_tool_metrics
+from servers.utils import server_uptime_seconds
 
 # 导入工具模块即可触发 @mcp.tool() 装饰器注册
 import servers.eda.project_manage       # noqa: F401
@@ -130,9 +139,6 @@ from servers.multimodal_vision import serve_document  # noqa: E402
 
 async def metrics_endpoint(request):
     """GET /metrics — 输出 Prometheus 格式的运行时指标。"""
-    from starlette.responses import PlainTextResponse
-    from servers.metrics import get_tool_metrics
-    from servers.utils import server_uptime_seconds
     from servers.eda.simulation import _sim_tasks
 
     metrics = get_tool_metrics()

@@ -84,6 +84,7 @@ _DESTRUCTIVE_CHAT_TOOLS = {
     "replace_port_component",
     "replace_schematic_from_file",   # 整体替换原理图，无条件确认
     "clear_schematic",               # 清空原理图，无条件确认
+    "use_schematic_from_library_import",  # 用原理图库内容替换工程原理图，无条件确认
     "close_edi_project",          # 确认时需要 need_save=true
     "generate_simulation_report",  # 确认时需要 overwrite=true
 }

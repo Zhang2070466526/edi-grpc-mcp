@@ -13,6 +13,14 @@ from servers.utils import require_nonempty
 from servers import mcp
 
 
+def _set_workspace(path: str, task_type: int, timeout_seconds: int) -> dict[str, Any]:
+    """创建/切换工作区的公共实现（二者仅 task_type 不同）。"""
+    path, err = require_nonempty(path, label="path")
+    if err:
+        return err
+    return call_grpc(task_type, {"path": path}, timeout_seconds, max_timeout_seconds=300)
+
+
 @mcp.tool()
 def create_workspace(path: str, timeout_seconds: int = 60) -> dict[str, Any]:
     """创建一个新的工作区，不自动切换。
@@ -29,15 +37,7 @@ def create_workspace(path: str, timeout_seconds: int = 60) -> dict[str, Any]:
     Returns:
         gRPC 统一返回结构，成功提示或失败原因在 message 中。
     """
-    path, err = require_nonempty(path, label="path")
-    if err:
-        return err
-    return call_grpc(
-        ecserver_pb2.CREATE_WORKSPACE,
-        {"path": path},
-        timeout_seconds,
-        max_timeout_seconds=300,
-    )
+    return _set_workspace(path, ecserver_pb2.CREATE_WORKSPACE, timeout_seconds)
 
 
 @mcp.tool()
@@ -56,15 +56,7 @@ def switch_workspace(path: str, timeout_seconds: int = 60) -> dict[str, Any]:
     Returns:
         gRPC 统一返回结构，成功提示或失败原因在 message 中。
     """
-    path, err = require_nonempty(path, label="path")
-    if err:
-        return err
-    return call_grpc(
-        ecserver_pb2.SWITCH_WORKSPACE,
-        {"path": path},
-        timeout_seconds,
-        max_timeout_seconds=300,
-    )
+    return _set_workspace(path, ecserver_pb2.SWITCH_WORKSPACE, timeout_seconds)
 
 
 @mcp.tool()

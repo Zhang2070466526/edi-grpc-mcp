@@ -1,16 +1,19 @@
-r"""EDA 分析工具 — 网表导出 + 原理图截图（gRPC 调用）。
+r"""EDA 分析工具 — 网表导出 + 原理图截图 + 器件 CSV 导出（gRPC 调用）。
 
-capture_schematic  截取工程原理图并保存为图片 返回 artifacts（含 build_file_link），图片生成后自动添加 file:// 链接。
 export_project_netlist  查看/导出 .epp 工程的网表文件
+capture_schematic       截取工程原理图并保存为图片 返回 artifacts（含 build_file_link）
+export_schematic_components_to_csv  导出原理图有效器件为 CSV（供模型替换）
 
 自然语言使用示例：
   帮我查看 EDA 工程 C:\...\EDI_TEST.epp 的网表
   帮我截取这个工程的原理图，保存到 C:\screenshots\circuit.png
   帮我导出这个工程的网表，超时设为 120 秒
+  把这个工程的器件信息导出成 CSV
 
 参数说明：
   project_path     EDA 服务所在机器上的 .epp 工程文件绝对路径
   img_path         截图输出路径，支持 PNG/JPG 等（capture_schematic）
+  save_path        CSV 输出路径（export_schematic_components_to_csv）
   timeout_seconds  最长等待秒数，无上限，默认 60 秒
 """
 
@@ -21,7 +24,7 @@ from typing import Any
 
 from proto import ecserver_pb2
 from servers.eda.grpc_client import call_project_grpc
-from servers.utils import build_artifact, build_file_link, error_response
+from servers.utils import build_artifact, build_file_link, error_response, require_nonempty
 from servers import mcp
 
 
@@ -67,3 +70,37 @@ def capture_schematic(
         result["message"] = "原理图已截图。"
         result.update(build_file_link(img_resolved, "打开原理图"))
     return result
+
+
+@mcp.tool()
+def export_schematic_components_to_csv(
+    project_path: str,
+    save_path: str,
+    timeout_seconds: int = 60,
+) -> dict[str, Any]:
+    """将工程原理图中的有效器件信息导出为 CSV。
+
+    用法："把这个工程的器件信息导出成 CSV"
+
+    导出列为 original_model_type/name/id 与 alternative_model_type/name/id（后三列
+    留空），供 replace_models_from_csv 后续模型替换填写。仿真控制器、端口、变量等
+    EXCLUDED_TYPES 不导出。save_path 未以 .csv 结尾时服务端自动追加后缀；父目录
+    必须已存在；同名文件直接覆盖。
+
+    Args:
+        project_path: .epp 工程文件绝对路径。
+        save_path: CSV 输出文件路径（非空，父目录必须已存在）。
+        timeout_seconds: 最长等待秒数，默认 60。
+
+    Returns:
+        gRPC 统一返回结构，成功时 details 含 csv_path（最终绝对路径）。
+    """
+    save_path, err = require_nonempty(save_path, label="save_path")
+    if err:
+        return err
+    return call_project_grpc(
+        ecserver_pb2.EXPORT_SCHEMATIC_COMPONENTS_TO_CSV,
+        project_path,
+        timeout_seconds,
+        save_path=save_path,
+    )
