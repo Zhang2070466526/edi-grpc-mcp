@@ -18,8 +18,8 @@ from servers.eda.project_manage import list_epp_projects
 
 - **[工程管理（9 个）](#工程管理9个)**：创建 / 扫描 / 打开 / 关闭工程、查询器件、分析变量
 - **[仿真（8 个）](#仿真8个)**：同步 / 异步仿真、网表仿真、抗烧毁评估、任务查询
-- **[导出与分析（3 个）](#导出与分析3个)**：导出网表、截图原理图、信号链路追踪
-- **[模型库（6 个）](#模型库6个)**：模型分类/查询/搜索、MMS 导入、性能器件放置
+- **[导出与分析（4 个）](#导出与分析4个)**：导出网表、截图原理图、器件 CSV、信号链路追踪
+- **[模型库 / 原理图库（10 个）](#模型库--原理图库10个)**：模型分类/查询/搜索、MMS 导入、器件放置、原理图库搜索/使用
 - **[工作区（3 个）](#工作区3个)**：创建 / 切换 / 查询当前工作区
 - **[原理图扩展（4 个）](#原理图扩展4个)**：内置器件、清空原理图、连线
 - **[启动 / 诊断（3 个）](#启动--诊断3个)**：启动 EDI、服务诊断、日志读取
@@ -529,7 +529,7 @@ list_eda_tasks(status: str = "") -> dict
 
 ---
 
-## 导出与分析（3 个）
+## 导出与分析（4 个）
 
 ### `export_project_netlist`
 
@@ -562,6 +562,24 @@ capture_schematic(project_path: str, img_path: str, timeout_seconds: int = 60) -
 |---|---|---|---|---|
 | `project_path` | str | 是 | — | `.epp` 文件绝对路径 |
 | `img_path` | str | 是 | — | 输出图片路径 |
+| `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
+
+---
+
+### `export_schematic_components_to_csv`
+
+```python
+from servers.eda.design_export import export_schematic_components_to_csv
+
+export_schematic_components_to_csv(project_path: str, save_path: str, timeout_seconds: int = 60) -> dict
+```
+
+将工程原理图中的有效器件信息导出为 CSV。导出列为 original_model_type/name/id 与 alternative_model_type/name/id（后三列留空），供 replace_models_from_csv 后续模型替换填写。仿真控制器、端口、变量等 EXCLUDED_TYPES 不导出。save_path 未以 .csv 结尾时服务端自动追加后缀；父目录必须已存在。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `project_path` | str | 是 | — | `.epp` 文件绝对路径 |
+| `save_path` | str | 是 | — | CSV 输出文件路径 |
 | `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
 
 ---
@@ -605,7 +623,7 @@ get_signal_chain(project_path: str, start_component: str = "",
 
 ---
 
-## 模型库（6 个）
+## 模型库 / 原理图库（10 个）
 
 ### `replace_models_from_csv`
 
@@ -710,6 +728,70 @@ add_performance_component(project_path: str, component_uuid: str, position: dict
 | `component_uuid` | str | 是 | — | 模型库 Component UUID |
 | `position` | dict | 是 | — | 场景坐标 `{"x": .., "y": ..}` |
 | `timeout_seconds` | int | 否 | 120 | 最长等待秒数 |
+
+---
+
+### `search_schematic_from_public_library`
+
+```python
+from servers.eda.model_library import search_schematic_from_public_library
+
+search_schematic_from_public_library(search_name: str, timeout_seconds: int = 30) -> dict
+```
+
+按拓扑描述查询公共原理图库。search_name 是必需的拓扑描述关键词，服务端固定转换为 topology_description 过滤条件。不需要 project_path、工作区或已打开工程。使用前应提示用户提供对应拓扑描述。成功 payload 含 count 和 results。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `search_name` | str | 是 | — | 拓扑描述关键词（必需） |
+| `timeout_seconds` | int | 否 | 30 | 最长等待秒数 |
+
+---
+
+### `search_schematic_from_personal_library`
+
+```python
+from servers.eda.model_library import search_schematic_from_personal_library
+
+search_schematic_from_personal_library(search_name: str, timeout_seconds: int = 30) -> dict
+```
+
+按拓扑描述查询个人原理图库，参数与返回结构同 `search_schematic_from_public_library`。
+
+---
+
+### `use_schematic_from_library_create_project`
+
+```python
+from servers.eda.model_library import use_schematic_from_library_create_project
+
+use_schematic_from_library_create_project(file_uuid: str, timeout_seconds: int = 180) -> dict
+```
+
+从在线原理图库下载内容，在当前工作区创建并打开新工程。file_uuid 是在线原理图文件的合法 UUID（取自搜索结果的 id）。下载超时 120 秒，模型库扫描超时 60 秒。同名工程目录存在则失败、不覆盖。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `file_uuid` | str | 是 | — | 在线原理图文件的 UUID |
+| `timeout_seconds` | int | 否 | 180 | 最长等待秒数 |
+
+---
+
+### `use_schematic_from_library_import`
+
+```python
+from servers.eda.model_library import use_schematic_from_library_import
+
+use_schematic_from_library_import(file_uuid: str, project_path: str, timeout_seconds: int = 180) -> dict
+```
+
+从在线原理图库下载内容，替换指定工程的当前原理图并保存。⚠️ 会替换工程原理图，请确认 project_path。下载/扫描规则同 create 方式。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `file_uuid` | str | 是 | — | 在线原理图文件的 UUID |
+| `project_path` | str | 是 | — | `.epp` 文件绝对路径 |
+| `timeout_seconds` | int | 否 | 180 | 最长等待秒数 |
 
 ---
 
@@ -1449,7 +1531,7 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 
 ## Resources & Prompts
 
-除了 Tool（启动时动态统计，当前 64 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
+除了 Tool（启动时动态统计，当前 69 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
 
 ### Resources（6 个）
 
