@@ -290,7 +290,7 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 - `HarmonicBalance` 和 `XDB` 支持根据 `Freq[1]`、`Order[1]` 模板新增更大下标的 `Freq[x]`、`Order[x]` 参数；频率与阶数必须同下标成对存在，且下标从 1 开始连续。
 - `P_nToneG` 和 `P_nTone` 支持根据 `Freq[1]`、`P[1]` 模板独立新增 `Freq[x]` 或 `P[x]`；两类参数不要求成对或连续。
 - 更新 `SweepVar` 时，原理图中必须存在 `Var` 器件，且至少一个 `Var` 器件包含与其 `value` 完全相同的变量名。
-- 更新 `SimInstanceName[1]`～`SimInstanceName[6]` 时，其 `value` 必须与原理图中已有器件实例名完全相同，且目标器件类型只能为 `HarmonicBalance` 或 `XDB`。
+- 更新 `SimInstanceName[1]`～`SimInstanceName[6]` 时，其 `value` 必须与原理图中已有器件实例名完全相同，且目标器件类型只能为 `HarmonicBalance` 或 `XDB` 或 `SParameter`。
 - 任一参数或引用校验失败时，不修改器件；保存失败时恢复修改前参数。
 - 更新 `Var` 时，`parameters` 的每个一级 key 表示变量名：已有同名变量时更新，不存在时新增。
 - `Var` 变量必须提供 `value`，可选提供 `min`、`max`、`status`、`tunable`，不支持 `unit`。
@@ -1089,7 +1089,7 @@ enum ResultStatus {
 
 `instance_name` 可以是 `P_nToneG` 或 `P_nTone` 器件的实际实例名。
 
-`SimInstanceName[x]` 只支持 Sweep 默认参数表中的 `x=1..6`；目标名称精确匹配，目标类型只能为 `HarmonicBalance` 或 `XDB`。
+`SimInstanceName[x]` 只支持 Sweep 默认参数表中的 `x=1..6`；目标名称精确匹配，目标类型只能为 `HarmonicBalance` 或 `XDB` 或 `SParameter`。
 
 #### Var 器件变量更新与新增
 
