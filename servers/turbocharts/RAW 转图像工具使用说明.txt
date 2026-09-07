@@ -21,7 +21,7 @@ RawConverter --raw <raw_path> --img <image_path> --type <image_type> [--csv <csv
 //ac="ac_type#bit#data#nv_type#nv_value"
 ac 字符串中 必须包含这些 即#分割的5组字符串
 act_type   phase（相位精度） att(衰减精度)
-data       曲线名称（PS:多条曲线可以用&分割，例如DB_S[2,1]&DB_S[1,1] ）
+data       参与精度计算的逻辑曲线名，用裸名（如 S[2,1]，不带单位前缀）；多条用 & 分割。注意别跟 --linename 混：linename 才要带单位前缀（DB_S[2,1]），data 用裸名
 bit        必须为可以转换成正整数的 数字字符串
 nv_type    fv：固定间隔 cl：完整列表
 nv_value   是一堆用，分割的字符串 固定间隔就填一个值就可以了

@@ -332,10 +332,13 @@ def turbocharts_convert(
         格式: ac_type#bit#data#nv_type#nv_value
         ac_type: phase（相位精度）或 att（衰减精度）
         bit:     精度位数（正整数）
-        data:    曲线名称（多条用 & 分隔）
+        data:    参与精度计算的逻辑曲线名，用裸名（如 S[2,1]，不带单位前缀），多条用 & 分隔
         nv_type: fv（固定间隔）或 cl（完整列表）
         nv_value: 间隔值（fv）或用逗号分隔的值列表（cl）
         示例: "phase#3#S[2,1]#fv#0.1"
+
+        注意：--ac 的 data 用裸曲线名（S[2,1]），而 --linename 必须带单位前缀（DB_S[2,1]）。
+        两者是不同字段、别混用：linename 负责定位并画出曲线，ac 的 data 只参与精度计算。
 
     Args:
         raw_path: 输入的 ADS RAW 文件路径（必填）。
