@@ -16,7 +16,7 @@ from typing import Any
 from proto import ecserver_pb2
 from servers.eda.config import validate_project_path
 from servers.eda.grpc_client import call_grpc
-from servers.utils import require_nonempty, require_position, require_uuid
+from servers.utils import error_response, require_nonempty, require_position, require_uuid
 from servers import mcp
 
 
@@ -70,6 +70,16 @@ def _search_models(
     sub_type, err = require_nonempty(sub_type, label="sub_type")
     if err:
         return err
+    if filters is not None:
+        if not isinstance(filters, list):
+            return error_response("INVALID_PARAMETERS", "filters 必须是数组")
+        for item in filters:
+            if not isinstance(item, dict):
+                return error_response("INVALID_PARAMETERS", "filters 每个元素必须是对象 {key, min, max}")
+            if not isinstance(item.get("key"), str) or not item.get("key"):
+                return error_response("INVALID_PARAMETERS", "filters 每个元素需要非空字符串 key")
+            if "min" not in item and "max" not in item:
+                return error_response("INVALID_PARAMETERS", "filters 每个元素需要 min 或 max 至少一个")
     payload: dict[str, Any] = {
         "sub_type": sub_type,
         "filters": filters if filters is not None else [],
@@ -91,7 +101,9 @@ def search_public_models(
 
     Args:
         sub_type: 模型子类 ID（非空字符串，如 "61"）。
-        filters: 过滤条件数组（原样转发，可选）。
+        filters: 过滤条件数组。每个元素为 {"key": "<参数id>", "min": 数值, "max": 数值}，key 取 get_model_category_params 返回的参数 id（如增益的 id 是 "gain"），min/max 二选一或都用（闭区间，单位见参数定义）。
+         示例：筛选增益≥20dB → [{"key": "gain", "min": 20}]；
+              叠加频段 → [{"key": "gain", "min": 20}, {"key": "min_freq", "min": 27000}]
         timeout_seconds: 最长等待秒数，默认 60。
 
     Returns:
@@ -114,7 +126,9 @@ def search_personal_models(
 
     Args:
         sub_type: 模型子类 ID（非空字符串，如 "61"）。
-        filters: 过滤条件数组（原样转发，可选）。
+        filters: 过滤条件数组。每个元素为 {"key": "<参数id>", "min": 数值, "max": 数值}，key 取 get_model_category_params 返回的参数 id（如增益的 id 是 "gain"），min/max 二选一或都用（闭区间，单位见参数定义）。
+         示例：筛选增益≥20dB → [{"key": "gain", "min": 20}]；
+              叠加频段 → [{"key": "gain", "min": 20}, {"key": "min_freq", "min": 27000}]
         timeout_seconds: 最长等待秒数，默认 60。
 
     Returns:
