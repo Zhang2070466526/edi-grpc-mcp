@@ -49,8 +49,8 @@ class Settings(BaseSettings):
     mcp_port: int = Field(default=50026, ge=1, le=65535)
     mcp_transport: str = "streamable-http"
     mcp_stateless_http: bool = True
-    # MCP 访问令牌：留空则不鉴权；配置后 /mcp 等端点要求 URL 带 ?token= 匹配才放行
-    mcp_api_key: str = ""
+    # 进程白名单：只放行匹配这些子串的进程访问 /mcp（逗号分隔，可填 exe 路径或命令行关键词）；留空禁用
+    mcp_allowed_processes: str = ""
 
     # ── 路径（环境变量覆盖优先，空字符串 = 未设置 = 自动检测）──
     edi_path: str = ""

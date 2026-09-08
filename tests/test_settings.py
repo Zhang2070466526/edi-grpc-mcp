@@ -19,7 +19,7 @@ class TestSettingsRead:
             assert s.mcp_port == 50026
             assert s.eda_grpc_server == "127.0.0.1:50055"
             assert s.mcp_stateless_http is True
-            assert s.mcp_api_key == ""
+            assert s.mcp_allowed_processes == ""
 
     def test_env_override(self):
         from servers.settings import Settings

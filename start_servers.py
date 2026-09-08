@@ -36,13 +36,10 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from dotenv import load_dotenv
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import JSONResponse
 
 # load_dotenv 必须在 import servers 之前：否则 servers/__init__.py 的
 # get_settings() 会先执行并被 lru_cache 缓存，frozen 下 env_file 路径不存在、
-# 环境变量尚未加载，导致读到空的 mcp_api_key。
+# 环境变量尚未加载，导致读到空配置。
 if getattr(sys, "frozen", False):
     load_dotenv(Path(sys.executable).parent / ".env")
 else:
@@ -67,6 +64,7 @@ if _cfg_issues:
 from servers import mcp, __version__ as _server_ver
 from servers.eda.config import EDA_GRPC_SERVER as _grpc_cfg_addr
 from servers.utils import set_server_address
+from servers.process_guard import ProcessProbeMiddleware, ProcessWhitelistMiddleware
 import servers.registry_server  # — 触发工具注册
 
 # ── 运行时状态 ──
@@ -157,32 +155,6 @@ async def ready_check(request):
         "tools_hash": tools_hash,
         "started_at": SERVER_STARTED_AT,
     })
-
-
-# 需要 token 鉴权的路径（健康检查 /health /ready /metrics 放行）
-_AUTH_REQUIRED_PREFIXES = ("/mcp", "/ui", "/chat", "/tools/list", "/upload")
-
-
-class _TokenAuthMiddleware(BaseHTTPMiddleware):
-    """校验敏感端点请求的访问令牌（URL query 参数 ?token=xxx）。
-
-    用于「只允许指定 agent 访问」：配置 MCP_API_KEY 后，只有带正确 ?token=
-    的请求才能访问 /mcp、/ui、/chat 等，其余返回 401。
-    """
-
-    def __init__(self, app, expected_token: str):
-        super().__init__(app)
-        self._expected_token = expected_token
-
-    async def dispatch(self, request: Request, call_next):
-        path = request.url.path.rstrip("/")
-        if any(path == p or path.startswith(p + "/") for p in _AUTH_REQUIRED_PREFIXES):
-            if request.query_params.get("token", "") != self._expected_token:
-                return JSONResponse(
-                    {"error": "unauthorized", "error_description": "invalid or missing token"},
-                    status_code=401,
-                )
-        return await call_next(request)
 
 
 def _find_port_pid(port: int) -> int | None:
@@ -301,13 +273,17 @@ def _run_http_server(port: int, transport: str = "streamable-http") -> None:
     mcp.settings.port = port
     set_server_address(host, port)
 
-    # 构建 Starlette app，按需加 token 鉴权中间件（只允许指定 agent 访问 /mcp）
+    # 构建 Starlette app（访问控制仅由进程白名单 MCP_ALLOWED_PROCESSES 负责）
     starlette_app = mcp.streamable_http_app()
-    if _cfg.mcp_api_key:
-        starlette_app.add_middleware(_TokenAuthMiddleware, expected_token=_cfg.mcp_api_key)
-        print(f"  Auth:   enabled (?token={_cfg.mcp_api_key} required on /mcp)")
+
+    # 进程白名单守卫（阶段 1：探针只打印来源进程；阶段 2：配了 MCP_ALLOWED_PROCESSES 才拦截）
+    if _cfg.mcp_allowed_processes:
+        allowed = {p.strip() for p in _cfg.mcp_allowed_processes.split(",") if p.strip()}
+        starlette_app.add_middleware(ProcessWhitelistMiddleware, server_port=port, allowed=allowed)
+        print(f"  Guard:  process whitelist enabled ({len(allowed)} pattern(s))")
     else:
-        print("  Auth:   disabled (MCP_API_KEY not set)")
+        starlette_app.add_middleware(ProcessProbeMiddleware, server_port=port)
+        print("  Probe:  process probe enabled (logging /mcp source process)")
 
     uvicorn.run(starlette_app, host=host, port=port, log_level="info")
 
