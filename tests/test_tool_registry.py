@@ -30,7 +30,7 @@ def test_all_tools_registered():
         "replace_port_component", "attach_out_component",
         "replace_schematic_from_file",
         "list_schematic_components", "get_schematic_component_info",
-        "get_components_static_params",
+        "get_components_static_params", "batch_query_component",
         "get_model_category_params", "search_public_models", "search_personal_models",
         "list_ideal_components", "create_workspace", "switch_workspace",
         "get_current_workspace",

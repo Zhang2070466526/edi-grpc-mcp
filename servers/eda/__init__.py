@@ -94,6 +94,7 @@ from servers.eda.project_manage import (  # noqa: F401
     list_schematic_components,
     get_schematic_component_info,
     get_components_static_params,
+    batch_query_component,
 )
 
 # -- 仿真 --

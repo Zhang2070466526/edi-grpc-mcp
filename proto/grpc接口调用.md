@@ -79,6 +79,7 @@ enum EventType {
   SEARCH_SCHEMATIC_FROM_PUBLIC_LIBRARY = 38;
   SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY = 39;
   EXPORT_SCHEMATIC_COMPONENTS_TO_CSV = 40;
+  BATCH_QUERY_COMPONENT = 41;
 }
 ```
 
@@ -122,6 +123,7 @@ enum EventType {
 - `SEARCH_SCHEMATIC_FROM_PUBLIC_LIBRARY`：按拓扑描述查询公共原理图库。
 - `SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY`：按拓扑描述查询当前用户的个人原理图库。
 - `EXPORT_SCHEMATIC_COMPONENTS_TO_CSV`：将指定工程原理图中的有效器件信息导出为 CSV。
+- `BATCH_QUERY_COMPONENT`：按器件型号列表批量查询模型信息，原样返回模型服务响应。
 
 ## 4. payload_json 示例
 
@@ -506,7 +508,7 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 ```
 
 - `sub_type` 必须是非空字符串。
-- `filters` 必须是数组，数组内部内容原样转发，不由 gRPC 层解释。
+- `filters` 为可选字段；未提供时下游请求体不包含该字段。提供时必须是数组，数组内部内容原样转发，不由 gRPC 层解释。
 - 服务端调用 `GrpcApiManager::SearchPublic`，返回内容经过现有 `TrimSearchResponse` 规则裁剪。
 
 ### SEARCH_PERSONAL_MODELS
@@ -518,8 +520,21 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 }
 ```
 
-- 参数规则与 `SEARCH_PUBLIC_MODELS` 相同。
+- `sub_type` 必须是非空字符串；`filters` 与公共库接口相同，属于可选字段，提供时必须是数组。
 - 服务端调用 `GrpcApiManager::SearchPersonal`，返回内容经过现有 `TrimSearchResponse` 规则裁剪。
+
+### BATCH_QUERY_COMPONENT
+
+```json
+{
+  "originalid_list":["MAAD_008866","HMC462_DIE","MAFL_011127"]
+}
+```
+
+- `originalid_list` 必须是非空数组，且每个元素必须是非空字符串；元素顺序和重复项均保留。
+- 该任务不需要 `project_path`，gRPC 层不解释器件型号，仅将数组转发给 `GrpcApiManager::BatchQueryComponent`。
+- 下游请求为 `POST /api/v1/models/manage/batch_query_component/`，请求体字段仍为 `originalid_list`。
+- 下游返回的完整 JSON 对象原样写入最终事件的 `payload_json`，不执行搜索接口的裁剪规则。
 
 ### LIST_IDEAL_COMPONENTS
 
@@ -848,6 +863,7 @@ enum ResultStatus {
 - `USE_SCHEMATIC_FROM_LIBRARY_CREATE_PROJECT` / `USE_SCHEMATIC_FROM_LIBRARY_IMPORT`：成功返回 `project_path`、`schematic_uuid`、`component_count`、`net_segment_count`；失败返回 `{}`
 - `SEARCH_SCHEMATIC_FROM_PUBLIC_LIBRARY` / `SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY`：成功返回 `count` 和 `results`；每项包含 `id`、`schematic_id`、`name`、`properties`
 - `EXPORT_SCHEMATIC_COMPONENTS_TO_CSV`：成功返回最终文件路径 `csv_path`；失败返回 `{}`
+- `BATCH_QUERY_COMPONENT`：模型服务返回的完整响应对象，通常包含 `code`、`message`、`data`
 - `GENERATE_SCHEMATIC_FROM_NETLIST`：`project_path`、`netlist_path`、`schematic_path`、`clear_before_import`、`symbols_added`、`nets_added`、`lines_added`、`net_points_added`
 
 ## 8. SIMULATE_NETLIST 完整调用示例
@@ -1803,6 +1819,32 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `35`。
 ```
 
 Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `40`。请求校验失败由 `PerformAction` 直接返回；文件读取或写入失败通过 `RESULT_STATUS_FAILED` 事件返回。
+
+### 9.30 批量查询器件
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-batch-query-component-001",
+  "type": "BATCH_QUERY_COMPONENT",
+  "payload_json": "{\"originalid_list\":[\"MAAD_008866\",\"HMC462_DIE\",\"MAFL_011127\"]}"
+}
+```
+
+最终事件示意：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-batch-query-component-001",
+  "event_type": "BATCH_QUERY_COMPONENT",
+  "status": "RESULT_STATUS_SUCCESS",
+  "message": "component batch query completed",
+  "payload_json": "{\"code\":200,\"message\":\"success\",\"data\":[...]}"
+}
+```
+
+`payload_json` 中的实际字段和值以模型服务返回为准。Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `41`。
 
 ## 10. 网表生成链路完整调用示例
 

@@ -410,3 +410,37 @@ def get_components_static_params(
         timeout_seconds,
         max_timeout_seconds=300,
     )
+
+
+@mcp.tool()
+def batch_query_component(
+        originalid_list: list[str],
+        timeout_seconds: int = 60,
+) -> dict[str, Any]:
+    """按器件型号字符串列表批量查询模型信息，原样返回模型服务响应。
+
+    用法：批量查这几个型号的模型信息（如 MAAD_008866）
+
+    该任务不需要打开工程，也不需要 project_path。gRPC 服务将请求转发到
+    POST /api/v1/models/manage/batch_query_component/，下游返回的完整 JSON
+    对象原样写入最终事件 payload_json（不执行搜索接口的裁剪规则）。
+
+    Args:
+        originalid_list: 器件型号字符串数组（如 "MAAD_008866"，非空，每个元素非空字符串，顺序和重复项保留）。
+        timeout_seconds: 最长等待秒数，默认 60。
+
+    Returns:
+        gRPC 统一返回结构，业务字段（下游完整响应）在 details 中。
+    """
+    if not originalid_list:
+        return error_response("INVALID_PARAMETERS", "originalid_list 不能为空数组")
+    if not all(isinstance(u, str) and u.strip() for u in originalid_list):
+        return error_response("INVALID_PARAMETERS", "originalid_list 必须是非空字符串数组")
+
+    payload = {"originalid_list": [u.strip() for u in originalid_list]}
+    return call_grpc(
+        ecserver_pb2.BATCH_QUERY_COMPONENT,
+        payload,
+        timeout_seconds,
+        max_timeout_seconds=300,
+    )
