@@ -217,6 +217,10 @@ def _prepare_parameters(
             return None, _param_error("INVALID_VALUE",
                                       f"参数 {pname} 的 value 必须是标量",
                                       component_type, parameter=pname)
+        if isinstance(raw_value, str) and not raw_value.strip():
+            return None, _param_error("INVALID_VALUE",
+                                      f"参数 {pname} 的值不能为空",
+                                      component_type, parameter=pname)
 
         # Type validation
         vt = schema.get("value_type", "string")

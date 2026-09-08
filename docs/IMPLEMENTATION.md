@@ -178,8 +178,8 @@ return STREAM_DISCONNECTED
 4. 参数名解析       先查固定参数 → 再匹配动态模式 Freq[{n}]/Order[{n}]
 5. 权限检查         create_allowed / update_allowed
 6. 值结构检查      每个参数值必须是 {"value": ..., "unit": ...}
-7. value 存在       不能为 null、数组或对象
-8. 值类型校验       number: 拒绝 NaN/Infinity；integer: 拒绝 1.5
+7. value 存在       不能为 null、数组、对象或空字符串
+8. 值类型校验       number: 拒绝 NaN/Infinity；integer: 拒绝 1.5；string: 原样透传（可传变量名如 "FREQ"）
 9. 枚举校验         如 CalcS 只能 "yes"/"no"
 10. 单位检查        required → 必须有 unit；forbidden → 不能有 unit
                     unit 必须是有效非空字符串且在允许列表中
@@ -472,7 +472,7 @@ HB 和 XDB 支持多音设置，需要多组 `Freq[n]`/`Order[n]`。目录用 `p
   "wire_pattern": "Freq[{index}]",
   "index_min": 1,
   "index_max": 32,
-  "value_type": "number",
+  "value_type": "string",
   "unit_required": true,
   "units": ["Hz", "kHz", "MHz", "GHz"],
   "create_allowed": true,
@@ -481,6 +481,8 @@ HB 和 XDB 支持多音设置，需要多组 `Freq[n]`/`Order[n]`。目录用 `p
 ```
 
 解析器将 `{index}` 替换为 `(\d+)` 生成正则，匹配 `Freq[1]` ~ `Freq[32]`。同时保留固定映射 `Freq → Freq[1]` 作为快捷方式。
+
+> 连续量参数（`Freq`/`Freq[{index}]`、`Start`/`Stop`/`Step`、`GC_XdB`/`GC_InputFreq`/`GC_OutputFreq`/`GC_InputPowerTol`/`GC_OutputPowerTol`/`GC_MaxInputPower`、`GroupDelayAperture`）的 `value_type` 为 `string` 而非 `number`：允许设置变量引用（如 `"FREQ"` 跟随 ParamSweep 扫频），数字串（如 `"2"`）也照常透传，空字符串会被拒绝。仅离散量（`Pts`、端口号、`Order`、`StatusLevel`）保持 `integer`，`CalcS` 等保持 `boolean`。
 
 ---
 

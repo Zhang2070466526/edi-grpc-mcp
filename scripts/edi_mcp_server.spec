@@ -70,6 +70,7 @@ a = Analysis(
         # 运行时配置
         'servers.utils',
         'servers.settings',
+        'servers.process_guard',
 
         # Proto / gRPC
         'proto',

@@ -85,7 +85,7 @@ class TestResolveParameterSchema:
         schema, wire = _resolve_parameter_schema("SParameter", "Start")
         assert schema is not None
         assert wire == "Start"
-        assert schema["value_type"] == "number"
+        assert schema["value_type"] == "string"
 
     def test_fixed_param_with_wire_alias(self):
         schema, wire = _resolve_parameter_schema("HarmonicBalance", "Freq")
@@ -173,13 +173,13 @@ class TestPrepareParameters:
 
     def test_nan_rejected(self):
         wire, err = _prepare_parameters("SParameter",
-            {"Start": {"value": "NaN", "unit": "GHz"}}, "create", allow_empty=True)
+            {"Pts": {"value": "NaN"}}, "create", allow_empty=True)
         assert err is not None
         assert err["error_code"] == "INVALID_VALUE"
 
     def test_infinity_rejected(self):
         wire, err = _prepare_parameters("SParameter",
-            {"Start": {"value": "Infinity", "unit": "GHz"}}, "create", allow_empty=True)
+            {"Pts": {"value": "Infinity"}}, "create", allow_empty=True)
         assert err is not None
         assert err["error_code"] == "INVALID_VALUE"
 

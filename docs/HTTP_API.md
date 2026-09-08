@@ -383,8 +383,6 @@
 
 **请求 / 响应**：JSON-RPC 2.0 格式，包括 `initialize`、`tools/list`、`tools/call`、`resources/list`、`resources/read`、`prompts/list`、`prompts/get` 等方法。
 
-**鉴权（可选）**：配置 `MCP_ED25519_ENABLED=true` 后，本端点要求带 `Authorization: Bearer <token>` 才放行，否则返回 `401 Unauthorized`。token 由 `/auth/challenge` + `/auth/session` 挑战签名换取。留空则不鉴权。
-
 > 该端点由 FastMCP 框架处理，客户端（Claude Code、OpenClaw 等）通过 MCP SDK 接入，无需手动构造请求。详细协议见 [MCP 规范](https://modelcontextprotocol.io)。
 
 ---

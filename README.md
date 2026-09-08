@@ -8,7 +8,7 @@
 
 ## ✨ 亮点
 
-- 🛠️ **69 个 MCP 工具** — 工程管理 / 仿真 / 器件配置 / 模型选型 / 信号链分析，全链路覆盖
+- 🛠️ **86 个 MCP 工具** — 工程管理 / 仿真 / 器件配置 / 模型选型 / 信号链分析，全链路覆盖
 - ⚡ **三大仿真引擎** — EDI gRPC · ANSYS HFSS · CST，一个服务统一封装
 - 🧠 **自然语言驱动** — 接入 Claude Code / OpenClaw，告别鼠标点击
 - 🔒 **本地安全** — 全本地运行，工程数据不出机器
@@ -29,7 +29,7 @@ AI 客户端 (Claude Code / OpenClaw)
    │  Streamable HTTP (stateless) 或 stdio
    │  POST /mcp  │  initialize → tools/list → tools/call
    ▼
-EDI gRPC MCP 服务 (FastMCP, 69 工具, 6 Resource, 8 Prompt)
+EDI gRPC MCP 服务 (FastMCP, 86 工具, 7 Resource, 9 Prompt)
    │
    ├── EDA gRPC 工具 (51) ──→ EDI 客户端 (127.0.0.1:50055)
    │     FetchEvent ← PerformAction 异步模型，增量 ads_output
@@ -69,7 +69,7 @@ EDI_PATH=                    # 留空自动检测
 TURBOCHARTS_PATH=            # 留空自动检测
 MCP_TRANSPORT=streamable-http
 MCP_PORT=50026
-MCP_API_KEY=                 # 可选：留空不鉴权；配置后 /mcp /ui /chat 等要求 ?token= 匹配
+MCP_ALLOWED_PROCESSES=       # 可选：留空不鉴权；配置后只放行匹配这些子串的进程访问 /mcp
 OPENCLAW_WORKSPACE=          # 留空自动检测，或手动指定
 ```
 
@@ -93,7 +93,7 @@ curl http://127.0.0.1:50026/health     # 进程 + gRPC 状态
 → {"status":"ok","mcp_ready":true,"eda_grpc_ready":true}
 
 curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
-→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":69}
+→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":86}
 ```
 
 ### 客户端接入
@@ -110,17 +110,13 @@ curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
 } } }
 ```
 
-> 配置了 `MCP_API_KEY` 后，Streamable HTTP 客户端（OpenClaw、Hermes 等）的 URL 需带 `?token=` 才能访问，例如 `http://127.0.0.1:50026/mcp?token=xxx`，不带则返回 401。stdio 模式（Claude Code）不经过 HTTP，不受影响。
->
-> 服务启动日志会打印 token 值（`Auth: enabled (?token=xxx required on /mcp)`），可直接复制。内置聊天界面通过 `http://127.0.0.1:50026/ui?token=xxx` 访问，页面内的请求会自动带上该 token。
-
 ---
 
 ## 使用方式
 
 | 方式 | 说明 |
 |---|---|
-| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 69 个工具 |
+| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 86 个工具 |
 | **聊天界面** | 浏览器访问 `http://127.0.0.1:50026/ui`，内置 LLM 多轮工具闭环 |
 | **Python 调用** | `from servers.eda import list_epp_projects` 直接调用 |
 
@@ -136,7 +132,7 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 
 ---
 
-## 工具一览（69 个）
+## 工具一览（86 个）
 
 > 工具数量由运行时动态统计，此处为当前快照。权威值见 `/ready` 的 `tool_count`（或 `tests/test_tool_registry.py` 的 `required` 列表）。
 
@@ -252,6 +248,31 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 | `cst_export_farfield` | 导出远场方向图为 ASCII .txt（自动判断求解） |
 | `cst_export_farfield_query` | 查询远场导出任务（进度+结果） |
 
+### TR 仿真集成（17 个，对接 SimulationAgent）
+
+> 封装外部服务 SimulationAgent.exe（`http://127.0.0.1:17866`）的 17 个 `tr_*` HTTP 工具。
+> 工作流规则见 Resource `edi://integration/workflow`（或 [docs/MCP_WORKFLOW.md](servers/simulation/MCP_WORKFLOW.md)）。
+
+| 工具 | 说明 |
+|---|---|
+| `tr_get_workflow_state` | 查询会话持久化的计划/链路/指标/报告状态 |
+| `tr_set_workflow_plan` | 持久化用户确认的完整链路仿真计划 |
+| `tr_get_simulation_capabilities` | 查询 TR 仿真支持的指标/单位/必需参数 |
+| `tr_find_paths` | 查找 EPP 端口和有效有向端口组合 |
+| `tr_read_netlist` | 读取 EDI 网表或会话内修订版（分页） |
+| `tr_modify_netlist` | 创建网表修订版并注入指标控制器 |
+| `tr_execute_simulation_plan` | 按计划批量执行多指标（修订→仿真→解析→登记） |
+| `tr_run_simulation` | 执行网表修订版获取 result.raw |
+| `tr_parse_raw` | 解析 RAW 生成 CSV、曲线图和标准化指标 |
+| `tr_get_project_netlist` | 获取工程当前真实网表并保存到会话 |
+| `tr_query_schematic_components` | 查询工程原理图中的器件信息 |
+| `tr_sync_project_components` | 将网表变更同步到工程原理图（确认门） |
+| `tr_restore_schematic` | 原理图整体回退到会话初始备份（确认门） |
+| `tr_query_components` | 查询器件类别/厂家/关键规格 |
+| `tr_prepare_report` | 生成报告草稿和判定证据 |
+| `tr_generate_document` | 校验报告草稿并生成 PDF/DOCX |
+| `tr_read_guide` | 读取 guides 目录中的 Word 指南 |
+
 ### 图表与图片
 
 | 工具 | 说明 |
@@ -299,7 +320,7 @@ Streamable HTTP 模式启用 `stateless_http=True`，服务不保留 MCP 会话�
 | `/upload` | POST | 文件上传（multipart/form-data） | `{"success":true,"file_path":"C:/...","file_name":"..."}` |
 | `/metrics` | GET | 运行时指标（Prometheus 格式） | 见 HTTP_API.md |
 
-### MCP Resources（6 个，只读上下文）
+### MCP Resources（7 个，只读上下文）
 
 客户端通过 `resources/list` 和 `resources/read` 访问。
 
@@ -311,8 +332,9 @@ Streamable HTTP 模式启用 `stateless_http=True`，服务不保留 MCP 会话�
 | `edi://reference/simulation-components` | `application/json` | SP/HB/XDB 参数目录，与 `get_simulation_component_schema` 同源 |
 | `edi://reference/operation-guide` | `text/markdown` | 操作安全约束：创建/删除/网表导入规则 |
 | `edi://reference/error-codes` | `text/markdown` | gRPC 状态码词典及建议动作 |
+| `edi://integration/workflow` | `text/markdown` | TR 仿真工作流规则（实时拉取 SimulationAgent） |
 
-### MCP Prompts（8 个，可复用工作流）
+### MCP Prompts（9 个，可复用工作流）
 
 | Prompt | 参数 | 说明 |
 |---|---|---|
@@ -324,6 +346,7 @@ Streamable HTTP 模式启用 `stateless_http=True`，服务不保留 MCP 会话�
 | `assess_anti_burnout` | `project_path` | 抗烧毁评估并按功率裕量排序 |
 | `select_component` | `sub_type_id`, `requirement` | 从公共/个人模型库选型（含替换闭环） |
 | `analyze_signal_chain` | `project_path`, `start` | 追踪信号链路并逐级说明 |
+| `run_tr_simulation` | `epp_path` | TR 仿真工作流：工程发现→参数确认→保存计划→仿真→报告→原理图同步 |
 
 ---
 
@@ -421,7 +444,7 @@ POST /chat
 | `MCP_STATELESS_HTTP` | `true` | 无状态模式 |
 | `MCP_HOST` | `127.0.0.1` | 监听地址（强制本地） |
 | `MCP_PORT` | `50026` | HTTP 监听端口 |
-| `MCP_API_KEY` | — | 访问令牌（留空不鉴权；配置后 `/mcp` `/ui` `/chat` 等要求 `?token=` 匹配） |
+| `MCP_ALLOWED_PROCESSES` | — | 进程白名单（留空不鉴权；配置后只放行匹配这些子串的进程访问 `/mcp`） |
 | `EDI_PATH` | 自动检测 | EDI.exe 路径 |
 | `TURBOCHARTS_PATH` | 自动检测 | turbocharts_app.exe 路径 |
 | `OPENCLAW_WORKSPACE` | 自动检测 | OpenClaw 工作区路径 |
@@ -432,6 +455,8 @@ POST /chat
 | `VISION_BASE_URL` | — | 视觉模型 API 地址 |
 | `VISION_MODEL` | — | 视觉模型名称 |
 | `REPORT_RENDER_URL` | `http://127.0.0.1:17867/api/v1/reports/render` | 报告渲染服务 |
+| `SIMULATION_AGENT_URL` | `http://127.0.0.1:17866` | SimulationAgent（TR 仿真集成）服务地址 |
+| `SIMULATION_AGENT_TIMEOUT` | `60` | SimulationAgent 单次 HTTP 请求超时（秒） |
 
 ---
 
@@ -462,7 +487,7 @@ edi-grpc-mcp/
 │   │                                   #   所有环境变量收敛于此，启动时 validate()
 │   ├── task_runner.py                  #   通用异步任务队列（EDA/HFSS/CST 复用，单 worker 串行）
 │   │
-│   ├── resources_prompts/              #   MCP Resource & Prompt（6 Resource + 8 Prompt）
+│   ├── resources_prompts/              #   MCP Resource & Prompt（7 Resource + 8 Prompt）
 │   │   ├── __init__.py                 #     注册入口（import 下面 6 模块触发注册）
 │   │   ├── resources_service.py        #     服务状态类（概览 / 状态 / 工程目录）
 │   │   ├── resources_reference.py      #     参考类（参数目录 / 操作规则 / 错误码）
@@ -510,6 +535,12 @@ edi-grpc-mcp/
 │   │   ├── simulate.py                 #     仿真求解（异步，一次性会话）
 │   │   └── result_export.py            #     结果导出（S 参数 / 远场方向图）
 │   │
+│   ├── simulation/                     #   SimulationAgent 集成 (17 个 tr_* 工具 + 1 Resource + 1 Prompt)
+│   │   ├── __init__.py                 #     公共 API re-export
+│   │   ├── client.py                   #     HTTP 客户端：会话管理 / 稳定 request_id / 调用与轮询
+│   │   ├── tools.py                    #     17 个 tr_* 工具（@mcp.tool()）
+│   │   └── resource.py                 #     TR 工作流 Resource（edi://integration/workflow）
+│   │
 │   ├── multimodal_vision/              #   图片 + 视觉 + 文档 (5 个工具)
 │   │   ├── __init__.py                 #     copy_image_to_workspace（已隐藏）
 │   │   ├── validators.py               #     共享校验：图片路径/扩展名/Pillow 内容验证
@@ -531,14 +562,14 @@ edi-grpc-mcp/
 │
 ├── docs/                               # 项目文档
 │   ├── DEPLOY.md                       #   部署指南（打包产物使用、客户端配置）
-│   ├── TOOLS_API.md                    #   工具 API（69 个工具完整签名+返回值示例）
+│   ├── TOOLS_API.md                    #   工具 API（86 个工具完整签名+返回值示例）
 │   ├── HTTP_API.md                     #   HTTP 接口（请求体、响应体、成功/失败情况）
 │   ├── IMPLEMENTATION.md               #   实现原理（通信类型、校验管线、并发控制、工具动机与依赖）
-│   ├── RESOURCES_PROMPTS.md            #   Resource & Prompt 说明（6 Resource + 8 Prompt 的用途与实现）
+│   ├── RESOURCES_PROMPTS.md            #   Resource & Prompt 说明（7 Resource + 8 Prompt 的用途与实现）
 │   ├── HANDOVER.md                     #   交接文档（架构设计、技术栈、47 条注意事项）
 │   └── EDI系统接口与外部调用汇总.md    #   EDI 系统全量对外接口
 │
-├── tests/                              # 测试套件 (358 项)
+├── tests/                              # 测试套件 (374 项)
 │   ├── test_simulation_components.py   #   90 项：参数目录/Schema/校验管线/wire转换
 │   ├── test_chat_service.py            #   28 项：会话/校验/重复调用/上下文/show_image
 │   ├── test_grpc_client.py             #   24 项：终端结果/日志累积/异常处理
@@ -556,7 +587,6 @@ edi-grpc-mcp/
 │   ├── test_settings.py                #   9 项：环境变量读取/范围限制/启动校验
 │   ├── test_ansys.py                   #   9 项：HFSS 队列迁移后逻辑（mock COM/AEDT）
 │   ├── test_bugfixes.py                #   33 项：历史 bug 修复回归测试
-│   ├── test_token_auth.py              #   5 项：MCP 访问令牌鉴权
 │   ├── test_extended_ops.py            #   14 项：工作区/模型库/原理图扩展工具 payload/校验
 │   ├── test_schematic_library.py       #   9 项：原理图库/导出工具 payload/校验
 │   └── test_health.py                  #   2 项：TCP 检查
@@ -601,12 +631,12 @@ edi-grpc-mcp/
 | `test_settings.py` | 环境变量读取 / 范围限制 / 启动校验 | 9 |
 | `test_ansys.py` | HFSS 队列迁移后逻辑（mock COM / AEDT） | 9 |
 | `test_bugfixes.py` | 历史 bug 修复回归测试 | 33 |
-| `test_token_auth.py` | MCP 访问令牌鉴权（token 中间件） | 5 |
 | `test_extended_ops.py` | 工作区 / 模型库 / 原理图扩展工具 payload / 校验 | 14 |
 | `test_schematic_library.py` | 原理图库 / 导出工具 payload / 校验 | 9 |
+| `test_simulation_agent.py` | TR 集成：session/request_id/调用/错误映射/Resource | 14 |
 
 ```powershell
-uv run pytest -q                 # 全量 358 项
+uv run pytest -q                 # 全量 374 项
 uv run pytest tests/ -v          # 详细输出
 uv run pytest tests/test_simulation_components.py -v  # 单文件
 ```
@@ -629,10 +659,10 @@ powershell -File scripts/build.ps1  # PyInstaller
 | 文档 | 说明 |
 |---|---|
 | [部署指南](./docs/DEPLOY.md) | 打包产物使用、客户端配置 |
-| [工具 API](./docs/TOOLS_API.md) | 全部 69 个工具参数、返回值、示例 |
+| [工具 API](./docs/TOOLS_API.md) | 全部 86 个工具参数、返回值、示例 |
 | [HTTP 接口](./docs/HTTP_API.md) | 全部 HTTP 路由的请求体、响应体、成功/失败情况 |
 | [实现原理](./docs/IMPLEMENTATION.md) | 5 种通信类型、校验管线、并发控制、工具动机与依赖 |
-| [Resource & Prompt](./docs/RESOURCES_PROMPTS.md) | 6 Resource + 8 Prompt 的用途、功能与实现 |
+| [Resource & Prompt](./docs/RESOURCES_PROMPTS.md) | 7 Resource + 8 Prompt 的用途、功能与实现 |
 | [交接文档](./docs/HANDOVER.md) | 架构设计、技术栈、扩展开发、47 条注意事项 |
 | [gRPC 协议](./proto/grpc接口调用.md) | ExternalCall 接口调用说明 |
 | [EDI 系统接口汇总](./docs/EDI系统接口与外部调用汇总.md) | EDI 全量对外接口 |

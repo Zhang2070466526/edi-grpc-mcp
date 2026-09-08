@@ -129,7 +129,7 @@ TURBOCHARTS_PATH=C:\Program Files (x86)\EDI\turbocharts_app.exe  # 留空自动�
 MCP_TRANSPORT=streamable-http
 MCP_HOST=127.0.0.1
 MCP_PORT=50026
-MCP_API_KEY=                              # 可选：留空不鉴权；配置后 /mcp /ui /chat 等要求 ?token= 匹配
+MCP_ALLOWED_PROCESSES=                    # 可选：留空不鉴权；配置后只放行来源进程命中白名单子串的请求
 ```
 
 ## 启动方式
@@ -231,10 +231,7 @@ python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto 
 - EDI_PATH / TURBOCHARTS_PATH / OPENCLAW_WORKSPACE 留空自动检测
 
 ### 访问控制
-- 配置 `MCP_API_KEY` 后，`/mcp` `/ui` `/chat` `/tools/list` `/upload` 端点要求 URL 带 `?token=<key>` 匹配才放行，其余返回 401
-- 留空则不鉴权（向后兼容）；用于「只允许指定 agent 访问」的场景
-- 实现：`start_servers.py` 的 `_TokenAuthMiddleware` 中间件，绕开 `mcp.run()` 手动构建 Starlette app 后 `add_middleware`
-- 启动日志会打印 token 值（`Auth: enabled (?token=xxx required on /mcp)`），便于复制；Chat 前端从 `/ui?token=` 的 URL 提取 token，页面内 fetch 自动带上
+- 通过进程白名单 `MCP_ALLOWED_PROCESSES` 实现：留空不鉴权；配置后只放行来源进程 exe/命令行命中白名单子串的请求，其余返回 403（详见 `docs/ACCESS_CONTROL.md`）
 
 ### Chat 与工具注册
 - Chat 工具列表从 MCP 元数据自动生成，排除同步阻塞和 COM 依赖工具

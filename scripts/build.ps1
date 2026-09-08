@@ -48,15 +48,6 @@ $topFiles = @(Get-ChildItem $distDir -Recurse -File | Sort-Object Length -Descen
 
 # ── [6/7] 生成配置和启动脚本 ──
 Write-Host "[6/7] Generating config + launcher..." -ForegroundColor Yellow
-# 从开发机 .env 读取 MCP_API_KEY（不写死在脚本里，避免 token 进 git 历史）
-$apiKey = ""
-$srcEnv = Join-Path $root ".env"
-if (Test-Path $srcEnv) {
-    $line = Get-Content $srcEnv | Where-Object { $_ -match '^MCP_API_KEY=' } | Select-Object -First 1
-    if ($line) {
-        $apiKey = ($line -split '=', 2)[1].Trim()
-    }
-}
 $envContent = @"
 # EDI gRPC MCP configuration - edit paths for this computer
 EDA_GRPC_SERVER=127.0.0.1:50055
@@ -69,8 +60,8 @@ OPENCLAW_WORKSPACE=
 MCP_TRANSPORT=streamable-http
 MCP_HOST=127.0.0.1
 MCP_PORT=50026
-# Access token: /mcp /ui /chat require ?token= to match this value (leave empty to disable auth)
-MCP_API_KEY=$apiKey
+# Process whitelist: only allow these processes to access /mcp (comma-separated substrings, e.g. hermes_cli). Leave empty to disable.
+MCP_ALLOWED_PROCESSES=edi-agent
 # Optional: image vision analysis (enabled when all three are configured)
 VISION_API_KEY=
 VISION_BASE_URL=

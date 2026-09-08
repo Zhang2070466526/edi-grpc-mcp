@@ -13,7 +13,7 @@
         "Start": {
           "wire_name": "Start",
           "description": "扫描起始频率",
-          "value_type": "number",
+          "value_type": "string",
           "unit_required": true,
           "units": [
             "Hz",
@@ -28,7 +28,7 @@
         "Stop": {
           "wire_name": "Stop",
           "description": "扫描终止频率",
-          "value_type": "number",
+          "value_type": "string",
           "unit_required": true,
           "units": [
             "Hz",
@@ -43,7 +43,7 @@
         "Step": {
           "wire_name": "Step",
           "description": "扫描步长",
-          "value_type": "number",
+          "value_type": "string",
           "unit_required": true,
           "units": [
             "Hz",
@@ -183,7 +183,7 @@
         "GroupDelayAperture": {
           "wire_name": "GroupDelayAperture",
           "description": "群时延孔径",
-          "value_type": "number",
+          "value_type": "string",
           "unit_required": false,
           "units": [],
           "create_allowed": true,
@@ -244,7 +244,7 @@
         "Freq": {
           "wire_name": "Freq[1]",
           "description": "基频频率（同 Freq[1]）",
-          "value_type": "number",
+          "value_type": "string",
           "unit_required": true,
           "units": [
             "Hz",
@@ -274,7 +274,7 @@
           "index_min": 1,
           "index_max": 32,
           "description": "第 N 个基频频率",
-          "value_type": "number",
+          "value_type": "string",
           "unit_required": true,
           "units": [
             "Hz",
@@ -315,7 +315,7 @@
         "Freq": {
           "wire_name": "Freq[1]",
           "description": "基频频率（同 Freq[1]）",
-          "value_type": "number",
+          "value_type": "string",
           "unit_required": true,
           "units": [
             "Hz",
@@ -340,7 +340,7 @@
         "GC_XdB": {
           "wire_name": "GC_XdB",
           "description": "增益压缩",
-          "value_type": "number",
+          "value_type": "string",
           "unit_required": false,
           "units": [],
           "create_allowed": true,
@@ -370,7 +370,7 @@
         "GC_InputFreq": {
           "wire_name": "GC_InputFreq",
           "description": "增益压缩输入频率",
-          "value_type": "number",
+          "value_type": "string",
           "unit_required": true,
           "units": [
             "Hz",
@@ -385,7 +385,7 @@
         "GC_OutputFreq": {
           "wire_name": "GC_OutputFreq",
           "description": "增益压缩输出频率",
-          "value_type": "number",
+          "value_type": "string",
           "unit_required": true,
           "units": [
             "Hz",
@@ -400,7 +400,7 @@
         "GC_InputPowerTol": {
           "wire_name": "GC_InputPowerTol",
           "description": "输入功率容差",
-          "value_type": "number",
+          "value_type": "string",
           "unit_required": false,
           "units": [],
           "create_allowed": true,
@@ -410,17 +410,17 @@
         "GC_OutputPowerTol": {
           "wire_name": "GC_OutputPowerTol",
           "description": "输出功率容差",
-          "value_type": "number",
+          "value_type": "string",
           "unit_required": false,
           "units": [],
           "create_allowed": true,
           "update_allowed": true,
           "permission_source": "legacy_non_readonly"
         },
-        "GC_MaxInputPowerTol": {
-          "wire_name": "GC_MaxInputPowerTol",
+        "GC_MaxInputPower": {
+          "wire_name": "GC_MaxInputPower",
           "description": "最大输入功率容差",
-          "value_type": "number",
+          "value_type": "string",
           "unit_required": false,
           "units": [],
           "create_allowed": true,
@@ -445,7 +445,7 @@
           "index_min": 1,
           "index_max": 32,
           "description": "第 N 个基频频率",
-          "value_type": "number",
+          "value_type": "string",
           "unit_required": true,
           "units": [
             "Hz",
@@ -500,7 +500,7 @@
         "GC_OutputPowerTol": {
           "value": "1e-3"
         },
-        "GC_MaxInputPowerTol": {
+        "GC_MaxInputPower": {
           "value": "100"
         },
         "StatusLevel": {
