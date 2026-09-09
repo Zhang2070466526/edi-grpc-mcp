@@ -6,6 +6,7 @@ r"""EDA 启动工具 — 启动 EDI 客户端并等待 gRPC 服务就绪。
 from __future__ import annotations
 
 import datetime
+import re
 import socket
 import subprocess
 import time
@@ -171,13 +172,15 @@ def get_service_logs(
 
     def _line_level(line: str) -> str:
         up = line.upper()
-        if "TRACEBACK" in up or "EXCEPTION" in up or "ERROR" in up or "FAIL" in up:
+        # 词边界匹配，避免 "no_error"、"information" 等子串误判
+        words = set(re.findall(r"\b(TRACEBACK|EXCEPTION|ERROR|FAIL|WARN|WARNING|INFO|DEBUG)\b", up))
+        if words & {"TRACEBACK", "EXCEPTION", "ERROR", "FAIL"}:
             return "ERROR"
-        if "WARN" in up:
+        if words & {"WARN", "WARNING"}:
             return "WARN"
-        if "INFO" in up:
+        if "INFO" in words:
             return "INFO"
-        if "DEBUG" in up:
+        if "DEBUG" in words:
             return "DEBUG"
         return ""
 

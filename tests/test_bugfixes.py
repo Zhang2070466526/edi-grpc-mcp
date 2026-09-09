@@ -319,12 +319,6 @@ def test_analyze_image_max_tokens_non_int(monkeypatch):
 
 def test_get_components_static_params_validation(monkeypatch):
     from servers.eda import project_manage as pm
-    # 同时提供 original_uuids 与 original_uuid → 拒绝
-    r = pm.get_components_static_params(original_uuids=["u1"], original_uuid="u2")
-    assert r["success"] is False and r["error_code"] == "INVALID_PARAMETERS"
-    # 都不提供 → 拒绝
-    r = pm.get_components_static_params()
-    assert r["success"] is False and r["error_code"] == "INVALID_PARAMETERS"
     # 空字符串数组元素 → 拒绝
     r = pm.get_components_static_params(original_uuids=["  "])
     assert r["success"] is False and r["error_code"] == "INVALID_PARAMETERS"
@@ -348,10 +342,10 @@ def test_get_components_static_params_payload(monkeypatch):
     pm.get_components_static_params(original_uuids=["u1", "u2"])
     assert calls[-1][0] == ecserver_pb2.GET_COMPONENTS_STATIC_PARAMS
     assert calls[-1][1] == {"original_uuids": ["u1", "u2"]}
-    # 单条查询
-    pm.get_components_static_params(original_uuid="u3")
+    # 单条查询（单元素数组）
+    pm.get_components_static_params(original_uuids=["u3"])
     assert calls[-1][0] == ecserver_pb2.GET_COMPONENTS_STATIC_PARAMS
-    assert calls[-1][1] == {"original_uuid": "u3"}
+    assert calls[-1][1] == {"original_uuids": ["u3"]}
 
 
 # ── BATCH_QUERY_COMPONENT 新工具 ─────────────────────────

@@ -39,7 +39,10 @@ def export_project_netlist(
         project_path: EDA 服务所在机器上的 .epp 工程文件绝对路径。
         timeout_seconds: 最长等待时间，默认 60 秒。
     """
-    return call_project_grpc(ecserver_pb2.VIEW_PROJECT_NETLIST, project_path, timeout_seconds)
+    result = call_project_grpc(ecserver_pb2.VIEW_PROJECT_NETLIST, project_path, timeout_seconds)
+    if result.get("success"):
+        result["message"] = "网表导出成功"
+    return result
 
 
 @mcp.tool()

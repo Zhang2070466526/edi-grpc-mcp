@@ -576,6 +576,10 @@ def list_simulation_components(
 
     可列出所有器件（SP/HB/XDB/Var/Sweep/P_nToneG/TermG 等）。
     已知类型做 wire→public 映射；其他类型返回原始 paramsinfo。
+
+    定位：本地磁盘读已保存工程，支持分页/过滤/summary_only。需要 gRPC 实时查全部器件
+    用 list_schematic_components；需要查网表看不到的实例名（如 Var）用
+    tr_query_schematic_components。
     读取磁盘文件，EDI 未保存的修改不会反映到结果中。
     字段包含：component_type/instance_name/component_id/model_id/pin_count/parameter_count/schematic/parameters。
 

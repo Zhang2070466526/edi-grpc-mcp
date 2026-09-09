@@ -110,7 +110,7 @@
 
 - **用途**：从公共/个人模型库选型，选完可生成替换 CSV 落到工程。
 - **干什么**：8 步闭环——`get_model_category_params(categories_only=true)` 确认子类 → **依次**（gRPC 串行，不并行）搜公共/个人库 → 提取过滤条件 → `get_components_static_params` 查厂商/尺寸 → 对比表 → 推荐 → 用户确认后 `list_simulation_components(summary_only=true)` 取 original 三列 → 生成 CSV 调 `replace_models_from_csv`。
-- **怎么实现**：`sub_type_id` + `requirement` 参数；重点标注了字段映射（搜索结果的 `model_uuid` → `get_components_static_params` 的 `original_uuid`；`component_type/instance_name/model_id` → CSV 的 `original_model_type/name/id`），防止 LLM 编造字段。
+- **怎么实现**：`sub_type_id` + `requirement` 参数；重点标注了字段映射（搜索结果的 `model_uuid` → `get_components_static_params` 的 `original_uuids` 数组；`component_type/instance_name/model_id` → CSV 的 `original_model_type/name/id`），防止 LLM 编造字段。
 
 ### 8. `analyze_signal_chain` — 信号链分析
 

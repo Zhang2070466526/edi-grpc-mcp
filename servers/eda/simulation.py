@@ -425,7 +425,9 @@ def simulate_project(
 
     用法："跑一下这个工程的仿真"（同步等待）
 
-    注意：同步阻塞，HTTP 请求可能等待数分钟，交互场景建议异步版本。
+    注意：同步阻塞会卡住 HTTP 请求数分钟，Streamable HTTP 模式下请改用
+    start_simulation_async（异步，返回 task_id）+ get_simulation_async_status 轮询；
+    本工具主要用于 stdio 交互场景。
 
     FetchEvent 长连接期间实时收集 ads_output 增量日志，
     成功或失败均返回完整日志。

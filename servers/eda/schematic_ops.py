@@ -32,12 +32,15 @@ def list_ideal_components(timeout_seconds: int = 60) -> dict[str, Any]:
     Returns:
         gRPC 统一返回结构，业务字段（component_count/components）在 details 中。
     """
-    return call_grpc(
+    result = call_grpc(
         ecserver_pb2.LIST_IDEAL_COMPONENTS,
         {},
         timeout_seconds,
         max_timeout_seconds=300,
     )
+    if result.get("success"):
+        result["message"] = "内置器件查询成功"
+    return result
 
 
 @mcp.tool()

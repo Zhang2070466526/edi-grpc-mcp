@@ -339,6 +339,10 @@ def list_schematic_components(
 
     用法："列出这个工程原理图上的所有器件"、"查看原理图器件"
 
+    定位：gRPC 实时读取当前工程全部器件（含 Var/Sweep 等）。需要分页/过滤/只取器件标识
+    用 list_simulation_components（本地磁盘）；需要查网表看不到的实例名用
+    tr_query_schematic_components。
+
     Args:
         project_path: .epp 工程文件绝对路径。
         timeout_seconds: 最长等待秒数，默认 60。
@@ -350,7 +354,10 @@ def list_schematic_components(
              {"instance_name": "R1", "component_type": "R",
               "active_state": 0, "state": "NORMAL", "parameters": {...}}, ...]}}
     """
-    return call_project_grpc(ecserver_pb2.LIST_SCHEMATIC_COMPONENTS, project_path, timeout_seconds)
+    result = call_project_grpc(ecserver_pb2.LIST_SCHEMATIC_COMPONENTS, project_path, timeout_seconds)
+    if result.get("success"):
+        result["message"] = "原理图器件查询成功"
+    return result
 
 
 @mcp.tool()
@@ -385,8 +392,7 @@ def get_schematic_component_info(
 
 @mcp.tool()
 def get_components_static_params(
-        original_uuids: list[str] | None = None,
-        original_uuid: str = "",
+        original_uuids: list[str],
         timeout_seconds: int = 60,
 ) -> dict[str, Any]:
     """查询器件的固有参数（重量、尺寸、封装、所属厂商、成本等）。
@@ -397,28 +403,19 @@ def get_components_static_params(
     POST /api/v1/components/static-params/，返回上游完整响应（code/message/data）。
 
     Args:
-        original_uuids: 器件 UUID 数组（批量查询），与 original_uuid 二选一。
-        original_uuid: 单个器件 UUID，与 original_uuids 二选一。
+        original_uuids: 器件 UUID 数组（至少一个，非空字符串）。
         timeout_seconds: 最长等待秒数，默认 60。
 
     Returns:
         gRPC 统一返回结构，业务字段（code/message/data）在 details 中。
         data 与请求 UUID 顺序一一对应，未命中的 UUID 保留为 null。
     """
-    if original_uuids and original_uuid.strip():
-        return error_response("INVALID_PARAMETERS", "original_uuids 与 original_uuid 只能提供一个")
+    if not original_uuids:
+        return error_response("INVALID_PARAMETERS", "original_uuids 不能为空数组")
+    if not all(isinstance(u, str) and u.strip() for u in original_uuids):
+        return error_response("INVALID_PARAMETERS", "original_uuids 必须是非空字符串数组")
 
-    if original_uuids is not None:
-        if not original_uuids:
-            return error_response("INVALID_PARAMETERS", "original_uuids 不能为空数组")
-        if not all(isinstance(u, str) and u.strip() for u in original_uuids):
-            return error_response("INVALID_PARAMETERS", "original_uuids 必须是非空字符串数组")
-        payload = {"original_uuids": [u.strip() for u in original_uuids]}
-    elif original_uuid.strip():
-        payload = {"original_uuid": original_uuid.strip()}
-    else:
-        return error_response("INVALID_PARAMETERS", "必须提供 original_uuids 或 original_uuid")
-
+    payload = {"original_uuids": [u.strip() for u in original_uuids]}
     return call_grpc(
         ecserver_pb2.GET_COMPONENTS_STATIC_PARAMS,
         payload,

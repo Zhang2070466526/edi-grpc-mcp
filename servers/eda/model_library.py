@@ -57,6 +57,9 @@ def get_model_category_params(timeout_seconds: int = 60,
                     trimmed.append(item)
             result.setdefault("details", {})["data"] = trimmed
 
+    if result.get("success"):
+        result["message"] = "模型分类参数获取成功"
+
     return result
 
 

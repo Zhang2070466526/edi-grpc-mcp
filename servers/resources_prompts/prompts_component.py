@@ -104,7 +104,7 @@ def prompt_select_component(sub_type_id: str, requirement: str) -> list[dict[str
         "2. 若需求含参数约束（增益/频率/NF 等）：调 `get_model_category_params()` 取该子类参数 id（如 gain/min_freq），\n"
         "   构造成 filters（例 [{\"key\":\"gain\",\"min\":20}]）；无约束则 filters 传空。\n"
         "3. 依次调用 `search_public_models` 与 `search_personal_models`（sub_type 相同、带 filters；EDA gRPC 串行执行，不要并行）。\n"
-        "4. 对候选调 `get_components_static_params`（把搜索结果里的 `model_uuid` 值作为 `original_uuid` 参数传入；\n"
+        "4. 对候选调 `get_components_static_params`（把搜索结果里的 `model_uuid` 值作为 `original_uuids` 数组参数传入；\n"
         "   二者值相同仅参数名不同，选型结果里没有 `alternative_model_id` 字段）查厂商/尺寸/封装。\n"
         "5. 输出对比表：型号 | 厂商 | 关键参数 | 尺寸 | 来源(公共/个人)。\n"
         "6. 给出推荐及理由，不编造参数。\n"

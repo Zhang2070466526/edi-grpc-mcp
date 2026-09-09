@@ -210,8 +210,7 @@ get_schematic_component_info(project_path: str, instance_name: str, timeout_seco
 from servers.eda.project_manage import get_components_static_params
 
 get_components_static_params(
-    original_uuids: list[str] | None = None,
-    original_uuid: str = "",
+    original_uuids: list[str],
     timeout_seconds: int = 60,
 ) -> dict
 ```
@@ -220,8 +219,7 @@ get_components_static_params(
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
-| `original_uuids` | list | 否 | None | 器件 UUID 数组（批量），与 `original_uuid` 二选一 |
-| `original_uuid` | str | 否 | "" | 单个器件 UUID，与 `original_uuids` 二选一 |
+| `original_uuids` | list | 是 | — | 器件 UUID 数组（至少一个，非空字符串） |
 | `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
 
 返回（gRPC 统一结构，业务字段在 `details` 中）：
@@ -239,6 +237,48 @@ get_components_static_params(
 ```
 
 `data` 与请求 UUID 顺序一一对应，未命中的 UUID 保留为 `null`。
+
+---
+
+### `batch_query_component`
+
+```python
+from servers.eda.project_manage import batch_query_component
+
+batch_query_component(
+    model_name_list: list[str],
+    timeout_seconds: int = 60,
+) -> dict
+```
+
+按器件型号字符串列表批量查询模型信息。只接受型号串（如 `"MAAD_008866"`），不接受 UUID（按 UUID 查固有参数用 `get_components_static_params`，UUID 或型号都认用 `tr_query_components`）。不需要打开工程，也不需要 `project_path`。gRPC 服务将请求转发到 `POST /api/v1/models/manage/batch_query_component/`。
+
+下游模型服务只返回命中的型号且不保序。本工具会将返回的 `data` 按输入 `model_name_list` 顺序对齐：未命中的型号补 `null` 占位，并在 `missing` 中列出未命中的型号。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `model_name_list` | list | 是 | — | 器件型号字符串数组（如 `"MAAD_008866"`），顺序和重复项保留 |
+| `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
+
+返回（gRPC 统一结构，业务字段在 `details` 中）：
+
+```python
+{
+    "success": True,
+    "status": "SUCCEEDED",
+    "details": {
+        "code": 200,
+        "message": "器件批量查询成功",
+        "data": [
+            {"model": "MAAD_008866", "manufacturer": "MACOM", "type": "...", "specs": "...", "description": "..."},
+            null
+        ],
+        "missing": ["未命中的型号"]
+    }
+}
+```
+
+`data` 与输入 `model_name_list` 顺序一一对应，未命中项为 `null`；`missing` 列出未命中的型号。
 
 ---
 
