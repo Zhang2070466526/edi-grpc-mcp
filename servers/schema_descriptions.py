@@ -94,3 +94,26 @@ def inject_tool_descriptions(mcp) -> tuple[int, int]:
 
     _logger.info("tool schema descriptions injected=%d missing=%d", injected, missing)
     return injected, missing
+
+
+def trim_tool_descriptions(mcp) -> int:
+    """把每个工具的 description 从全文 docstring 截成第一段摘要。
+
+    FastMCP 默认把 ``fn.__doc__`` 整段塞进 tools/list 的 description（含 用法/Args/Returns），
+    导致 LLM 工具选择上下文膨胀、语义搜索噪声大。这里只保留首行摘要，全文仍留在
+    ``tool.fn.__doc__`` 供人类查看，不丢失信息。
+    """
+    trimmed = 0
+    tool_manager = getattr(mcp, "_tool_manager", None)
+    tools = getattr(tool_manager, "_tools", {}) if tool_manager is not None else {}
+    for tool in tools.values():
+        fn = getattr(tool, "fn", None)
+        doc = (getattr(fn, "__doc__", "") or "").strip()
+        if not doc:
+            continue
+        first = doc.split("\n\n", 1)[0].strip()
+        if first and first != tool.description:
+            tool.description = first
+            trimmed += 1
+    _logger.info("tool descriptions trimmed=%d", trimmed)
+    return trimmed

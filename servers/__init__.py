@@ -43,11 +43,26 @@ _settings = get_settings()
 mcp = FastMCP(
     "EDI gRPC MCP",
     instructions=(
-        "EDA 工程操作工具集："
-        "扫描工程、打开工程、网表查看、仿真执行、截图原理图、"
-        "模型替换、关闭工程、ADS 仿真控制、启动 EDI、RAW 图表生成、"
-        "ANSYS HFSS 工具。"
-        "操作规则：产生输出文件（截图/图表/报告）或采用默认值时，要告知用户输出位置或默认值，暂时不用询问是否需要调整。"
+        "EDI gRPC MCP —— EDA 设计与仿真工具集（EDI / ANSYS HFSS / CST 三大仿真引擎）。\n"
+        "\n"
+        "【工具分类导航】\n"
+        "- 工程管理：list_epp_projects(扫描工程) / create_project(新建) / open_edi_project(打开) / get_project_summary(概览) / list_schematic_components(查器件)\n"
+        "- 仿真：start_simulation_async(异步启动，返回 task_id) / get_simulation_async_status(查进度) / get_simulation_async_result(取结果) / simulate_project(同步)\n"
+        "- 仿真器件：list_simulation_components / create_simulation_component / update_simulation_component / delete_simulation_component / get_simulation_component_schema(查参数定义)\n"
+        "- 模型库：get_model_category_params(查分类) / search_public_models / search_personal_models / load_performance_component_from_mms\n"
+        "- 图表：list_result_curves(查可用曲线) / turbocharts_convert(RAW 转曲线图) / compare_simulation_results(多结果对比)\n"
+        "- 报告：generate_simulation_report(生成 PDF/DOCX)\n"
+        "- 电磁仿真：open_hfss_project 等 ANSYS HFSS 工具 / cst_solve_async 等 CST 工具\n"
+        "\n"
+        "【常用工作流】\n"
+        "1. 查工程：list_epp_projects → get_project_summary\n"
+        "2. 跑仿真：start_simulation_async → 轮询 get_simulation_async_status → get_simulation_async_result\n"
+        "3. 出报告：get_project_summary + turbocharts_convert → generate_simulation_report\n"
+        "4. 改器件参数：list_simulation_components → update_simulation_component\n"
+        "\n"
+        "【不确定用哪个工具】先用 tool_search 按关键词搜工具名/描述，再用 tool_describe 查看具体参数。\n"
+        "\n"
+        "【操作规则】产生输出文件（截图/图表/报告）或采用默认值时，先告知用户输出位置/默认值。仿真用异步接口，按 task_id 轮询进度。"
     ),
     stateless_http=(
         _settings.mcp_transport == "streamable-http"

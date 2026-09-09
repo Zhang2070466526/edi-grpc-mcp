@@ -175,6 +175,20 @@ def test_all_tool_params_have_description():
     )
 
 
+def test_tool_descriptions_are_concise():
+    """工具 description 应只含首行摘要，不含 用法/Args/Returns 整段。
+
+    防止 description 被塞进全文 docstring，导致 LLM 工具选择上下文膨胀、语义搜索噪声大。
+    """
+    from start_servers import mcp
+    bad: dict[str, str] = {}
+    for name, tool in sorted(mcp._tool_manager._tools.items()):
+        desc = getattr(tool, "description", "") or ""
+        if "\n\n" in desc or any(kw in desc for kw in ("用法:", "Args:", "Returns:")):
+            bad[name] = desc[:60]
+    assert not bad, f"以下工具 description 未截断（仍含多段或用法/Args/Returns）: {bad}"
+
+
 if __name__ == "__main__":
     test_all_tools_registered()
     test_grpc_timeout_limits()
