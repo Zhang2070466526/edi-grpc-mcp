@@ -16,7 +16,7 @@ from servers import mcp
 @mcp.tool()
 def replace_models_from_csv(
     project_path: str,
-    csv_path: str,
+    input_csv_path: str,
     timeout_seconds: int = 60,
 ) -> dict[str, Any]:
     """按 CSV 文件批量替换工程中的元件模型。
@@ -27,12 +27,12 @@ def replace_models_from_csv(
 
     Args:
         project_path: EDA 服务所在机器上的 .epp 工程文件绝对路径。
-        csv_path: 模型替换 CSV 文件绝对路径。
+        input_csv_path: 模型替换 CSV 文件绝对路径（输入，读取此 CSV）。
         timeout_seconds: 最长等待时间，默认 60 秒。
 
     Returns:
         gRPC 统一返回结构：{"success": True, "completed": True, "status": "SUCCEEDED", ...}
     """
-    resolved_csv = validate_file(csv_path, (".csv",))
+    resolved_csv = validate_file(input_csv_path, (".csv",))
     return call_project_grpc(ecserver_pb2.MODEL_REPLACE, project_path, timeout_seconds,
                              csv_path=resolved_csv)

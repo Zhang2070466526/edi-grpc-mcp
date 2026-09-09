@@ -29,7 +29,7 @@ from servers import mcp
 def compare_simulation_results(
     result_paths: list[str],
     curve: str,
-    img_path: str,
+    output_path: str,
     chart_type: str = "SP",
     labels: list[str] | None = None,
     dependency: str = "freq",
@@ -45,7 +45,7 @@ def compare_simulation_results(
     Args:
         result_paths: RAW 文件路径列表（2-8 个）。
         curve: 曲线名，如 "DB_S[2,1]"。
-        img_path: 对比图输出路径。
+        output_path: 对比图输出路径。
         chart_type: 图表类型，默认 "SP"。
         labels: 每个结果文件的标签，默认使用文件名。
         dependency: 依赖轴名称，默认 "freq"。
@@ -82,11 +82,11 @@ def compare_simulation_results(
                  Path(csv_path).name if csv_path else "(none)")
 
     # 规范化输出路径
-    img_path = str(Path(img_path).expanduser().resolve())
+    output_path = str(Path(output_path).expanduser().resolve())
     if csv_path:
         csv_path = str(Path(csv_path).expanduser().resolve())
-    if not Path(img_path).parent.is_dir():
-        return error_response("OUTPUT_DIRECTORY_NOT_FOUND", f"输出目录不存在: {Path(img_path).parent}")
+    if not Path(output_path).parent.is_dir():
+        return error_response("OUTPUT_DIRECTORY_NOT_FOUND", f"输出目录不存在: {Path(output_path).parent}")
 
     # Step 1: export each RAW to temp CSV (serialized via runner)
     dep_key = dependency
@@ -180,9 +180,9 @@ def compare_simulation_results(
     ax.legend()
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
-    fig.savefig(img_path, dpi=150)
+    fig.savefig(output_path, dpi=150)
     plt.close(fig)
-    img_ok = Path(img_path).exists()
+    img_ok = Path(output_path).exists()
 
     # Step 5: write comparison CSV
     csv_ok = False
@@ -197,13 +197,13 @@ def compare_simulation_results(
 
     artifacts: list[dict] = []
     if img_ok:
-        artifacts.append(build_artifact("image", img_path, "compare_simulation_results"))
+        artifacts.append(build_artifact("image", output_path, "compare_simulation_results"))
     if csv_ok:
         artifacts.append(build_artifact("csv", csv_path, "compare_simulation_results"))
 
     result = {
         "success": img_ok,
-        "image_path": img_path,
+        "image_path": output_path,
         "csv_path": csv_path if csv_ok else "",
         "curve": curve,
         "alignment": alignment,
@@ -213,7 +213,7 @@ def compare_simulation_results(
         "message": "对比图已生成。" if img_ok else "对比图生成失败。",
     }
     if img_ok and result.get("success"):
-        result.update(build_file_link(img_path, "打开对比图"))
+        result.update(build_file_link(output_path, "打开对比图"))
     return result
 
 

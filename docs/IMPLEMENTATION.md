@@ -287,7 +287,7 @@ wire_params, error = _prepare_parameters(ct, parameters, op="update")
 | 工具 | EventType | MCP 层校验 |
 |---|---|---|
 | `export_project_netlist` | VIEW_PROJECT_NETLIST(3) | 仅校验 `project_path` |
-| `capture_schematic` | CAPTURE_SCHEMATIC(7) | 额外校验 `img_path` 扩展名（PNG/JPG/BMP/SVG）和路径 resolve |
+| `capture_schematic` | CAPTURE_SCHEMATIC(7) | 额外校验 `output_path` 扩展名（PNG/JPG/BMP/SVG）和路径 resolve |
 | `replace_models_from_csv` | MODEL_REPLACE(6) | 额外校验 `csv_path` 存在且后缀 `.csv` |
 | `get_model_category_params` | GET_MODEL_CATEGORY_PARAMS(24) | 无业务参数，`payload_json` 为空对象 |
 | `search_public_models` | SEARCH_PUBLIC_MODELS(25) | `sub_type` 非空；`filters` 数组原样转发 |
@@ -296,7 +296,7 @@ wire_params, error = _prepare_parameters(ct, parameters, op="update")
 | `search_schematic_from_personal_library` | SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY(39) | 同公共库 |
 | `use_schematic_from_library_create_project` | USE_SCHEMATIC_FROM_LIBRARY_CREATE_PROJECT(36) | `file_uuid` 非空 |
 | `use_schematic_from_library_import` | USE_SCHEMATIC_FROM_LIBRARY_IMPORT(37) | `file_uuid` 非空 + `project_path` 校验 |
-| `export_schematic_components_to_csv` | EXPORT_SCHEMATIC_COMPONENTS_TO_CSV(40) | `save_path` 非空 |
+| `export_schematic_components_to_csv` | EXPORT_SCHEMATIC_COMPONENTS_TO_CSV(40) | `csv_path` 非空 |
 
 ### 1.8 工作区 / 原理图扩展（9 个工具）
 
@@ -510,7 +510,7 @@ def run_turbocharts(command, timeout_seconds=120):
 **命令行构造**（`turbocharts_convert`）：
 
 ```python
-cmd = [TURBOCHARTS_PATH, "--raw", raw_path, "--img", img_path, "--type", chart_type]
+cmd = [TURBOCHARTS_PATH, "--raw", raw_path, "--img", output_path, "--type", chart_type]
 if csv_path:   cmd.extend(["--csv", csv_path])
 if linename:   cmd.extend(["--linename", linename])
 if dependency: cmd.extend(["--dependcy", dependency])  # 注意：程序的参数名就是 --dependcy
@@ -519,7 +519,7 @@ if ac_config:  cmd.extend(["--ac", ac_config])
 
 关键点：
 - `--dependcy` 是 `turbocharts_app.exe` 的真实参数名（少一个 n，非拼写错误）
-- MCP 层校验 `img_path` 扩展名（PNG/JPG/BMP/SVG）
+- MCP 层校验 `output_path` 扩展名（PNG/JPG/BMP/SVG）
 - `timeout_seconds` 范围 1-600
 
 ### 4.2 RAW 曲线查询

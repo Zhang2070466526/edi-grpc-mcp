@@ -58,7 +58,7 @@ def _com_open_project(project_path: str) -> dict[str, Any]:
 def open_hfss_project(
     project_path: str,
     aedt_path: str = "",
-    wait_timeout: int = 30,
+    timeout_seconds: int = 30,
 ) -> dict[str, Any]:
     """启动 AEDT 并打开 .aedt 项目（COM 附着优先，subprocess 单次启动兜底）。
 
@@ -68,14 +68,14 @@ def open_hfss_project(
     Args:
         project_path: .aedt 项目文件绝对路径。
         aedt_path: AEDT（ansysedt.exe）路径，默认自动检测。
-        wait_timeout: 等待工程打开的超时秒数，默认 30（1-120）。
+        timeout_seconds: 等待工程打开的超时秒数，默认 30（1-120）。
 
     Returns:
         {"success": True, "status": "opened/already_open", "project_opened": True,
          "method": "com/subprocess", "duration_s": 1.2}
     """
     t0 = time.monotonic()
-    wait_timeout = max(1, min(wait_timeout, 120))
+    timeout_seconds = max(1, min(timeout_seconds, 120))
 
     try:
         resolved = validate_file(project_path, (".aedt", ".aedtz"))
@@ -174,7 +174,7 @@ def open_hfss_project(
             logger.exception("AEDT launch failed")
             return {"success": False, "status": "launch_failed", "message": str(exc)}
 
-        deadline = time.monotonic() + wait_timeout
+        deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:
             if proc.poll() is not None:
                 return {
@@ -340,15 +340,15 @@ def close_hfss_project(
 @mcp.tool()
 def launch_aedt(
     aedt_path: str = "",
-    wait_timeout: int = 30,
+    timeout_seconds: int = 30,
 ) -> dict[str, Any]:
     """启动 AEDT（不打开项目）。已运行时仅返回状态。
 
     Args:
         aedt_path: AEDT（ansysedt.exe）路径，默认自动检测。
-        wait_timeout: 等待 COM 就绪的超时秒数，默认 30（1-120）。
+        timeout_seconds: 等待 COM 就绪的超时秒数，默认 30（1-120）。
     """
-    wait_timeout = max(1, min(wait_timeout, 120))
+    timeout_seconds = max(1, min(timeout_seconds, 120))
     global _LAST_PID
 
     exe = aedt_path or AEDT_PATH
@@ -370,7 +370,7 @@ def launch_aedt(
         except Exception as exc:
             return {"success": False, "status": "launch_failed", "message": str(exc)}
 
-        deadline = time.monotonic() + wait_timeout
+        deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:
             if query_desktop_state()["connected"]:
                 return {"success": True, "status": "started", "com_ready": True,

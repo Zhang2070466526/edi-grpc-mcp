@@ -13,7 +13,7 @@ turbocharts_convert   将 ADS 仿真 RAW 结果转为 PNG 曲线图和 CSV
 
 参数说明：
     raw_path    ADS RAW 结果文件路径（必填）
-    img_path    输出图片路径，支持 PNG/JPG 等（必填）
+    output_path    输出图片路径，支持 PNG/JPG 等（必填）
     chart_type  转换类型："SP"（S参数）、"HB"（谐波平衡）、"XDB"（必填）
 
     可选参数：
@@ -273,9 +273,9 @@ def list_result_curves(result_path: str) -> dict[str, Any]:
     return response
 
 
-def _build_cmd(raw_path, img_path, chart_type, *, linename="", dependency="", csv_path="", ac_config=""):
+def _build_cmd(raw_path, output_path, chart_type, *, linename="", dependency="", csv_path="", ac_config=""):
     """构造 turbocharts 命令行参数列表（基础参数 + 可选参数）。"""
-    cmd = [TURBOCHARTS_PATH, "--raw", raw_path, "--img", img_path, "--type", chart_type]
+    cmd = [TURBOCHARTS_PATH, "--raw", raw_path, "--img", output_path, "--type", chart_type]
     if linename:
         cmd.extend(["--linename", linename])
     if csv_path:
@@ -290,7 +290,7 @@ def _build_cmd(raw_path, img_path, chart_type, *, linename="", dependency="", cs
 @mcp.tool()
 def turbocharts_convert(
     raw_path: str,
-    img_path: str,
+    output_path: str,
     chart_type: str,
     csv_path: str = "",
     linename: str = "",
@@ -342,7 +342,7 @@ def turbocharts_convert(
 
     Args:
         raw_path: 输入的 ADS RAW 文件路径（必填）。
-        img_path: 输出的图像文件路径，支持 PNG/JPG 等（必填）。
+        output_path: 输出的图像文件路径，支持 PNG/JPG 等（必填）。
         chart_type: 转换类型，如 "SP"、"HB"、"XDB"（必填）。
         csv_path: 可选，同时导出的 CSV 文件路径。
         linename: 可选，曲线名，格式为 单位_曲线名[端口]。
@@ -358,14 +358,14 @@ def turbocharts_convert(
     validate_file(TURBOCHARTS_PATH)
 
     _logger.info("turbocharts_convert raw=%s img=%s type=%s linename=%s csv=%s dep=%s ac=%s",
-                 Path(raw_path).name, Path(img_path).name, chart_type,
+                 Path(raw_path).name, Path(output_path).name, chart_type,
                  linename or "(all)", Path(csv_path).name if csv_path else "(none)",
                  dependency or "(none)", ac_config or "(none)")
 
     # 校验输出图片扩展名
-    img_ext = Path(img_path).suffix.lower()
+    img_ext = Path(output_path).suffix.lower()
     if img_ext not in (".png", ".jpg", ".jpeg", ".bmp", ".svg"):
-        raise ValueError(f"img_path 扩展名不支持: {img_ext}，请使用 PNG/JPG/BMP/SVG")
+        raise ValueError(f"output_path 扩展名不支持: {img_ext}，请使用 PNG/JPG/BMP/SVG")
 
     warnings: list[str] = []
     artifacts: list[dict] = []
@@ -381,12 +381,12 @@ def turbocharts_convert(
     need_split = csv_path and len(vswr_curves) > 1  # 需要拆分：有 CSV 且多条 VSWR
 
     # ── 第 1 步：生成 PNG 图片（所有曲线一次性合并，VSWR 不受影响）──
-    cmd_img = _build_cmd(raw_path, img_path, chart_type, linename=linename, dependency=dependency, ac_config=ac_config)
+    cmd_img = _build_cmd(raw_path, output_path, chart_type, linename=linename, dependency=dependency, ac_config=ac_config)
 
     result = run_turbocharts(cmd_img, timeout_seconds=120)
-    img_generated = Path(img_path).exists()
+    img_generated = Path(output_path).exists()
     if img_generated:
-        artifacts.append(build_artifact("image", img_path, "turbocharts_convert"))
+        artifacts.append(build_artifact("image", output_path, "turbocharts_convert"))
 
     # ── 第 2 步：CSV 导出（自动拆分 VSWR） ──
     if need_split:
@@ -405,14 +405,14 @@ def turbocharts_convert(
         vswr_artifacts = []
         for vswr in vswr_curves:
             csv_vswr = str(csv_dir / f"{csv_stem}_{vswr.replace('[','').replace(']','').replace(',','_')}{csv_ext}")
-            cmd_csv = _build_cmd(raw_path, img_path, chart_type, linename=vswr, dependency=dependency, csv_path=csv_vswr, ac_config=ac_config)
+            cmd_csv = _build_cmd(raw_path, output_path, chart_type, linename=vswr, dependency=dependency, csv_path=csv_vswr, ac_config=ac_config)
             proc = run_turbocharts(cmd_csv, timeout_seconds=120)
             if proc.returncode == 0 and Path(csv_vswr).exists():
                 artifacts.append(build_artifact("csv", csv_vswr, "turbocharts_convert"))
 
         # 非 VSWR 曲线 CSV
         if csv_non and non_vswr:
-            cmd_non = _build_cmd(raw_path, img_path, chart_type, linename=non_vswr, dependency=dependency, csv_path=csv_non, ac_config=ac_config)
+            cmd_non = _build_cmd(raw_path, output_path, chart_type, linename=non_vswr, dependency=dependency, csv_path=csv_non, ac_config=ac_config)
             proc = run_turbocharts(cmd_non, timeout_seconds=120)
             if proc.returncode == 0 and Path(csv_non).exists():
                 artifacts.append(build_artifact("csv", csv_non, "turbocharts_convert"))
@@ -420,7 +420,7 @@ def turbocharts_convert(
         warnings.append(f"VSWR 曲线已自动拆分为 {len(vswr_curves)} 次 CSV 导出：{', '.join(vswr_curves)}")
     elif csv_path:
         # 单条 VSWR 或无 VSWR，正常调用
-        cmd_csv = _build_cmd(raw_path, img_path, chart_type, linename=linename, dependency=dependency, csv_path=csv_path, ac_config=ac_config)
+        cmd_csv = _build_cmd(raw_path, output_path, chart_type, linename=linename, dependency=dependency, csv_path=csv_path, ac_config=ac_config)
         r = run_turbocharts(cmd_csv, timeout_seconds=120)
         if r.returncode == 0 and Path(csv_path).exists():
             artifacts.append(build_artifact("csv", csv_path, "turbocharts_convert"))
@@ -439,13 +439,13 @@ def turbocharts_convert(
         "img_generated": img_generated,
         "csv_generated": csv_count > 0,
         "artifacts": artifacts,
-        "output_paths": {"img": img_path} | ({"csv": csv_path} if csv_path and not need_split else {}),
+        "output_paths": {"img": output_path} | ({"csv": csv_path} if csv_path and not need_split else {}),
         "message": "曲线图已生成。" if img_generated else "图表生成失败，请检查 RAW 文件和参数。",
     }
     if warnings:
         resp["warnings"] = warnings
     if result.returncode == 0 and img_generated:
-        resp.update(build_file_link(img_path, "打开曲线图"))
+        resp.update(build_file_link(output_path, "打开曲线图"))
     return resp
 
 

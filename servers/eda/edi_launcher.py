@@ -25,7 +25,7 @@ from servers import mcp
 def launch_edi(
     edi_path: str = "",
     wait_for_grpc: bool = True,
-    wait_timeout: int = 30,
+    timeout_seconds: int = 30,
 ) -> dict[str, Any]:
     """启动 EDI 客户端并等待 gRPC 就绪。已运行时跳过启动。
 
@@ -34,7 +34,7 @@ def launch_edi(
     Args:
         edi_path: EDI.exe 路径，默认使用配置的 EDI_PATH。
         wait_for_grpc: 是否等待 gRPC 服务端口就绪，默认 True。
-        wait_timeout: 等待 gRPC 就绪的超时秒数，默认 30 秒。
+        timeout_seconds: 等待 gRPC 就绪的超时秒数，默认 30 秒。
 
     Returns:
         {"process_started": True, "grpc_ready": True, "success": True,
@@ -95,7 +95,7 @@ def launch_edi(
 
     if wait_for_grpc:
         started = time.monotonic()
-        while time.monotonic() - started < wait_timeout:
+        while time.monotonic() - started < timeout_seconds:
             try:
                 with socket.create_connection((host, port), timeout=1):
                     result["grpc_ready"] = True
