@@ -25,26 +25,15 @@ def prompt_run_and_review_simulation(
 
     Args:
         project_path: .epp 工程文件绝对路径。
-        execution_mode: async（异步，推荐）或 sync（同步）。
+        execution_mode: 已废弃（仿真仅支持异步），保留参数兼容旧调用。
         analyze_log: 是否分析 ads_output 日志。
     """
-    mode = execution_mode.lower().strip() or "async"
-    if mode not in ("async", "sync"):
-        mode = "async"
-
     steps: list[str] = [
         "1. 调用 `get_project_summary` 确认工程中有仿真器件。",
+        "2. 调用 `start_simulation_async` 启动仿真，获取 task_id。",
+        "3. 启动后最多立即查询一次 `get_simulation_async_status`。如果仍在运行，返回 task_id 告知用户稍后查询。不要紧密轮询（间隔不少于 10 秒），单次对话最多自动查询 3 次。",
+        "4. 完成后调用 `get_simulation_async_result` 获取完整结果和日志。",
     ]
-    if mode == "async":
-        steps += [
-            "2. 调用 `start_simulation_async` 启动仿真，获取 task_id。",
-            "3. 启动后最多立即查询一次 `get_simulation_async_status`。如果仍在运行，返回 task_id 告知用户稍后查询。不要紧密轮询（间隔不少于 10 秒），单次对话最多自动查询 3 次。",
-            "4. 完成后调用 `get_simulation_async_result` 获取完整结果和日志。",
-        ]
-    else:
-        steps += [
-            "2. 调用 `simulate_project` 等待仿真完成。",
-        ]
 
     if analyze_log:
         steps += [
@@ -69,7 +58,6 @@ def prompt_run_and_review_simulation(
             "role": "user",
             "content": (
                     f"请对工程 {project_path} 执行仿真并分析结果。\n"
-                    f"执行方式：{mode}\n"
                     f"分析日志：{'是' if analyze_log else '否'}\n\n"
                     + "\n".join(steps)
             ),

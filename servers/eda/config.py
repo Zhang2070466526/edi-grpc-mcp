@@ -18,6 +18,7 @@ else:
     load_dotenv()
 
 from servers.settings import get_settings as _get_settings
+from servers.utils import validate_file
 _settings = _get_settings()
 EDA_GRPC_SERVER = _settings.eda_grpc_server
 MCP_TRANSPORT = _settings.mcp_transport if _settings.mcp_transport else None
@@ -50,9 +51,6 @@ def _find_first(*candidates: str) -> str:
 
 EDI_PATH = _settings.edi_path or _find_first(*_EDI_CANDIDATES)
 TURBOCHARTS_PATH = _settings.turbocharts_path or _find_first(*_TC_CANDIDATES)
-
-
-from servers.utils import validate_file
 
 
 def validate_project_path(project_path: str) -> str:

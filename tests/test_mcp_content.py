@@ -104,12 +104,13 @@ class TestPromptsDirect:
         assert "禁止自动重试" in msgs[0]["content"]
         assert "ads_output" in msgs[0]["content"]
 
-    def test_run_and_review_sync(self):
+    def test_run_and_review_mode_deprecated(self):
         from servers.resources_prompts.prompts_simulation import prompt_run_and_review_simulation
         msgs = prompt_run_and_review_simulation(
             "C:/test.epp", execution_mode="sync", analyze_log=False)
-        assert "simulate_project" in msgs[0]["content"]
-        assert "start_simulation_async" not in msgs[0]["content"]
+        # execution_mode 已废弃，始终走异步
+        assert "start_simulation_async" in msgs[0]["content"]
+        assert "simulate_project" not in msgs[0]["content"]
 
     def test_configure_create(self):
         from servers.resources_prompts.prompts_component import prompt_configure_simulation_component

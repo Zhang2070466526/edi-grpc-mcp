@@ -21,7 +21,6 @@ from starlette.responses import FileResponse, JSONResponse
 from servers import mcp
 from servers.token_registry import TokenStore
 from servers.multimodal_vision.validators import validate_image_path, IMAGE_MIME_MAP
-from servers.multimodal_vision.workspace_copy import OPENCLAW_WORKSPACE_PATH
 
 load_dotenv()
 _logger = logging.getLogger("multimodal.display")
@@ -37,10 +36,8 @@ _MIME_TYPES = IMAGE_MIME_MAP
 # ═══════════════════════════════════════════════════════════
 
 def _workspace_note() -> str:
-    """根据工作区配置返回相应的提示文案。"""
-    if OPENCLAW_WORKSPACE_PATH is not None:
-        return "如需在工作区内查看，可要求复制到 OpenClaw 工作区。"
-    return "当前未配置 OPENCLAW_WORKSPACE，请使用资源管理器打开该文件。"
+    """返回查看图片的提示文案（工作区复制功能已移除）。"""
+    return "请使用资源管理器打开该文件。"
 
 
 @mcp.tool(structured_output=False)

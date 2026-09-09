@@ -47,7 +47,7 @@ mcp = FastMCP(
         "\n"
         "【工具分类导航】\n"
         "- 工程管理：list_epp_projects(扫描工程) / create_project(新建) / open_edi_project(打开) / get_project_summary(概览) / list_schematic_components(查器件)\n"
-        "- 仿真：start_simulation_async(异步启动，返回 task_id) / get_simulation_async_status(查进度) / get_simulation_async_result(取结果) / simulate_project(同步)\n"
+        "- 仿真：start_simulation_async(异步启动，返回 task_id) / get_simulation_async_status(查进度) / get_simulation_async_result(取结果)\n"
         "- 仿真器件：list_simulation_components / create_simulation_component / update_simulation_component / delete_simulation_component / get_simulation_component_schema(查参数定义)\n"
         "- 模型库：get_model_category_params(查分类) / search_public_models / search_personal_models / load_performance_component_from_mms\n"
         "- 图表：list_result_curves(查可用曲线) / turbocharts_convert(RAW 转曲线图) / compare_simulation_results(多结果对比)\n"

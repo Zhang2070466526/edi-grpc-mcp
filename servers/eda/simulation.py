@@ -256,7 +256,7 @@ def start_simulation_async(
         log_source: str = "mcp_client",
         timeout_seconds: int = 600,
 ) -> dict[str, Any]:
-    """启动异步仿真，立即返回 task_id 供get_simulation_async_status后续查询进度。
+    """启动异步仿真，立即返回 task_id 供 get_simulation_async_status 查进度；仿真日志在结果查询的 ads_output 字段。
 
     用法："帮我跑一下这个工程的仿真"、"启动仿真，超时设 10 分钟"
 
@@ -323,7 +323,7 @@ def start_simulation_async(
 
 @mcp.tool()
 def get_simulation_async_status(task_id: str) -> dict[str, Any]:
-    """查询异步仿真进度和实时日志。运行中即可调用，不阻塞。
+    """查询异步仿真进度和实时日志（仿真日志在 ads_output 字段）。运行中即可调用，不阻塞。
 
     用法："查一下 task_id 为 xxx 的仿真进度"、"仿真跑完了吗"
 
@@ -370,7 +370,7 @@ def get_simulation_async_status(task_id: str) -> dict[str, Any]:
 
 @mcp.tool()
 def get_simulation_async_result(task_id: str) -> dict[str, Any]:
-    """获取异步仿真最终结果。运行中返回当前状态和已接收的部分日志，完成后返完整的仿真结果和日志(ads_output)。
+    """获取异步仿真最终结果，完整仿真日志在 ads_output 字段。运行中返回部分日志，完成后返回完整结果。
 
     用法："仿真结果出来了吗"、"把 task_id xxx 的完整日志给我"
 
@@ -415,7 +415,7 @@ def get_simulation_async_result(task_id: str) -> dict[str, Any]:
     }
 
 
-@mcp.tool()
+# 已取消注册为 MCP 工具（同步仿真默认改用异步 start_simulation_async），保留代码备用
 def simulate_project(
         project_path: str,
         log_source: str = "mcp_client",

@@ -58,7 +58,7 @@ from servers.eda.model_replace import replace_models_from_csv  # noqa: E402
 from servers.eda.edi_launcher import launch_edi  # noqa: E402
 from servers.turbocharts.compare_results import compare_simulation_results  # noqa: E402
 from servers.turbocharts.convert_raw import turbocharts_convert, list_result_curves  # noqa: E402
-from servers.multimodal_vision import show_image, analyze_image, OPENCLAW_WORKSPACE_PATH, open_document, register_image_url  # noqa: E402
+from servers.multimodal_vision import show_image, analyze_image, open_document, register_image_url  # noqa: E402
 from servers.report import generate_simulation_report  # noqa: E402
 from servers.settings import get_settings  # noqa: E402
 from servers.metrics import record_tool_call  # noqa: E402
@@ -94,7 +94,6 @@ _DESTRUCTIVE_CHAT_TOOLS = {
 # 排除：同步阻塞、ANSYS COM 依赖、需本地网表文件
 # ---------------------------------------------------------------------------
 _CHAT_EXCLUDED_TOOLS = {
-    "simulate_project",          # 同步阻塞，不适合 Chat
     "simulate_netlist",          # 需要本地网表文件
     "simulate_netlist_with_ads", # 需要 ADS 安装
     "open_hfss_project",         # ANSYS COM 依赖
@@ -943,8 +942,6 @@ _TOOL_LABELS: dict[str, str] = {
     "cst_export_farfield": "CST导出远场方向图",
     "cst_export_farfield_query": "CST导出远场查询",
 }
-if OPENCLAW_WORKSPACE_PATH is not None:
-    _TOOL_LABELS["copy_image_to_workspace"] = "复制到工作区"
 
 
 def _tool_args_summary(tool_name: str, args: dict) -> str:

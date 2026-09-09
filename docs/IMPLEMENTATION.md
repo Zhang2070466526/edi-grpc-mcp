@@ -703,20 +703,6 @@ CST 工具不走 ANSYS COM，而是用 CST 官方 Python 接口（`servers/cst/c
    └─ >10MB → 只返回 TextContent（本地路径 + 查看建议）
 ```
 
-### 6.2 copy_image_to_workspace（已隐藏）
-
-当前不使用 OpenClaw，该工具已暂时隐藏（`OPENCLAW_WORKSPACE_PATH` 恒为 `None`，不检测工作区）。原条件注册逻辑：`OPENCLAW_WORKSPACE` 有效时支持 `.env` 配置或自动检测（edi-mcp 同级 `rfclaw/openclaw-service/state/workspace`，回退到 `~/.openclaw/workspace`），复制到 `{workspace}/media/edi/mcp-cache/`。
-
-返回关键字段：
-- `media_path`：相对工作区的路径（如 `media/edi/mcp-cache/S11.png`），客户端可直接用于 MEDIA 指令
-- `media_type`：MIME 类型（如 `image/png`）
-
-其他细节：
-- 文件名 = `{安全源文件名}_{MD5前8位}{扩展名}`（稳定文件名，同一源文件总是相同目标）
-- 上限 40MB
-- 超过 24h 的缓存自动清理
-- `show_image` 成功时不会自动调用此工具
-
 ### 6.3 临时图片 HTTP 服务
 
 `/images/{token}` 路由，10 分钟过期。供 Chat 界面渲染 `show_image` 返回的图片。不依赖 OpenClaw 工作区。
@@ -860,20 +846,11 @@ MCP 协议除了 Tool，还定义了 Resource（只读上下文）和 Prompt（�
 
 | URI | MIME | 内容来源 | 关键字段 |
 |---|---|---|---|
-| `edi://service/overview` | `application/json` | 动态生成 | `server_version`, `protocol_version`, `grpc_target`, `workspace_copy_enabled`, `safety_rules` |
+| `edi://service/overview` | `application/json` | 动态生成 | `server_version`, `protocol_version`, `grpc_target`, `safety_rules` |
 | `edi://reference/simulation-components` | `application/json` | `_load_catalog()` | 与 `get_simulation_component_schema` 同源 |
 | `edi://reference/operation-guide` | `text/markdown` | 静态维护 | 操作安全约束（创建/删除/网表导入/默认值透明等） |
 | `edi://service/status` | `application/json` | 动态生成 | 与 `get_service_status` 同源（gRPC 通道、队列占用） |
 | `edi://reference/error-codes` | `text/markdown` | 静态维护 | gRPC 状态码词典及建议动作 |
-
-`workspace_copy_enabled` 的判断逻辑：
-
-```python
-from servers.multimodal_vision import OPENCLAW_WORKSPACE_PATH
-workspace_enabled = OPENCLAW_WORKSPACE_PATH is not None
-```
-
-直接复用 `workspace_copy.OPENCLAW_WORKSPACE_PATH`，保证 Resource 返回值与实际工具注册状态一致（不依赖环境变量字符串解析）。
 
 ### 8.2 Prompts
 
@@ -1072,16 +1049,6 @@ failure_source 异常来源："mcp" 表示 MCP 自身异常，不是 EDI 业务�
 - 最大 50 个任务（含历史）
 - 统一 `outcome_known` / `task_success` 字段
 - TASK_NOT_FOUND 返回 `success=False, outcome_known=False, task_success=None`
-
-### 11.10 工作区自动检测
-
-`OPENCLAW_WORKSPACE` 查找顺序：
-
-1. `.env` 中 `OPENCLAW_WORKSPACE` 配置路径（优先）
-2. edi-mcp 同级 `rfclaw/openclaw-service/state/workspace`
-3. 用户目录 `~/.openclaw/workspace`（兜底）
-
-（当前已隐藏：不执行检测，`OPENCLAW_WORKSPACE_PATH` 恒为 `None`。）
 
 ### 11.11 产物统一格式（artifacts）
 

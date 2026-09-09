@@ -1400,32 +1400,6 @@ analyze_image(image_path: str, prompt: str = "请描述图片中的主要内容�
 
 ---
 
-### `copy_image_to_workspace`（已隐藏）
-
-当前不使用 OpenClaw，该工具已暂时隐藏（不注册为 MCP 工具、不检测工作区）。原逻辑：仅在 `OPENCLAW_WORKSPACE` 有效时注册（支持 `.env` 配置或自动检测），复制到 `media/edi/mcp-cache/`。
-
-```python
-from servers.multimodal_vision import copy_image_to_workspace
-
-copy_image_to_workspace(image_path: str) -> dict
-```
-
-| 参数 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `image_path` | str | 是 | 图片文件绝对路径 |
-
-返回：
-```python
-{
-    "success": True, "copied": True,
-    "workspace_path": "C:/Users/JGL/.openclaw/workspace",
-    "image_path": "C:/Users/.../mcp-cache/S11_a1b2c3d4.png",
-    "media_path": "media/edi/mcp-cache/S11_a1b2c3d4.png",  # 相对工作区路径
-    "media_type": "image/png",
-    "openclaw_attachment": {"filePath": "..."}
-}
-```
-
 ---
 
 ## 仿真器件管理（10 个）— 协议 v3

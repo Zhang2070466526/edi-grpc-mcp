@@ -575,13 +575,10 @@ class TestGrpcTerminalResult:
 class TestToolCount:
     def test_default_tool_count(self):
         from servers import mcp
-        from servers.multimodal_vision import OPENCLAW_WORKSPACE_PATH
         tools = [t.name for t in mcp._tool_manager._tools.values()]
-        # Base tools should be at least 33 (without workspace copy tool)
-        if OPENCLAW_WORKSPACE_PATH:
-            assert "copy_image_to_workspace" in tools
-        else:
-            assert "copy_image_to_workspace" not in tools
+        # 已移除 copy_image_to_workspace 与同步仿真 simulate_project
+        assert "copy_image_to_workspace" not in tools
+        assert "simulate_project" not in tools
         # All 7 sim component tools should be present
         for name in ["create_simulation_component", "update_simulation_component",
                      "delete_simulation_component", "set_component_active_state",

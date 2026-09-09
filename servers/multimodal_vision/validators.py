@@ -1,6 +1,6 @@
 """图片校验工具 — 路径安全校验 + 扩展名白名单 + Pillow 内容验证。
 
-供 show_image / analyze_image / copy_image_to_workspace 复用。
+供 show_image / analyze_image 复用。
 校验规则：拒绝网络路径、拒绝非白名单扩展名、Pillow 内容有效性检查。
 """
 
@@ -15,7 +15,7 @@ from servers.utils import is_network_path
 # 允许的图片扩展名
 _ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
 
-# 图片扩展名 → MIME 类型（供 image_display / vision_analyzer / workspace_copy 复用）
+# 图片扩展名 → MIME 类型（供 image_display / vision_analyzer 复用）
 IMAGE_MIME_MAP: dict[str, str] = {
     ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
     ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",

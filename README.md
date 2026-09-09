@@ -542,12 +542,11 @@ edi-grpc-mcp/
 │   │   ├── tools.py                    #     17 个 tr_* 工具（@mcp.tool()）
 │   │   └── resource.py                 #     TR 工作流 Resource（edi://integration/workflow）
 │   │
-│   ├── multimodal_vision/              #   图片 + 视觉 + 文档 (5 个工具)
-│   │   ├── __init__.py                 #     copy_image_to_workspace（已隐藏）
+│   ├── multimodal_vision/              #   图片 + 视觉 + 文档 (3 个工具)
+│   │   ├── __init__.py                 #     公共 API re-export
 │   │   ├── validators.py               #     共享校验：图片路径/扩展名/Pillow 内容验证
 │   │   ├── image_display.py            #     show_image + HTTP /images/{token} 路由
 │   │   ├── vision_analyzer.py          #     analyze_image (OpenAI Vision API, Semaphore(2))
-│   │   ├── workspace_copy.py           #     copy_image_to_workspace（已隐藏，暂不检测工作区）
 │   │   └── document.py                 #     open_document（link/local）+ /documents/{token}
 │   │
 │   ├── report/                         #   仿真报告渲染 (1 个工具)
@@ -695,7 +694,6 @@ curl http://127.0.0.1:50026/ready    # 就绪检查
 ### 图片
 
 - `show_image` 始终可用，未配置工作区时提示用资源管理器打开
-- `copy_image_to_workspace` 已暂时隐藏（当前不使用 OpenClaw）
 - `analyze_image` 仅用户明确要求时调用，会上传到第三方
 
 ### 服务重启

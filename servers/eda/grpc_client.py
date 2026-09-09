@@ -165,6 +165,8 @@ def _terminal_result(
     此时 task_success 有意义；False 表示 EDI 任务结果未知（超时/断连等）。
     """
     latest_details = latest_details or {}
+    # result_path 已在顶层单独返回，从 details 中移除避免重复
+    latest_details.pop("result_path", None)
     return {
         "success": success,
         "completed": True,

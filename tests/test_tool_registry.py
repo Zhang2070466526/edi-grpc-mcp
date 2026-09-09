@@ -11,7 +11,7 @@ def test_all_tools_registered():
     required = [
         "list_epp_projects", "create_project", "open_edi_project", "close_edi_project",
         "get_project_summary",
-        "simulate_project", "simulate_netlist", "simulate_netlist_with_ads",
+        "simulate_netlist", "simulate_netlist_with_ads",
         "simulate_anti_burnout",
         "compare_simulation_results",
         "start_simulation_async", "get_simulation_async_status", "get_simulation_async_result",
@@ -50,10 +50,6 @@ def test_all_tools_registered():
         "tr_query_schematic_components", "tr_sync_project_components",
         "tr_prepare_report", "tr_generate_document", "tr_query_components",
     ]
-    # copy_image_to_workspace is conditional
-    from servers.multimodal_vision import OPENCLAW_WORKSPACE_PATH
-    if OPENCLAW_WORKSPACE_PATH is not None:
-        required.append("copy_image_to_workspace")
     assert len(tools) == len(required), f"expected {len(required)} tools, got {len(tools)} ({sorted(tools)})"
     for name in required:
         assert name in tools, f"missing tool: {name}"
@@ -109,7 +105,6 @@ def test_mcp_only_tools_are_expected():
 
     mcp_only = mcp_tools - chat_tools
     expected = {
-        "simulate_project",           # 同步阻塞
         "simulate_netlist",           # 需要本地网表文件
         "simulate_netlist_with_ads",  # 需要 ADS 安装
         "open_hfss_project",          # ANSYS COM 依赖

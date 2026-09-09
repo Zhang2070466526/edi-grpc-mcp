@@ -228,7 +228,6 @@ class TestMessageTrim:
         assert session.messages[0]["role"] == "system"
 
 
-
 class TestShowImage:
     """show_image — 纯 ImageContent，不复制文件。"""
 
@@ -270,55 +269,6 @@ class TestShowImage:
         big.write_bytes(b"\x00" * 100)
         result = it.show_image(str(big))
         assert len(result) == 1
-
-
-
-class TestCopyToWorkspace:
-    """copy_image_to_workspace 测试。"""
-
-    def test_with_workspace(self, tmp_path, monkeypatch):
-        from servers import multimodal_vision as it
-        ws = tmp_path / "ws"; ws.mkdir()
-        monkeypatch.setattr("servers.multimodal_vision.workspace_copy.OPENCLAW_WORKSPACE_PATH", ws)
-        from PIL import Image
-        img = Image.new("RGB", (10, 10), color="red")
-        src = tmp_path / "img.png"; img.save(str(src))
-        r = it.copy_image_to_workspace(str(src))
-        assert r["copied"] and "mcp-cache" in r["image_path"].replace("\\", "/")
-
-    def test_no_workspace_copied_false(self, tmp_path, monkeypatch):
-        from servers import multimodal_vision as it
-        monkeypatch.setattr("servers.multimodal_vision.workspace_copy.OPENCLAW_WORKSPACE_PATH", None)
-        from PIL import Image
-        img = Image.new("RGB", (10, 10), color="red")
-        src = tmp_path / "img.png"; img.save(str(src))
-        r = it.copy_image_to_workspace(str(src))
-        assert r["success"] and not r["copied"]
-
-    def test_same_source_overwrites(self, tmp_path, monkeypatch):
-        from servers import multimodal_vision as it
-        ws = tmp_path / "ws"; ws.mkdir()
-        monkeypatch.setattr("servers.multimodal_vision.workspace_copy.OPENCLAW_WORKSPACE_PATH", ws)
-        from PIL import Image
-        img = Image.new("RGB", (10, 10), color="red")
-        src = tmp_path / "img.png"; img.save(str(src))
-        r1 = it.copy_image_to_workspace(str(src))
-        r2 = it.copy_image_to_workspace(str(src))
-        assert r1["image_path"] == r2["image_path"]
-
-    def test_different_dirs_no_conflict(self, tmp_path, monkeypatch):
-        from servers import multimodal_vision as it
-        ws = tmp_path / "ws"; ws.mkdir()
-        monkeypatch.setattr("servers.multimodal_vision.workspace_copy.OPENCLAW_WORKSPACE_PATH", ws)
-        d1 = tmp_path / "d1"; d1.mkdir()
-        d2 = tmp_path / "d2"; d2.mkdir()
-        from PIL import Image
-        img = Image.new("RGB", (10, 10), color="red")
-        s1 = d1 / "img.png"; img.save(str(s1))
-        s2 = d2 / "img.png"; img.save(str(s2))
-        r1 = it.copy_image_to_workspace(str(s1))
-        r2 = it.copy_image_to_workspace(str(s2))
-        assert r1["image_path"] != r2["image_path"]
 
 
 if __name__ == "__main__":

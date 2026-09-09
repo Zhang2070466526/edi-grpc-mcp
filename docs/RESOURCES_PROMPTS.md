@@ -32,7 +32,7 @@
 
 - **用途**：让 LLM 一次性了解服务能力、版本、安全规则，作为会话开场的上下文。
 - **干什么**：返回服务的元信息（版本号、协议版本、gRPC 目标、工作区状态、安全规则标志）。
-- **怎么实现**：纯静态组装，读模块常量 `SERVER_VERSION`（`servers/__init__.py`）、`EDA_GRPC_SERVER`（`config.py`）、`OPENCLAW_WORKSPACE_PATH`（`multimodal_vision`），拼成 dict。**不含任何密钥/路径敏感信息**（有测试断言 `sk-`、`API_KEY` 不出现）。
+- **怎么实现**：纯静态组装，读模块常量 `SERVER_VERSION`（`servers/__init__.py`）、`EDA_GRPC_SERVER`（`config.py`），拼成 dict。**不含任何密钥/路径敏感信息**（有测试断言 `sk-`、`API_KEY` 不出现）。
 
 ### 2. `edi://service/status` — 实时运行时状态
 

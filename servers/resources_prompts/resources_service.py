@@ -18,7 +18,6 @@ from servers.eda.config import EDA_GRPC_SERVER
 from servers.eda.grpc_client import get_cached_channel, is_queue_busy
 from servers.eda.project_manage import list_epp_projects
 from servers.eda.workspace_ops import get_current_workspace
-from servers.multimodal_vision import OPENCLAW_WORKSPACE_PATH
 
 
 @mcp.resource(
@@ -30,7 +29,6 @@ from servers.multimodal_vision import OPENCLAW_WORKSPACE_PATH
 )
 def resource_service_overview() -> dict[str, Any]:
     """返回服务能力概览。不包含密钥、路径或敏感信息。"""
-    workspace_enabled = OPENCLAW_WORKSPACE_PATH is not None
     grpc_host = EDA_GRPC_SERVER or "127.0.0.1:50055"
 
     return {
@@ -40,12 +38,10 @@ def resource_service_overview() -> dict[str, Any]:
         "tool_api_version": "3",    # 仿真器件工具 API 版本
         "mode": "local",
         "grpc_target": grpc_host,
-        "workspace_copy_enabled": workspace_enabled,
         "simulation_components": ["SParameter", "HarmonicBalance", "XDB"],
         "safety_rules": {
             "do_not_retry_unknown_outcome": True,
             "clear_schematic_requires_confirmation": True,
-            "workspace_copy_requires_explicit_user_request": True,
             "show_image_uses_native_imagecontent": True,
         },
     }

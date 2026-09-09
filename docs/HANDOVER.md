@@ -289,7 +289,6 @@ python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto 
 
 ### 图片与文档
 31. show_image 始终返回 ImageContent，不依赖工作区
-32. copy_image_to_workspace 已暂时隐藏（不使用 OpenClaw），不检测工作区；恢复时改回 `OPENCLAW_WORKSPACE_PATH = _get_openclaw_workspace()`
 33. analyze_image 仅用户明确要求时调用，会上传到第三方
 34. open_document 生成 10 分钟 HTTP token，仅本机 127.0.0.1 可访问
 

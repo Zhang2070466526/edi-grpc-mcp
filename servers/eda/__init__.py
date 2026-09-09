@@ -23,8 +23,7 @@ project_manage.py — 工程管理（10 工具）
     get_components_static_params  查询器件固有参数（重量/尺寸/封装/厂商/成本）
     batch_query_component         按器件型号列表批量查询模型信息
 
-simulation.py — 仿真（8 工具）
-    simulate_project              同步执行工程仿真
+simulation.py — 仿真（7 工具，默认异步）
     start_simulation_async        启动异步仿真，返回 task_id
     get_simulation_async_status   查询异步仿真进度和日志
     get_simulation_async_result   获取异步仿真最终结果

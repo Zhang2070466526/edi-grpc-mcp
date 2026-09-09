@@ -15,7 +15,6 @@
     get_components_static_params   查询器件固有参数（重量/尺寸/封装/厂商/成本）
 
   仿真：
-    simulate_project              执行工程仿真（同步）
     start_simulation_async        启动异步仿真
     get_simulation_async_status   查询异步仿真状态
     get_simulation_async_result   获取异步仿真结果
@@ -86,7 +85,6 @@
   图片：
     show_image                    读取本地图片，返回 MCP ImageContent
     analyze_image                 调用视觉模型分析图片内容
-    copy_image_to_workspace       已隐藏（不使用 OpenClaw）
 
   文档：
     open_document                 打开本地文档（link 链接 / local 系统打开）
