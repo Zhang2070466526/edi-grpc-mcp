@@ -96,14 +96,22 @@ def export_schematic_components_to_csv(
         timeout_seconds: 最长等待秒数，默认 60。
 
     Returns:
-        gRPC 统一返回结构，成功时 details 含 csv_path（最终绝对路径）。
+        gRPC 统一返回结构。成功时 details.csv_path 为最终写入的绝对路径（下游可能对传入
+        路径做后缀追加/归一化，故以 csv_path 为准）；失败时 details 为空，原因在 message。
+        注意：details 里下游回显的请求键 save_path（与 csv_path 同文件但非权威）已被本工具
+        移除，避免与最终路径混淆。
     """
     csv_path, err = require_nonempty(csv_path, label="csv_path")
     if err:
         return err
-    return call_project_grpc(
+    result = call_project_grpc(
         ecserver_pb2.EXPORT_SCHEMATIC_COMPONENTS_TO_CSV,
         project_path,
         timeout_seconds,
         save_path=csv_path,
     )
+    # 下游会把请求里的 save_path 回显到 details（与最终路径 csv_path 同文件但非权威），
+    # 这里去掉该冗余回显，只保留权威的最终路径 csv_path。
+    if result.get("success"):
+        result.setdefault("details", {}).pop("save_path", None)
+    return result

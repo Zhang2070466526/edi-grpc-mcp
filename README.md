@@ -8,7 +8,7 @@
 
 ## ✨ 亮点
 
-- 🛠️ **87 个 MCP 工具** — 工程管理 / 仿真 / 器件配置 / 模型选型 / 信号链分析，全链路覆盖
+- 🛠️ **86 个 MCP 工具** — 工程管理 / 仿真 / 器件配置 / 模型选型 / 信号链分析，全链路覆盖
 - ⚡ **三大仿真引擎** — EDI gRPC · ANSYS HFSS · CST，一个服务统一封装
 - 🧠 **自然语言驱动** — 接入 Claude Code / OpenClaw，告别鼠标点击
 - 🔒 **本地安全** — 全本地运行，工程数据不出机器
@@ -29,7 +29,7 @@ AI 客户端 (Claude Code / OpenClaw)
    │  Streamable HTTP (stateless) 或 stdio
    │  POST /mcp  │  initialize → tools/list → tools/call
    ▼
-EDI gRPC MCP 服务 (FastMCP, 87 工具, 7 Resource, 9 Prompt)
+EDI gRPC MCP 服务 (FastMCP, 86 工具, 7 Resource, 9 Prompt)
    │
    ├── EDA gRPC 工具 (51) ──→ EDI 客户端 (127.0.0.1:50055)
    │     FetchEvent ← PerformAction 异步模型，增量 ads_output
@@ -93,7 +93,7 @@ curl http://127.0.0.1:50026/health     # 进程 + gRPC 状态
 → {"status":"ok","mcp_ready":true,"eda_grpc_ready":true}
 
 curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
-→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":87}
+→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":86}
 ```
 
 ### 客户端接入
@@ -116,7 +116,7 @@ curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
 
 | 方式 | 说明 |
 |---|---|
-| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 87 个工具 |
+| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 86 个工具 |
 | **聊天界面** | 浏览器访问 `http://127.0.0.1:50026/ui`，内置 LLM 多轮工具闭环 |
 | **Python 调用** | `from servers.eda import list_epp_projects` 直接调用 |
 
@@ -132,7 +132,7 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 
 ---
 
-## 工具一览（87 个）
+## 工具一览（86 个）
 
 > 工具数量由运行时动态统计，此处为当前快照。权威值见 `/ready` 的 `tool_count`（或 `tests/test_tool_registry.py` 的 `required` 列表）。
 
@@ -166,7 +166,7 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 | `attach_out_component` | 为器件引脚挂载 Out 器件并自动连线 |
 | `replace_schematic_from_file` | 从 .ep 文件整体替换原理图 |
 
-### 仿真（8 个）
+### 仿真（7 个）
 
 | 工具 | 说明 |
 |---|---|
@@ -174,7 +174,6 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 | `get_simulation_async_status` | 查询实时进度和增量日志 |
 | `get_simulation_async_result` | 获取完整结果和 ads_output |
 | `list_eda_tasks` | 列出当前仿真任务 |
-| `simulate_project` | 执行工程仿真（同步阻塞） |
 | `simulate_netlist` | 仿真网表文件 |
 | `simulate_netlist_with_ads` | 调用 ADS 仿真控制器 |
 | `simulate_anti_burnout` | 抗烧毁仿真与风险评估 |
@@ -505,7 +504,7 @@ edi-grpc-mcp/
 │   │   │                               #     全局 _EDA_LOCK 串行锁，增量 ads_output 收集
 │   │   │                               #     _terminal_result() 统一返回结构
 │   │   ├── project_manage.py           #     工程管理：扫描/创建/打开/关闭/元件/概述/变量分析/静态参数 (9 工具)
-│   │   ├── simulation.py               #     仿真引擎：同步/异步/网表/ADS 控制器/抗烧毁 (8 工具)
+│   │   ├── simulation.py               #     仿真引擎：异步/网表/ADS 控制器/抗烧毁 (7 工具)
 │   │   │                               #     ThreadPoolExecutor(1) 串行执行，最多 8 个排队任务
 │   │   ├── simulation_components.py    #     仿真器件管理：10 工具（含 Out 挂载）
 │   │   │                               #     11 步参数校验管线 + wire↔public 名称映射
@@ -562,7 +561,7 @@ edi-grpc-mcp/
 │
 ├── docs/                               # 项目文档
 │   ├── DEPLOY.md                       #   部署指南（打包产物使用、客户端配置）
-│   ├── TOOLS_API.md                    #   工具 API（87 个工具完整签名+返回值示例）
+│   ├── TOOLS_API.md                    #   工具 API（86 个工具完整签名+返回值示例）
 │   ├── HTTP_API.md                     #   HTTP 接口（请求体、响应体、成功/失败情况）
 │   ├── IMPLEMENTATION.md               #   实现原理（通信类型、校验管线、并发控制、工具动机与依赖）
 │   ├── RESOURCES_PROMPTS.md            #   Resource & Prompt 说明（6 Resource + 8 Prompt 的用途与实现）
@@ -659,7 +658,7 @@ powershell -File scripts/build.ps1  # PyInstaller
 | 文档 | 说明 |
 |---|---|
 | [部署指南](./docs/DEPLOY.md) | 打包产物使用、客户端配置 |
-| [工具 API](./docs/TOOLS_API.md) | 全部 87 个工具参数、返回值、示例 |
+| [工具 API](./docs/TOOLS_API.md) | 全部 86 个工具参数、返回值、示例 |
 | [HTTP 接口](./docs/HTTP_API.md) | 全部 HTTP 路由的请求体、响应体、成功/失败情况 |
 | [实现原理](./docs/IMPLEMENTATION.md) | 5 种通信类型、校验管线、并发控制、工具动机与依赖 |
 | [Resource & Prompt](./docs/RESOURCES_PROMPTS.md) | 6 Resource + 8 Prompt 的用途、功能与实现 |
