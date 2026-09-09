@@ -58,7 +58,7 @@ class ProjectReader:
             if len(entry) >= 2:
                 path = entry[1].strip('"')
                 # "schematics/main/schematic.ep" -> "main"
-                name = Path(path).parent.name if "/" in path else path
+                name = Path(path).parent.name if ("/" in path or "\\" in path) else path
                 names.append(name)
         return names
 

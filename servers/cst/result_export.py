@@ -232,7 +232,7 @@ def cst_export_snp(
     # 走 cst_runner 串行执行：与求解/远场导出的会话互斥，避免无会话读结果时
     # 与正在求解的会话并发（读到半写结果或 CST 单实例冲突）
     try:
-        snp_path = cst_runner.run_sync(_result_exporter.export_snp, resolved, output_dir, port_count)
+        snp_path = cst_runner.run_sync(_result_exporter.export_snp, resolved, output_dir, port_count, timeout=300)
     except Exception as exc:
         return error_response("CST_EXPORT_FAILED", str(exc))
     return {"success": True, "snp_path": snp_path, "message": "S 参数已导出"}

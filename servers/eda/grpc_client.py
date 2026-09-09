@@ -40,8 +40,9 @@ _queue_busy = False  # EDA gRPC 执行槽是否被占用（跨线程标志，由
 # gRPC 通道配置：默认接收上限 4MB，长仿真日志可能会超过，导致
 # RESOURCE_EXHAUSTED 被误判为 STREAM_DISCONNECTED，结果丢失。
 # keepalive 防止防火墙/NAT 空闲超时掐断 FetchEvent 长连接流。
+MAX_RECEIVE_MB = 256
 _CHANNEL_OPTIONS = [
-    ("grpc.max_receive_message_length", 256 * 1024 * 1024),  # 4MB -> 256MB
+    ("grpc.max_receive_message_length", MAX_RECEIVE_MB * 1024 * 1024),  # 4MB -> 256MB
     ("grpc.max_send_message_length", 64 * 1024 * 1024),
     ("grpc.keepalive_time_ms", 300_000),  # 300s
     ("grpc.keepalive_timeout_ms", 10_000),  # ping 发出后 10s 无响应才判定超时

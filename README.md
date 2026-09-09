@@ -8,7 +8,7 @@
 
 ## ✨ 亮点
 
-- 🛠️ **86 个 MCP 工具** — 工程管理 / 仿真 / 器件配置 / 模型选型 / 信号链分析，全链路覆盖
+- 🛠️ **87 个 MCP 工具** — 工程管理 / 仿真 / 器件配置 / 模型选型 / 信号链分析，全链路覆盖
 - ⚡ **三大仿真引擎** — EDI gRPC · ANSYS HFSS · CST，一个服务统一封装
 - 🧠 **自然语言驱动** — 接入 Claude Code / OpenClaw，告别鼠标点击
 - 🔒 **本地安全** — 全本地运行，工程数据不出机器
@@ -29,7 +29,7 @@ AI 客户端 (Claude Code / OpenClaw)
    │  Streamable HTTP (stateless) 或 stdio
    │  POST /mcp  │  initialize → tools/list → tools/call
    ▼
-EDI gRPC MCP 服务 (FastMCP, 86 工具, 7 Resource, 9 Prompt)
+EDI gRPC MCP 服务 (FastMCP, 87 工具, 7 Resource, 9 Prompt)
    │
    ├── EDA gRPC 工具 (51) ──→ EDI 客户端 (127.0.0.1:50055)
    │     FetchEvent ← PerformAction 异步模型，增量 ads_output
@@ -93,7 +93,7 @@ curl http://127.0.0.1:50026/health     # 进程 + gRPC 状态
 → {"status":"ok","mcp_ready":true,"eda_grpc_ready":true}
 
 curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
-→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":86}
+→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":87}
 ```
 
 ### 客户端接入
@@ -116,7 +116,7 @@ curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
 
 | 方式 | 说明 |
 |---|---|
-| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 86 个工具 |
+| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 87 个工具 |
 | **聊天界面** | 浏览器访问 `http://127.0.0.1:50026/ui`，内置 LLM 多轮工具闭环 |
 | **Python 调用** | `from servers.eda import list_epp_projects` 直接调用 |
 
@@ -132,11 +132,11 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 
 ---
 
-## 工具一览（86 个）
+## 工具一览（87 个）
 
 > 工具数量由运行时动态统计，此处为当前快照。权威值见 `/ready` 的 `tool_count`（或 `tests/test_tool_registry.py` 的 `required` 列表）。
 
-### 工程管理（9 个）
+### 工程管理（10 个）
 
 | 工具 | 说明 |
 |---|---|
@@ -149,6 +149,7 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 | `get_project_summary` | 工程概览（元数据/原理图/仿真配置） |
 | `analyze_variables` | 分析变量定义、引用和 Sweep 配置 |
 | `get_components_static_params` | 查询器件固有参数（重量/尺寸/封装/厂商/成本） |
+| `batch_query_component` | 按器件型号列表批量查询模型信息 |
 
 ### 仿真器件（10 个）— 工具 API v3 / gRPC 协议 v2
 
@@ -487,7 +488,7 @@ edi-grpc-mcp/
 │   │                                   #   所有环境变量收敛于此，启动时 validate()
 │   ├── task_runner.py                  #   通用异步任务队列（EDA/HFSS/CST 复用，单 worker 串行）
 │   │
-│   ├── resources_prompts/              #   MCP Resource & Prompt（7 Resource + 8 Prompt）
+│   ├── resources_prompts/              #   MCP Resource & Prompt（6 Resource + 8 Prompt）
 │   │   ├── __init__.py                 #     注册入口（import 下面 6 模块触发注册）
 │   │   ├── resources_service.py        #     服务状态类（概览 / 状态 / 工程目录）
 │   │   ├── resources_reference.py      #     参考类（参数目录 / 操作规则 / 错误码）
@@ -562,14 +563,14 @@ edi-grpc-mcp/
 │
 ├── docs/                               # 项目文档
 │   ├── DEPLOY.md                       #   部署指南（打包产物使用、客户端配置）
-│   ├── TOOLS_API.md                    #   工具 API（86 个工具完整签名+返回值示例）
+│   ├── TOOLS_API.md                    #   工具 API（87 个工具完整签名+返回值示例）
 │   ├── HTTP_API.md                     #   HTTP 接口（请求体、响应体、成功/失败情况）
 │   ├── IMPLEMENTATION.md               #   实现原理（通信类型、校验管线、并发控制、工具动机与依赖）
-│   ├── RESOURCES_PROMPTS.md            #   Resource & Prompt 说明（7 Resource + 8 Prompt 的用途与实现）
+│   ├── RESOURCES_PROMPTS.md            #   Resource & Prompt 说明（6 Resource + 8 Prompt 的用途与实现）
 │   ├── HANDOVER.md                     #   交接文档（架构设计、技术栈、47 条注意事项）
 │   └── EDI系统接口与外部调用汇总.md    #   EDI 系统全量对外接口
 │
-├── tests/                              # 测试套件 (374 项)
+├── tests/                              # 测试套件 (375 项)
 │   ├── test_simulation_components.py   #   90 项：参数目录/Schema/校验管线/wire转换
 │   ├── test_chat_service.py            #   28 项：会话/校验/重复调用/上下文/show_image
 │   ├── test_grpc_client.py             #   24 项：终端结果/日志累积/异常处理
@@ -633,10 +634,10 @@ edi-grpc-mcp/
 | `test_bugfixes.py` | 历史 bug 修复回归测试 | 33 |
 | `test_extended_ops.py` | 工作区 / 模型库 / 原理图扩展工具 payload / 校验 | 14 |
 | `test_schematic_library.py` | 原理图库 / 导出工具 payload / 校验 | 9 |
-| `test_simulation_agent.py` | TR 集成：session/request_id/调用/错误映射/Resource | 14 |
+| `test_simulation_agent.py` | TR 集成：session/request_id/调用/错误映射/Resource/Prompt | 17 |
 
 ```powershell
-uv run pytest -q                 # 全量 374 项
+uv run pytest -q                 # 全量 375 项
 uv run pytest tests/ -v          # 详细输出
 uv run pytest tests/test_simulation_components.py -v  # 单文件
 ```
@@ -649,7 +650,7 @@ uv run pytest tests/test_simulation_components.py -v  # 单文件
 uv build && uv publish           # PyPI
 powershell -File scripts/build.ps1  # PyInstaller
 # → dist/edi-mcp/（edi_mcp_server.exe + _internal/ + .env）
-#   打包完成后自动冒烟测试（启动 exe → 健康检查 → 鉴权 → 工具注册）
+#   打包完成后自动冒烟测试（启动 exe → 健康检查 → 工具注册）
 ```
 
 ---
@@ -659,10 +660,10 @@ powershell -File scripts/build.ps1  # PyInstaller
 | 文档 | 说明 |
 |---|---|
 | [部署指南](./docs/DEPLOY.md) | 打包产物使用、客户端配置 |
-| [工具 API](./docs/TOOLS_API.md) | 全部 86 个工具参数、返回值、示例 |
+| [工具 API](./docs/TOOLS_API.md) | 全部 87 个工具参数、返回值、示例 |
 | [HTTP 接口](./docs/HTTP_API.md) | 全部 HTTP 路由的请求体、响应体、成功/失败情况 |
 | [实现原理](./docs/IMPLEMENTATION.md) | 5 种通信类型、校验管线、并发控制、工具动机与依赖 |
-| [Resource & Prompt](./docs/RESOURCES_PROMPTS.md) | 7 Resource + 8 Prompt 的用途、功能与实现 |
+| [Resource & Prompt](./docs/RESOURCES_PROMPTS.md) | 6 Resource + 8 Prompt 的用途、功能与实现 |
 | [交接文档](./docs/HANDOVER.md) | 架构设计、技术栈、扩展开发、47 条注意事项 |
 | [gRPC 协议](./proto/grpc接口调用.md) | ExternalCall 接口调用说明 |
 | [EDI 系统接口汇总](./docs/EDI系统接口与外部调用汇总.md) | EDI 全量对外接口 |

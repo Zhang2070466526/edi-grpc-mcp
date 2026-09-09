@@ -65,6 +65,11 @@ def open_hfss_project(
     流程：检查锁文件→清理失效锁→COM 附着打开或 subprocess 启动→轮询确认工程打开
     用法："帮我打开 C:/demo.aedt"、"在 AEDT 中打开这个 HFSS 项目"
 
+    Args:
+        project_path: .aedt 项目文件绝对路径。
+        aedt_path: AEDT（ansysedt.exe）路径，默认自动检测。
+        wait_timeout: 等待工程打开的超时秒数，默认 30（1-120）。
+
     Returns:
         {"success": True, "status": "opened/already_open", "project_opened": True,
          "method": "com/subprocess", "duration_s": 1.2}
@@ -337,7 +342,12 @@ def launch_aedt(
     aedt_path: str = "",
     wait_timeout: int = 30,
 ) -> dict[str, Any]:
-    """启动 AEDT（不打开项目）。已运行时仅返回状态。"""
+    """启动 AEDT（不打开项目）。已运行时仅返回状态。
+
+    Args:
+        aedt_path: AEDT（ansysedt.exe）路径，默认自动检测。
+        wait_timeout: 等待 COM 就绪的超时秒数，默认 30（1-120）。
+    """
     wait_timeout = max(1, min(wait_timeout, 120))
     global _LAST_PID
 

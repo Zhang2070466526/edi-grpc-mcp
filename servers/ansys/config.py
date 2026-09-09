@@ -49,18 +49,18 @@ def _find_aedt() -> str:
             r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
             r"SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
         ]:
-            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path)
-            for j in range(winreg.QueryInfoKey(key)[0]):
-                try:
-                    sub = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, f"{reg_path}\\{winreg.EnumKey(key, j)}")
-                    name = winreg.QueryValueEx(sub, "DisplayName")[0]
-                    if "ANSYS" in name and ("Electromagnetics" in name or "Electronics" in name):
-                        loc = winreg.QueryValueEx(sub, "InstallLocation")[0]
-                        exe = Path(loc) / "ansysedt.exe"
-                        if exe.is_file():
-                            return str(exe)
-                except OSError:
-                    pass
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path) as key:
+                for j in range(winreg.QueryInfoKey(key)[0]):
+                    try:
+                        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, f"{reg_path}\\{winreg.EnumKey(key, j)}") as sub:
+                            name = winreg.QueryValueEx(sub, "DisplayName")[0]
+                            if "ANSYS" in name and ("Electromagnetics" in name or "Electronics" in name):
+                                loc = winreg.QueryValueEx(sub, "InstallLocation")[0]
+                                exe = Path(loc) / "ansysedt.exe"
+                                if exe.is_file():
+                                    return str(exe)
+                    except OSError:
+                        pass
     except Exception:
         pass
     for base in [r"C:\Program Files\AnsysEM", r"C:\Program Files (x86)\AnsysEM"]:
@@ -93,14 +93,19 @@ _COM_PROGIDS = ("AnsoftHfss.HfssScriptInterface", "Ansoft.ElectronicsDesktop")
 
 
 def _attach_aedt():
-    """附着现有 AEDT 实例，返回 (app, desktop)，失败抛异常。"""
-    for pid in _COM_PROGIDS:
-        try:
-            app = GetActiveObject(pid)
-            return app, app.GetAppDesktop()
-        except Exception:
-            continue
-    raise RuntimeError(f"GetActiveObject failed for: {_COM_PROGIDS}")
+    """附着现有 AEDT 实例，返回 (app, desktop)，失败抛异常。
+
+    全程持 _AEDT_LOCK：worker 线程、refresh_from_aedt、query_desktop_state 等多条
+    调用路径都走这里，串行化 COM 附着避免并发操作 AEDT 单实例桌面。
+    """
+    with _AEDT_LOCK:
+        for pid in _COM_PROGIDS:
+            try:
+                app = GetActiveObject(pid)
+                return app, app.GetAppDesktop()
+            except Exception:
+                continue
+        raise RuntimeError(f"GetActiveObject failed for: {_COM_PROGIDS}")
 
 
 def query_desktop_state() -> dict[str, Any]:
@@ -170,7 +175,18 @@ def cleanup_stale_project_lock(project_path: str) -> dict:
     result["lock_pid"] = pid
 
     if pid is None:
-        result["status"] = "lock_unknown_format"
+        # 无法解析 PID：保守处理。仅当根本没有 AEDT 进程时才删除坏格式锁，
+        # 否则保留给用户手动排查（避免误删活跃实例的锁）。
+        if not aedt_is_running():
+            try:
+                lock.unlink()
+                result["removed"] = True
+                result["status"] = "stale_lock_removed"
+            except OSError as exc:
+                result["status"] = "lock_remove_failed"
+                result["error"] = str(exc)
+        else:
+            result["status"] = "lock_unknown_format"
         return result
 
     if pid in get_aedt_pids():

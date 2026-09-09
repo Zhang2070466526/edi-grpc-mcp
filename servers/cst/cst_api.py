@@ -11,6 +11,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 import winreg
 
 from servers.task_runner import TaskRunner
@@ -23,12 +24,35 @@ logger = logging.getLogger(__name__)
 cst_runner = TaskRunner(name_prefix="cst", max_run_seconds=7200)
 
 
+_CST_TMP_TTL_SECONDS = 24 * 3600
+
+
+def _cleanup_stale_tmp_copies(tmp_dir: str, ttl_seconds: int) -> None:
+    """清理超过 TTL 的临时副本（只读模型副本按需创建，避免无限堆积）。"""
+    now = time.time()
+    try:
+        names = os.listdir(tmp_dir)
+    except OSError:
+        return
+    for name in names:
+        p = os.path.join(tmp_dir, name)
+        try:
+            if now - os.path.getmtime(p) > ttl_seconds:
+                if os.path.isdir(p):
+                    shutil.rmtree(p, ignore_errors=True)
+                else:
+                    os.remove(p)
+        except OSError:
+            pass
+
+
 def to_writable_copy(model_path: str) -> str:
     """模型只读时复制到临时可写副本，返回可写模型路径（连同结果目录一起复制）。"""
     if os.access(model_path, os.W_OK):
         return model_path
     tmp_dir = os.path.join(tempfile.gettempdir(), "cst_solve")
     os.makedirs(tmp_dir, exist_ok=True)
+    _cleanup_stale_tmp_copies(tmp_dir, _CST_TMP_TTL_SECONDS)
     tmp_model = os.path.join(tmp_dir, os.path.basename(model_path))
     shutil.copyfile(model_path, tmp_model)
     src_dir = os.path.splitext(model_path)[0]

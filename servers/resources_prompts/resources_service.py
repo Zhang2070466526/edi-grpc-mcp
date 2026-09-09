@@ -60,7 +60,7 @@ def resource_service_overview() -> dict[str, Any]:
 )
 def resource_service_status() -> dict[str, Any]:
     """返回运行时状态，与 get_service_status 共享数据源。"""
-    target = EDA_GRPC_SERVER
+    target = EDA_GRPC_SERVER or "127.0.0.1:50055"
     ch = get_cached_channel(target)
     state = "unknown"
     if ch is not None:

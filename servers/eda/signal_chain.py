@@ -211,7 +211,13 @@ def get_signal_chain(
          "branch_count": 0, "truncated": false, "warning": "...", "skipped_lines": 8}
     """
     resolved = validate_project_path(project_path)
-    max_depth = max(1, min(int(max_depth), 100))
+    direction = (direction or "forward").strip().lower()
+    if direction not in ("forward", "backward"):
+        return error_response("INVALID_PARAMETERS", "direction 必须是 forward 或 backward")
+    try:
+        max_depth = max(1, min(int(max_depth), 100))
+    except (TypeError, ValueError):
+        return error_response("INVALID_PARAMETERS", "max_depth 必须是整数")
 
     text, warn = _acquire_netlist(resolved, timeout_seconds)
     if text is None:
@@ -222,15 +228,17 @@ def get_signal_chain(
     if not comps:
         return error_response("NETLIST_EMPTY", "网表中没有器件/端口（可能是空工程或网表未生成）")
 
-    # 起点处理：未指定时自动找激励源，无激励源则取第一个端口
+    # 起点处理：未指定时按方向自动找（forward→激励源，backward→负载），
+    # 无对应角色时回退到第一个端口
     if not start_component:
-        sources = [i for i, c in comps.items() if c["role"] == "source"]
-        if sources:
-            start_component = sources[0]
+        if direction == "backward":
+            loads = [i for i, c in comps.items() if c["role"] == "load"]
+            candidates = loads or [i for i, c in comps.items() if c["type"] == "Port"]
         else:
-            ports = [i for i, c in comps.items() if c["type"] == "Port"]
-            if ports:
-                start_component = ports[0]
+            sources = [i for i, c in comps.items() if c["role"] == "source"]
+            candidates = sources or [i for i, c in comps.items() if c["type"] == "Port"]
+        if candidates:
+            start_component = candidates[0]
 
     if start_component not in comps:
         return error_response("COMPONENT_NOT_FOUND", f"网表中未找到起始器件: {start_component}")

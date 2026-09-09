@@ -154,6 +154,8 @@ def add_wire(
     for label, v in (("first_pin_index", first_pin_index), ("second_pin_index", second_pin_index)):
         if not isinstance(v, int) or isinstance(v, bool) or not (0 <= v <= 2147483647):
             return error_response("INVALID_PARAMETERS", f"{label} 必须是 0~2147483647 的整数")
+    if first_instance_name == second_instance_name and first_pin_index == second_pin_index:
+        return error_response("INVALID_PARAMETERS", "不能连接同一器件的同一引脚（自连接）")
     return call_grpc(
         ecserver_pb2.ADD_WIRE,
         {

@@ -16,7 +16,7 @@ import grpc
 
 from servers.eda.config import EDA_GRPC_SERVER, EDI_PATH
 from servers.settings import get_settings
-from servers.eda.grpc_client import get_cached_channel, is_queue_busy
+from servers.eda.grpc_client import get_cached_channel, is_queue_busy, MAX_RECEIVE_MB
 from servers.utils import error_response
 from servers import mcp
 
@@ -41,14 +41,21 @@ def launch_edi(
          "message": "EDI 已在运行（gRPC 127.0.0.1:50055 已就绪）"}
     """
     exe = edi_path or EDI_PATH
+    if not exe:
+        return error_response("EDI_NOT_FOUND", "未检测到 EDI.exe 路径，请设置 EDI_PATH 或将其放在项目同级目录")
     exe_path = Path(exe).expanduser()
     if not exe_path.is_file():
         raise FileNotFoundError(f"EDI.exe 不存在: {exe_path}")
 
     try:
-        host, port_str = EDA_GRPC_SERVER.rsplit(":", 1)
-        port = int(port_str)
-    except ValueError:
+        server = EDA_GRPC_SERVER.strip()
+        if server.startswith("["):  # IPv6 带方括号：[::1]:50055
+            host, _, port_str = server[1:].partition("]:")
+            port = int(port_str)
+        else:
+            host, _, port_str = server.rpartition(":")
+            port = int(port_str)
+    except (ValueError, TypeError):
         raise ValueError(f"EDA_GRPC_SERVER 配置无效（需要 host:port）: {EDA_GRPC_SERVER}") from None
     already_running = False
     try:
@@ -129,7 +136,10 @@ def get_service_logs(
          "matched_lines": 42, "error_count": 5, "warning_count": 8,
          "exception_lines": [...], "message": "..."}
     """
-    lines = max(1, min(int(lines), 500))
+    try:
+        lines = max(1, min(int(lines), 500))
+    except (TypeError, ValueError):
+        return error_response("INVALID_PARAMETERS", "lines 必须是整数（1-500）")
     level = (level or "").strip().upper()
     keyword = (keyword or "").strip()
 
@@ -236,5 +246,5 @@ def get_service_status() -> dict[str, Any]:
         "channel_state": state,
         "channel_cached": ch is not None,
         "queue_locked": is_queue_busy(),
-        "max_receive_mb": 256,
+        "max_receive_mb": MAX_RECEIVE_MB,
     }

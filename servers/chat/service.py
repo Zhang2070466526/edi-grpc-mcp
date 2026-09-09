@@ -186,15 +186,18 @@ def _auto_build_chat_tools() -> tuple[dict[str, Any], list[dict]]:
 
 CHAT_TOOL_MAP, CHAT_TOOLS_SCHEMA = _auto_build_chat_tools()
 
+_chat_tools_lock = threading.Lock()
+
 
 def _ensure_chat_tools() -> None:
     """每次 Chat 请求时刷新工具列表（原地更新，所有引用可见）。"""
     new_map, new_schema = _auto_build_chat_tools()
 
-    CHAT_TOOL_MAP.clear()
-    CHAT_TOOL_MAP.update(new_map)
-    CHAT_TOOLS_SCHEMA.clear()
-    CHAT_TOOLS_SCHEMA.extend(new_schema)
+    with _chat_tools_lock:
+        CHAT_TOOL_MAP.clear()
+        CHAT_TOOL_MAP.update(new_map)
+        CHAT_TOOLS_SCHEMA.clear()
+        CHAT_TOOLS_SCHEMA.extend(new_schema)
 
 # 模块加载时填充一次
 _ensure_chat_tools()

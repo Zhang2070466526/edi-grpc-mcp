@@ -2,7 +2,7 @@
 
 每个 MCP 工具按底层通信方式分为 5 种实现类型：gRPC 远程调用、本地文件读取、subprocess 命令行、COM 对象、内存服务。本文逐一说明每种工具的协议交互、数据结构、校验流程、错误处理和设计决策。
 >
-> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（69 个工具接口）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由）。
+> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（87 个工具接口）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由）。
 
 ---
 
@@ -19,7 +19,7 @@
 - **[九、Resources 与 Prompts](#九Resources与-Prompts)**：只读资源、可复用工作流
 - **[十、文档工具（1 个工具）](#十文档工具1个工具)**：open_document
 - **[十一、报告渲染（1 个工具）](#十一报告渲染1个工具)**：16 步校验、调用流程
-- **[十二、跨层设计原则](#十二跨层设计原则)**：校验分层、错误码、并发、outcome_known、日志等
+- **[十二、跨层设计原则](#十二跨层设计原则)**：校验分层、错误码、并发、outcome_known、日志、进程白名单等
 - **[十三、工具设计动机与数据依赖](#十三工具设计动机与数据依赖)**：每个工具的动机 / 功能 / 依赖 / 底层机制
 
 ---
@@ -30,7 +30,7 @@
 
 ### 1.1 通信协议
 
-EDI 服务通过 `proto/ecserver.proto` 定义了 `ExternalCall` 服务，当前协议版本 v2，27 种事件类型：
+EDI 服务通过 `proto/ecserver.proto` 定义了 `ExternalCall` 服务，当前协议版本 v2，41 种事件类型：
 
 ```proto
 service ExternalCall {
@@ -1150,6 +1150,33 @@ Chat 工具调用日志对路径做脱敏处理（只记录文件名），不暴
 
 服务端行为：自动判断引脚朝向 → 计算放置位置（100 坐标单位） → 顺时针尝试四个方向（各向外扩展 10 单位检测重叠） → 创建器件和网线在同一撤销组内。单引脚器件可省略 `pin_index`，多引脚器件必须提供。
 
+### 11.17 进程白名单访问控制
+
+MCP 服务只监听本机（`127.0.0.1:50026`），通过进程白名单实现「只放行指定 agent 进程、拒绝其它进程」。核心实现在 `servers/process_guard.py`，接线在 `start_servers.py`。
+
+**机制**：反查「连接由哪个进程发起」。OS 的 TCP 连接表记录每条连接的 owning PID，客户端无法伪造：
+
+```
+请求 → 来源端口(request.client.port) → psutil.net_connections 反查 PID → exe 路径 + 命令行 → 白名单子串比对 → 放行 / 403
+```
+
+**核心函数**（`servers/process_guard.py`）：
+- `find_client_process(client_port, server_port)`：遍历 `psutil.net_connections(kind="inet")`，找 `raddr.port == server_port 且 laddr.port == client_port` 的已建立连接，返回 `(exe 完整路径, 命令行)`。
+- `resolve_client_process(...)`：带 60s TTL 缓存的查询（keep-alive 复用端口时避免每次扫全表）。
+- `_norm(s)`：归一化（小写 + 正斜杠），跨平台 / 大小写无关比较。
+- `ProcessProbeMiddleware`：探针，只打印来源进程（`exe=` + `cmd=`），不拦截。
+- `ProcessWhitelistMiddleware`：白名单拦截，命中放行、未命中返回 403。
+
+**配置**（`settings.py` 的 `mcp_allowed_processes`，环境变量 `MCP_ALLOWED_PROCESSES`）：逗号分隔的子串列表，留空禁用。示例 `MCP_ALLOWED_PROCESSES=hermes_cli,edi-agent`。
+
+**接线**（`start_servers.py` 的 `_run_http_server`）：留空 → 挂 `ProcessProbeMiddleware`（只打印）；有值 → 挂 `ProcessWhitelistMiddleware`（未命中 403）。
+
+**路径豁免** `_PROTECTED_PREFIXES = ("/mcp",)`：只对 `/mcp`（agent 直连的 MCP 协议端点）做白名单校验；`/ui` `/chat` `/tools/list` `/upload`（依赖浏览器访问）和 `/health` `/ready` `/metrics`（诊断 / 冒烟测试）放行。
+
+**匹配规则**：每个白名单条目作为「子串」在 `exe + " " + 命令行`（归一化后）里查找，命中任一 → 放行；反查不到来源进程 → 默认拒绝（`fail_open=False`）。填白名单时优先填命令行关键词（如 `hermes_cli` 精确锁定 `python.exe -m hermes_cli.main gateway run` 这种通用 python 跑专属模块的场景），其次填完整 exe 路径或进程名。
+
+**为什么不用 token / clientInfo**：同机同用户下，配置文件里的 token 和客户端自报的 `clientInfo.name` 都能被其它进程读到 / 伪造；只有 OS 记录的「连接来源 PID」无法伪造。局限：进程名 / 路径理论上可被「改名 + 放同路径」绕过，100% 隔离仍需 OS 用户隔离。
+
 ---
 
 ## 十三、工具设计动机与数据依赖
@@ -1173,7 +1200,7 @@ list_simulation_components / list_schematic_components ──(instance_name)─�
 get_project_summary + turbocharts_convert + capture_schematic + simulate_* ──> generate_simulation_report ──(PDF/DOCX)──> open_document
 ```
 
-### 12.1 工程管理（9 个）
+### 12.1 工程管理（10 个）
 
 | 工具 | 动机（为什么） | 解决的功能 | 依赖（输入来自） | 被依赖（输出供） |
 |---|---|---|---|---|

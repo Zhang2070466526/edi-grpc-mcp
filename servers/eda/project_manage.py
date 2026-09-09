@@ -277,10 +277,17 @@ def analyze_variables(project_path: str) -> dict[str, Any]:
             # Sweep 元件：扫描配置
             if ct == "Sweep":
                 sweep_var = params.get("SweepVar", {}).get("value", "")
+                # 动态收集所有 SimInstanceName[i]（避免硬编码上界漏掉更多目标实例）
+                sweep_indices = sorted(
+                    int(k[len("SimInstanceName["):-1])
+                    for k in params
+                    if k.startswith("SimInstanceName[") and k.endswith("]")
+                    and k[len("SimInstanceName["):-1].isdigit()
+                )
                 targets = [
-                    params.get(f"SimInstanceName[{i}]", {}).get("value", "")
-                    for i in range(1, 10)
-                    if params.get(f"SimInstanceName[{i}]", {}).get("value")
+                    params[f"SimInstanceName[{i}]"].get("value", "")
+                    for i in sweep_indices
+                    if params[f"SimInstanceName[{i}]"].get("value")
                 ]
                 sweeps.append({
                     "sweep": comp.get("name", ""),
@@ -333,6 +340,10 @@ def list_schematic_components(
 
     用法："列出这个工程原理图上的所有器件"、"查看原理图器件"
 
+    Args:
+        project_path: .epp 工程文件绝对路径。
+        timeout_seconds: 最长等待秒数，默认 60。
+
     Returns:
         gRPC 统一返回结构（业务字段在 details 中）：
         {"success": True, "status": "SUCCEEDED",
@@ -352,6 +363,11 @@ def get_schematic_component_info(
     """通过 gRPC 按实例名查询单个器件的完整信息。
 
     用法："查看 R1 这个器件的参数"、"U1 是什么类型的器件"
+
+    Args:
+        project_path: .epp 工程文件绝对路径。
+        instance_name: 器件实例名（如 "R1"）。
+        timeout_seconds: 最长等待秒数，默认 60。
 
     Returns:
         gRPC 统一返回结构（业务字段在 details 中）：

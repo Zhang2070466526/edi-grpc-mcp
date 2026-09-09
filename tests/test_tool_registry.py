@@ -43,6 +43,12 @@ def test_all_tools_registered():
         "start_hfss_analysis_async", "get_hfss_analysis_status",
         "cst_solve_async", "cst_solve_query", "cst_export_snp",
         "cst_export_farfield", "cst_export_farfield_query",
+        "tr_get_workflow_state", "tr_set_workflow_plan", "tr_get_simulation_capabilities",
+        "tr_read_netlist", "tr_find_paths", "tr_restore_schematic",
+        "tr_modify_netlist", "tr_execute_simulation_plan", "tr_run_simulation",
+        "tr_parse_raw", "tr_read_guide", "tr_get_project_netlist",
+        "tr_query_schematic_components", "tr_sync_project_components",
+        "tr_prepare_report", "tr_generate_document", "tr_query_components",
     ]
     # copy_image_to_workspace is conditional
     from servers.multimodal_vision import OPENCLAW_WORKSPACE_PATH
@@ -112,6 +118,12 @@ def test_mcp_only_tools_are_expected():
         "get_hfss_project_info",
         "start_hfss_analysis_async",
         "get_hfss_analysis_status",
+        "tr_restore_schematic",       # TR 后台工具，同步阻塞
+        "tr_execute_simulation_plan",
+        "tr_run_simulation",
+        "tr_parse_raw",
+        "tr_sync_project_components",
+        "tr_generate_document",
     }
     unexpected = mcp_only - expected
     assert not unexpected, (
@@ -137,6 +149,32 @@ def test_destructive_tools_in_map():
     assert not missing, f"破坏性工具未在 MCP 注册: {sorted(missing)}"
 
 
+def test_all_tool_params_have_description():
+    """每个工具 inputSchema 的每个参数都应有 description（由 schema_descriptions 注入）。
+
+    防止以后新增工具时忘了写 docstring 的 Args: 段，导致参数 description 缺失、
+    标准 MCP 客户端「看不懂参数」。
+    """
+    from start_servers import mcp
+    missing: dict[str, list[str]] = {}
+    for name, tool in sorted(mcp._tool_manager._tools.items()):
+        params = getattr(tool, "parameters", {})
+        if not isinstance(params, dict):
+            continue
+        properties = params.get("properties", {})
+        if not isinstance(properties, dict):
+            continue
+        bare = [
+            p for p, f in properties.items()
+            if isinstance(f, dict) and not f.get("description")
+        ]
+        if bare:
+            missing[name] = bare
+    assert not missing, (
+        f"以下工具的参数缺少 inputSchema description（请在 docstring 补 Args: 段）: {missing}"
+    )
+
+
 if __name__ == "__main__":
     test_all_tools_registered()
     test_grpc_timeout_limits()
@@ -145,4 +183,5 @@ if __name__ == "__main__":
     test_mcp_only_tools_are_expected()
     test_tool_count_dynamic()
     test_destructive_tools_in_map()
+    test_all_tool_params_have_description()
     print("test_tool_registry.py: all passed")

@@ -1,4 +1,4 @@
-r"""EDA gRPC MCP 工具包 -- 通过 ExternalCall gRPC 操作 EDI 工程（51 个工具）。
+r"""EDA gRPC MCP 工具包 -- 通过 ExternalCall gRPC 操作 EDI 工程（52 个工具）。
 
 按文件列工具与用途：
 
@@ -11,7 +11,7 @@ project_reader.py — 工程文件解析（无工具）
 grpc_client.py — gRPC 通信层（内部）
     call_grpc / call_project_grpc
 
-project_manage.py — 工程管理（9 工具）
+project_manage.py — 工程管理（10 工具）
     list_epp_projects             扫描文件夹中的所有 .epp 工程
     create_project                创建新工程（不显示向导、不自动打开）
     open_edi_project              打开 .epp 工程
@@ -21,6 +21,7 @@ project_manage.py — 工程管理（9 工具）
     list_schematic_components     查询原理图全部器件（gRPC，含完整参数）
     get_schematic_component_info  按实例名查询器件完整信息
     get_components_static_params  查询器件固有参数（重量/尺寸/封装/厂商/成本）
+    batch_query_component         按器件型号列表批量查询模型信息
 
 simulation.py — 仿真（8 工具）
     simulate_project              同步执行工程仿真

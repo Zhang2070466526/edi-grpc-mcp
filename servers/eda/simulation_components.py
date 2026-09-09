@@ -697,7 +697,7 @@ def update_simulation_component(
         return error_response("INVALID_PARAMETERS", "parameters 必须是非空对象")
 
     # Three-way type inference: explicit > disk > error
-    explicit_type = component_type.strip() if component_type else ""
+    explicit_type = component_type.strip() if isinstance(component_type, str) else ""
     component, find_err = _find_component_by_instance(resolved, instance_name)
     # 空实例名 / 同名歧义必须立即报错，不能静默吞掉（COMPONENT_NOT_FOUND 可忽略，以支持显式 type + 未保存新器件）
     if find_err and find_err.get("error_code") in ("EMPTY_INSTANCE_NAME", "AMBIGUOUS_INSTANCE_NAME"):
@@ -844,6 +844,9 @@ def set_component_active_state(
         state: 目标状态，只接受 "NORMAL" / "DISABLED" / "SHORTED"（大小写不敏感）。
         timeout_seconds: 最长等待秒数。
     """
+    if not isinstance(state, str):
+        return error_response("INVALID_ACTIVE_STATE", f"无效状态: {state}，仅支持 NORMAL / DISABLED / SHORTED",
+                              allowed_states=sorted(_ACTIVE_STATES))
     normalized = state.strip().upper()
     if normalized not in _ACTIVE_STATES:
         return error_response("INVALID_ACTIVE_STATE", f"无效状态: {state}，仅支持 NORMAL / DISABLED / SHORTED",

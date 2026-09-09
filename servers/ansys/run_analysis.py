@@ -10,6 +10,7 @@ import pythoncom
 
 from servers.ansys.config import (
     aedt_is_running, get_setup_module,
+    com_session,
     _attach_aedt,
 )
 from servers.task_runner import TaskRunner
@@ -118,7 +119,14 @@ def start_hfss_analysis_async(
     setup_name: str,
     save_before_run: bool = True,
 ) -> dict[str, Any]:
-    """异步启动 HFSS Setup 仿真，立即返回 task_id。"""
+    """异步启动 HFSS Setup 仿真，立即返回 task_id。
+
+    Args:
+        project_path: .aedt 项目文件绝对路径。
+        design_name: 设计名。
+        setup_name: Setup 名。
+        save_before_run: 仿真前是否保存，默认 True。
+    """
     try:
         resolved = validate_file(project_path, (".aedt", ".aedtz"))
     except (FileNotFoundError, ValueError) as exc:
@@ -169,7 +177,12 @@ def get_hfss_analysis_status(
     task_id: str,
     refresh_from_aedt: bool = False,
 ) -> dict[str, Any]:
-    """查询 HFSS 异步仿真状态（默认只读本地，不访问 AEDT）。"""
+    """查询 HFSS 异步仿真状态（默认只读本地，不访问 AEDT）。
+
+    Args:
+        task_id: start_hfss_analysis_async 返回的 task_id。
+        refresh_from_aedt: 是否实时访问 AEDT 刷新仿真运行状态，默认 False。
+    """
     snap = hfss_runner.snapshot(task_id)
     if snap is None:
         return {
@@ -216,14 +229,12 @@ def get_hfss_analysis_status(
 
     if refresh_from_aedt:
         try:
-            pythoncom.CoInitialize()
-            _, desktop = _attach_aedt()
-            result["aedt_refresh_succeeded"] = True
-            result["aedt_simulations_running"] = desktop.AreThereSimulationsRunning(True)
+            with com_session():
+                _, desktop = _attach_aedt()
+                result["aedt_refresh_succeeded"] = True
+                result["aedt_simulations_running"] = desktop.AreThereSimulationsRunning(True)
         except Exception as exc:
             result["aedt_refresh_succeeded"] = False
             result["aedt_refresh_error"] = str(exc)
-        finally:
-            pythoncom.CoUninitialize()
 
     return result

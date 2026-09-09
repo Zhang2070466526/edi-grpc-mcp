@@ -40,12 +40,12 @@ _TC_CANDIDATES = ["turbocharts_app.exe", "turbocharts.exe", "TurboCharts.exe"]
 
 
 def _find_first(*candidates: str) -> str:
-    """返回第一个存在的文件路径，都不存在则返回第一个候选名。"""
+    """返回第一个存在的文件路径，都不存在则返回空串（供调用方区分「未检测到」）。"""
     for name in candidates:
         p = _PARENT / name
         if p.is_file():
             return str(p)
-    return str(_PARENT / candidates[0])
+    return ""
 
 
 EDI_PATH = _settings.edi_path or _find_first(*_EDI_CANDIDATES)

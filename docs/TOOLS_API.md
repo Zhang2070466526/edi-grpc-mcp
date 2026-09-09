@@ -16,7 +16,7 @@ from servers.eda.project_manage import list_epp_projects
 
 ## 目录
 
-- **[工程管理（9 个）](#工程管理9个)**：创建 / 扫描 / 打开 / 关闭工程、查询器件、分析变量
+- **[工程管理（10 个）](#工程管理10个)**：创建 / 扫描 / 打开 / 关闭工程、查询器件、分析变量
 - **[仿真（8 个）](#仿真8个)**：同步 / 异步仿真、网表仿真、抗烧毁评估、任务查询
 - **[导出与分析（4 个）](#导出与分析4个)**：导出网表、截图原理图、器件 CSV、信号链路追踪
 - **[模型库 / 原理图库（10 个）](#模型库--原理图库10个)**：模型分类/查询/搜索、MMS 导入、器件放置、原理图库搜索/使用
@@ -36,7 +36,7 @@ from servers.eda.project_manage import list_epp_projects
 
 ---
 
-## 工程管理（9 个）
+## 工程管理（10 个）
 
 ### `list_epp_projects`
 
@@ -1531,7 +1531,7 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 
 ## Resources & Prompts
 
-除了 Tool（启动时动态统计，当前 69 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
+除了 Tool（启动时动态统计，当前 87 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
 
 ### Resources（6 个）
 

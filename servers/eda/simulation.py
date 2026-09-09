@@ -64,6 +64,9 @@ _VALID_TASK_STATUSES = {
     "PROTOCOL_MISMATCH", "GRPC_UNAVAILABLE"
 }
 
+# 事件回调里匹配 RUNNING 状态用的名称，从 proto 派生，避免硬编码字符串随枚举改名失效
+_RESULT_STATUS_RUNNING = ecserver_pb2.ResultStatus.Name(ecserver_pb2.RESULT_STATUS_RUNNING)
+
 
 def _prune_tasks_locked() -> None:
     """（需持 _sim_lock）清理过期任务。"""
@@ -80,6 +83,12 @@ def _prune_tasks() -> None:
     """清理过期任务（超过 TTL 的已完成/失败任务）。"""
     with _sim_lock:
         _prune_tasks_locked()
+
+
+def sim_task_count() -> int:
+    """返回当前异步仿真任务总数（供 metrics 等只读场景使用，内部持锁）。"""
+    with _sim_lock:
+        return len(_sim_tasks)
 
 
 def _task_completed(task: dict[str, Any]) -> bool:
@@ -162,7 +171,7 @@ def _handle_sim_event(task_id: str, update: dict[str, Any]) -> None:
             if task["status"] == "QUEUED":
                 task["status"] = "ACCEPTED"
 
-        elif status == "RESULT_STATUS_RUNNING":
+        elif status == _RESULT_STATUS_RUNNING:
             task["status"] = "RUNNING"
             if task["started_at"] is None:
                 task["started_at"] = time.time()
@@ -318,6 +327,9 @@ def get_simulation_async_status(task_id: str) -> dict[str, Any]:
 
     用法："查一下 task_id 为 xxx 的仿真进度"、"仿真跑完了吗"
 
+    Args:
+        task_id: start_simulation_async 返回的 task_id。
+
     Returns:
         {"success": True, "completed": False, "task_success": null,
          "outcome_known": False, "status": "RUNNING", "ads_output": "...", "log_complete": False}
@@ -361,6 +373,9 @@ def get_simulation_async_result(task_id: str) -> dict[str, Any]:
     """获取异步仿真最终结果。运行中返回当前状态和已接收的部分日志，完成后返完整的仿真结果和日志(ads_output)。
 
     用法："仿真结果出来了吗"、"把 task_id xxx 的完整日志给我"
+
+    Args:
+        task_id: start_simulation_async 返回的 task_id。
 
     Returns:
         完成时：{"success": True, "completed": True, "outcome_known": True,
@@ -465,6 +480,10 @@ def simulate_netlist(
 
     用法："帮我跑一下这个网表文件"、"仿真 C:/test/netlist.log"
     服务端：网表→临时目录→ADS仿真→RAW归档到原网表同级 history/result.raw→清理临时目录
+
+    Args:
+        netlist_path: 网表文件路径（如 C:/test/netlist.log）。
+        timeout_seconds: 最长等待秒数，默认 600。
 
     Returns:
         {"success": True, "status": "SUCCEEDED", "result_path": ".../history/result.raw",

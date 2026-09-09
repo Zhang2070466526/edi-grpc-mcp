@@ -131,6 +131,11 @@ import servers.cst                        # noqa: F401 — cst_solve + cst_expor
 # Resources & Prompts
 import servers.resources_prompts      # noqa: F401 — @mcp.resource() / @mcp.prompt()
 
+# 工具全部注册完成后，把各工具 docstring 的 Args: 段注入 inputSchema 参数 description
+# （FastMCP 默认不解析 docstring，此处统一补上，见 servers/schema_descriptions.py）
+from servers.schema_descriptions import inject_tool_descriptions  # noqa: E402
+inject_tool_descriptions(mcp)
+
 # Web 路由
 from servers.chat.routes import ui_page, health_check, chat_endpoint, tool_list, upload_file  # noqa: E402
 from servers.multimodal_vision import serve_image  # noqa: E402
@@ -139,7 +144,7 @@ from servers.multimodal_vision import serve_document  # noqa: E402
 
 async def metrics_endpoint(request):
     """GET /metrics — 输出 Prometheus 格式的运行时指标。"""
-    from servers.eda.simulation import _sim_tasks
+    from servers.eda.simulation import sim_task_count
 
     metrics = get_tool_metrics()
     lines = []
@@ -163,7 +168,7 @@ async def metrics_endpoint(request):
     # 当前异步仿真任务数
     lines.append("# HELP edi_sim_tasks 当前异步仿真任务数")
     lines.append("# TYPE edi_sim_tasks gauge")
-    lines.append(f"edi_sim_tasks {len(_sim_tasks)}")
+    lines.append(f"edi_sim_tasks {sim_task_count()}")
 
     # 服务运行时长
     lines.append("# HELP edi_uptime_seconds 服务运行时长(秒)")

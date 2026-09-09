@@ -41,11 +41,11 @@ class TaskRunner:
         self._ttl = ttl_seconds
         self._max_tasks = max_tasks
         self._max_run_seconds = max_run_seconds
-        # 进程退出时停止接收新任务，并把 worker 线程 daemon 化，避免非 daemon 线程阻塞退出
+        # 进程退出时调用 shutdown(wait=False)：worker 线程是非 daemon，仍在运行的任务会延迟进程退出
         atexit.register(self._shutdown)
 
     def _shutdown(self) -> None:
-        """进程退出时释放 executor（worker 线程本就是 daemon，不会阻塞退出）。"""
+        """进程退出时释放 executor（wait=False 不等待；worker 线程非 daemon，未完成任务会阻塞解释器退出）。"""
         self._executor.shutdown(wait=False)
 
     # ── 提交 ──

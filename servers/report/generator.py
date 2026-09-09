@@ -22,8 +22,6 @@ from servers.settings import get_settings
 from servers.utils import build_artifact, build_file_link, is_network_path, error_response
 from servers.multimodal_vision.document import register_document_url
 
-_error = error_response  # 别名，内部校验函数使用
-
 load_dotenv()
 _logger = logging.getLogger("report.generator")
 
@@ -41,22 +39,22 @@ _MAX_FIELD_LENGTHS = {"description": 50_000, "conclusion": 50_000}
 # 校验
 # ═══════════════════════════════════════════════════════════
 
-def _validate_output(path: str, overwrite: bool) -> tuple[str, str] | tuple[None, dict]:
+def _validate_output(path: str, overwrite: bool) -> tuple[str, None] | tuple[None, dict]:
     """校验输出路径（绝对、扩展名、目录存在、overwrite），返回 (文件类型, 错误)。"""
     if not isinstance(path, str) or not path.strip():
-        return None, _error("INVALID_OUTPUT_PATH", "output_path 不能为空")
-    p = Path(path)
+        return None, error_response("INVALID_OUTPUT_PATH", "output_path 不能为空")
+    p = Path(path).expanduser()
     if not p.is_absolute():
-        return None, _error("INVALID_OUTPUT_PATH", "output_path 必须是绝对路径")
+        return None, error_response("INVALID_OUTPUT_PATH", "output_path 必须是绝对路径")
     if is_network_path(p):
-        return None, _error("INVALID_OUTPUT_PATH", "禁止网络路径")
+        return None, error_response("INVALID_OUTPUT_PATH", "禁止网络路径")
     ext = p.suffix.lower()
     if ext not in _ALLOWED_EXTENSIONS:
-        return None, _error("INVALID_OUTPUT_PATH", f"后缀必须是 .pdf 或 .docx")
+        return None, error_response("INVALID_OUTPUT_PATH", f"后缀必须是 .pdf 或 .docx")
     if not p.parent.is_dir():
-        return None, _error("OUTPUT_DIRECTORY_NOT_FOUND", f"输出目录不存在: {p.parent}")
+        return None, error_response("OUTPUT_DIRECTORY_NOT_FOUND", f"输出目录不存在: {p.parent}")
     if p.exists() and not overwrite:
-        return None, _error("OUTPUT_ALREADY_EXISTS",
+        return None, error_response("OUTPUT_ALREADY_EXISTS",
                              f"输出文件已存在: {p.name}。如需覆盖，请设置 overwrite=true")
     return ext.lstrip("."), None
 
@@ -96,30 +94,30 @@ def _validate_charts(charts: list | None) -> tuple[list | None, list[str], dict 
     if charts is None:
         return None, warnings, None
     if not isinstance(charts, list):
-        return None, warnings, _error("INVALID_REPORT_PARAMETERS", "charts 必须是数组")
+        return None, warnings, error_response("INVALID_REPORT_PARAMETERS", "charts 必须是数组")
     if not charts:
         return None, warnings, None
     if len(charts) > 50:
-        return None, warnings, _error("INVALID_REPORT_PARAMETERS", "charts 最多 50 张")
+        return None, warnings, error_response("INVALID_REPORT_PARAMETERS", "charts 最多 50 张")
     validated: list[dict] = []
     for i, c in enumerate(charts):
         if not isinstance(c, dict):
-            return None, warnings, _error("INVALID_REPORT_PARAMETERS", f"charts[{i}] 必须是对象")
+            return None, warnings, error_response("INVALID_REPORT_PARAMETERS", f"charts[{i}] 必须是对象")
         path = c.get("path", "")
         title = c.get("title", "")
         if not isinstance(path, str) or not isinstance(title, str):
-            return None, warnings, _error("INVALID_REPORT_PARAMETERS",
+            return None, warnings, error_response("INVALID_REPORT_PARAMETERS",
                                            f"charts[{i}].path 和 title 必须是字符串")
         if len(title) > 500:
-            return None, warnings, _error("INVALID_REPORT_PARAMETERS",
+            return None, warnings, error_response("INVALID_REPORT_PARAMETERS",
                                            f"charts[{i}].title 最长 500 字符")
         p = Path(path)
         if not p.is_absolute():
-            return None, warnings, _error("INVALID_CHART_PATH", f"charts[{i}].path 必须是绝对路径")
+            return None, warnings, error_response("INVALID_CHART_PATH", f"charts[{i}].path 必须是绝对路径")
         if is_network_path(p):
-            return None, warnings, _error("INVALID_CHART_PATH", "禁止网络路径")
+            return None, warnings, error_response("INVALID_CHART_PATH", "禁止网络路径")
         if p.suffix.lower() not in _IMAGE_EXTENSIONS:
-            return None, warnings, _error("INVALID_CHART_PATH",
+            return None, warnings, error_response("INVALID_CHART_PATH",
                                            f"charts[{i}].path 后缀必须是 PNG/JPG/JPEG")
         if not p.is_file():
             warnings.append(f"图片未找到: {p.name}")
@@ -180,11 +178,11 @@ def _validate_schematic(path: str) -> tuple[str | None, bool, dict | None]:
         return None, False, None
     p = Path(path)
     if not p.is_absolute():
-        return None, False, _error("INVALID_REPORT_PARAMETERS", "schematic 必须是绝对路径")
+        return None, False, error_response("INVALID_REPORT_PARAMETERS", "schematic 必须是绝对路径")
     if is_network_path(p):
-        return None, False, _error("INVALID_REPORT_PARAMETERS", "禁止网络路径")
+        return None, False, error_response("INVALID_REPORT_PARAMETERS", "禁止网络路径")
     if p.suffix.lower() not in _IMAGE_EXTENSIONS:
-        return None, False, _error("INVALID_REPORT_PARAMETERS",
+        return None, False, error_response("INVALID_REPORT_PARAMETERS",
                                    "schematic 后缀必须是 PNG/JPG/JPEG")
     missing = not p.is_file()
     return str(p.resolve()), missing, None
@@ -215,6 +213,18 @@ def generate_simulation_report(
     charts：[{"path": "C:/.../gain.png", "title": "增益曲线"}]
     components：type/model/manufacturer/specs 四项全字符串，manufacturer 不知道填 "N/A"
     默认禁止覆盖已有文件（overwrite=false）
+
+    Args:
+        output_path: 报告输出路径（绝对路径，.pdf 或 .docx）。
+        model_name: 产品型号名称（非空）。
+        description: 报告描述（可选）。
+        conclusion: 结论（可选）。
+        spec_table: 规格表二维数组，固定 7 列（指标/数值/单位/规格/规格单位/结论/状态）。
+        charts: 图表列表 [{"path": "...", "title": "..."}]。
+        components: 器件列表，type/model/manufacturer/specs 四项全字符串。
+        schematic: 原理图截图路径（可选）。
+        overwrite: 是否覆盖已有文件，默认 False。
+        timeout_seconds: 渲染服务超时秒数（可选）。
 
     Returns:
         {"success": True, "file_path": "C:/.../report.pdf", "preview_url": "http://...",
@@ -401,7 +411,7 @@ def generate_simulation_report(
         "warnings": warnings,
         "output_verified": True,
     }
-    result.update(build_file_link(str(expected_output), f"打开{file_type.upper()}报告"))
+    result["file_uri"] = build_file_link(str(expected_output), f"打开{file_type.upper()}报告")["file_uri"]
     return result
 
 

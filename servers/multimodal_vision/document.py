@@ -129,14 +129,14 @@ def open_document(
 
     ext = path.suffix.lower()
     mime, _ = _MIME_TYPES.get(ext, ("application/octet-stream", "attachment"))
-    token, url = _register_token(path, disposition)
+    _, url = _doc_store.register(str(path), disposition=disposition)
 
     return {
         "success": True,
         "file_name": path.name,
         "mime_type": mime,
         "url": url,
-        "expires_in": _TOKEN_TTL,
+        "expires_in": 600,
         "display_mode": disposition,
         "markdown_link": f"[{path.name}]({url})",
     }

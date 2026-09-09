@@ -49,7 +49,7 @@ servers/
     config.py             # 配置 / 路径检测
     project_reader.py     # ProjectReader + S-expression 解析器
     grpc_client.py        # gRPC 通信层（FetchEvent → PerformAction）
-    project_manage.py     # 工程管理（9 工具）
+    project_manage.py     # 工程管理（10 工具）
     simulation.py         # 仿真（8 工具）
     simulation_components.py  # 仿真器件（10 工具）
     simulation_component_catalog.json  # 参数目录 v2.0
@@ -98,23 +98,23 @@ PyPI: https://pypi.org/project/edi-grpc-mcp/  |  当前版本：0.1.8
 
 ## MCP 工具清单
 
-工具总数随版本变化（当前 69 个，以运行时 `/ready` 的 `tool_count` 为准），按功能分 14 类：
+工具总数随版本变化（当前 87 个，以运行时 `/ready` 的 `tool_count` 为准），按功能分 13 类：
 
 | 分类 | 数量 | 说明 |
 |---|---|---|
-| 工程管理 | 9 | 创建 / 扫描 / 打开 / 关闭工程、查询器件、分析变量 |
+| 工程管理 | 10 | 创建 / 扫描 / 打开 / 关闭工程、查询器件、分析变量、批量查询器件 |
 | 仿真器件 | 10 | 器件 Schema、增删改、状态、网表导入、原理图加载 |
 | 仿真 | 8 | 同步 / 异步仿真、网表仿真、抗烧毁评估、任务查询 |
-| 导出分析 | 3 | 导出网表、截图原理图、信号链路追踪 |
-| 模型 / 启动 / 诊断 | 7 | 模型替换、启动 EDI、服务诊断、日志读取 |
-| 工作区 / MMS | 4 | 创建 / 查询 / 切换工作区、从 MMS 导入性能模型 |
-| 原理图扩展 | 5 | 内置器件、性能器件放置、清空原理图、连线 |
+| 导出与分析 | 4 | 导出网表、截图原理图、导出器件 CSV、信号链路追踪 |
+| 模型库 / 原理图库 | 10 | 模型替换、模型库查询、原理图库查询、MMS 导入、性能器件放置 |
+| 启动 / 诊断 | 3 | 启动 EDI、服务状态、日志读取 |
+| 工作区 | 3 | 创建 / 切换 / 查询工作区 |
+| 原理图扩展 | 4 | 内置器件、理想器件放置、清空原理图、连线 |
 | ANSYS HFSS | 6 | AEDT 工程开关、HFSS 异步仿真 |
 | CST 电磁仿真 | 5 | 异步求解 .cst、导出 S 参数 / 远场方向图 |
-| 图表 | 3 | RAW 曲线、转图、结果对比 |
-| 图片 | 2 | 显示、视觉分析 |
-| 文档 | 1 | 打开本地文档 |
-| 报告 | 1 | 生成仿真报告 |
+| TR 仿真集成 | 17 | 对接 SimulationAgent：网表、仿真、解析、报告、原理图同步 |
+| 图表与图片 | 5 | RAW 曲线、转图、结果对比、显示、视觉分析 |
+| 报告与文档 | 2 | 生成仿真报告、打开本地文档 |
 
 > 完整工具签名、参数、返回格式见 [TOOLS_API.md](./TOOLS_API.md)，工具一览表见 [README.md](../README.md)。
 
@@ -182,7 +182,7 @@ uv publish
 ```powershell
 powershell -File scripts/build.ps1
 # 输出: dist/edi-mcp/（含 edi_mcp_server.exe + start_server.bat + .env，约 90 MB）
-# 打包完成后自动跑 scripts/smoke_test_exe.py 冒烟测试（启动 exe → 健康检查 → 鉴权 → 工具注册），不通过则打包失败
+# 打包完成后自动跑 scripts/smoke_test_exe.py 冒烟测试（启动 exe → 健康检查 → 工具注册），不通过则打包失败
 ```
 
 目录型打包，复制 `dist/edi-mcp/` 到目标电脑后创建 `.env` 即可运行。
@@ -231,7 +231,7 @@ python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto 
 - EDI_PATH / TURBOCHARTS_PATH / OPENCLAW_WORKSPACE 留空自动检测
 
 ### 访问控制
-- 通过进程白名单 `MCP_ALLOWED_PROCESSES` 实现：留空不鉴权；配置后只放行来源进程 exe/命令行命中白名单子串的请求，其余返回 403（详见 `docs/ACCESS_CONTROL.md`）
+- 通过进程白名单 `MCP_ALLOWED_PROCESSES` 实现：留空不鉴权；配置后只放行来源进程 exe/命令行命中白名单子串的请求，其余返回 403（实现详见 `docs/IMPLEMENTATION.md` §11.17）
 
 ### Chat 与工具注册
 - Chat 工具列表从 MCP 元数据自动生成，排除同步阻塞和 COM 依赖工具
