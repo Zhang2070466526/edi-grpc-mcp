@@ -103,7 +103,7 @@ def test_export_schematic_components_payload(monkeypatch):
     assert calls[-1][2] == {"save_path": "C:/out.csv"}
 
 
-def test_export_schematic_components_rejects_empty_save_path(monkeypatch):
+def test_export_schematic_components_rejects_empty_csv_path(monkeypatch):
     from servers.eda import design_export as de
     monkeypatch.setattr(de, "call_project_grpc", lambda *a, **k: {"success": True})
     r = de.export_schematic_components_to_csv("C:/test.epp", "   ")

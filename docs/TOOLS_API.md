@@ -553,7 +553,7 @@ export_project_netlist(project_path: str, timeout_seconds: int = 60) -> dict
 ```python
 from servers.eda.design_export import capture_schematic
 
-capture_schematic(project_path: str, img_path: str, timeout_seconds: int = 60) -> dict
+capture_schematic(project_path: str, output_path: str, timeout_seconds: int = 60) -> dict
 ```
 
 截取原理图为图片（PNG/JPG 等）。
@@ -561,7 +561,7 @@ capture_schematic(project_path: str, img_path: str, timeout_seconds: int = 60) -
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `project_path` | str | 是 | — | `.epp` 文件绝对路径 |
-| `img_path` | str | 是 | — | 输出图片路径 |
+| `output_path` | str | 是 | — | 输出图片路径 |
 | `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
 
 ---
@@ -571,15 +571,15 @@ capture_schematic(project_path: str, img_path: str, timeout_seconds: int = 60) -
 ```python
 from servers.eda.design_export import export_schematic_components_to_csv
 
-export_schematic_components_to_csv(project_path: str, save_path: str, timeout_seconds: int = 60) -> dict
+export_schematic_components_to_csv(project_path: str, csv_path: str, timeout_seconds: int = 60) -> dict
 ```
 
-将工程原理图中的有效器件信息导出为 CSV。导出列为 original_model_type/name/id 与 alternative_model_type/name/id（后三列留空），供 replace_models_from_csv 后续模型替换填写。仿真控制器、端口、变量等 EXCLUDED_TYPES 不导出。save_path 未以 .csv 结尾时服务端自动追加后缀；父目录必须已存在。
+将工程原理图中的有效器件信息导出为 CSV。导出列为 original_model_type/name/id 与 alternative_model_type/name/id（后三列留空），供 replace_models_from_csv 后续模型替换填写。仿真控制器、端口、变量等 EXCLUDED_TYPES 不导出。csv_path 未以 .csv 结尾时服务端自动追加后缀；父目录必须已存在。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `project_path` | str | 是 | — | `.epp` 文件绝对路径 |
-| `save_path` | str | 是 | — | CSV 输出文件路径 |
+| `csv_path` | str | 是 | — | CSV 输出文件路径 |
 | `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
 
 ---
@@ -930,7 +930,7 @@ add_wire(project_path: str, first_instance_name: str, first_pin_index: int, seco
 ```python
 from servers.eda.edi_launcher import launch_edi
 
-launch_edi(edi_path: str = "", wait_for_grpc: bool = True, wait_timeout: int = 30) -> dict
+launch_edi(edi_path: str = "", wait_for_grpc: bool = True, timeout_seconds: int = 30) -> dict
 ```
 
 启动 EDI 客户端并等待 gRPC 就绪。
@@ -939,7 +939,7 @@ launch_edi(edi_path: str = "", wait_for_grpc: bool = True, wait_timeout: int = 3
 |---|---|---|---|---|
 | `edi_path` | str | 否 | .env 配置 | EDI.exe 路径 |
 | `wait_for_grpc` | bool | 否 | True | 是否等待 gRPC 端口就绪 |
-| `wait_timeout` | int | 否 | 30 | 等待超时秒数 |
+| `timeout_seconds` | int | 否 | 30 | 等待超时秒数 |
 
 ---
 
@@ -1003,7 +1003,7 @@ get_service_logs(lines: int = 50, keyword: str = "", level: str = "") -> dict
 ```python
 from servers.ansys.project_manage import open_hfss_project
 
-open_hfss_project(project_path: str, aedt_path: str = "", wait_timeout: int = 30) -> dict
+open_hfss_project(project_path: str, aedt_path: str = "", timeout_seconds: int = 30) -> dict
 ```
 
 启动 AEDT 并打开 .aedt 项目（COM 附着优先，subprocess 单次启动兜底）。流程：检查锁文件 → 清理失效锁 → COM 附着打开或 subprocess 启动 → 轮询确认工程打开。
@@ -1012,7 +1012,7 @@ open_hfss_project(project_path: str, aedt_path: str = "", wait_timeout: int = 30
 |---|---|---|---|---|
 | `project_path` | str | 是 | — | .aedt/.aedtz 文件绝对路径 |
 | `aedt_path` | str | 否 | 自动检测 | ansysedt.exe 路径 |
-| `wait_timeout` | int | 否 | 30 | 等待超时秒数（1-120） |
+| `timeout_seconds` | int | 否 | 30 | 等待超时秒数（1-120） |
 
 返回：`{"success": true, "status": "opened/already_open", "project_opened": true, "method": "com/subprocess", "duration_s": 1.2}`；失败 `{"success": false, "status": "invalid_path"/"aedt_not_found"/"project_locked"/"com_open_failed", "message": "..."}`
 
@@ -1040,7 +1040,7 @@ close_hfss_project(project_name: str = "", project_path: str = "", save_before_c
 ```python
 from servers.ansys.project_manage import launch_aedt
 
-launch_aedt(aedt_path: str = "", wait_timeout: int = 30) -> dict
+launch_aedt(aedt_path: str = "", timeout_seconds: int = 30) -> dict
 ```
 
 启动 AEDT（不打开项目）。已运行时仅返回状态。
@@ -1048,7 +1048,7 @@ launch_aedt(aedt_path: str = "", wait_timeout: int = 30) -> dict
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `aedt_path` | str | 否 | 自动检测 | ansysedt.exe 路径 |
-| `wait_timeout` | int | 否 | 30 | 等待超时秒数 |
+| `timeout_seconds` | int | 否 | 30 | 等待超时秒数 |
 
 返回：`{"success": true, "status": "started"/"already_running", "com_ready": true, "pid": 12345, "message": "..."}`
 
@@ -1223,7 +1223,7 @@ from servers.turbocharts.convert_raw import turbocharts_convert
 
 turbocharts_convert(
     raw_path: str,
-    img_path: str,
+    output_path: str,
     chart_type: str,
     csv_path: str = "",
     linename: str = "",
@@ -1237,7 +1237,7 @@ ADS RAW 结果文件转换为曲线图 + CSV。
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `raw_path` | str | 是 | RAW 文件路径 |
-| `img_path` | str | 是 | 输出图片路径（PNG/JPG/BMP/SVG） |
+| `output_path` | str | 是 | 输出图片路径（PNG/JPG/BMP/SVG） |
 | `chart_type` | str | 是 | `"SP"` / `"HB"` / `"XDB"` |
 | `csv_path` | str | 否 | 同步导出 CSV 路径 |
 | `linename` | str | 否 | 曲线名，如 `"DB_S[2,1]"` |
@@ -1271,7 +1271,7 @@ from servers.turbocharts.compare_results import compare_simulation_results
 compare_simulation_results(
     result_paths: list[str],
     curve: str,
-    img_path: str,
+    output_path: str,
     chart_type: str = "SP",
     labels: list[str] | None = None,
     dependency: str = "freq",
@@ -1287,7 +1287,7 @@ compare_simulation_results(
 |---|---|---|---|
 | `result_paths` | list | 是 | RAW 文件路径（2-8 个） |
 | `curve` | str | 是 | 曲线名 |
-| `img_path` | str | 是 | 输出图片路径 |
+| `output_path` | str | 是 | 输出图片路径 |
 | `labels` | list | 否 | 每条曲线标签 |
 | `dependency` | str | 否 | 依赖轴（默认 "freq"） |
 | `alignment` | str | 否 | 对齐方式："intersection" 或 "interpolation" |

@@ -3,7 +3,7 @@
 - **评审日期**：2026-09-08
 - **评审对象**：EDI MCP 服务（`http://127.0.0.1:50026/mcp`，`D:\GitLabCode\edi-grpc-mcp\start_servers.py`），87 个业务工具
 - **评审方法**：① 运行形态侦察（netstat/进程命令行/`/ready`）；② 全量 `tools/list` 定义审查（87 个工具 name/description/inputSchema 静态分析）；③ 行为抽样探针（直接调工具 + 白名单探针裸调 `/mcp`）
-- **说明**：本清单只保留**未解决**项。评审中发现的 2 个崩溃 bug（`open_document` NameError、`generate_simulation_report` 的 `markdown_link` 被 `file://` URI 覆盖）与 5 条运行时正确性问题（add_wire 自连接、signal_chain backward、strip/int 类型防护、TR 会话 404、文档计数）已由开发者修复，故移除。
+- **说明**：本清单只保留**未解决**项（已修复项已移除）。
 
 ---
 
@@ -21,18 +21,13 @@
 
 ## 二、P0（高优先级）
 
-### P0-1　inputSchema 260 个参数缺 `description`
-- **现象**：`tools/list` 的 `inputSchema.properties` 只有 `title`+`type`，**无 `description`**。FastMCP 默认不把 docstring 的 `Args:` 段传播进 schema。
-- **影响**：Claude Code 等标准 MCP 客户端**只读 schema 级 description**，缺失则「看不懂参数」，只能靠猜——硬契约，比 docstring 打磨收益大得多。
-- **建议**：用 FastMCP `Annotated[..., Field(description=...)]` 或 pydantic 模型给 87 工具每个 property 补 description（机械但量大，可脚本批量生成初稿再人工校对）。
-
-### P0-2　`batch_query_component` 未命中静默丢弃（与同家族契约不一致）
+### P0-1　`batch_query_component` 未命中静默丢弃（与同家族契约不一致）
 - **现象**：请求 N 项，返回 `data` < N 项，未命中**无 null 占位、无 missing 字段、无 error**，外层仍 `SUCCEEDED/code 200`。
-- **对照**：同家族 `get_components_stat ic_params` 正确保留 null 占位（实测 `data=[命中项, null]`）。
+- **对照**：同家族 `get_components_static_params` 正确保留 null 占位（实测 `data=[命中项, null]`）。
 - **影响**：批量核对型号时打错（大小写/连字符/传成 UUID）就「消失」，调用方误判"库中无此器件"；按 index 消费会错位。
 - **建议**：未命中补 `null` + 返回 `missing: []`；docstring 写明行为。
 
-### P0-3 🔐 SimulationAgent 密钥裸奔在进程命令行
+### P0-2 🔐 SimulationAgent 密钥裸奔在进程命令行
 - **现象**：`SimulationAgent.exe` 以 `--model-api-key sk-...` 与 `--edi-mms-api-token <JWT>` 作为 argv 明文启动。
 - **影响**：本机任何进程/用户可 `ps`/WMI 读到明文密钥。
 - **建议**：改从环境变量/配置文件读取；启动后清零 argv。
@@ -43,13 +38,10 @@
 
 | # | 问题 | 证据 / 说明 |
 |---|---|---|
-| P1-1 | 「原始 ID」语义分裂 | `batch_query.originalid_list` 只认型号串（UUID 静默丢）／`tr_query_components.originalid_list` 认 UUID 或 model_name／`get_components_static_params.original_uuids` 认真 UUID。真实 footgun |
-| P1-2 | `originalid_list` 命名不规范 | `originalid` 缺下划线，与 `original_uuid`/`original_uuids` 不统一 |
-| P1-3 | 工程路径多名字 | 内部工具统一 `project_path` 可做；**`epp_path`(9, tr_*) 例外**——1:1 镜像 SimulationAgent 外部契约，不统一，改为 docstring 说明 |
-| P1-4 | 图片路径两种写法 | `img_path`(capture_schematic) vs `image_path`(show_image) |
-| P1-5 | 超时参数两种写法 | `timeout_seconds`(42) vs `wait_timeout`(launch_edi) |
-| P1-6 | 输出路径五种写法 | `save_path` / `csv_path` / `output_dir` / `output_path` / `result_path` |
-| P1-7 | `get_components_static_params` 双参数 | `original_uuid`(标量) + `original_uuids`(anyOf[array,null]) 并存，`type=None` 属实 |
+| P1-1 | 「型号/ID 列表」参数名不统一 | `batch_query_component.model_name_list`（仅型号串，已改名✅）／`tr_query_components.originalid_list`（UUID 或 model_name，未改）／`get_components_static_params.original_uuids`（真 UUID）——三处仍不统一 |
+| P1-2 | `originalid` 命名残留 | `tr_query_components` 仍用 `originalid_list`（无下划线），建议一并改名对齐 batch_query |
+| P1-3 | 工程路径多名字 | 内部 `project_path` vs `create_project` 的 `path` vs `list_epp_projects` 的 `folder_path`；`epp_path`(tr_*, 镜像 SimulationAgent 契约) 保留 |
+| P1-4 | `get_components_static_params` 双参数 | `original_uuid`(标量) + `original_uuids`(anyOf[array,null]) 并存，`type=None` 属实 |
 
 ---
 
@@ -69,14 +61,13 @@
 
 ## 五、优化建议（服务端视角，按落地优先级）
 
-1. **P0-1 优先**：给 87 工具 inputSchema 每个 property 补 `description`——硬契约，收益最大。
-2. **删 `open_edi_project` 硬编码路径**（P2-2，一行）。
-3. **统一 `originalid_list` 语义**（P1-1）：要么都认 UUID，要么把「只认型号串」写进 docstring 并加校验拦截 UUID 静默丢弃。
-4. **`get_service_status` 首探**（P2-5）：报 READY/IDLE/CONNECTING 而非恒 unknown。
-5. **未命中行为全家族统一**（P0-2）：`data` 与请求一一对应、未命中补 `null` + `missing: []`。
-6. **密钥治理**（P0-3）：密钥走环境变量/配置，不落 argv，启动后清零。
-7. **命名收敛**（P1-2~P1-7）：内部工具统一 `project_path`/`timeout_seconds`/`image_path`/`output_path`；`epp_path`（tr_*）保留并 docstring 说明镜像关系。
-8. **稳定长连接**：服务端减少会话中途重启（客户端侧断线不自动重连、不自动重拉 tools/list）。
+1. **删 `open_edi_project` 硬编码路径**（P2-2，一行）。
+2. **统一 `originalid_list` 语义**（P1-1）：要么都认 UUID，要么把「只认型号串」写进 docstring 并加校验拦截 UUID 静默丢弃。
+3. **`get_service_status` 首探**（P2-5）：报 READY/IDLE/CONNECTING 而非恒 unknown。
+4. **未命中行为全家族统一**（P0-1）：`data` 与请求一一对应、未命中补 `null` + `missing: []`。
+5. **密钥治理**（P0-2）：密钥走环境变量/配置，不落 argv，启动后清零。
+6. **命名收敛**（P1-1~P1-3）：`tr_query_components.originalid_list` 一并改名、内部路径名统一；`epp_path`（tr_*）保留并 docstring 说明镜像关系。
+7. **稳定长连接**：服务端减少会话中途重启（客户端侧断线不自动重连、不自动重拉 tools/list）。
 
 ---
 
@@ -84,10 +75,9 @@
 
 对 87 个工具做全量运行时冒烟（空参 `{}` + 按必需参数类型注入 dummy 实参；写类工具仅空参、不注入实参以避免副作用），另对 12 个只读工具用工程 23 真实参数跑通：
 
-- **结论：0 崩溃**——无 NameError/TypeError/AttributeError/KeyError/traceback/5xx，参数校验层干净（印证开发者已修复的 strip/int 类型防护与 `open_document` 崩溃）。
+- **结论：0 崩溃**——无 NameError/TypeError/AttributeError/KeyError/traceback/5xx，参数校验层干净。
 - **真实参数跑通 12 工具**：get_project_summary / list_schematic_components / list_simulation_components / get_signal_chain / analyze_variables / export_project_netlist / tr_find_paths / tr_query_schematic_components / tr_get_project_netlist / get_simulation_component_schema / list_ideal_components / get_schematic_component_info，均无逻辑崩溃。
 - **更正**：工程 23 实际 **9 个器件**（TermG / SParameter / Sweep / Var / HarmonicBalance / Out / NC10355C_2931 / XDB / P_nToneG），早前只看 CSV 误判为 2 个（CSV 排除了仿真控制器）。
-- **新增/细化**：P2-9（CSV 漏导 Out）、P2-7（两列组件工具信封/分页不一致）、P2-4（message 英文更多实例）见上文。
 
 ---
 

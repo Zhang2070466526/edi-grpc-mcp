@@ -112,7 +112,7 @@ def test_compare_interpolation_checks_all_files(tmp_path, monkeypatch):
     img = tmp_path / "cmp.png"
     result = cr.compare_simulation_results(
         result_paths=[str(raw_a), str(raw_b)],
-        curve="DB_S[2,1]", img_path=str(img),
+        curve="DB_S[2,1]", output_path=str(img),
         alignment="interpolation", reference_index=0)
     assert result["success"] is False
     assert result["error_code"] == "INVALID_RAW_DATA"
@@ -231,7 +231,7 @@ def test_vswr_split_removes_consecutive_ampersand_and_passes_ac(tmp_path, monkey
 
     monkeypatch.setattr(cr, "run_turbocharts", _run)
     cr.turbocharts_convert(
-        raw_path=str(raw), img_path=str(tmp_path / "out.png"), chart_type="SP",
+        raw_path=str(raw), output_path=str(tmp_path / "out.png"), chart_type="SP",
         csv_path=str(tmp_path / "out.csv"),
         linename="DB_S[2,1]&VSWR_S[1,1]&VSWR_S[2,2]&DB_S[1,2]",
         ac_config="phase#3#S[2,1]#fv#0.1")
@@ -298,7 +298,7 @@ def test_compare_rejects_missing_output_dir(tmp_path, monkeypatch):
     img = tmp_path / "nonexistent" / "cmp.png"  # 父目录不存在
     result = cr.compare_simulation_results(
         result_paths=[str(raw_a), str(raw_b)],
-        curve="DB_S[2,1]", img_path=str(img))
+        curve="DB_S[2,1]", output_path=str(img))
     assert result["success"] is False
     assert result["error_code"] == "OUTPUT_DIRECTORY_NOT_FOUND"
 
@@ -359,13 +359,13 @@ def test_get_components_static_params_payload(monkeypatch):
 def test_batch_query_component_validation():
     from servers.eda import project_manage as pm
     # 空数组 → 拒绝
-    r = pm.batch_query_component(originalid_list=[])
+    r = pm.batch_query_component(model_name_list=[])
     assert r["success"] is False and r["error_code"] == "INVALID_PARAMETERS"
     # 空字符串元素 → 拒绝
-    r = pm.batch_query_component(originalid_list=["  "])
+    r = pm.batch_query_component(model_name_list=["  "])
     assert r["success"] is False and r["error_code"] == "INVALID_PARAMETERS"
     # 非字符串元素 → 拒绝
-    r = pm.batch_query_component(originalid_list=[1, "u2"])
+    r = pm.batch_query_component(model_name_list=[1, "u2"])
     assert r["success"] is False and r["error_code"] == "INVALID_PARAMETERS"
 
 
@@ -379,9 +379,32 @@ def test_batch_query_component_payload(monkeypatch):
         return {"success": True, "status": "SUCCEEDED"}
 
     monkeypatch.setattr(pm, "call_grpc", _fake)
-    pm.batch_query_component(originalid_list=["MAAD_008866", "HMC462_DIE"])
+    pm.batch_query_component(model_name_list=["MAAD_008866", "HMC462_DIE"])
     assert calls[-1][0] == ecserver_pb2.BATCH_QUERY_COMPONENT
     assert calls[-1][1] == {"originalid_list": ["MAAD_008866", "HMC462_DIE"]}
+
+
+def test_batch_query_component_alignment(monkeypatch):
+    """下游 data 不保序且未命中被丢弃，应对齐输入顺序、未命中补 null、返回 missing。"""
+    from servers.eda import project_manage as pm
+
+    downstream = {
+        "success": True, "status": "SUCCEEDED",
+        "details": {
+            "code": 200,
+            "data": [
+                {"model": "HMC462_DIE", "manufacturer": "ADI"},
+                {"model": "MAAD_008866", "manufacturer": "MACOM"},
+            ],
+        },
+    }
+    monkeypatch.setattr(pm, "call_grpc", lambda *a, **k: downstream)
+
+    r = pm.batch_query_component(model_name_list=["MAAD_008866", "HMC462_DIE", "NOPE"])
+
+    models = [item["model"] if item else None for item in r["details"]["data"]]
+    assert models == ["MAAD_008866", "HMC462_DIE", None]  # 对齐到输入顺序 + 未命中补 null
+    assert r["details"]["missing"] == ["NOPE"]
 
 
 # ── 端口占用自动清理 ────────────────────────────────────────────

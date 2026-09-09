@@ -43,7 +43,7 @@ def test_compare_intersection_regression(tmp_path, monkeypatch):
     result = cr.compare_simulation_results(
         result_paths=[str(raw_a), str(raw_b)],
         curve="DB_S[2,1]",
-        img_path=str(img),
+        output_path=str(img),
         csv_path=str(csv),
         labels=["a", "b"],
     )
@@ -66,7 +66,7 @@ def test_compare_interpolation_requires_increasing_reference(tmp_path, monkeypat
     result = cr.compare_simulation_results(
         result_paths=[str(raw_a), str(raw_b)],
         curve="DB_S[2,1]",
-        img_path=str(img),
+        output_path=str(img),
         alignment="interpolation",
     )
 

@@ -344,9 +344,16 @@ def launch_aedt(
 ) -> dict[str, Any]:
     """启动 AEDT（不打开项目）。已运行时仅返回状态。
 
+    用法："启动 AEDT"、"打开 AEDT 桌面"
+
+    只启动 ansysedt.exe 进程，不打开任何 .aedt 工程；已在运行时跳过启动直接返回状态。
+
     Args:
-        aedt_path: AEDT（ansysedt.exe）路径，默认自动检测。
+        aedt_path: AEDT（ansysedt.exe）路径，默认自动检测（注册表/默认目录）。
         timeout_seconds: 等待 COM 就绪的超时秒数，默认 30（1-120）。
+
+    Returns:
+        {"success": True, "status": "started/already_running", "com_ready": bool, "pid": int}
     """
     timeout_seconds = max(1, min(timeout_seconds, 120))
     global _LAST_PID
@@ -383,7 +390,18 @@ def launch_aedt(
 
 @mcp.tool()
 def get_hfss_project_info() -> dict[str, Any]:
-    """查询当前 AEDT 项目信息（纯查询，不启动 AEDT）。"""
+    """查询当前 AEDT 打开的项目和活动设计（纯查询，不启动 AEDT）。
+
+    用法："AEDT 现在打开了哪些工程"、"当前活动的 HFSS 设计是哪个"
+
+    只读查询，不启动、不附着 AEDT。返回已打开项目列表、活动项目/设计名、
+    AEDT 进程 PID 和 COM 可用性。查 design_name/setup_name 时优先用它。
+
+    Returns:
+        {"success": True, "aedt_running": bool, "pids": [...],
+         "com_available": bool, "open_projects": [...],
+         "active_project": str, "active_design": str}
+    """
     if not aedt_is_running():
         return {"success": True, "aedt_running": False, "message": "AEDT 未运行", "pids": []}
 

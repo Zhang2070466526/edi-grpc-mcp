@@ -6,7 +6,7 @@ close_edi_project             关闭已打开的工程，可选择是否保存
 get_project_summary           工程概览（元数据、原理图、仿真配置）
 
 自然语言使用示例：
-  帮我看看 C:/Users/JGL/EDI-Workspace 下面有哪些 .epp 工程
+  帮我看看 C:/EDI-Workspace 下面有哪些 .epp 工程
   帮我打开 EDA 工程 C:/.../EDI_TEST.epp
   帮我关闭这个工程
   帮我看看这个工程有哪些元件
@@ -129,8 +129,7 @@ def open_edi_project(
         project_path: str,
         timeout_seconds: int = 60,
 ) -> dict[str, Any]:
-    """
-    打开一个.epp 工程，例如C:\\Users\\JGL\\EDI-Workspace\\projects\\1\\1.epp
+    """打开一个 .epp 工程。
 
     Args:
         project_path: EDA 服务所在机器上的 .epp 工程文件绝对路径。
@@ -433,33 +432,49 @@ def batch_query_component(
         model_name_list: list[str],
         timeout_seconds: int = 60,
 ) -> dict[str, Any]:
-    """按器件型号字符串列表批量查询模型信息，原样返回模型服务响应。
+    """按器件型号字符串列表批量查询模型信息，返回对齐到输入顺序的结果。
 
     用法：批量查这几个型号的模型信息（如 MAAD_008866）
 
     注意：本工具只接受器件型号串（如 "MAAD_008866"），不接受 UUID。
     按 UUID 查固有参数用 get_components_static_params，UUID 或型号都认用 tr_query_components。
 
+    下游模型服务只返回命中的型号且不保序。本工具将返回的 data 按输入 model_name_list
+    顺序对齐：未命中的型号补 null 占位，并在 missing 中列出未命中的型号。
+
     该任务不需要打开工程，也不需要 project_path。gRPC 服务将请求转发到
-    POST /api/v1/models/manage/batch_query_component/，下游返回的完整 JSON
-    对象原样写入最终事件 payload_json（不执行搜索接口的裁剪规则）。
+    POST /api/v1/models/manage/batch_query_component/。
 
     Args:
         model_name_list: 器件型号字符串数组（如 "MAAD_008866"，非空，每个元素非空字符串，顺序和重复项保留）。
         timeout_seconds: 最长等待秒数，默认 60。
 
     Returns:
-        gRPC 统一返回结构，业务字段（下游完整响应）在 details 中。
+        gRPC 统一返回结构，业务字段在 details 中：
+        details.data 与输入 model_name_list 顺序一一对应，未命中项为 null；
+        details.missing 为未命中的型号列表。
     """
     if not model_name_list:
         return error_response("INVALID_PARAMETERS", "model_name_list 不能为空数组")
     if not all(isinstance(u, str) and u.strip() for u in model_name_list):
         return error_response("INVALID_PARAMETERS", "model_name_list 必须是非空字符串数组")
 
-    payload = {"originalid_list": [u.strip() for u in model_name_list]}
-    return call_grpc(
+    names = [u.strip() for u in model_name_list]
+    payload = {"originalid_list": names}
+    result = call_grpc(
         ecserver_pb2.BATCH_QUERY_COMPONENT,
         payload,
         timeout_seconds,
         max_timeout_seconds=300,
     )
+
+    # 下游 data 不保序、未命中型号被静默丢弃。这里按 model 字段对齐输入顺序，
+    # 未命中补 null、并返回 missing 列表，避免调用方按 index 错位或误判「库中无此件」。
+    if result.get("success"):
+        details = result.get("details")
+        if isinstance(details, dict) and isinstance(details.get("data"), list):
+            by_model = {item.get("model"): item for item in details["data"] if isinstance(item, dict)}
+            details["data"] = [by_model.get(name) for name in names]
+            details["missing"] = [name for name in names if name not in by_model]
+
+    return result

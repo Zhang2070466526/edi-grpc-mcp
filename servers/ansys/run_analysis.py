@@ -121,11 +121,20 @@ def start_hfss_analysis_async(
 ) -> dict[str, Any]:
     """异步启动 HFSS Setup 仿真，立即返回 task_id。
 
+    用法："跑一下这个 HFSS 工程的 Setup1 仿真"、"对 HFSSDesign1 的 Setup1 求解"
+
+    对 AEDT 中已打开工程的指定 design 下的 setup 发起 Analyze，后台单 worker 串行执行。
+    返回 task_id 后用 get_hfss_analysis_status 轮询进度。design_name/setup_name 可先
+    用 get_hfss_project_info 查活动设计，或先 open_hfss_project 打开工程。
+
     Args:
         project_path: .aedt 项目文件绝对路径。
-        design_name: 设计名。
-        setup_name: Setup 名。
-        save_before_run: 仿真前是否保存，默认 True。
+        design_name: HFSS 设计名（如 "HFSSDesign1"）。
+        setup_name: 该设计下的 Analysis Setup 名（如 "Setup1"）。
+        save_before_run: 求解前是否保存工程，默认 True。
+
+    Returns:
+        {"success": True, "task_id": "hfss-...", "status": "QUEUED"}；用 get_hfss_analysis_status(task_id) 查进度。
     """
     try:
         resolved = validate_file(project_path, (".aedt", ".aedtz"))
