@@ -50,7 +50,6 @@ from servers.settings import get_settings
 # -- 配置（从统一配置读取）--
 _cfg = get_settings()
 DEFAULT_TRANSPORT = _cfg.mcp_transport
-DEFAULT_HOST = _cfg.mcp_host
 DEFAULT_PORT = _cfg.mcp_port
 
 # ── 启动时配置校验 ──
@@ -203,10 +202,7 @@ def _run_http_server(port: int, transport: str = "streamable-http") -> None:
         sys.stdout = open(os.devnull, "w")
         sys.stderr = open(os.devnull, "w")
 
-    host = DEFAULT_HOST or "127.0.0.1"
-    if host != "127.0.0.1":
-        print(f"WARNING: MCP_HOST={host} ignored, forcing 127.0.0.1 (local mode)")
-        host = "127.0.0.1"
+    host = "127.0.0.1"
 
     # 端口占用检查：被占用时自动结束占用进程，释放后继续启动
     _test = socket.socket()

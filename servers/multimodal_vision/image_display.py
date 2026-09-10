@@ -3,7 +3,6 @@
 功能：
   show_image           — 读取本地图片，≤10MB 返回 ImageContent，>10MB 返回本地路径提示
   register_image_url   — 生成临时 HTTP Token（10 分钟有效），供 Chat 前端渲染
-  _workspace_note      — 根据 OPENCLAW_WORKSPACE 配置返回自适应提示文案
 """
 
 from __future__ import annotations

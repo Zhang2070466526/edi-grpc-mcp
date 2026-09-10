@@ -14,13 +14,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-import pythoncom
-
 from servers.ansys.config import (
     AEDT_PATH, _AEDT_LOCK,
     aedt_is_running, get_aedt_pids, query_desktop_state,
     cleanup_stale_project_lock, get_project_lock_path,
-    _attach_aedt, logger,
+    _attach_aedt, com_session, logger,
 )
 from servers.utils import validate_file
 from servers import mcp
@@ -31,27 +29,25 @@ _OPEN_PROJECT_PATHS: dict[str, str] = {}  # project_name -> project_path
 
 def _com_open_project(project_path: str) -> dict[str, Any]:
     """在现有 AEDT 中通过 COM 打开工程。"""
-    pythoncom.CoInitialize()
-    try:
-        _, desktop = _attach_aedt()
-        project_name = Path(project_path).stem
+    with com_session():
+        try:
+            _, desktop = _attach_aedt()
+            project_name = Path(project_path).stem
 
-        if project_name in list(desktop.GetProjectList()):
-            desktop.SetActiveProject(project_name)
-            return {"status": "already_open", "project_name": project_name}
+            if project_name in list(desktop.GetProjectList()):
+                desktop.SetActiveProject(project_name)
+                return {"status": "already_open", "project_name": project_name}
 
-        result = desktop.OpenProject(project_path)
-        if result is not None or project_name in list(desktop.GetProjectList()):
-            return {"status": "opened", "project_name": project_name}
+            result = desktop.OpenProject(project_path)
+            if result is not None or project_name in list(desktop.GetProjectList()):
+                return {"status": "opened", "project_name": project_name}
 
-        return {"status": "com_open_failed", "project_name": project_name,
-                "error": "OpenProject returned None and project not in list"}
-    except Exception as exc:
-        logger.exception("COM OpenProject failed")
-        return {"status": "com_open_failed", "project_name": Path(project_path).stem,
-                "error": str(exc)}
-    finally:
-        pythoncom.CoUninitialize()
+            return {"status": "com_open_failed", "project_name": project_name,
+                    "error": "OpenProject returned None and project not in list"}
+        except Exception as exc:
+            logger.exception("COM OpenProject failed")
+            return {"status": "com_open_failed", "project_name": Path(project_path).stem,
+                    "error": str(exc)}
 
 
 @mcp.tool()
@@ -117,15 +113,13 @@ def open_hfss_project(
 
             if project_name in state["projects"]:
                 attach_error = None
-                pythoncom.CoInitialize()
-                try:
-                    _, dtop = _attach_aedt()
-                    dtop.SetActiveProject(project_name)
-                except Exception as exc:
-                    attach_error = str(exc)
-                    logger.warning("SetActiveProject 失败 (%s): %s", project_name, exc)
-                finally:
-                    pythoncom.CoUninitialize()
+                with com_session():
+                    try:
+                        _, dtop = _attach_aedt()
+                        dtop.SetActiveProject(project_name)
+                    except Exception as exc:
+                        attach_error = str(exc)
+                        logger.warning("SetActiveProject 失败 (%s): %s", project_name, exc)
                 if attach_error is not None:
                     # 工程已在 AEDT 中列出但激活失败，不能假装成功
                     return {
@@ -280,61 +274,59 @@ def close_hfss_project(
     if not aedt_is_running():
         return {"success": False, "message": "AEDT 未运行"}
 
-    pythoncom.CoInitialize()
-    try:
-        _, desktop = _attach_aedt()
-        names = list(desktop.GetProjectList())
+    with com_session():
+        try:
+            _, desktop = _attach_aedt()
+            names = list(desktop.GetProjectList())
 
-        # 为空时关闭活动项目（而非 GetProjectList 的第一个，顺序不保证活动项目在首位）
-        if project_name.strip():
-            target = project_name.strip()
-        else:
-            target = ""
-            try:
-                active = desktop.GetActiveProject()
-                if active is not None:
-                    target = active.GetName()
-            except Exception:
-                pass
+            # 为空时关闭活动项目（而非 GetProjectList 的第一个，顺序不保证活动项目在首位）
+            if project_name.strip():
+                target = project_name.strip()
+            else:
+                target = ""
+                try:
+                    active = desktop.GetActiveProject()
+                    if active is not None:
+                        target = active.GetName()
+                except Exception:
+                    pass
+                if not target:
+                    target = names[0] if names else ""
             if not target:
-                target = names[0] if names else ""
-        if not target:
-            return {"success": False, "message": "没有可关闭的项目"}
+                return {"success": False, "message": "没有可关闭的项目"}
 
-        if save_before_close:
-            try:
-                proj = desktop.SetActiveProject(target)
-                if proj is not None:
-                    proj.Save()
-            except Exception:
-                pass
+            if save_before_close:
+                try:
+                    proj = desktop.SetActiveProject(target)
+                    if proj is not None:
+                        proj.Save()
+                except Exception:
+                    pass
 
-        desktop.CloseProject(target)
-        names_after = list(desktop.GetProjectList())
-        closed = target not in names_after
+            desktop.CloseProject(target)
+            names_after = list(desktop.GetProjectList())
+            closed = target not in names_after
 
-        # 清理锁 — 等待 AEDT 自己先删，再检查残余
-        lock_cleanup = {}
-        if closed and lock_path:
-            time.sleep(2)
-            if get_project_lock_path(lock_path).is_file():
-                result = cleanup_stale_project_lock(lock_path)
-                if result["removed"]:
-                    lock_cleanup = {"lock_cleanup": result}
+            # 清理锁 — 等待 AEDT 自己先删，再检查残余
+            lock_cleanup = {}
+            if closed and lock_path:
+                time.sleep(2)
+                if get_project_lock_path(lock_path).is_file():
+                    result = cleanup_stale_project_lock(lock_path)
+                    if result["removed"]:
+                        lock_cleanup = {"lock_cleanup": result}
 
-        if target in _OPEN_PROJECT_PATHS:
-            del _OPEN_PROJECT_PATHS[target]
+            if target in _OPEN_PROJECT_PATHS:
+                del _OPEN_PROJECT_PATHS[target]
 
-        return {
-            "success": closed, "method": "com", "project_closed": closed,
-            "message": f"已关闭: {target}" if closed else f"未能确认关闭: {target}",
-            **lock_cleanup,
-        }
-    except Exception as exc:
-        logger.exception("COM close failed")
-        return {"success": False, "message": f"关闭失败: {exc}"}
-    finally:
-        pythoncom.CoUninitialize()
+            return {
+                "success": closed, "method": "com", "project_closed": closed,
+                "message": f"已关闭: {target}" if closed else f"未能确认关闭: {target}",
+                **lock_cleanup,
+            }
+        except Exception as exc:
+            logger.exception("COM close failed")
+            return {"success": False, "message": f"关闭失败: {exc}"}
 
 
 @mcp.tool()

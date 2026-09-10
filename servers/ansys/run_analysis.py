@@ -6,8 +6,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-import pythoncom
-
 from servers.ansys.config import (
     aedt_is_running, get_setup_module,
     com_session,
@@ -34,8 +32,7 @@ def _run_hfss_analysis_task(
     状态由 TaskRunner 管理（RUNNING/SUCCEEDED/FAILED）；本函数只返回结果字段，
     异常抛给 TaskRunner 记录为 FAILED。
     """
-    pythoncom.CoInitialize()
-    try:
+    with com_session():
         _, desktop = _attach_aedt()
         project = desktop.SetActiveProject(project_name)
         design = project.SetActiveDesign(design_name)
@@ -75,41 +72,37 @@ def _run_hfss_analysis_task(
             "outcome_known": outcome_ok,
             "task_success": True if outcome_ok else None,
         }
-    finally:
-        pythoncom.CoUninitialize()
 
 
 def _validate_setups(project_path: str, design_name: str) -> dict:
     """校验 HFSS 项目和 Setup 是否存在，返回 setup 列表。"""
-    pythoncom.CoInitialize()
-    try:
-        _, desktop = _attach_aedt()
-        project_name = Path(project_path).stem
-        projects = list(desktop.GetProjectList())
-
-        if project_name not in projects:
-            return {"success": False, "status": "project_not_open",
-                    "project_name": project_name, "open_projects": projects}
-
-        project = desktop.SetActiveProject(project_name)
+    with com_session():
         try:
-            design = project.SetActiveDesign(design_name)
-        except Exception:
-            names = list(project.GetDesignNames()) if hasattr(project, "GetDesignNames") else []
-            return {"success": False, "status": "design_not_found",
-                    "requested_design": design_name, "available_designs": names}
+            _, desktop = _attach_aedt()
+            project_name = Path(project_path).stem
+            projects = list(desktop.GetProjectList())
 
-        try:
-            module, _ = get_setup_module(design)
-            setups = list(module.GetSetups())
-        except Exception:
-            setups = []
-        return {"success": True, "project_name": project_name,
-                "design_name": design_name, "setups": setups}
-    except Exception as exc:
-        return {"success": False, "status": "com_error", "error": str(exc)}
-    finally:
-        pythoncom.CoUninitialize()
+            if project_name not in projects:
+                return {"success": False, "status": "project_not_open",
+                        "project_name": project_name, "open_projects": projects}
+
+            project = desktop.SetActiveProject(project_name)
+            try:
+                design = project.SetActiveDesign(design_name)
+            except Exception:
+                names = list(project.GetDesignNames()) if hasattr(project, "GetDesignNames") else []
+                return {"success": False, "status": "design_not_found",
+                        "requested_design": design_name, "available_designs": names}
+
+            try:
+                module, _ = get_setup_module(design)
+                setups = list(module.GetSetups())
+            except Exception:
+                setups = []
+            return {"success": True, "project_name": project_name,
+                    "design_name": design_name, "setups": setups}
+        except Exception as exc:
+            return {"success": False, "status": "com_error", "error": str(exc)}
 
 
 @mcp.tool()

@@ -241,16 +241,6 @@ class TestShowImage:
         assert len(result) == 2
         assert getattr(result[1], "type") == "image"
 
-    def test_no_workspace_needed(self, tmp_path, monkeypatch):
-        monkeypatch.delenv("OPENCLAW_WORKSPACE", raising=False)
-        from PIL import Image
-        img = Image.new("RGB", (10, 10), color="red")
-        src = tmp_path / "img.png"
-        img.save(str(src))
-        from servers.multimodal_vision import show_image
-        result = show_image(str(src))
-        assert len(result) == 2
-
     def test_rejects_invalid_extension(self, tmp_path):
         from servers.multimodal_vision import show_image
         txt = tmp_path / "t.txt"

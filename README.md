@@ -70,13 +70,11 @@ TURBOCHARTS_PATH=            # 留空自动检测
 MCP_TRANSPORT=streamable-http
 MCP_PORT=50026
 MCP_ALLOWED_PROCESSES=       # 可选：留空不鉴权；配置后只放行匹配这些子串的进程访问 /mcp
-OPENCLAW_WORKSPACE=          # 留空自动检测，或手动指定
 ```
 
 自动检测规则：
 - `EDI_PATH`：项目同级找 `EDI.exe` → `EDA-PMDS.exe` → `CAIS.exe`
 - `TURBOCHARTS_PATH`：项目同级找 `turbocharts_app.exe` → `TurboCharts.exe`
-- `OPENCLAW_WORKSPACE`：edi-mcp 同级 `rfclaw/openclaw-service/state/workspace`，回退 `~/.openclaw/workspace`
 
 ### 启动
 
@@ -442,12 +440,10 @@ POST /chat
 | `EDA_GRPC_SERVER` | `127.0.0.1:50055` | EDI gRPC 服务地址 |
 | `MCP_TRANSPORT` | `streamable-http` | 传输方式（streamable-http / stdio） |
 | `MCP_STATELESS_HTTP` | `true` | 无状态模式 |
-| `MCP_HOST` | `127.0.0.1` | 监听地址（强制本地） |
 | `MCP_PORT` | `50026` | HTTP 监听端口 |
 | `MCP_ALLOWED_PROCESSES` | — | 进程白名单（留空不鉴权；配置后只放行匹配这些子串的进程访问 `/mcp`） |
 | `EDI_PATH` | 自动检测 | EDI.exe 路径 |
 | `TURBOCHARTS_PATH` | 自动检测 | turbocharts_app.exe 路径 |
-| `OPENCLAW_WORKSPACE` | 自动检测 | OpenClaw 工作区路径 |
 | `LLM_API_KEY` | — | Chat AI 功能 |
 | `LLM_BASE_URL` | — | LLM API 地址 |
 | `LLM_MODEL` | — | 模型名称 |

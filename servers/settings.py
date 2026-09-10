@@ -45,7 +45,6 @@ class Settings(BaseSettings):
 
     # ── 服务器 ──
     eda_grpc_server: str = "127.0.0.1:50055"
-    mcp_host: str = "127.0.0.1"
     mcp_port: int = Field(default=50026, ge=1, le=65535)
     mcp_transport: str = "streamable-http"
     mcp_stateless_http: bool = True
@@ -77,9 +76,6 @@ class Settings(BaseSettings):
     # ── SimulationAgent（TR 仿真集成）──
     simulation_agent_url: str = "http://127.0.0.1:17866"
     simulation_agent_timeout: int = Field(default=60, ge=5, le=600)
-
-    # ── 工作区 ──
-    openclaw_workspace: str = ""
 
     def validate(self) -> list[str]:
         """业务级格式校验，返回问题列表。不阻断启动，仅由 start_servers.py 打印警告。"""

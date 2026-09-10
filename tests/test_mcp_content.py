@@ -35,7 +35,6 @@ class TestResourcesDirect:
         text = json.dumps(data)
         assert "sk-" not in text.lower()
         assert "API_KEY" not in text
-        assert "OPENCLAW_WORKSPACE" not in text
 
     def test_simulation_components_matches_catalog(self):
         from servers.resources_prompts.resources_reference import resource_simulation_components

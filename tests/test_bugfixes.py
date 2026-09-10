@@ -129,8 +129,8 @@ def test_close_hfss_project_uses_active_project():
     desktop.GetActiveProject.return_value = active
     with patch("servers.ansys.project_manage.aedt_is_running", return_value=True), \
          patch("servers.ansys.project_manage._attach_aedt", return_value=(None, desktop)), \
-         patch("servers.ansys.project_manage.pythoncom.CoInitialize"), \
-         patch("servers.ansys.project_manage.pythoncom.CoUninitialize"):
+         patch("servers.ansys.config.pythoncom.CoInitialize"), \
+         patch("servers.ansys.config.pythoncom.CoUninitialize"):
         r = project_manage.close_hfss_project()
     assert r["success"] is True
     desktop.CloseProject.assert_called_once_with("ProjectB")

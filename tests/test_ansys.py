@@ -9,10 +9,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def _patch_com():
-    """屏蔽 COM 初始化，返回两个 patch（CoInitialize / CoUninitialize）。"""
+    """屏蔽 COM 初始化（com_session 内部调 config.pythoncom），返回两个 patch。"""
     return (
-        patch("servers.ansys.run_analysis.pythoncom.CoInitialize"),
-        patch("servers.ansys.run_analysis.pythoncom.CoUninitialize"),
+        patch("servers.ansys.config.pythoncom.CoInitialize"),
+        patch("servers.ansys.config.pythoncom.CoUninitialize"),
     )
 
 

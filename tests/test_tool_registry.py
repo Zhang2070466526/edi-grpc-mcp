@@ -99,9 +99,9 @@ def test_mcp_only_tools_are_expected():
     from start_servers import mcp
     mcp_tools = set(t.name for t in mcp._tool_manager._tools.values())
 
-    from servers.chat.service import CHAT_TOOL_MAP, _ensure_chat_tools
-    _ensure_chat_tools()  # 刷新，确保 CHAT_TOOL_MAP 包含所有已注册工具（含后注册的 CST 等）
-    chat_tools = set(CHAT_TOOL_MAP.keys())
+    from servers.chat.service import _auto_build_chat_tools
+    # 直接现构建（而非模块级 CHAT_TOOL_MAP），避免 import 顺序导致 map 早于部分工具注册
+    chat_tools = set(_auto_build_chat_tools()[0].keys())
 
     mcp_only = mcp_tools - chat_tools
     expected = {

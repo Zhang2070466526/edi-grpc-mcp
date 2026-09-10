@@ -192,22 +192,6 @@ def _auto_build_chat_tools() -> tuple[dict[str, Any], list[dict]]:
 
 CHAT_TOOL_MAP, CHAT_TOOLS_SCHEMA = _auto_build_chat_tools()
 
-_chat_tools_lock = threading.Lock()
-
-
-def _ensure_chat_tools() -> None:
-    """每次 Chat 请求时刷新工具列表（原地更新，所有引用可见）。"""
-    new_map, new_schema = _auto_build_chat_tools()
-
-    with _chat_tools_lock:
-        CHAT_TOOL_MAP.clear()
-        CHAT_TOOL_MAP.update(new_map)
-        CHAT_TOOLS_SCHEMA.clear()
-        CHAT_TOOLS_SCHEMA.extend(new_schema)
-
-# 模块加载时填充一次
-_ensure_chat_tools()
-
 # ---------------------------------------------------------------------------
 # 数据结构
 # ---------------------------------------------------------------------------
@@ -475,7 +459,6 @@ class ChatService:
         self, session: ChatSession, message: str, request_id: str,
     ) -> ChatResponse:
         """已持会话锁：执行多轮 LLM 工具调用闭环（最多 _MAX_ROUNDS 轮）。"""
-        _ensure_chat_tools()  # 每次请求刷新
         activities: list[Activity] = []
         called_fingerprints: set[str] = set()
         media: list[dict] = []
