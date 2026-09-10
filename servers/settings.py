@@ -74,6 +74,10 @@ class Settings(BaseSettings):
     report_render_url: str = "http://127.0.0.1:17867/api/v1/reports/render"
     report_timeout: int = Field(default=45, ge=5, le=120)
 
+    # ── SimulationAgent（TR 仿真集成）──
+    simulation_agent_url: str = "http://127.0.0.1:17866"
+    simulation_agent_timeout: int = Field(default=60, ge=5, le=600)
+
     # ── 工作区 ──
     openclaw_workspace: str = ""
 
@@ -94,6 +98,9 @@ class Settings(BaseSettings):
         # ── 传输方式 ──
         if self.mcp_transport not in ("stdio", "streamable-http"):
             issues.append(f"MCP_TRANSPORT 不支持（streamable-http / stdio）: {self.mcp_transport}")
+        # ── SimulationAgent 地址格式 ──
+        if not self.simulation_agent_url.startswith(("http://", "https://")):
+            issues.append(f"SIMULATION_AGENT_URL 格式无效（需 http(s):// 前缀）: {self.simulation_agent_url}")
         return issues
 
 

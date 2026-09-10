@@ -251,7 +251,7 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 ### TR 仿真集成（17 个，对接 SimulationAgent）
 
 > 封装外部服务 SimulationAgent.exe（`http://127.0.0.1:17866`）的 17 个 `tr_*` HTTP 工具。
-> 工作流规则见 Resource `edi://integration/workflow`（或 [docs/MCP_WORKFLOW.md](servers/simulation/MCP_WORKFLOW.md)）。
+> 工作流规则见 Resource `edi://integration/workflow`（或 [MCP_WORKFLOW.md](servers/tr_simulation/MCP_WORKFLOW.md)）。
 
 | 工具 | 说明 |
 |---|---|
@@ -535,11 +535,12 @@ edi-grpc-mcp/
 │   │   ├── simulate.py                 #     仿真求解（异步，一次性会话）
 │   │   └── result_export.py            #     结果导出（S 参数 / 远场方向图）
 │   │
-│   ├── simulation/                     #   SimulationAgent 集成 (17 个 tr_* 工具 + 1 Resource + 1 Prompt)
+│   ├── tr_simulation/                  #   SimulationAgent 集成 (17 个 tr_* 工具 + 1 Resource + 1 Prompt)
 │   │   ├── __init__.py                 #     公共 API re-export
 │   │   ├── client.py                   #     HTTP 客户端：会话管理 / 稳定 request_id / 调用与轮询
 │   │   ├── tools.py                    #     17 个 tr_* 工具（@mcp.tool()）
-│   │   └── resource.py                 #     TR 工作流 Resource（edi://integration/workflow）
+│   │   ├── resource.py                 #     TR 工作流 Resource（edi://integration/workflow）
+│   │   └── prompts.py                  #     TR 工作流 Prompt（run_tr_simulation）
 │   │
 │   ├── multimodal_vision/              #   图片 + 视觉 + 文档 (3 个工具)
 │   │   ├── __init__.py                 #     公共 API re-export

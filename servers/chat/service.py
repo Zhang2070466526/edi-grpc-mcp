@@ -102,6 +102,13 @@ _CHAT_EXCLUDED_TOOLS = {
     "get_hfss_project_info",
     "start_hfss_analysis_async",
     "get_hfss_analysis_status",
+    # TR 后台工具：内部轮询到终态，同步阻塞，不适合 Chat
+    "tr_restore_schematic",
+    "tr_execute_simulation_plan",
+    "tr_run_simulation",
+    "tr_parse_raw",
+    "tr_sync_project_components",
+    "tr_generate_document",
 }
 
 # 需要增强描述的工具（补充使用注意事项）
