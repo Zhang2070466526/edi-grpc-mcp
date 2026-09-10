@@ -223,14 +223,9 @@ body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--
 <div class="tool-tip" id="tooltip"></div>
 
 <script>
-// 从 URL query 提取 token（鉴权启用时 /ui 访问会带 ?token=，页面内 fetch 也需带上）
-const AUTH_TOKEN = new URLSearchParams(location.search).get("token") || "";
-function withToken(path) {
-    return location.origin + path + (AUTH_TOKEN ? "?token=" + encodeURIComponent(AUTH_TOKEN) : "");
-}
-const CHAT_URL = withToken("/chat");
+const CHAT_URL = location.origin + "/chat";
 const HLTH_URL = location.origin + "/health";
-const TOOLS_URL = withToken("/tools/list");
+const TOOLS_URL = location.origin + "/tools/list";
 
 let tools = [], edaReady = false, tcReady = false;
 
@@ -492,7 +487,7 @@ async function send() {
         try {
             let fd = new FormData();
             fd.append("file", file);
-            let r = await fetch(withToken("/upload"), {method:"POST",body:fd});
+            let r = await fetch(location.origin + "/upload", {method:"POST",body:fd});
             let d = await r.json();
             hideTyping();
             if (d.success) {

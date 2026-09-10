@@ -61,7 +61,7 @@ MCP_TRANSPORT=streamable-http
 MCP_HOST=127.0.0.1
 MCP_PORT=50026
 # Process whitelist: only allow these processes to access /mcp (comma-separated substrings, e.g. hermes_cli). Leave empty to disable.
-MCP_ALLOWED_PROCESSES=edi-agent
+MCP_ALLOWED_PROCESSES=edi-agent-service.exe
 # Optional: image vision analysis (enabled when all three are configured)
 VISION_API_KEY=
 VISION_BASE_URL=

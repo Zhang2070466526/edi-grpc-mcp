@@ -265,7 +265,7 @@ def test_tool_args_summary_redacts_forward_slash_path():
     assert "John" not in result
 
 
-def test_async_result_success_means_query_success(monkeypatch):
+def test_async_result_success_reflects_business_result(monkeypatch):
     from servers.eda import simulation as sim
     failed_result = {
         "success": False, "completed": True, "outcome_known": True,
@@ -281,7 +281,7 @@ def test_async_result_success_means_query_success(monkeypatch):
     }
     monkeypatch.setattr(sim, "_get_task_snapshot", lambda tid, *, prune=False: task)
     r = sim.get_simulation_async_result("abc")
-    assert r["success"] is True
+    assert r["success"] is False
     assert r["task_success"] is False
     assert r["status"] == "FAILED"
 

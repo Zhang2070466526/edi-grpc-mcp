@@ -322,10 +322,24 @@ def tr_query_components(originalid_list: list, epp_path: str = "") -> dict[str, 
     originalid_list 可传器件 UUID 或网表 model_name。返回匹配器件的中文类别、标准厂家
     名称和关键规格；未返回的型号保持未知，不得补造。
 
+    返回的 data 按 model_name 对齐到输入顺序：未命中的型号补 null 占位，并在 missing
+    中列出未命中的型号。
+
     Args:
         originalid_list: 器件 UUID 或 model_name 数组。
         epp_path: EPP 工程绝对路径（默认空，回退本地 component.json）。
     """
-    return call_tool("tr_query_components", {
+    r = call_tool("tr_query_components", {
         "originalid_list": originalid_list, "epp_path": epp_path,
     })
+    # 兜底：data 不保序且未命中被静默丢弃，按 model 字段对齐输入顺序、补 null、加 missing。
+    # 仅当输入能命中 model 字段（model_name 场景）时对齐；UUID 场景 data 项无 model 匹配，保持原样。
+    if r.get("success") and isinstance(r.get("result"), dict):
+        res = r["result"]
+        data = res.get("data")
+        if isinstance(data, list):
+            by_model = {item.get("model"): item for item in data if isinstance(item, dict)}
+            if not data or any(name in by_model for name in originalid_list):
+                res["data"] = [by_model.get(name) for name in originalid_list]
+                res["missing"] = [name for name in originalid_list if name not in by_model]
+    return r

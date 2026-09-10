@@ -331,9 +331,12 @@ def get_simulation_async_status(task_id: str) -> dict[str, Any]:
         task_id: start_simulation_async 返回的 task_id。
 
     Returns:
-        {"success": True, "completed": False, "task_success": null,
-         "outcome_known": False, "status": "RUNNING", "ads_output": "...", "log_complete": False}
-        completed=True 且 outcome_known=False 表示 MCP 已退出但 EDI 结果未知（如 TIMEOUT）
+        {"success": bool, "completed": bool, "task_success": bool|null,
+         "outcome_known": bool, "status": "RUNNING/SUCCEEDED/FAILED/...",
+         "ads_output": "...", "log_complete": bool}
+        success 反映仿真业务结果（与 get_simulation_async_result 一致）：
+        运行中 success=true；终态时 success=task_success（结果未知如 TIMEOUT 时 success=false）。
+        completed=True 且 outcome_known=False 表示 MCP 已退出但 EDI 结果未知（如 TIMEOUT）。
     """
     task = _get_task_snapshot(task_id, prune=True)
 
@@ -349,8 +352,17 @@ def get_simulation_async_status(task_id: str) -> dict[str, Any]:
     )
     grpc_task_success = task["result"].get("task_success") if grpc_outcome_known else None
 
+    # success 反映仿真业务结果（与 get_simulation_async_result 一致）：
+    # 终态且 outcome_known 时 = task_success；终态但结果未知（TIMEOUT/断连）= False；运行中 = True
+    if completed and grpc_outcome_known:
+        business_success = grpc_task_success is True
+    elif completed:
+        business_success = False
+    else:
+        business_success = True
+
     return {
-        "success": True,
+        "success": business_success,
         "completed": completed,
         "task_success": grpc_task_success,
         "outcome_known": grpc_outcome_known,
@@ -378,11 +390,14 @@ def get_simulation_async_result(task_id: str) -> dict[str, Any]:
         task_id: start_simulation_async 返回的 task_id。
 
     Returns:
-        完成时：{"success": True, "completed": True, "outcome_known": True,
-                  "status": "SUCCEEDED", "result_path": ".../result.raw", "ads_output": "..."}
+        完成且成功：{"success": True, "completed": True, "outcome_known": True,
+                    "status": "SUCCEEDED", "task_success": True,
+                    "result_path": ".../result.raw", "ads_output": "..."}
+        完成且失败：{"success": False, "completed": True, "outcome_known": True,
+                    "status": "FAILED", "task_success": False, "ads_output": "..."}
         运行中：{"success": True, "completed": False, "outcome_known": False,
-                  "status": "RUNNING", "ads_output": "部分日志..."}
-        超时/断连：{"success": True, "outcome_known": False, "task_success": null}
+                "status": "RUNNING", "ads_output": "部分日志..."}
+        超时/断连：{"success": False, "outcome_known": False, "task_success": null}
     """
     task = _get_task_snapshot(task_id, prune=True)
 
@@ -391,12 +406,10 @@ def get_simulation_async_result(task_id: str) -> dict[str, Any]:
 
     completed = _task_completed(task)
 
-    # 已完成 — 返回完整 result；success 统一为「查询成功」语义（与 status 端点一致），
-    # 仿真任务成败看 task_success / status，避免两端点 success 语义相反
+    # 已完成 — 返回完整 result；success 反映仿真业务结果（由 _terminal_result 计算，
+    # 与 get_simulation_async_status 一致），权威细粒度信号仍是 task_success / outcome_known
     if task["result"] is not None:
-        result = dict(task["result"])
-        result["success"] = True
-        return result
+        return dict(task["result"])
 
     # 运行中 — 返回当前状态和部分日志
     return {

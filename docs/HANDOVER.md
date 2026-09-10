@@ -98,7 +98,7 @@ PyPI: https://pypi.org/project/edi-grpc-mcp/  |  当前版本：0.1.8
 
 ## MCP 工具清单
 
-工具总数随版本变化（当前 87 个，以运行时 `/ready` 的 `tool_count` 为准），按功能分 13 类：
+工具总数随版本变化（当前 86 个，以运行时 `/ready` 的 `tool_count` 为准），按功能分 13 类：
 
 | 分类 | 数量 | 说明 |
 |---|---|---|

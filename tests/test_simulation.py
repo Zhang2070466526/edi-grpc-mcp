@@ -199,6 +199,120 @@ class TestCompletedSemantics:
         assert _task_log_complete(task)
 
 
+class TestResultSuccessSemantics:
+    """success 字段反映仿真业务结果（FAILED/TIMEOUT 时 success=False）。"""
+
+    @staticmethod
+    def _result(status, success, task_success, outcome_known):
+        return {
+            "success": success,
+            "completed": True,
+            "outcome_known": outcome_known,
+            "task_success": task_success,
+            "client_uuid": "cu",
+            "task_id": "test-res-sem",
+            "task_type": "SIMULATE_PROJECT",
+            "status": status,
+            "message": "msg",
+            "project_path": "/p.epp",
+            "result_path": "/r.raw",
+            "ads_output": "",
+            "log_complete": True,
+            "details": {},
+        }
+
+    def _put_task(self, result):
+        from servers.eda.simulation import _sim_tasks, _sim_lock
+        with _sim_lock:
+            _sim_tasks["test-res-sem"] = {
+                "task_id": "test-res-sem",
+                "client_uuid": "cu",
+                "project_path": "/p.epp",
+                "result_path": "/r.raw",
+                "status": result["status"],
+                "message": result.get("message", ""),
+                "log_chunks": [],
+                "result": result,
+                "error": None,
+                "created_at": time.time(),
+                "started_at": time.time(),
+                "finished_at": time.time(),
+            }
+
+    @staticmethod
+    def _cleanup():
+        from servers.eda.simulation import _sim_tasks, _sim_lock
+        with _sim_lock:
+            _sim_tasks.pop("test-res-sem", None)
+
+    def test_succeeded_success_true(self):
+        from servers.eda.simulation import get_simulation_async_result
+        self._put_task(self._result("SUCCEEDED", True, True, True))
+        try:
+            r = get_simulation_async_result("test-res-sem")
+            assert r["success"] is True
+            assert r["task_success"] is True
+        finally:
+            self._cleanup()
+
+    def test_failed_success_false(self):
+        from servers.eda.simulation import get_simulation_async_result
+        self._put_task(self._result("FAILED", False, False, True))
+        try:
+            r = get_simulation_async_result("test-res-sem")
+            assert r["success"] is False
+            assert r["task_success"] is False
+            assert r["status"] == "FAILED"
+        finally:
+            self._cleanup()
+
+    def test_timeout_success_false(self):
+        from servers.eda.simulation import get_simulation_async_result
+        self._put_task(self._result("TIMEOUT", False, None, False))
+        try:
+            r = get_simulation_async_result("test-res-sem")
+            assert r["success"] is False
+            assert r["task_success"] is None
+        finally:
+            self._cleanup()
+
+    def test_status_failed_success_false(self):
+        from servers.eda.simulation import get_simulation_async_status
+        self._put_task(self._result("FAILED", False, False, True))
+        try:
+            r = get_simulation_async_status("test-res-sem")
+            assert r["success"] is False
+            assert r["task_success"] is False
+        finally:
+            self._cleanup()
+
+    def test_status_running_success_true(self):
+        from servers.eda.simulation import get_simulation_async_status, _sim_tasks, _sim_lock
+        tid = "test-res-sem-running"
+        with _sim_lock:
+            _sim_tasks[tid] = {
+                "task_id": tid,
+                "client_uuid": "cu",
+                "project_path": "/p.epp",
+                "result_path": "",
+                "status": "RUNNING",
+                "message": "simulating",
+                "log_chunks": [],
+                "result": None,
+                "error": None,
+                "created_at": time.time(),
+                "started_at": time.time(),
+                "finished_at": None,
+            }
+        try:
+            r = get_simulation_async_status(tid)
+            assert r["success"] is True
+            assert r["completed"] is False
+        finally:
+            with _sim_lock:
+                _sim_tasks.pop(tid, None)
+
+
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__, "-v", "-p", "no:cacheprovider"])

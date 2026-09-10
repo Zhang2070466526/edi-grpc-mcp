@@ -307,6 +307,20 @@ def _call_grpc_unlocked(
         """返回距 deadline 的剩余秒数（下限 0.1，避免超时参数为 0）。"""
         return max(0.1, deadline - time.monotonic())
 
+    def finish(success: bool, status: str, message: str, *,
+               project_path: str = "", result_path: str = "",
+               ads_output: str = "", log_complete: bool = False,
+               latest_details: dict[str, Any] | None = None,
+               outcome_known: bool = False) -> dict[str, Any]:
+        """_terminal_result 简写：自动填 client_uuid/task_id/task_type_name 公共字段。"""
+        return _terminal_result(
+            success, status, message,
+            client_uuid=client_uuid, task_id=task_id, task_type_name=task_type_name,
+            project_path=project_path, result_path=result_path, ads_output=ads_output,
+            log_complete=log_complete, latest_details=latest_details,
+            outcome_known=outcome_known,
+        )
+
     try:
         with _ChannelHandle(_get_channel(EDA_GRPC_SERVER)) as channel:
             stub = ecserver_pb2_grpc.ExternalCallStub(channel)
@@ -342,25 +356,15 @@ def _call_grpc_unlocked(
                     "ads_output_chunk": "",
                     "details": {},
                 })
-                return _terminal_result(
-                    success=False, status="REJECTED", message=message,
-                    client_uuid=client_uuid, task_id=task_id,
-                    task_type_name=task_type_name,
-                    project_path=payload.get("project_path", ""),
-                    result_path="", ads_output="", log_complete=True,
-                    latest_details={},
-                    outcome_known=True,
-                )
+                return finish(False, "REJECTED", message,
+                              project_path=payload.get("project_path", ""),
+                              log_complete=True, outcome_known=True)
 
             # ── 4. 回显校验 ──
             def _mismatch(msg: str) -> dict[str, Any]:
                 _logger.error("task=%s %s", task_id[:12], msg)
-                return _terminal_result(
-                    success=False, status="PROTOCOL_MISMATCH", message=msg,
-                    client_uuid=client_uuid, task_id=task_id,
-                    task_type_name=task_type_name,
-                    project_path=payload.get("project_path", ""),
-                )
+                return finish(False, "PROTOCOL_MISMATCH", msg,
+                              project_path=payload.get("project_path", ""))
             if response.client_uuid and response.client_uuid != client_uuid:
                 return _mismatch(f"PerformAction client_uuid 不匹配: sent={client_uuid} got={response.client_uuid}")
             if response.task_id and response.task_id != task_id:
@@ -448,51 +452,31 @@ def _call_grpc_unlocked(
                     if parse_error:
                         _logger.error("task=%s SUCCEEDED but payload_json invalid: %s",
                                       task_id[:12], parse_error)
-                        return _terminal_result(
-                            success=False, status="PROTOCOL_MISMATCH",
-                            message=f"SUCCEEDED 事件 payload_json 无法解析: {parse_error}",
-                            client_uuid=client_uuid, task_id=task_id,
-                            task_type_name=task_type_name,
-                            project_path=project_path, result_path=result_path,
-                            ads_output=ads_output, log_complete=True,
-                            latest_details=latest_details,
-                        )
-                    return _terminal_result(
-                        success=True, status="SUCCEEDED",
-                        message=event.message or "task completed",
-                        client_uuid=client_uuid, task_id=task_id,
-                        task_type_name=task_type_name,
-                        project_path=project_path, result_path=result_path,
-                        ads_output=ads_output, log_complete=True,
-                        latest_details=latest_details,
-                        outcome_known=True,
-                    )
+                        return finish(False, "PROTOCOL_MISMATCH",
+                                      f"SUCCEEDED 事件 payload_json 无法解析: {parse_error}",
+                                      project_path=project_path, result_path=result_path,
+                                      ads_output=ads_output, log_complete=True,
+                                      latest_details=latest_details)
+                    return finish(True, "SUCCEEDED", event.message or "task completed",
+                                  project_path=project_path, result_path=result_path,
+                                  ads_output=ads_output, log_complete=True,
+                                  latest_details=latest_details, outcome_known=True)
 
                 if event.status == ecserver_pb2.RESULT_STATUS_FAILED:
                     _logger.info("task=%s phase=COMPLETED status=FAILED duration=%.1fs chunks=%d",
                                  task_id[:12], time.monotonic() - started_at, chunk_count)
-                    return _terminal_result(
-                        success=False, status="FAILED",
-                        message=event.message or "task failed",
-                        client_uuid=client_uuid, task_id=task_id,
-                        task_type_name=task_type_name,
-                        project_path=project_path, result_path=result_path,
-                        ads_output=ads_output, log_complete=True,
-                        latest_details=latest_details,
-                        outcome_known=True,
-                    )
+                    return finish(False, "FAILED", event.message or "task failed",
+                                  project_path=project_path, result_path=result_path,
+                                  ads_output=ads_output, log_complete=True,
+                                  latest_details=latest_details, outcome_known=True)
 
             # ── 流结束但无终态 ──
-            return _terminal_result(
-                success=False, status="STREAM_DISCONNECTED",
-                message="FetchEvent 流已结束但未收到终态事件，EDI 端任务状态未知",
-                client_uuid=client_uuid, task_id=task_id,
-                task_type_name=task_type_name,
-                project_path=latest_details.get("project_path", payload.get("project_path", "")),
-                result_path=latest_details.get("result_path", ""),
-                ads_output="".join(ads_output_chunks), log_complete=False,
-                latest_details=latest_details,
-            )
+            return finish(False, "STREAM_DISCONNECTED",
+                          "FetchEvent 流已结束但未收到终态事件，EDI 端任务状态未知",
+                          project_path=latest_details.get("project_path", payload.get("project_path", "")),
+                          result_path=latest_details.get("result_path", ""),
+                          ads_output="".join(ads_output_chunks),
+                          latest_details=latest_details)
 
     except grpc.RpcError as exc:
         code = exc.code().name if exc.code() else "UNKNOWN"
@@ -500,51 +484,33 @@ def _call_grpc_unlocked(
         # 消息过大（如长仿真日志超过 256MB 上限）
         if code_enum == grpc.StatusCode.RESOURCE_EXHAUSTED:
             _logger.error("task=%s phase=PAYLOAD_TOO_LARGE", task_id[:12])
-            return _terminal_result(
-                success=False, status="PAYLOAD_TOO_LARGE",
-                message=f"EDI 返回的消息过大（>256MB），日志已部分接收",
-                client_uuid=client_uuid, task_id=task_id,
-                task_type_name=task_type_name,
-                project_path=latest_details.get("project_path", payload.get("project_path", "")),
-                result_path=latest_details.get("result_path", ""),
-                ads_output="".join(ads_output_chunks), log_complete=False,
-                latest_details=latest_details,
-            )
+            return finish(False, "PAYLOAD_TOO_LARGE",
+                          "EDI 返回的消息过大（>256MB），日志已部分接收",
+                          project_path=latest_details.get("project_path", payload.get("project_path", "")),
+                          result_path=latest_details.get("result_path", ""),
+                          ads_output="".join(ads_output_chunks),
+                          latest_details=latest_details)
         # 区分超时、断连、不可达三种异常
         if code_enum == grpc.StatusCode.DEADLINE_EXCEEDED:
             _logger.warning("task=%s phase=TIMEOUT", task_id[:12])
-            return _terminal_result(
-                success=False, status="TIMEOUT",
-                message=f"MCP 已停止等待（{_given_timeout:.0f}s），EDI 端任务状态未知",
-                client_uuid=client_uuid, task_id=task_id,
-                task_type_name=task_type_name,
-                project_path=latest_details.get("project_path", payload.get("project_path", "")),
-                result_path=latest_details.get("result_path", ""),
-                ads_output="".join(ads_output_chunks), log_complete=False,
-                latest_details=latest_details,
-            )
+            return finish(False, "TIMEOUT",
+                          f"MCP 已停止等待（{_given_timeout:.0f}s），EDI 端任务状态未知",
+                          project_path=latest_details.get("project_path", payload.get("project_path", "")),
+                          result_path=latest_details.get("result_path", ""),
+                          ads_output="".join(ads_output_chunks),
+                          latest_details=latest_details)
         # 任务已受理后断开 → STREAM_DISCONNECTED；未受理 → GRPC_UNAVAILABLE
         if action_accepted:
             _logger.error("task=%s phase=STREAM_DISCONNECTED code=%s", task_id[:12], code)
-            return _terminal_result(
-                success=False, status="STREAM_DISCONNECTED",
-                message=f"FetchEvent 长连接中断 ({code}): {exc.details() or exc}",
-                client_uuid=client_uuid, task_id=task_id,
-                task_type_name=task_type_name,
-                project_path=latest_details.get("project_path", payload.get("project_path", "")),
-                result_path=latest_details.get("result_path", ""),
-                ads_output="".join(ads_output_chunks), log_complete=False,
-                latest_details=latest_details,
-            )
-        return _terminal_result(
-            success=False, status="GRPC_UNAVAILABLE",
-            message=f"无法连接 EDA gRPC ({EDA_GRPC_SERVER}, {code})，请手动启动 EDI 软件后重试: {exc.details() or exc}",
-            client_uuid=client_uuid, task_id=task_id,
-            task_type_name=task_type_name,
-            project_path=payload.get("project_path", ""),
-            result_path="", ads_output="", log_complete=False,
-            latest_details={},
-        )
+            return finish(False, "STREAM_DISCONNECTED",
+                          f"FetchEvent 长连接中断 ({code}): {exc.details() or exc}",
+                          project_path=latest_details.get("project_path", payload.get("project_path", "")),
+                          result_path=latest_details.get("result_path", ""),
+                          ads_output="".join(ads_output_chunks),
+                          latest_details=latest_details)
+        return finish(False, "GRPC_UNAVAILABLE",
+                      f"无法连接 EDA gRPC ({EDA_GRPC_SERVER}, {code})，请手动启动 EDI 软件后重试: {exc.details() or exc}",
+                      project_path=payload.get("project_path", ""))
 
     finally:
         # ── 确保事件流释放 ──

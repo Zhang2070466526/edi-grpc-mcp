@@ -337,40 +337,8 @@ analyze_variables(project_path: str) -> dict
 
 ---
 
-## 仿真（8 个）
+## 仿真（7 个）
 
-### `simulate_project`
-
-```python
-from servers.eda.simulation import simulate_project
-
-simulate_project(project_path: str, log_source: str = "mcp_client", timeout_seconds: int = 600) -> dict
-```
-
-对 `.epp` 工程执行仿真，**同步等待**完成。FetchEvent 长连接期间实时收集 `ads_output` 增量日志。
-
-| 参数 | 类型 | 必填 | 默认 | 说明 |
-|---|---|---|---|---|
-| `project_path` | str | 是 | — | `.epp` 文件绝对路径 |
-| `log_source` | str | 否 | "mcp_client" | 日志来源标识 |
-| `timeout_seconds` | int | 否 | 600 | 最长等待秒数（上限 3600） |
-
-返回：
-```python
-{
-    "success": True,
-    "completed": True,
-    "status": "SUCCEEDED",
-    "project_path": "C:/Projects/test/test.epp",
-    "result_path": "C:/Projects/test/history/result.raw",
-    "ads_output": "Parsing netlist...\nTask completed.\n",
-    "log_complete": True
-}
-```
-
-> **注意**：此函数为同步阻塞，一次 HTTP 请求可能等待数分钟。交互场景建议使用 `start_simulation_async`。
-
----
 
 ### `start_simulation_async`
 
@@ -410,6 +378,7 @@ get_simulation_async_status(task_id: str) -> dict
 ```
 
 查询异步仿真任务状态和已实时接收的 `ads_output` 日志。运行中即可查询。
+`success` 反映仿真业务结果（与 `get_simulation_async_result` 一致）：运行中为 true；终态时等于 `task_success`（结果未知如 TIMEOUT 时为 false）。
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
@@ -441,6 +410,7 @@ get_simulation_async_result(task_id: str) -> dict
 ```
 
 获取仿真最终结果。运行中返回当前部分日志，完成后返回完整 `ads_output`。
+`success` 反映仿真业务结果：SUCCEEDED 为 true；FAILED/TIMEOUT/断连 为 false（权威细粒度信号看 `task_success` / `outcome_known`）。
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
@@ -451,7 +421,7 @@ get_simulation_async_result(task_id: str) -> dict
 {"success": True, "completed": False, "status": "RUNNING", "ads_output": "..."}
 ```
 
-完成后返回：
+完成后返回（成功）：
 ```python
 {
     "success": True, "completed": True,
@@ -462,6 +432,8 @@ get_simulation_async_result(task_id: str) -> dict
     "log_complete": True
 }
 ```
+
+完成但失败 / 超时 / 断连时 `success` 为 `false`：`FAILED` → `task_success=false, outcome_known=true`；`TIMEOUT`/`STREAM_DISCONNECTED` → `task_success=null, outcome_known=false`。
 
 ---
 
@@ -1545,7 +1517,7 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 
 ## Resources & Prompts
 
-除了 Tool（启动时动态统计，当前 87 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
+除了 Tool（启动时动态统计，当前 86 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
 
 ### Resources（6 个）
 

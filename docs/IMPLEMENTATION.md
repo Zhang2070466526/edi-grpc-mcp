@@ -2,7 +2,7 @@
 
 每个 MCP 工具按底层通信方式分为 5 种实现类型：gRPC 远程调用、本地文件读取、subprocess 命令行、COM 对象、内存服务。本文逐一说明每种工具的协议交互、数据结构、校验流程、错误处理和设计决策。
 >
-> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（87 个工具接口）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由）。
+> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（86 个工具接口）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由）。
 
 ---
 
@@ -199,10 +199,6 @@ return STREAM_DISCONNECTED
 | `close_edi_project` | CLOSE_PROJECT(8) | `project_path`, `need_save` | 可选保存 |
 
 ### 1.5 仿真工具
-
-#### 同步仿真
-
-`simulate_project` 直接调用 `call_grpc(SIMULATE_PROJECT, ...)`，阻塞等待仿真完成。期间实时收集 `ads_output`。
 
 #### 异步仿真
 
@@ -1153,7 +1149,7 @@ MCP 服务只监听本机（`127.0.0.1:50026`），通过进程白名单实现�
 ### 12.0 核心依赖链（总览）
 
 ```
-list_epp_projects ──(工程路径)──> open_edi_project ──(已打开工程)──┬─> simulate_project / start_simulation_async
+list_epp_projects ──(工程路径)──> open_edi_project ──(已打开工程)──┬─> start_simulation_async
                                                                    ├─> 器件操作（create/update/delete/...）
                                                                    ├─> capture_schematic / export_project_netlist
                                                                    └─> list_schematic_components
@@ -1200,7 +1196,6 @@ get_project_summary + turbocharts_convert + capture_schematic + simulate_* ─�
 
 | 工具 | 动机 | 功能 | 依赖 | 被依赖 |
 |---|---|---|---|---|
-| `simulate_project` | 执行工程仿真 | 同步阻塞仿真，实时收日志 | `open_edi_project`（已打开工程） | 结果 RAW → 图表/报告 |
 | `start_simulation_async` | 长仿真不能同步阻塞 | 异步启动，返回 task_id | `open_edi_project` | `get_simulation_async_status/result`（依赖 task_id） |
 | `get_simulation_async_status` | 查进度和实时日志 | 查询异步仿真状态 | `start_simulation_async`（task_id） | LLM 判断进度 |
 | `get_simulation_async_result` | 取最终结果和完整日志 | 获取仿真结果 | `start_simulation_async`（task_id） | `list_result_curves`/`turbocharts_convert`/报告 |

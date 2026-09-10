@@ -15,10 +15,8 @@
 """
 
 # FastMCP：MCP 框架的核心类，用于创建 MCP 服务器实例。
-# NotificationOptions：底层协议类，用于声明「工具列表可变」（listChanged）能力。
 # get_settings：项目自己的配置单例函数（集中读取 .env，模块内禁止直接 os.getenv）。
 from mcp.server.fastmcp import FastMCP
-from mcp.server.lowlevel.server import NotificationOptions
 
 from servers.settings import get_settings
 
@@ -69,39 +67,3 @@ mcp = FastMCP(
         and _settings.mcp_stateless_http
     ),
 )
-
-
-# ── 声明「工具列表可变」能力（initialize 返回 capabilities.tools.listChanged=true）──
-# 背景：MCP 客户端（如 Hermes）在 initialize 握手时调用一次 tools/list 后，会缓存工具
-# 列表、不再主动刷新，导致服务端增删工具后客户端要很久才能发现。
-# 这里包装 FastMCP 底层生成「初始化响应」的方法，让响应带上 listChanged=true，
-# 告诉客户端「工具列表可能变化」，客户端可据此（配合 /ready 的 tools_hash）判断是否需要重新拉取。
-#
-# 逐行说明：
-#   getattr(..., "create_initialization_options", None)
-#       —— 拿到 FastMCP 底层「生成初始化响应」的方法；属性不存在时返回 None（防御，
-#          防止 SDK 升级后私有属性改名/消失导致服务 import 崩溃）。
-#   if _orig_create_init is not None:
-#       —— 只有方法存在时才做包装，否则静默跳过（不声明 listChanged，但不影响服务）。
-#   def _create_init_with_tools_changed(...):
-#       —— 定义一个「包装函数」，在调用原方法前塞入 NotificationOptions(tools_changed=True)。
-#   kwargs.setdefault("notification_options", NotificationOptions(tools_changed=True))
-#       —— 若调用方（FastMCP）没传 notification_options 参数，就补上「工具可变=True」。
-#   return _orig_create_init(*args, **kwargs)
-#       —— 用原方法生成最终的初始化响应（此时 capabilities.tools.listChanged 已被设为 True）。
-#   mcp._mcp_server.create_initialization_options = _create_init_with_tools_changed
-#       —— 用包装函数替换原方法，此后所有 initialize 调用都会走包装逻辑。
-#
-# 注意：这里依赖了私有属性 _mcp_server（下划线开头），属 SDK 内部实现，升级有风险；
-# 故用 getattr 防御。真正让客户端「自动刷新」还需服务端主动发 notifications/tools/list_changed
-# 通知（当前工具是 import 时静态注册、运行期不变，故未发送通知）。
-_orig_create_init = getattr(mcp._mcp_server, "create_initialization_options", None)
-
-if _orig_create_init is not None:
-    def _create_init_with_tools_changed(*args, **kwargs):
-        kwargs.setdefault(
-            "notification_options", NotificationOptions(tools_changed=True)
-        )
-        return _orig_create_init(*args, **kwargs)
-
-    mcp._mcp_server.create_initialization_options = _create_init_with_tools_changed

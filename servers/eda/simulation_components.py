@@ -631,7 +631,6 @@ def list_simulation_components(
         "success": True,
         "project_path": str(reader.epp_path.resolve()),
         "total": total,
-        "count": total,
         "offset": offset,
         "limit": limit,
         "component_type_counts": type_counts,

@@ -57,17 +57,51 @@ def test_find_client_process_no_match(monkeypatch):
 
 
 def test_whitelist_matching_logic():
-    """白名单核心：exe + cmdline 子串匹配。"""
+    """白名单核心：路径型 + 关键词型精确匹配。"""
+    from servers.process_guard import _matches_whitelist
+
     exe = r"C:\Users\JGL\AppData\Roaming\uv\python\cpython-3.11.15\python.exe"
     cmd = "python.exe -m hermes_cli.main gateway run"
 
-    def _matches(allowed):
-        haystack = (exe + " " + cmd).replace("\\", "/").lower()
-        return any(a in haystack for a in allowed)
+    assert _matches_whitelist("hermes_cli.main", exe, cmd) is True   # 完整模块名命中
+    assert _matches_whitelist("claude", exe, cmd) is False           # 其他 agent 不命中
 
-    assert _matches(["hermes_cli"]) is True        # 命令行关键词命中 Hermes
-    assert _matches(["claude"]) is False           # 其他 agent 不命中
-    assert _matches(["python.exe"]) is True        # 宽松的 exe 名也会命中
+
+def test_whitelist_precise_no_substring_false_positive():
+    """短串 / 裸解释器名 / 前缀不误命中。"""
+    from servers.process_guard import _matches_whitelist
+
+    exe = r"C:\Python\python.exe"
+    cmd = "python.exe -m myagent.main run"
+
+    assert _matches_whitelist("myagent.main", exe, cmd) is True     # 完整模块名
+    assert _matches_whitelist("python", exe, cmd) is False          # 裸解释器名不命中
+    assert _matches_whitelist("python.exe", exe, cmd) is False      # 通用解释器硬编码排除
+    assert _matches_whitelist("node.exe", exe, cmd) is False        # 其他通用解释器同样排除
+    assert _matches_whitelist("r", exe, cmd) is False               # 单字母不命中
+    assert _matches_whitelist("myagent", exe, cmd) is False         # 前缀不命中（须完整 token）
+
+
+def test_whitelist_path_entry():
+    """路径型条目：精确相等或目录前缀。"""
+    from servers.process_guard import _matches_whitelist
+
+    exe = r"C:\Tools\Hermes\Hermes.exe"
+    assert _matches_whitelist(r"C:\Tools\Hermes\Hermes.exe", exe, "any") is True   # 完整路径
+    assert _matches_whitelist(r"C:\Tools\Hermes", exe, "any") is True              # 目录前缀
+    assert _matches_whitelist(r"C:\Tools\Other", exe, "any") is False              # 不同目录
+
+
+def test_whitelist_bare_filename_matches_basename():
+    """裸文件名（含 .exe）命中 exe 的 basename，即使 argv[0] 是完整路径。"""
+    from servers.process_guard import _matches_whitelist
+
+    exe = r"C:\Program Files (x86)\EDI\edi-agent\service\edi-agent-service.exe"
+    cmd = r"C:\Program Files (x86)\EDI\edi-agent\service\edi-agent-service.exe serve --host 127.0.0.1 --port 0"
+
+    assert _matches_whitelist("edi-agent-service.exe", exe, cmd) is True   # 裸文件名命中 basename
+    assert _matches_whitelist("edi-agent", exe, cmd) is False              # 目录名不是 basename，不命中
+    assert _matches_whitelist("serve", exe, cmd) is True                   # 完整 cmd token 命中
 
 
 def test_whitelist_path_exemption(monkeypatch):
