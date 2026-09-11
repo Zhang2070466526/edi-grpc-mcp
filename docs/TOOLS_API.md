@@ -20,6 +20,7 @@ from servers.eda.project_manage import list_epp_projects
 - **[仿真（8 个）](#仿真8个)**：同步 / 异步仿真、网表仿真、抗烧毁评估、任务查询
 - **[导出与分析（4 个）](#导出与分析4个)**：导出网表、截图原理图、器件 CSV、信号链路追踪
 - **[模型库 / 原理图库（10 个）](#模型库--原理图库10个)**：模型分类/查询/搜索、MMS 导入、器件放置、原理图库搜索/使用
+- **[软 IP（4 个）](#软ip4个)**：软 IP 分类查询、模型搜索、AEDT 模型下载
 - **[工作区（3 个）](#工作区3个)**：创建 / 切换 / 查询当前工作区
 - **[原理图扩展（4 个）](#原理图扩展4个)**：内置器件、清空原理图、连线
 - **[启动 / 诊断（3 个）](#启动--诊断3个)**：启动 EDI、服务诊断、日志读取
@@ -807,6 +808,89 @@ use_schematic_from_library_import(file_uuid: str, project_path: str, timeout_sec
 
 ---
 
+## 软 IP（4 个）
+
+### `search_soft_ip_categories`
+
+```python
+from servers.eda.soft_ip import search_soft_ip_categories
+
+search_soft_ip_categories(timeout_seconds: int = 60) -> dict
+```
+
+查询全部软 IP 分类（自动合并分页）。不接收业务参数。服务端每页 15 条请求软 IP 分类接口并自动合并分页，返回过滤后的 `results` 与 `count`。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
+
+返回（gRPC 统一结构，业务字段在 `details` 中）：
+
+```python
+{"success": True, "status": "SUCCEEDED", "details": {"count": 3, "results": [...]}}
+```
+
+---
+
+### `search_public_soft_ip_models`
+
+```python
+from servers.eda.soft_ip import search_public_soft_ip_models
+
+search_public_soft_ip_models(filters: list, timeout_seconds: int = 60) -> dict
+```
+
+查询公共软 IP 模型（自动合并分页）。`filters` 为必填数组，内容由软 IP 服务解释，gRPC 层不修改；空数组也允许传入。服务端每页 15 条请求并自动合并分页。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `filters` | list | 是 | — | 过滤条件数组（可为空数组），原样转发给软 IP 服务 |
+| `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
+
+---
+
+### `search_personal_soft_ip_models`
+
+```python
+from servers.eda.soft_ip import search_personal_soft_ip_models
+
+search_personal_soft_ip_models(filters: list, timeout_seconds: int = 60) -> dict
+```
+
+查询当前登录用户的个人软 IP 模型（自动合并分页）。参数与返回结构同 `search_public_soft_ip_models`，查询范围为个人软 IP 库。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `filters` | list | 是 | — | 过滤条件数组（可为空数组），原样转发给软 IP 服务 |
+| `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
+
+---
+
+### `download_soft_ip_model`
+
+```python
+from servers.eda.soft_ip import download_soft_ip_model
+
+download_soft_ip_model(soft_ip_id: str, save_path: str, freq: float, timeout_seconds: int = 120) -> dict
+```
+
+按软 IP UUID 和频率下载 AEDT 模型文件到指定路径。`soft_ip_id` 是软 IP UUID，`save_path` 是完整目标文件路径（不是目录），`freq` 是频率（>0）。服务端自动创建父目录并安全覆盖同名文件；下载超时 120 秒。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `soft_ip_id` | str | 是 | — | 软 IP UUID |
+| `save_path` | str | 是 | — | 目标文件完整路径（如 `D:/soft-ip/C_10mil4350.aedt`） |
+| `freq` | float | 是 | — | 频率（大于 0 的有限数值） |
+| `timeout_seconds` | int | 否 | 120 | 最长等待秒数 |
+
+返回（gRPC 统一结构，成功时 `details.save_path` 为最终绝对路径）：
+
+```python
+{"success": True, "status": "SUCCEEDED", "details": {"save_path": "D:/soft-ip/C_10mil4350.aedt"}}
+```
+
+---
+
 ## 工作区（3 个）
 
 ### `create_workspace`
@@ -1213,6 +1297,8 @@ list_result_curves(result_path: str) -> dict
 
 解析 ADS RAW 仿真结果文件，返回可用曲线名和依赖轴。画图前调用避免猜测曲线名。
 
+`suggested_curves` 只列该 plot 类型下**实测有效**的写法（HB 数据不给 `phase_`/`imag_`，因为引擎会静默回退成 dBm 图），被排除的原因见 `curve_notes`。
+
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `result_path` | str | 是 | RAW 文件路径 |
@@ -1220,10 +1306,11 @@ list_result_curves(result_path: str) -> dict
 返回：
 ```python
 {"success": True, "format": "MDS", "datasets": [
-    {"plot_name": "SP SP1[1]", "dependencies": ["freq"],
+    {"plot_name": "SP SP1[1]", "plot_type": "SP", "dependencies": ["freq"],
      "variables": [{"name": "S[2,1]", "type": "complex"}],
-     "suggested_curves": ["DB_S[2,1]", "real_S[2,1]", ...]}
-]}
+     "suggested_curves": ["dBm_S[2,1]", "real_S[2,1]", "DB_S[2,1]", ...],
+     "curve_notes": ["...被排除的写法及原因..."]}
+], "curve_notes": ["..."]}
 ```
 
 ---
@@ -1249,18 +1336,31 @@ ADS RAW 结果文件转换为曲线图 + CSV。
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `raw_path` | str | 是 | RAW 文件路径 |
-| `output_path` | str | 是 | 输出图片路径（PNG/JPG/BMP/SVG） |
-| `chart_type` | str | 是 | `"SP"` / `"HB"` / `"XDB"` |
-| `csv_path` | str | 否 | 同步导出 CSV 路径 |
-| `linename` | str | 否 | 曲线名，如 `"DB_S[2,1]"` |
-| `dependency` | str | 否 | 依赖轴，通常 `"freq"` |
+| `output_path` | str | 是 | 输出图片路径（PNG/JPG/BMP/SVG），父目录自动创建 |
+| `chart_type` | str | 是 | `"SP"` / `"HB"` / `"XDB"`，**须与 RAW 的 Plotname 一致** |
+| `csv_path` | str | 否 | 同步导出 CSV 路径（多曲线拆分时自动加曲线后缀） |
+| `linename` | str | 否 | 曲线名 `<前缀>_<变量名>`，多条用 `&` 分隔 |
+| `dependency` | str | 否 | 依赖轴，通常 `"freq"`（HB 下引擎忽略） |
 | `ac_config` | str | 否 | 精度配置 |
 
-常用曲线名：
-- `DB_S[2,1]` — 增益
-- `VSWR_S[1,1]` — 驻波
-- `real_nf(1)` — 噪声系数
-- `real_delayS[2,1]` — 群时延
+曲线名 `linename` 格式与单位取自引擎自带说明（`servers/turbocharts/RAW 转图像工具使用说明.txt`）：`"_"` 前是单位，`"_"` 后是绘制线段名称。
+
+| 单位 / 线段名（说明原文） | 示例 | 备注 |
+|---|---|---|
+| `db` | `DB_S[2,1]` / `db_s[1,1]` | 输出增益 `DB_S[2,1]`、反向增益 `DB_S[1,2]`（大小写不敏感） |
+| `real`（实数） | `real_S[2,1]` | 线性幅度 |
+| `phase` | `phase_S[2,1]` | 相位 |
+| `vswr` | `VSWR_S[1,1]` | 驻波，原文注明只支持单条曲线 |
+| `aps`（附加移向） | `APS_S[2,1]` | 数控衰减器附加相移 |
+| `af`（幅度波动） | `AF_S[2,1]` | 数控器件幅度波动 |
+| 数控移相器 | `MAS_S[2,1]` / `MV_S[2,1]` / `PSS_S[2,1]` | 衰减态 / 幅度波动 / 移相态 |
+| 时延（线段名 `delays[2,1]`） | `real_delayS[2,1]` / `real_delays[1,1]` | 群时延 |
+| `dbm`（原文未列，实测有效） | `dBm_S[2,1]` | 绝对功率，与 `db` 是两张不同的图 |
+| `imag`（原文未列，实测有效） | `imag_S[2,1]` | 虚部 |
+
+⚠️ 说明未覆盖、由实测补齐的规则：`chart_type=HB` 时引擎只认 `db` 类与 `real_`，`phase_`/`imag_`/`vswr_` 会被静默忽略并回退成 dBm 图；`"_"` 后的线段名必须与 RAW 的 Variables 段完全一致（大小写敏感）；多条曲线用 `&` 分隔（原文示例即 `&`）；逗号/分号/空格、裸变量名、拼错的线段名会被工具直接拦下（返回 `INVALID_LINENAME` / `CURVE_NOT_FOUND`），不再静默出空图。
+
+CSV 行为：SP 多条曲线一次导出多列；**HB 多条曲线引擎只导出最后一条，工具自动按曲线拆分**；多条 VSWR 同样自动拆分。
 
 返回：
 ```python
@@ -1269,6 +1369,9 @@ ADS RAW 结果文件转换为曲线图 + CSV。
     "return_code": 0,
     "img_generated": True,
     "csv_generated": True,
+    "curves": ["dBm_Out1"],
+    "curve_labels": {"C:/result/out.csv": ["freq", "dBm(Out1)"]},
+    "warnings": ["CSV 已生成（1 个文件），请核对行数和列数与预期一致后再使用数据。"],
     "output_paths": {"img": "C:/result/gain.png", "csv": "C:/result/gain.csv"}
 }
 ```
@@ -1517,7 +1620,7 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 
 ## Resources & Prompts
 
-除了 Tool（启动时动态统计，当前 86 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
+除了 Tool（启动时动态统计，当前 90 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
 
 ### Resources（6 个）
 

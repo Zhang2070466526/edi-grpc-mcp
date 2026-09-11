@@ -2,13 +2,13 @@
 
 每个 MCP 工具按底层通信方式分为 5 种实现类型：gRPC 远程调用、本地文件读取、subprocess 命令行、COM 对象、内存服务。本文逐一说明每种工具的协议交互、数据结构、校验流程、错误处理和设计决策。
 >
-> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（86 个工具接口）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由）。
+> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（90 个工具接口）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由）。
 
 ---
 
 ## 目录
 
-- **[一、gRPC 远程调用（39 个工具）](#一gRPC远程调用39个工具)**：通信协议、call_grpc 统一入口、11 步参数校验管线
+- **[一、gRPC 远程调用（43 个工具）](#一gRPC远程调用43个工具)**：通信协议、call_grpc 统一入口、11 步参数校验管线
 - **[二、本地文件读取（6 个工具）](#二本地文件读取6个工具)**：.epp 格式、S-expression 解析、参数格式化
 - **[三、内存服务（4 个工具）](#三内存服务4个工具)**：异步任务状态查询、服务诊断
 - **[四、参数目录与 Schema](#四参数目录与-Schema)**：目录设计动机、核心函数、动态参数模式
@@ -24,13 +24,13 @@
 
 ---
 
-## 一、gRPC 远程调用（39 个工具）
+## 一、gRPC 远程调用（43 个工具）
 
 所有操作 EDI 工程和仿真器件的工具共享同一套 gRPC 通信模型。核心实现在 `servers/eda/grpc_client.py`（通信层）和 `servers/eda/simulation_components.py`（参数校验层）。
 
 ### 1.1 通信协议
 
-EDI 服务通过 `proto/ecserver.proto` 定义了 `ExternalCall` 服务，当前协议版本 v2，41 种事件类型：
+EDI 服务通过 `proto/ecserver.proto` 定义了 `ExternalCall` 服务，当前协议版本 v2，45 种事件类型：
 
 ```proto
 service ExternalCall {
@@ -293,6 +293,10 @@ wire_params, error = _prepare_parameters(ct, parameters, op="update")
 | `use_schematic_from_library_create_project` | USE_SCHEMATIC_FROM_LIBRARY_CREATE_PROJECT(36) | `file_uuid` 非空 |
 | `use_schematic_from_library_import` | USE_SCHEMATIC_FROM_LIBRARY_IMPORT(37) | `file_uuid` 非空 + `project_path` 校验 |
 | `export_schematic_components_to_csv` | EXPORT_SCHEMATIC_COMPONENTS_TO_CSV(40) | `csv_path` 非空 |
+| `search_soft_ip_categories` | SEARCH_SOFT_IP_CATEGORIES(42) | 无业务参数，`payload_json` 为空对象 |
+| `search_public_soft_ip_models` | SEARCH_PUBLIC_SOFT_IP_MODELS(43) | `filters` 数组原样转发（软 IP 服务解释） |
+| `search_personal_soft_ip_models` | SEARCH_PERSONAL_SOFT_IP_MODELS(44) | 同 `search_public_soft_ip_models` |
+| `download_soft_ip_model` | DOWNLOAD_SOFT_IP_MODEL(45) | `id` UUID + `save_path` 非空 + `freq`>0 |
 
 ### 1.8 工作区 / 原理图扩展（9 个工具）
 

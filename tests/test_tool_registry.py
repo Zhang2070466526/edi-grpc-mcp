@@ -39,6 +39,8 @@ def test_all_tools_registered():
         "search_schematic_from_public_library", "search_schematic_from_personal_library",
         "use_schematic_from_library_create_project", "use_schematic_from_library_import",
         "export_schematic_components_to_csv",
+        "search_soft_ip_categories", "search_public_soft_ip_models",
+        "search_personal_soft_ip_models", "download_soft_ip_model",
         "open_hfss_project", "close_hfss_project", "launch_aedt", "get_hfss_project_info",
         "start_hfss_analysis_async", "get_hfss_analysis_status",
         "cst_solve_async", "cst_solve_query", "cst_export_snp",

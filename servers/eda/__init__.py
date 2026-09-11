@@ -1,4 +1,4 @@
-r"""EDA gRPC MCP 工具包 -- 通过 ExternalCall gRPC 操作 EDI 工程（52 个工具）。
+r"""EDA gRPC MCP 工具包 -- 通过 ExternalCall gRPC 操作 EDI 工程（55 个工具）。
 
 按文件列工具与用途：
 
@@ -147,6 +147,14 @@ from servers.eda.model_library import (  # noqa: F401
     search_schematic_from_personal_library,
     use_schematic_from_library_create_project,
     use_schematic_from_library_import,
+)
+
+# -- 软 IP --
+from servers.eda.soft_ip import (  # noqa: F401
+    search_soft_ip_categories,
+    search_public_soft_ip_models,
+    search_personal_soft_ip_models,
+    download_soft_ip_model,
 )
 
 # -- 启动/诊断 --

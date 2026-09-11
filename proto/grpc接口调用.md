@@ -80,6 +80,10 @@ enum EventType {
   SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY = 39;
   EXPORT_SCHEMATIC_COMPONENTS_TO_CSV = 40;
   BATCH_QUERY_COMPONENT = 41;
+  SEARCH_SOFT_IP_CATEGORIES = 42;
+  SEARCH_PUBLIC_SOFT_IP_MODELS = 43;
+  SEARCH_PERSONAL_SOFT_IP_MODELS = 44;
+  DOWNLOAD_SOFT_IP_MODEL = 45;
 }
 ```
 
@@ -123,7 +127,11 @@ enum EventType {
 - `SEARCH_SCHEMATIC_FROM_PUBLIC_LIBRARY`：按拓扑描述查询公共原理图库。
 - `SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY`：按拓扑描述查询当前用户的个人原理图库。
 - `EXPORT_SCHEMATIC_COMPONENTS_TO_CSV`：将指定工程原理图中的有效器件信息导出为 CSV。
-- `BATCH_QUERY_COMPONENT`：按器件型号列表批量查询模型信息，原样返回模型服务响应。
+- `BATCH_QUERY_COMPONENT`：按器件类型列表批量查询模型信息，原样返回模型服务响应。
+- `SEARCH_SOFT_IP_CATEGORIES`：查询全部软 IP 分类，自动合并分页结果。
+- `SEARCH_PUBLIC_SOFT_IP_MODELS`：查询全部公共软 IP，自动合并分页结果。
+- `SEARCH_PERSONAL_SOFT_IP_MODELS`：查询当前用户的全部个人软 IP，自动合并分页结果。
+- `DOWNLOAD_SOFT_IP_MODEL`：按软 IP UUID 和频率下载 AEDT 模型文件到指定路径。
 
 ## 4. payload_json 示例
 
@@ -531,10 +539,77 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 }
 ```
 
-- `originalid_list` 必须是非空数组，且每个元素必须是非空字符串；元素顺序和重复项均保留。
-- 该任务不需要 `project_path`，gRPC 层不解释器件型号，仅将数组转发给 `GrpcApiManager::BatchQueryComponent`。
+- `originalid_list` 表示器件类型列表，必须是非空数组，且每个器件类型必须是非空字符串；元素顺序和重复项均保留。
+- 该任务不需要 `project_path`，gRPC 层不解释器件类型，仅将列表转发给 `GrpcApiManager::BatchQueryComponent`。
 - 下游请求为 `POST /api/v1/models/manage/batch_query_component/`，请求体字段仍为 `originalid_list`。
 - 下游返回的完整 JSON 对象原样写入最终事件的 `payload_json`，不执行搜索接口的裁剪规则。
+
+### SEARCH_SOFT_IP_CATEGORIES
+
+```json
+{}
+```
+
+- 该任务不接收业务参数，`payload_json` 必须是空 JSON 对象。
+- 服务端以每页 15 条请求 `GET /api/v1/soft-ip-manager/soft-ip-categories/`，并根据 `data.total_pages` 查询全部分页。
+- 成功时合并各页的 `data.results`；gRPC 会删除每个分类及其 `params` 子项中的 `created_time`、`updated_time`，其他字段保持不变。
+- 最终 payload 只返回过滤后的 `results`，以及根据该数组长度计算的 `count`。
+- 任意一页发生网络、HTTP、JSON 解析或业务错误时，任务整体失败，不返回已查询到的部分软 IP 分类；具体原因位于事件 `message`。
+
+### SEARCH_PUBLIC_SOFT_IP_MODELS
+
+```json
+{
+  "filters": [
+    {
+      "key": "params1",
+      "min": 1,
+      "max": 2
+    }
+  ]
+}
+```
+
+- `filters` 为必填数组，数组内容由软 IP 服务解释，gRPC 层不修改；空数组也允许传入。
+- 服务端将 `filters` 原样放入每一页的 POST 请求体，每页 15 条请求 `POST /api/v1/soft-ip-manager/soft-ip-models/search-public/`，并根据 `data.total_pages` 查询全部分页。
+- 成功时合并各页的 `data.results`，并删除每个软 IP 对象中的 `created_time`、`result_download_url`、`updated_time`，其他字段保持不变。
+- gRPC 最终 payload 只返回过滤后的 `results`，以及根据该数组长度计算的 `count`。
+- 任意一页发生网络、HTTP、JSON 解析或业务错误时，任务整体失败，payload 返回 `{}`，不返回已查询到的部分软 IP；具体原因位于事件 `message`。
+
+### SEARCH_PERSONAL_SOFT_IP_MODELS
+
+```json
+{
+  "filters": [
+    {
+      "key": "params1",
+      "min": 1,
+      "max": 2
+    }
+  ]
+}
+```
+
+- 请求体规则与 `SEARCH_PUBLIC_SOFT_IP_MODELS` 相同：`filters` 为必填数组，并原样加入每一页的 POST 请求体。
+- 分页合并、成功返回和失败处理规则与公共接口相同。
+- 成功响应同样删除每个软 IP 对象中的 `created_time`、`result_download_url`、`updated_time`，其他字段保持不变。
+- 下游接口为 `POST /api/v1/soft-ip-manager/soft-ip-models/search-personal/`，查询范围为当前登录用户的个人软 IP。
+
+### DOWNLOAD_SOFT_IP_MODEL
+
+```json
+{
+  "id": "4240f1c5-0622-4de1-9786-16003aa1e23a",
+  "save_path": "D:/soft-ip/C_10mil4350.aedt",
+  "freq": 25
+}
+```
+
+- `id` 必须是合法的软 IP UUID，并作为路径参数请求 `POST /api/v1/soft-ip-manager/soft-ip-models/<id>/download/`。
+- `freq` 必须是大于 `0` 的有限数值；下游 POST 请求体只包含 `{"freq":25}`。
+- `save_path` 必须是服务端可访问的完整目标文件路径，不是目录。服务端自动创建父目录，并使用安全写入方式替换同名文件。
+- 下载超时为 120 秒。HTTP 或业务失败、响应为空、目录创建失败、文件写入失败时，最终事件状态为 `RESULT_STATUS_FAILED`，payload 为 `{}`，具体原因位于 `message`。
+- 成功 payload 只返回最终绝对文件路径 `save_path`。
 
 ### LIST_IDEAL_COMPONENTS
 
@@ -864,6 +939,10 @@ enum ResultStatus {
 - `SEARCH_SCHEMATIC_FROM_PUBLIC_LIBRARY` / `SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY`：成功返回 `count` 和 `results`；每项包含 `id`、`schematic_id`、`name`、`properties`
 - `EXPORT_SCHEMATIC_COMPONENTS_TO_CSV`：成功返回最终文件路径 `csv_path`；失败返回 `{}`
 - `BATCH_QUERY_COMPONENT`：模型服务返回的完整响应对象，通常包含 `code`、`message`、`data`
+- `SEARCH_SOFT_IP_CATEGORIES`：成功仅返回 `count`、`results`，其中分类和参数项不包含 `created_time`、`updated_time`，`count` 等于合并后的 `results` 数组长度；失败返回 `{}`
+- `SEARCH_PUBLIC_SOFT_IP_MODELS`：成功仅返回 `count`、`results`，每项不包含 `created_time`、`result_download_url`、`updated_time`，`count` 等于合并后的 `results` 数组长度；失败返回 `{}`
+- `SEARCH_PERSONAL_SOFT_IP_MODELS`：成功仅返回 `count`、`results`，每项不包含 `created_time`、`result_download_url`、`updated_time`，`count` 等于合并后的 `results` 数组长度；失败返回 `{}`
+- `DOWNLOAD_SOFT_IP_MODEL`：成功返回最终绝对文件路径 `save_path`；失败返回 `{}`
 - `GENERATE_SCHEMATIC_FROM_NETLIST`：`project_path`、`netlist_path`、`schematic_path`、`clear_before_import`、`symbols_added`、`nets_added`、`lines_added`、`net_points_added`
 
 ## 8. SIMULATE_NETLIST 完整调用示例
@@ -1845,6 +1924,110 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `40`。请�
 ```
 
 `payload_json` 中的实际字段和值以模型服务返回为准。Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `41`。
+
+### 9.31 查询软 IP 分类
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-search-soft-ip-categories-001",
+  "type": "SEARCH_SOFT_IP_CATEGORIES",
+  "payload_json": "{}"
+}
+```
+
+最终成功事件示意：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-search-soft-ip-categories-001",
+  "event_type": "SEARCH_SOFT_IP_CATEGORIES",
+  "status": "RESULT_STATUS_SUCCESS",
+  "message": "soft IP categories retrieved",
+  "payload_json": "{\"count\":3,\"results\":[...]}"
+}
+```
+
+Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `42`。分页中的任一请求失败时，最终事件状态为 `RESULT_STATUS_FAILED`，`payload_json` 为 `{}`。
+
+### 9.32 查询公共软 IP
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-search-public-soft-ip-models-001",
+  "type": "SEARCH_PUBLIC_SOFT_IP_MODELS",
+  "payload_json": "{\"filters\":[{\"key\":\"params1\",\"min\":1,\"max\":2}]}"
+}
+```
+
+最终成功事件示意：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-search-public-soft-ip-models-001",
+  "event_type": "SEARCH_PUBLIC_SOFT_IP_MODELS",
+  "status": "RESULT_STATUS_SUCCESS",
+  "message": "public soft IP models retrieved",
+  "payload_json": "{\"count\":3,\"results\":[...]}"
+}
+```
+
+Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `43`。分页中的任一请求失败时，最终事件状态为 `RESULT_STATUS_FAILED`，`payload_json` 为 `{}`。
+
+### 9.33 查询个人软 IP
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-search-personal-soft-ip-models-001",
+  "type": "SEARCH_PERSONAL_SOFT_IP_MODELS",
+  "payload_json": "{\"filters\":[{\"key\":\"params1\",\"min\":1,\"max\":2}]}"
+}
+```
+
+最终成功事件示意：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-search-personal-soft-ip-models-001",
+  "event_type": "SEARCH_PERSONAL_SOFT_IP_MODELS",
+  "status": "RESULT_STATUS_SUCCESS",
+  "message": "personal soft IP models retrieved",
+  "payload_json": "{\"count\":3,\"results\":[...]}"
+}
+```
+
+Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `44`。分页中的任一请求失败时，最终事件状态为 `RESULT_STATUS_FAILED`，`payload_json` 为 `{}`。
+
+### 9.34 下载软 IP AEDT 模型
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-download-soft-ip-model-001",
+  "type": "DOWNLOAD_SOFT_IP_MODEL",
+  "payload_json": "{\"id\":\"4240f1c5-0622-4de1-9786-16003aa1e23a\",\"save_path\":\"D:/soft-ip/C_10mil4350.aedt\",\"freq\":25}"
+}
+```
+
+最终成功事件示意：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-download-soft-ip-model-001",
+  "event_type": "DOWNLOAD_SOFT_IP_MODEL",
+  "status": "RESULT_STATUS_SUCCESS",
+  "message": "soft IP model downloaded",
+  "payload_json": "{\"save_path\":\"D:/soft-ip/C_10mil4350.aedt\"}"
+}
+```
+
+Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `45`。`PerformAction` 返回成功仅表示任务已受理，最终下载结果通过 `FetchEvent` 获取。
 
 ## 10. 网表生成链路完整调用示例
 

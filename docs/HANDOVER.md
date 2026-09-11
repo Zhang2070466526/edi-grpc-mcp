@@ -44,7 +44,7 @@ servers/
   resources_prompts/       # 6 个 Resource + 8 个 Prompt
   multimodal_vision/      # 图片 + 视觉分析 + 文档工具
   report/                 # 仿真报告生成
-  eda/                   # EDI 工程工具（51 个）
+  eda/                   # EDI 工程工具（55 个）
     __init__.py           # 公共 API + 工具清单
     config.py             # 配置 / 路径检测
     project_reader.py     # ProjectReader + S-expression 解析器
@@ -98,7 +98,7 @@ PyPI: https://pypi.org/project/edi-grpc-mcp/  |  当前版本：0.1.8
 
 ## MCP 工具清单
 
-工具总数随版本变化（当前 86 个，以运行时 `/ready` 的 `tool_count` 为准），按功能分 13 类：
+工具总数随版本变化（当前 90 个，以运行时 `/ready` 的 `tool_count` 为准），按功能分 13 类：
 
 | 分类 | 数量 | 说明 |
 |---|---|---|

@@ -115,6 +115,7 @@ import servers.eda.design_export         # noqa: F401
 import servers.eda.signal_chain          # noqa: F401
 import servers.eda.model_replace         # noqa: F401
 import servers.eda.model_library          # noqa: F401
+import servers.eda.soft_ip                # noqa: F401
 import servers.eda.workspace_ops         # noqa: F401
 import servers.eda.schematic_ops         # noqa: F401
 import servers.eda.edi_launcher          # noqa: F401

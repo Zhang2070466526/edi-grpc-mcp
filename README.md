@@ -8,7 +8,7 @@
 
 ## ✨ 亮点
 
-- 🛠️ **86 个 MCP 工具** — 工程管理 / 仿真 / 器件配置 / 模型选型 / 信号链分析，全链路覆盖
+- 🛠️ **90 个 MCP 工具** — 工程管理 / 仿真 / 器件配置 / 模型选型 / 信号链分析，全链路覆盖
 - ⚡ **三大仿真引擎** — EDI gRPC · ANSYS HFSS · CST，一个服务统一封装
 - 🧠 **自然语言驱动** — 接入 Claude Code / OpenClaw，告别鼠标点击
 - 🔒 **本地安全** — 全本地运行，工程数据不出机器
@@ -29,9 +29,9 @@ AI 客户端 (Claude Code / OpenClaw)
    │  Streamable HTTP (stateless) 或 stdio
    │  POST /mcp  │  initialize → tools/list → tools/call
    ▼
-EDI gRPC MCP 服务 (FastMCP, 86 工具, 7 Resource, 9 Prompt)
+EDI gRPC MCP 服务 (FastMCP, 90 工具, 7 Resource, 9 Prompt)
    │
-   ├── EDA gRPC 工具 (51) ──→ EDI 客户端 (127.0.0.1:50055)
+   ├── EDA gRPC 工具 (55) ──→ EDI 客户端 (127.0.0.1:50055)
    │     FetchEvent ← PerformAction 异步模型，增量 ads_output
    │
    ├── TurboCharts (3) ──→ turbocharts_app.exe (subprocess)
@@ -91,7 +91,7 @@ curl http://127.0.0.1:50026/health     # 进程 + gRPC 状态
 → {"status":"ok","mcp_ready":true,"eda_grpc_ready":true}
 
 curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
-→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":86}
+→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":90}
 ```
 
 ### 客户端接入
@@ -114,7 +114,7 @@ curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
 
 | 方式 | 说明 |
 |---|---|
-| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 86 个工具 |
+| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 90 个工具 |
 | **聊天界面** | 浏览器访问 `http://127.0.0.1:50026/ui`，内置 LLM 多轮工具闭环 |
 | **Python 调用** | `from servers.eda import list_epp_projects` 直接调用 |
 
@@ -130,7 +130,7 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 
 ---
 
-## 工具一览（86 个）
+## 工具一览（90 个）
 
 > 工具数量由运行时动态统计，此处为当前快照。权威值见 `/ready` 的 `tool_count`（或 `tests/test_tool_registry.py` 的 `required` 列表）。
 
@@ -199,6 +199,15 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 | `search_schematic_from_personal_library` | 按拓扑描述查询个人原理图库 |
 | `use_schematic_from_library_create_project` | 用原理图库内容创建并打开新工程 |
 | `use_schematic_from_library_import` | 用原理图库内容替换工程原理图 |
+
+### 软 IP（4 个）
+
+| 工具 | 说明 |
+|---|---|
+| `search_soft_ip_categories` | 查询全部软 IP 分类（自动合并分页） |
+| `search_public_soft_ip_models` | 查询公共软 IP 模型（自动合并分页） |
+| `search_personal_soft_ip_models` | 查询个人软 IP 模型（自动合并分页） |
+| `download_soft_ip_model` | 按软 IP UUID 和频率下载 AEDT 模型文件 |
 
 ### 启动 / 诊断（3 个）
 
@@ -276,7 +285,7 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 | 工具 | 说明 |
 |---|---|
 | `list_result_curves` | 解析 RAW 返回可用曲线名 |
-| `turbocharts_convert` | ADS RAW → 曲线图 + CSV |
+| `turbocharts_convert` | ADS RAW → 曲线图 + CSV（`linename=<前缀>_<变量>`，多条用 `&`；调用前校验并回读 CSV 表头自检） |
 | `compare_simulation_results` | 多 RAW 同曲线对比叠图（Matplotlib） |
 | `show_image` | 返回 MCP ImageContent + 本地路径 |
 | `analyze_image` | 调用视觉模型分析图片内容 |
@@ -318,7 +327,7 @@ Streamable HTTP 模式启用 `stateless_http=True`，服务不保留 MCP 会话�
 | `/upload` | POST | 文件上传（multipart/form-data） | `{"success":true,"file_path":"C:/...","file_name":"..."}` |
 | `/metrics` | GET | 运行时指标（Prometheus 格式） | 见 HTTP_API.md |
 
-### MCP Resources（7 个，只读上下文）
+### MCP Resources（8 个，只读上下文）
 
 客户端通过 `resources/list` 和 `resources/read` 访问。
 
@@ -330,6 +339,7 @@ Streamable HTTP 模式启用 `stateless_http=True`，服务不保留 MCP 会话�
 | `edi://reference/simulation-components` | `application/json` | SP/HB/XDB 参数目录，与 `get_simulation_component_schema` 同源 |
 | `edi://reference/operation-guide` | `text/markdown` | 操作安全约束：创建/删除/网表导入规则 |
 | `edi://reference/error-codes` | `text/markdown` | gRPC 状态码词典及建议动作 |
+| `edi://reference/turbocharts-guide` | `text/plain` | 引擎自带《RAW 转图像工具使用说明》原文（画图前读：参数、linename 单位与线段名、示例） |
 | `edi://integration/workflow` | `text/markdown` | TR 仿真工作流规则（实时拉取 SimulationAgent） |
 
 ### MCP Prompts（9 个，可复用工作流）
@@ -558,7 +568,7 @@ edi-grpc-mcp/
 │
 ├── docs/                               # 项目文档
 │   ├── DEPLOY.md                       #   部署指南（打包产物使用、客户端配置）
-│   ├── TOOLS_API.md                    #   工具 API（86 个工具完整签名+返回值示例）
+│   ├── TOOLS_API.md                    #   工具 API（90 个工具完整签名+返回值示例）
 │   ├── HTTP_API.md                     #   HTTP 接口（请求体、响应体、成功/失败情况）
 │   ├── IMPLEMENTATION.md               #   实现原理（通信类型、校验管线、并发控制、工具动机与依赖）
 │   ├── RESOURCES_PROMPTS.md            #   Resource & Prompt 说明（6 Resource + 8 Prompt 的用途与实现）
@@ -655,7 +665,7 @@ powershell -File scripts/build.ps1  # PyInstaller
 | 文档 | 说明 |
 |---|---|
 | [部署指南](./docs/DEPLOY.md) | 打包产物使用、客户端配置 |
-| [工具 API](./docs/TOOLS_API.md) | 全部 86 个工具参数、返回值、示例 |
+| [工具 API](./docs/TOOLS_API.md) | 全部 90 个工具参数、返回值、示例 |
 | [HTTP 接口](./docs/HTTP_API.md) | 全部 HTTP 路由的请求体、响应体、成功/失败情况 |
 | [实现原理](./docs/IMPLEMENTATION.md) | 5 种通信类型、校验管线、并发控制、工具动机与依赖 |
 | [Resource & Prompt](./docs/RESOURCES_PROMPTS.md) | 6 Resource + 8 Prompt 的用途、功能与实现 |
