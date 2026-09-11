@@ -120,6 +120,7 @@ import servers.eda.schematic_ops         # noqa: F401
 import servers.eda.edi_launcher          # noqa: F401
 import servers.turbocharts.compare_results  # noqa: F401
 import servers.turbocharts.convert_raw   # noqa: F401
+import servers.turbocharts.resource      # noqa: F401 — edi://reference/turbocharts-guide（RAW 转图说明）
 import servers.ansys.project_manage       # noqa: F401
 import servers.ansys.run_analysis         # noqa: F401
 import servers.multimodal_vision          # noqa: F401 — show_image + copy + analyze + open_document

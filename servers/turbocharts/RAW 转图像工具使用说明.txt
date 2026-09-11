@@ -14,7 +14,7 @@ RawConverter --raw <raw_path> --img <image_path> --type <image_type> [--csv <csv
 可选参数
 参数	说明	示例
 --csv	导出的 CSV 文件路径。若提供，程序会在转换图像的同时将 RAW 数据（如像素值、统计信息等）导出到该 CSV 文件	--csv "D:/output/data.csv"
---linename	绘制线段名称。	--linename "db_s[1,1]"  --linename "real_delays[1,1]"   _前是单位（PS：常用单位db、phase、real(实数),另vswr，aps(附加移向)，af（幅度波动）） 后边是绘制线段名称（PS：时延的线段名称为delays[2,1]）
+--linename	绘制线段名称。	--linename "db_s[1,1]"  --linename "real_delayS[1,1]"   _前是单位（PS：常用单位db、phase、real(实数),另vswr，aps(附加移相)，af（幅度波动）） 后边是绘制线段名称（PS：时延的线段名称为delays[2,1]）
 --dependcy  依赖
 --ac        精度计算
 
@@ -51,3 +51,9 @@ turbocharts_app.exe --raw "C:/Users/crb/Desktop/中文路径测试/result_SW.raw
 
 数控移相器 移相态
 turbocharts_app.exe --raw "C:/Users/crb/Desktop/中文路径测试/result_SW.raw" --csv "C:/Users/crb/Desktop/中文路径测试/输出SP_tr.csv" --img "C:/Users/crb/Desktop/中文路径测试/输出SP_tr.png" --type "SP" --linename "PSS_S[2,1]" --dependcy "freq"
+
+HB绘制结果图
+turbocharts_app.exe --raw "C:/Users/crb/Desktop/中文路径测试/result_SW.raw" --img "C:/Users/crb/Desktop/中文路径测试/history/hb_Out1_Out2.png" --type HB --linename "dBm_Out1"
+
+HB绘制两个结果图
+turbocharts_app.exe --raw "C:/Users/crb/Desktop/中文路径测试/result_SW.raw" --img "C:/Users/crb/Desktop/中文路径测试/history/hb_Out1_Out2.png" --type HB --linename "dBm_Out1&dBm_Out2"
