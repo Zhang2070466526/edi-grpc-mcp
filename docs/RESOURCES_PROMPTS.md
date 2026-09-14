@@ -1,6 +1,6 @@
 # MCP Resources & Prompts 说明
 
-本文档详细说明 EDI gRPC MCP 服务的 **6 个 Resource** 和 **8 个 Prompt**：每个都有什么用、干了什么、怎么实现的。
+本文档详细说明 EDI gRPC MCP 服务的 **8 个 Resource** 和 **9 个 Prompt**：每个都有什么用、干了什么、怎么实现的。（其中 `resources_prompts/` 包内 6 Resource + 8 Prompt，另有 `edi://reference/turbocharts-guide` 与 TR 的 `edi://integration/workflow` + `run_tr_simulation`。）
 
 ## 一、概述
 
@@ -137,9 +137,9 @@
 MCP 客户端通过协议原语访问：
 
 ```
-resources/list                    → 列出 7 个 Resource（另有 TR 的 edi://integration/workflow）
+resources/list                    → 列出 8 个 Resource（含 TR 的 edi://integration/workflow）
 resources/read {uri}              → 读取指定 Resource 内容
-prompts/list                      → 列出 8 个 Prompt
+prompts/list                      → 列出 9 个 Prompt
 prompts/get {name, arguments}     → 传入参数，得到工作流指令
 ```
 

@@ -29,7 +29,7 @@ AI 客户端 (Claude Code / OpenClaw)
    │  Streamable HTTP (stateless) 或 stdio
    │  POST /mcp  │  initialize → tools/list → tools/call
    ▼
-EDI gRPC MCP 服务 (FastMCP, 90 工具, 7 Resource, 9 Prompt)
+EDI gRPC MCP 服务 (FastMCP, 90 工具, 8 Resource, 9 Prompt)
    │
    ├── EDA gRPC 工具 (55) ──→ EDI 客户端 (127.0.0.1:50055)
    │     FetchEvent ← PerformAction 异步模型，增量 ads_output
@@ -571,7 +571,7 @@ edi-grpc-mcp/
 │   ├── TOOLS_API.md                    #   工具 API（90 个工具完整签名+返回值示例）
 │   ├── HTTP_API.md                     #   HTTP 接口（请求体、响应体、成功/失败情况）
 │   ├── IMPLEMENTATION.md               #   实现原理（通信类型、校验管线、并发控制、工具动机与依赖）
-│   ├── RESOURCES_PROMPTS.md            #   Resource & Prompt 说明（6 Resource + 8 Prompt 的用途与实现）
+│   ├── RESOURCES_PROMPTS.md            #   Resource & Prompt 说明（8 Resource + 9 Prompt 的用途与实现）
 │   ├── HANDOVER.md                     #   交接文档（架构设计、技术栈、47 条注意事项）
 │   └── EDI系统接口与外部调用汇总.md    #   EDI 系统全量对外接口
 │
@@ -668,7 +668,7 @@ powershell -File scripts/build.ps1  # PyInstaller
 | [工具 API](./docs/TOOLS_API.md) | 全部 90 个工具参数、返回值、示例 |
 | [HTTP 接口](./docs/HTTP_API.md) | 全部 HTTP 路由的请求体、响应体、成功/失败情况 |
 | [实现原理](./docs/IMPLEMENTATION.md) | 5 种通信类型、校验管线、并发控制、工具动机与依赖 |
-| [Resource & Prompt](./docs/RESOURCES_PROMPTS.md) | 6 Resource + 8 Prompt 的用途、功能与实现 |
+| [Resource & Prompt](./docs/RESOURCES_PROMPTS.md) | 8 Resource + 9 Prompt 的用途、功能与实现 |
 | [交接文档](./docs/HANDOVER.md) | 架构设计、技术栈、扩展开发、47 条注意事项 |
 | [gRPC 协议](./proto/grpc接口调用.md) | ExternalCall 接口调用说明 |
 | [EDI 系统接口汇总](./docs/EDI系统接口与外部调用汇总.md) | EDI 全量对外接口 |
