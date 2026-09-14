@@ -26,7 +26,10 @@
 
 ---
 
-## 二、Resource 详解（6 个）
+## 二、Resource 详解（7 个）
+
+> 另有一个 Resource 由业务包自带：`edi://reference/turbocharts-guide`（见第 7 条）；
+> TR 集成的 `edi://integration/workflow` 在 `servers/tr_simulation/resource.py`。
 
 ### 1. `edi://service/overview` — 服务概览
 
@@ -63,6 +66,13 @@
 - **用途**：让 LLM 根据 gRPC 返回的 status 选择正确的重试/排查策略。
 - **干什么**：返回状态码 → 含义 → 建议动作的对照表（SUCCEEDED/FAILED/REJECTED/QUEUE_TIMEOUT/TIMEOUT/STREAM_DISCONNECTED/GRPC_UNAVAILABLE/PAYLOAD_TOO_LARGE/PROTOCOL_MISMATCH/TASK_NOT_FOUND），以及重试原则。
 - **怎么实现**：硬编码的 Markdown 表格返回。核心原则：TIMEOUT/STREAM_DISCONNECTED 时 `outcome_known=false` 不要假设失败；非幂等操作禁止自动重试；查询类可安全重试一次。
+
+### 7. `edi://reference/turbocharts-guide` — RAW 转图说明
+
+- **用途**：`turbocharts_convert` / `list_result_curves` 之前做参考——参数怎么传、曲线名（`--linename`）的单位与线段名怎么写、有哪些现成示例。
+- **干什么**：返回 Turbocharts 引擎自带《RAW 转图像工具使用说明》的**原文**（命令格式、`--raw/--img/--type/--csv/--linename/--dependcy/--ac`、单位 `db`/`phase`/`real`/`vswr`/`aps`/`af`、时延线段名 `delays[i,j]`、使用示例）。
+- **怎么实现**：`servers/turbocharts/resource.py` 直接读取引擎自带的 `RAW 转图像工具使用说明.txt`（**不复制内容**，保持单一事实源，引擎升级换文件即生效）；文件缺失时返回带路径与单位要点摘要的提示文本，而不是抛异常。
+- **注意**：说明书未覆盖的实测规则（HB 只认 `db` 类与 `real_`、线段名大小写敏感、多条用 `&`、CSV 拆分等）记在工具 docstring 与 `docs/TOOLS_API.md`，由工具侧的校验强制执行。
 
 ---
 
@@ -127,7 +137,7 @@
 MCP 客户端通过协议原语访问：
 
 ```
-resources/list                    → 列出 6 个 Resource
+resources/list                    → 列出 7 个 Resource（另有 TR 的 edi://integration/workflow）
 resources/read {uri}              → 读取指定 Resource 内容
 prompts/list                      → 列出 8 个 Prompt
 prompts/get {name, arguments}     → 传入参数，得到工作流指令

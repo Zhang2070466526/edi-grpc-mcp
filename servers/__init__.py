@@ -11,6 +11,7 @@
   - servers.multimodal_vision : 图片显示 / 视觉分析 / 文档访问
   - servers.report : 仿真报告生成
   - servers.resources_prompts : MCP Resources & Prompts（6 Resource + 8 Prompt）
+  - 另有 2 个 Resource 随业务包走：turbocharts（RAW 转图说明）、tr_simulation（TR 工作流）
   - servers.chat : 聊天模块（会话管理、LLM 工具闭环）
 """
 

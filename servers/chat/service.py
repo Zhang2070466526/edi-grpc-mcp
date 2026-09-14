@@ -114,8 +114,9 @@ _CHAT_EXCLUDED_TOOLS = {
 # 需要增强描述的工具（补充使用注意事项）
 _CHAT_TOOL_DESCRIPTIONS: dict[str, str] = {
     "turbocharts_convert": (
-        "ADS RAW 转曲线图和 CSV。"
-        "多条 VSWR 自动拆分为多次导出。导出后核对行数列数"
+        "ADS RAW 转曲线图和 CSV。linename=<前缀>_<变量名>（dBm_S[2,1]），"
+        "多条用 & 分隔禁用逗号；变量名大小写要与 RAW 一致。"
+        "HB 多曲线/VSWR 多曲线会自动拆分 CSV。导出后看 curve_labels 与 warnings"
     ),
     "show_image": "读取本地图片，返回 MCP ImageContent（不要自行生成 MEDIA）",
     "analyze_image": (
