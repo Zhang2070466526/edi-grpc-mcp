@@ -19,8 +19,8 @@
 #   (mcp 1.13.0+ already requires pydantic>=2.11 = over the line).
 #   cryptography is also Rust and is not needed at runtime -- do not install it.
 #
-# INSTALL:       scripts\setup_win7_env.bat
-# AFTER INSTALL: python scripts\patch_mcp_win7.py   (fixes mcp<=1.12.4 Context bug)
+# INSTALL:       scripts\win7\setup_win7_env.bat
+# AFTER INSTALL: python scripts\win7\patch_mcp_win7.py   (fixes mcp<=1.12.4 Context bug)
 # DO NOT: upgrade mcp / pydantic / rpds-py, and do not install from pyproject.toml.
 
 # --- hard pins (the only real constraint) ---

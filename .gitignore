@@ -1,4 +1,5 @@
 .venv/
+.venv-win7/
 .uv-cache/
 .tools/
 __pycache__/
@@ -11,5 +12,6 @@ __pycache__/
 logs/
 *.log
 dist/
+dist-win7/
 build/
 .pytest_tmp*/
