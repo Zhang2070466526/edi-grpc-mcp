@@ -38,7 +38,7 @@ scripts\win7\setup_win7_env.bat
 | 目标系统 | Windows **7 SP1**（32/64 位均可，全程位数要一致；本项目按 **x64** 交付） |
 | 部署形态 | 服务与 `EDI.exe` **必须同机**；**不允许用 VM 绕开** |
 | 服务端口 | MCP/HTTP **50026**；EDI gRPC **50055** |
-| 交付形态 | PyInstaller **目录模式** es（`edi_mcp_server.exe` + `_internal\` + `.env` + `start_server.bat`） |
+| 交付形态 | PyInstaller **目录模式**（`edi_mcp_server.exe` + `_internal\` + `.env` + `start_server.bat`） |
 | 明确不做 | 不自研/替换 mcp 传输层、不改 SDK 架构、不做 14 个依赖的大规模降级 |
 
 ---
@@ -280,7 +280,7 @@ netstat -ano | findstr ":50026"
 1. 打开仓库 → **Releases** → 在最新 Release 的 Assets 里认准**安装器**：
    - 要下：`python-3.10.x-amd64.exe`（x64；32 位系统选 `python-3.10.x-win32.exe`）
    - 不要下：`embeddable`（嵌入式 zip，装不了第三方包）、NuGet 包、help 文档
-2. 版本选 **3.10.x**（覆盖全、稳定）；3.12 需额外 KB2533623 且覆盖不全，**避开**。
+2. 版本选 **3.10.x**（覆盖全、稳定，且冻结栈按 3.10 实测验证，见 §7）。
 3. 安装向导**底部勾上「Add Python 3.10 to PATH」**，其余默认。
 4. 验证：`python -V` 应输出 3.10.x。
 
