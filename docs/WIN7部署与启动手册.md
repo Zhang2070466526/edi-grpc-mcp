@@ -421,6 +421,7 @@ cd /d C:\edi-grpc-mcp && .venv-win7\Scripts\python.exe scripts\win7\diag_win7_ex
 | 5 | 从开发机整目录拷过去，脚本报 `pydantic_core ... 找不到指定的程序` | 拷了开发机的 `.venv-win7`（`pyvenv.cfg` 绑开发机路径 + 装的是新版包） | **不拷 venv**，目标机上重建（§4.2） |
 | 6 | 打包出来的 exe 里工具描述是旧的 | 现场副本是"某天整体拷过去的"快照，往往正好 = **git 已提交基线**；主仓工作区的未提交改动（spec、工具描述）没跟过去 | 打包前**核副本对齐**：`md5sum` 关键文件 + `git show HEAD:<file> \| diff --strip-trailing-cr -` 判断副本是否 = 基线；整目录 md5 逐字节比会被 CRLF 洗成一片 DIFF，注意区分 |
 | 7 | 双击 exe 没反应、看不到任何日志 | exe 是窗口模式（`console=False`） | **设计如此，不是故障**；用 `/ready` 探活，排错走命令行启动 |
+| 8 | 重打好的 `dist-win7\` 过一会儿又不见了（`dist\` 同样不见） | `dist-win7/` **当时没进 `.gitignore`**（只有 `dist/`、`build/`）→ 任何 `git clean -fd` / IDE「清理未跟踪文件」都会把它当垃圾一并清掉；有忽略规则的 `dist/` 只能人工删 | `.gitignore` 已补 `dist-win7/`（2026-09-14）；产物随时用 §6.2 那条命令重打，丢了不影响交付 |
 
 ---
 
