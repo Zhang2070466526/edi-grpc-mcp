@@ -2,16 +2,28 @@
 # PyInstaller spec — EDA MCP 本地服务打包
 # 目录模式，对 NumPy/Matplotlib/gRPC 兼容性最好
 
+import os
 import sys
 from pathlib import Path
 
 block_cipher = None
 root = Path(SPECPATH).parent
 
+# VC++ 运行库：msvcp140 系列（C++ 标准库）。PyInstaller 只自动带 vcruntime140，
+# 不带 msvcp140；grpcio / protobuf / matplotlib 等 C++ 扩展需要它。
+# Win7 目标机若没装 VC++ redist，会因缺 msvcp140 加载失败，故打包时一并带上。
+_sys32 = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32"
+_msvc_dlls = [
+    (str(_sys32 / "msvcp140.dll"), "."),
+    (str(_sys32 / "msvcp140_1.dll"), "."),
+    (str(_sys32 / "msvcp140_2.dll"), "."),
+    (str(_sys32 / "msvcp140_atomic_wait.dll"), "."),
+]
+
 a = Analysis(
     [str(root / 'start_servers.py')],
     pathex=[str(root)],
-    binaries=[],
+    binaries=_msvc_dlls,
     datas=[
         (str(root / 'proto'), 'proto'),
         (str(root / 'servers' / 'chat' / 'index.html'), 'servers/chat'),
