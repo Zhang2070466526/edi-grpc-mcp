@@ -43,7 +43,7 @@ _IMG_EXTENSIONS = (".png", ".jpg", ".jpeg", ".bmp", ".svg")
 # （servers/turbocharts/RAW 转图像工具使用说明.txt），凡说明未列的都在说明里标注。
 _PREFIX_RULES: tuple[tuple[re.Pattern[str], str, str], ...] = (
     (re.compile(r'^dBm_(?P<var>.+)$', re.IGNORECASE), "dBm",
-     "dBm(变量)：绝对功率（说明未列，实测有效；文件落盘形态 freq,dBm(变量)）"),
+     "dBm(变量)：绝对功率（说明单位清单未列，示例已用；文件落盘形态 freq,dBm(变量)）"),
     (re.compile(r'^dB_(?P<var>.+)$', re.IGNORECASE), "DB",
      "db(变量)：说明中的常用单位 db，落盘为 dB(变量)（SP 下与 dBm_ 是两张不同的图）"),
     (re.compile(r'^real_delay(?P<var>.+)$', re.IGNORECASE), "real_delay",
@@ -577,7 +577,7 @@ def turbocharts_convert(
         导出后请核对返回值里的 curve_labels / warnings（rc=0 不代表画对了）。
 
     实测补充（说明未覆盖，工具按此校验）:
-        · dBm_（绝对功率 → dBm(变量)）与 imag_（虚部）有效（说明未列）；单位前缀大小写不敏感
+        · dBm_（绝对功率 → dBm(变量)）与 imag_（虚部）有效（说明单位清单未列，示例已用）；单位前缀大小写不敏感
         · "_" 后的线段名大小写敏感且必须存在于 RAW（dBm_out1 出空图、dBm_Out1 正常）
         · 必须「单位_线段名」两段式；逗号/分号/空格、裸线段名会被直接拒绝（说明用 & 分隔）
         · type=HB 时引擎只认 db 类与 real_，phase_/imag_/vswr_ 静默回退成 dBm 图

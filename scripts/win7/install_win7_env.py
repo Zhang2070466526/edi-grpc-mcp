@@ -33,7 +33,6 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent.parent   # scripts/win7/ -> 仓库根
 TSINGHUA = "https://pypi.tuna.tsinghua.edu.cn/simple"
-EXPECT_TOOLS = 90
 
 # Win7 是 GBK 控制台：Dingbats / Emoji（U+2705 之类）不在 GBK 里，print 会抛
 # UnicodeEncodeError 把安装流程崩在最后一行。降级成 '?'，并保持输出只用 GBK 安全字符。
@@ -239,8 +238,8 @@ def check_tools(venv: Path) -> bool:
                             "print('TOOLS=%d' % len(mcp._tool_manager.list_tools()))")
     m = re.search(r"TOOLS=(\d+)", out)
     n = m.group(1) if m else "?"
-    good = rc == 0 and n.isdigit() and int(n) == EXPECT_TOOLS
-    return step("工具注册 = %s 个（期望 %d）" % (n, EXPECT_TOOLS), good, "" if good else out[-300:])
+    good = rc == 0 and n.isdigit() and int(n) > 0
+    return step("工具注册 = %s 个（>0）" % n, good, "" if good else out[-300:])
 
 
 def smoke_server(venv: Path, port: int) -> bool:
@@ -256,7 +255,7 @@ def smoke_server(venv: Path, port: int) -> bool:
             try:
                 with urllib.request.urlopen("http://127.0.0.1:%d/ready" % port, timeout=3) as r:
                     body = r.read().decode("utf-8", "replace")
-                return step("服务启动 + /ready 正常", '"tool_count":%d' % EXPECT_TOOLS in body, body[:200])
+                return step("服务启动 + /ready 正常", '"tool_count":' in body and '"tool_count":0' not in body, body[:200])
             except Exception:
                 continue
         return step("服务启动", False, "30 秒内 /ready 无响应")

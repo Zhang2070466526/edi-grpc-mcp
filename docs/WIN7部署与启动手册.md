@@ -180,9 +180,7 @@ dir /s /b C:\edi-mcp\*.dll C:\edi-mcp\*.pyd C:\edi-mcp\*.exe | find /c /v ""
 | `EDA_GRPC_SERVER` | `127.0.0.1:50055` | EDI gRPC 地址；同机就保持默认 |
 | `EDI_PATH` | 空 | EDI 客户端 exe 路径。**留空=自动探测**（`EDI.exe` > `EDA-PMDS.exe` > `CAIS.exe`）；装在非默认位置或探测报错时才填绝对路径 |
 | `TURBOCHARTS_PATH` | 空 | 同上，自动探测 `turbocharts_app.exe` > `TurboCharts.exe` |
-| `OPENCLAW_WORKSPACE` | 空 | 留空=自动探测，或手工指定 |
 | `MCP_TRANSPORT` | `streamable-http` | 保持默认；`stdio` 用于被别的程序当子进程拉起的用法 |
-| `MCP_HOST` | `127.0.0.1` | **只监听本机**；要让别的机器访问才改 `0.0.0.0`（并注意白名单，§3.6） |
 | `MCP_PORT` | `50026` | 服务端口（`start_server.bat` 里提示的 UI/MCP 地址写死 50026，改端口后请手动访问新端口） |
 | `MCP_ALLOWED_PROCESSES` | `edi-agent-service.exe` | **进程白名单**：只有进程名含这些子串（逗号分隔）的进程能调 `/mcp`。**留空=关闭白名单**；客户端换名字后不同步改 → 调用被拒 |
 | `VISION_API_KEY` / `VISION_BASE_URL` / `VISION_MODEL` | 空 | 三个都填才启用图片视觉分析 |
@@ -208,7 +206,7 @@ cd /d C:\edi-mcp && edi_mcp_server.exe --transport streamable-http --port 50026
 | `--transport` | `streamable-http`（默认）/ `stdio` | 一般保持默认 |
 | `--port` | 1–65535 | 覆盖 `.env` 的 `MCP_PORT`；超范围会直接报错退出 |
 
-Host 无命令行参数，只能改 `.env` 的 `MCP_HOST`。
+Host 固定 `127.0.0.1`（代码硬编码，不可配置）。
 
 **确认已就绪**：浏览器打开 `http://127.0.0.1:50026/ready`（启动中返回 503，等几秒刷新）。真机实测返回：
 
@@ -243,11 +241,11 @@ Host 无命令行参数，只能改 `.env` 的 `MCP_HOST`。
 | `/images/{token}`、`/documents/{token}` | GET | 工具产出的图片/文档 |
 | `/upload` | POST | 上传 |
 
-默认只监听 `127.0.0.1`。对外暴露要同时处理 `MCP_HOST` 与进程白名单。
+服务固定只监听 `127.0.0.1`（host 硬编码，不可配置）。
 
 ### 3.6 接入客户端
 
-1. **MCP 地址**填 `http://127.0.0.1:50026/mcp`（同机）。跨机：`.env` 改 `MCP_HOST=0.0.0.0`，客户端填 `http://<目标机IP>:50026/mcp`，并放行防火墙端口。
+1. **MCP 地址**填 `http://127.0.0.1:50026/mcp`（同机；服务固定只监听本机）。
 2. **进程白名单**：客户端进程名要能匹配 `MCP_ALLOWED_PROCESSES`（默认 `edi-agent-service.exe`）。被拒时服务端日志有 `[process-probe]` 记录。**"客户端连不上 / 403" 先查这条。**
 3. **一致性自检**：客户端看到的工具数应为 **90**、`tools_hash` 与 `/ready` 相同（基线 `ae6cd062`）。对不上 = 客户端连的不是这版服务。
 

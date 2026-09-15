@@ -55,10 +55,7 @@ EDA_GRPC_SERVER=127.0.0.1:50055
 EDI_PATH=
 # TurboCharts path: leave empty to auto-detect (turbocharts_app.exe > TurboCharts.exe)
 TURBOCHARTS_PATH=
-# Optional OpenClaw workspace. Leave empty to auto-detect, or set path manually.
-OPENCLAW_WORKSPACE=
 MCP_TRANSPORT=streamable-http
-MCP_HOST=127.0.0.1
 MCP_PORT=50026
 # Process whitelist: only allow these processes to access /mcp (comma-separated substrings, e.g. hermes_cli). Leave empty to disable.
 MCP_ALLOWED_PROCESSES=edi-agent-service.exe

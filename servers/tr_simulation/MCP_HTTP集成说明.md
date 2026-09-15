@@ -112,7 +112,7 @@ GET /api/v1/integration/tools
 - `input_schema` 直接取自 SimulationAgent 当前 FunctionTool，避免参数契约漂移。
 - `execution_mode=background` 表示默认返回 HTTP 202，需轮询 operation。
 - `requires_user_confirmation=true` 表示调用请求必须提供 confirmation。
-- `tr_open_document` 通过 HTTP 开放，用于用户明确要求在本机打开报告时调用。
+- 打开报告/文档请用本 MCP 的 `open_document`（SimulationAgent 侧的 `tr_open_document` 未在本 MCP 暴露）。
 
 ### 4.5 创建或登记会话
 

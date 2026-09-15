@@ -567,7 +567,7 @@ edi-grpc-mcp/
 │       └── index.html                  #     聊天前端页面
 │
 ├── docs/                               # 项目文档
-│   ├── DEPLOY.md                       #   部署指南（打包产物使用、客户端配置）
+│   ├── WIN7部署与启动手册.md           #   部署指南（打包产物、客户端配置）
 │   ├── TOOLS_API.md                    #   工具 API（90 个工具完整签名+返回值示例）
 │   ├── HTTP_API.md                     #   HTTP 接口（请求体、响应体、成功/失败情况）
 │   ├── IMPLEMENTATION.md               #   实现原理（通信类型、校验管线、并发控制、工具动机与依赖）
@@ -664,7 +664,7 @@ powershell -File scripts/build.ps1  # PyInstaller
 
 | 文档 | 说明 |
 |---|---|
-| [部署指南](./docs/DEPLOY.md) | 打包产物使用、客户端配置 |
+| [部署指南](./docs/WIN7部署与启动手册.md) | 打包产物使用、客户端配置 |
 | [工具 API](./docs/TOOLS_API.md) | 全部 90 个工具参数、返回值、示例 |
 | [HTTP 接口](./docs/HTTP_API.md) | 全部 HTTP 路由的请求体、响应体、成功/失败情况 |
 | [实现原理](./docs/IMPLEMENTATION.md) | 5 种通信类型、校验管线、并发控制、工具动机与依赖 |

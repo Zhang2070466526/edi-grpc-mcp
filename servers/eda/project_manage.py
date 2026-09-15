@@ -1,9 +1,15 @@
 r"""EDA 工程管理工具。
 
 list_epp_projects             扫描文件夹中的所有 .epp 工程文件
+create_project                创建新的 .epp 工程（不显示创建向导）
 open_edi_project              打开 .epp 工程，等待返回成功或失败
 close_edi_project             关闭已打开的工程，可选择是否保存
 get_project_summary           工程概览（元数据、原理图、仿真配置）
+analyze_variables             分析变量定义、引用和 Sweep 配置
+list_schematic_components     查询原理图全部器件（gRPC，含完整参数）
+get_schematic_component_info  按实例名查询器件完整信息（gRPC）
+get_components_static_params  查询器件固有参数（重量/尺寸/封装/厂商/成本）
+batch_query_component         按器件型号列表批量查询模型信息
 
 自然语言使用示例：
   帮我看看 C:/EDI-Workspace 下面有哪些 .epp 工程

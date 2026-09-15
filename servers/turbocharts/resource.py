@@ -2,8 +2,8 @@
 
   edi://reference/turbocharts-guide — 《RAW 转图像工具使用说明》原文（画图前先读）
 
-说明文档就是 Turbocharts 引擎自带的 `RAW 转图像工具使用说明.txt`，本资源**直接读取原文件**，
-不复制内容（保持单一事实源：文件里写什么，资源就返回什么，引擎升级后无需改代码）。
+说明文档就是 Turbocharts 引擎自带的 `RAW 转图像工具使用说明.txt`，本资源**直接读取原文件**
+（保持单一事实源）；文件缺失时返回一份硬编码的兜底摘要，引擎升级后需同步该摘要。
 """
 
 from __future__ import annotations

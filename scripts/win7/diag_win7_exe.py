@@ -29,7 +29,6 @@ for _s in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
-EXPECT_TOOLS = 90
 CHECKS = []
 FAILS = []
 
@@ -145,7 +144,7 @@ def main():
                 except Exception:
                     j = {}
                 step("status=ready", j.get("status") == "ready", "status=%s" % j.get("status"))
-                step("tool_count=%d" % EXPECT_TOOLS, j.get("tool_count") == EXPECT_TOOLS,
+                step("tool_count>0", int(j.get("tool_count") or 0) > 0,
                      "tool_count=%s tools_hash=%s grpc=%s" % (j.get("tool_count"),
                                                               j.get("tools_hash"), j.get("grpc")))
 

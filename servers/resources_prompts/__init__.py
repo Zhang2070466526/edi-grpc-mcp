@@ -1,4 +1,4 @@
-"""MCP Resources & Prompts — 6 个 Resource + 8 个 Prompt。
+"""MCP Resources & Prompts — 本目录 6 个 Resource + 8 个 Prompt（全服务合计 8 Resource + 9 Prompt）。
 
 按语义拆为 6 个文件，每个文件的 @mcp.resource() / @mcp.prompt() 装饰器在 import 时触发注册。
 
@@ -28,11 +28,10 @@ prompts_report.py — 报告/诊断类（2 个 Prompt）：
   create_simulation_report — 协调多工具生成 PDF/DOCX 仿真报告
   troubleshoot_edi_error   — 诊断 gRPC 调用错误并给排查建议
 
-注意：TR 仿真集成的 1 个 Resource + 1 个 Prompt 不在此目录，而在
-servers/tr_simulation/ 下（resource.py / prompts.py，与 TR 的 client/tools 内聚，
-避免跨目录 import）：
-  edi://integration/workflow — TR 仿真工作流规则（实时拉取 SimulationAgent）
-  run_tr_simulation          — TR 仿真工作流 Prompt
+注意：另有 2 个 Resource + 1 个 Prompt 不在此目录：
+  edi://reference/turbocharts-guide — 在 servers/turbocharts/resource.py（引擎说明原文）
+  edi://integration/workflow        — 在 servers/tr_simulation/resource.py（TR 工作流规则）
+  run_tr_simulation                 — 在 servers/tr_simulation/prompts.py（TR 工作流 Prompt）
 """
 
 from servers.resources_prompts.resources_service import (  # noqa: F401

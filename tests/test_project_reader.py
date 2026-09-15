@@ -3,6 +3,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from servers.eda.project_reader import parse_sexp, _kv, _walk_find, parse_paramsinfo, parse_components, ProjectReader
@@ -42,8 +44,7 @@ def test_walk_find():
 def test_parse_components_from_real_file():
     project = r"C:\Users\JGL\EDI-Workspace\EDI_TEST\EDI_TEST.epp"
     if not Path(project).is_file():
-        print(f"SKIP: {project} not found")
-        return
+        pytest.skip(f"依赖本机工程文件: {project}")
     r = ProjectReader(project)
     raw = r.read_schematic("main")
     assert raw is not None

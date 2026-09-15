@@ -1622,7 +1622,7 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 
 除了 Tool（启动时动态统计，当前 90 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
 
-### Resources（6 个）
+### Resources（8 个）
 
 | URI | MIME | 说明 |
 |---|---|---|
@@ -1631,10 +1631,13 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 | `edi://reference/operation-guide` | `text/markdown` | Markdown 操作规则：创建/删除/网表导入的安全约束 |
 | `edi://service/status` | `application/json` | 实时运行时状态（gRPC 通道、队列占用） |
 | `edi://reference/error-codes` | `text/markdown` | gRPC 状态码词典及建议动作 |
+| `edi://projects` | `application/json` | 工作区工程目录清单（名称/路径/大小） |
+| `edi://integration/workflow` | `text/markdown` | TR 仿真工作流规则（实时拉取 SimulationAgent） |
+| `edi://reference/turbocharts-guide` | `text/plain` | 引擎《RAW 转图像工具使用说明》原文 |
 
 > Resource 是只读上下文，由客户端主动拉取。标准 MCP 客户端可通过 `resources/list` 和 `resources/read` 访问。
 
-### Prompts（8 个）
+### Prompts（9 个）
 
 | Prompt | 参数 | 用途 |
 |---|---|---|
@@ -1643,6 +1646,10 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 | `configure_simulation_component` | `project_path`, `action`, `component_type`, `instance_name`, `requirements` | Schema→参数→确认→创建/更新 |
 | `create_simulation_report` | `project_path`, `output_path`, `overwrite` | 查询工程 → 生成曲线 → 渲染 PDF/DOCX |
 | `troubleshoot_edi_error` | `status`, `error_code` | 按状态码查错误词典、检查服务状态、给排查建议 |
+| `analyze_signal_chain` | `project_path`, `start` | 追踪信号链路并逐级说明 |
+| `assess_anti_burnout` | `project_path` | 抗烧毁评估并按功率裕量排序 |
+| `select_component` | `sub_type_id`, `requirement` | 从公共/个人模型库选型（含替换闭环） |
+| `run_tr_simulation` | `epp_path` | TR 仿真工作流（发现→计划→仿真→报告→同步） |
 
 > Prompt 是用户主动选择的工作流模板。标准 MCP 客户端可通过 `prompts/list` 和 `prompts/get` 访问。
 

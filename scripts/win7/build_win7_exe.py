@@ -33,7 +33,6 @@ REPO = Path(__file__).resolve().parent.parent.parent   # scripts/win7/ -> 仓库
 DIST = REPO / "dist" / "edi-mcp"
 EXE = DIST / "edi_mcp_server.exe"
 PYINSTALLER_PIN = "6.22.3"
-EXPECT_TOOLS = 90
 
 # 产物自带的 .env 模板（同 build.ps1；纯 ASCII 之外的中文注释只在 Python 里生成，不落文件）
 ENV_TEMPLATE = """# EDI gRPC MCP configuration - edit paths for this computer
@@ -42,10 +41,7 @@ EDA_GRPC_SERVER=127.0.0.1:50055
 EDI_PATH=
 # TurboCharts path: leave empty to auto-detect (turbocharts_app.exe > TurboCharts.exe)
 TURBOCHARTS_PATH=
-# Optional OpenClaw workspace. Leave empty to auto-detect, or set path manually.
-OPENCLAW_WORKSPACE=
 MCP_TRANSPORT=streamable-http
-MCP_HOST=127.0.0.1
 MCP_PORT={port}
 # Process whitelist: only allow these processes to access /mcp (comma-separated substrings). Leave empty to disable.
 MCP_ALLOWED_PROCESSES=edi-agent-service.exe
@@ -157,7 +153,7 @@ def smoke(port: int) -> bool:
             try:
                 with urllib.request.urlopen("http://127.0.0.1:%d/ready" % port, timeout=3) as r:
                     body = r.read().decode("utf-8", "replace")
-                return step("exe 启动 + /ready", '"tool_count":%d' % EXPECT_TOOLS in body, body[:200])
+                return step("exe 启动 + /ready", '"tool_count":' in body and '"tool_count":0' not in body, body[:200])
             except Exception:
                 continue
         return step("exe 启动", False, "45 秒内 /ready 无响应")

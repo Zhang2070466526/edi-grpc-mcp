@@ -1,7 +1,7 @@
 """MCP 工具注册中心 — 导入即可自动注册所有 @mcp.tool() 工具。
 
 ═══════════════════════════════════════════════════════════
-  已注册工具（数量由实际模块加载决定，配置工作区后 +1）：
+  已注册工具（快照；权威数量以 /ready 的 tool_count 为准）：
 
   工程管理：
     list_epp_projects             扫描文件夹中的 .epp 工程
@@ -13,6 +13,7 @@
     list_schematic_components     查询原理图全部器件（gRPC）
     get_schematic_component_info  按实例名查询器件完整信息
     get_components_static_params   查询器件固有参数（重量/尺寸/封装/厂商/成本）
+    batch_query_component         按器件型号列表批量查询模型信息
 
   仿真：
     start_simulation_async        启动异步仿真
@@ -50,6 +51,12 @@
     search_schematic_from_personal_library    查询个人原理图库
     use_schematic_from_library_create_project 用原理图库内容创建新工程
     use_schematic_from_library_import         用原理图库内容替换工程原理图
+
+  软 IP：
+    search_soft_ip_categories     查询全部软 IP 分类
+    search_public_soft_ip_models  查询公共软 IP 模型
+    search_personal_soft_ip_models  查询个人软 IP 模型
+    download_soft_ip_model        按软 IP UUID 和频率下载 AEDT 模型
 
   启动：
     launch_edi                    启动 EDI 客户端
@@ -96,6 +103,13 @@
     list_result_curves            解析 RAW 返回可用曲线
     compare_simulation_results    多 RAW 结果对比叠图
     turbocharts_convert           ADS RAW → 曲线图 + CSV
+
+  TR 仿真集成（17 个，对接 SimulationAgent）：
+    tr_get_workflow_state / tr_set_workflow_plan / tr_get_simulation_capabilities /
+    tr_find_paths / tr_read_netlist / tr_modify_netlist / tr_execute_simulation_plan /
+    tr_run_simulation / tr_parse_raw / tr_get_project_netlist /
+    tr_query_schematic_components / tr_sync_project_components / tr_restore_schematic /
+    tr_query_components / tr_prepare_report / tr_generate_document / tr_read_guide
 ═══════════════════════════════════════════════════════════
 """
 

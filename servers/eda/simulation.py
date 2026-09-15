@@ -543,8 +543,9 @@ def list_eda_tasks(status: str = "") -> dict[str, Any]:
 
     Args:
         status: 按状态过滤，为空返回全部。
-               可选：QUEUED / ACCEPTED / RUNNING / SUCCEEDED / FAILED /
-               TIMEOUT / STREAM_DISCONNECTED / REJECTED。
+               可选：QUEUED / QUEUE_TIMEOUT / ACCEPTED / RUNNING / SUCCEEDED /
+               FAILED / TIMEOUT / STREAM_DISCONNECTED / REJECTED /
+               PROTOCOL_MISMATCH / GRPC_UNAVAILABLE。
 
     Returns:
         {"success": True, "total": 3, "tasks": [

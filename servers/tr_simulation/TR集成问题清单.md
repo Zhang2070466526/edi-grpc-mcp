@@ -2,7 +2,7 @@
 
 > 记录 `servers/tr_simulation/`（对接 SimulationAgent 的 17 个 `tr_*` 工具 + 1 Resource + 1 Prompt）的已知问题、方案与待决策点。
 >
-> 状态：整个 `servers/tr_simulation/` 目录尚未提交（开发中）。
+> 状态：已入库（`git ls-files servers/tr_simulation/` 共 8 个文件，已提交跟踪）。
 
 ## 一、当前结构
 

@@ -127,7 +127,6 @@ EDA_GRPC_SERVER=127.0.0.1:50055
 EDI_PATH=C:\Program Files (x86)\EDI\EDI.exe    # 留空自动检测
 TURBOCHARTS_PATH=C:\Program Files (x86)\EDI\turbocharts_app.exe  # 留空自动检测
 MCP_TRANSPORT=streamable-http
-MCP_HOST=127.0.0.1
 MCP_PORT=50026
 MCP_ALLOWED_PROCESSES=                    # 可选：留空不鉴权；配置后只放行来源进程命中白名单子串的请求
 ```
@@ -228,7 +227,7 @@ python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto 
 ### 配置管理
 - 所有环境变量收敛到 `servers/settings.py` → Settings dataclass (frozen)
 - 启动时 validate() 校验 gRPC 地址格式、端口范围、传输方式
-- EDI_PATH / TURBOCHARTS_PATH / OPENCLAW_WORKSPACE 留空自动检测
+- EDI_PATH / TURBOCHARTS_PATH 留空自动检测
 
 ### 访问控制
 - 通过进程白名单 `MCP_ALLOWED_PROCESSES` 实现：留空不鉴权；配置后只放行来源进程 exe/命令行命中白名单子串的请求，其余返回 403（实现详见 `docs/IMPLEMENTATION.md` §11.17）
