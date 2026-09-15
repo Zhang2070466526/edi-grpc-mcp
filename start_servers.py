@@ -62,7 +62,7 @@ if _cfg_issues:
 
 from servers import mcp, __version__ as _server_ver
 from servers.eda.config import EDA_GRPC_SERVER as _grpc_cfg_addr
-from servers.utils import set_server_address
+from servers.utils import set_server_address, registered_tools
 from servers.process_guard import ProcessProbeMiddleware, ProcessWhitelistMiddleware
 import servers.registry_server  # — 触发工具注册
 
@@ -133,7 +133,7 @@ async def ready_check(request):
             "message": "MCP 服务正在初始化，请稍后重试",
         }, status_code=503)
 
-    tools = [t.name for t in mcp._tool_manager._tools.values()]
+    tools = [t.name for t in registered_tools(mcp)]
     tools_hash = hashlib.md5(",".join(sorted(tools)).encode("utf-8")).hexdigest()[:8]
     try:
         host, port_str = _grpc.rsplit(":", 1)
@@ -238,7 +238,7 @@ def _run_http_server(port: int, transport: str = "streamable-http") -> None:
             asyncio.WindowsSelectorEventLoopPolicy()
         )
 
-    tools = [t.name for t in mcp._tool_manager._tools.values()]
+    tools = [t.name for t in registered_tools(mcp)]
 
     # 检测 50055 状态
     _grpc_host, _grpc_port = _grpc_cfg_addr.rsplit(":", 1)

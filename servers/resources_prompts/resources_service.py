@@ -18,6 +18,7 @@ from servers.eda.config import EDA_GRPC_SERVER
 from servers.eda.grpc_client import get_cached_channel, is_queue_busy
 from servers.eda.project_manage import list_epp_projects
 from servers.eda.workspace_ops import get_current_workspace
+from servers.utils import registered_tools
 
 
 @mcp.resource(
@@ -90,7 +91,7 @@ def _current_workspace() -> str:
 
 def _current_tools_names() -> list[str]:
     """返回当前已注册工具的排序名列表（与 /ready 的 tools_hash 同一数据源）。"""
-    return sorted(t.name for t in mcp._tool_manager._tools.values())
+    return sorted(t.name for t in registered_tools(mcp))
 
 
 def _current_tools_hash() -> str:

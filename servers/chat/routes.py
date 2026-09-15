@@ -18,6 +18,7 @@ from starlette.responses import HTMLResponse, JSONResponse
 from servers import mcp, __version__ as _ver
 from servers.chat.service import ChatService
 from servers.eda.config import EDA_GRPC_SERVER, TURBOCHARTS_PATH
+from servers.utils import registered_tools
 
 import sys as _sys
 if getattr(_sys, "frozen", False):
@@ -55,7 +56,7 @@ async def ui_page(request: Request):
 async def tool_list(request: Request):
     """GET /tools/list — 返回已注册 MCP 工具名称和描述列表。"""
     tools = [{"name": t.name, "description": t.description or ""}
-             for t in mcp._tool_manager._tools.values()]
+             for t in registered_tools(mcp)]
     return JSONResponse(tools)
 
 
@@ -65,7 +66,7 @@ async def health_check(request: Request):
     """GET /health — 健康检查：gRPC + TurboCharts 状态 + 版本号。"""
     eda_ready = await _check_tcp(EDA_GRPC_SERVER)
     turbocharts_ready = bool(TURBOCHARTS_PATH) and Path(TURBOCHARTS_PATH).is_file()
-    tools = sorted(t.name for t in mcp._tool_manager._tools.values())
+    tools = sorted(t.name for t in registered_tools(mcp))
     tools_hash = hashlib.md5(",".join(tools).encode("utf-8")).hexdigest()[:8]
     return JSONResponse({
         "status": "ok" if eda_ready else "degraded",

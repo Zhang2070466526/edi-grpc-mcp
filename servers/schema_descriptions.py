@@ -13,6 +13,8 @@ from __future__ import annotations
 import logging
 import re
 
+from servers.utils import registered_tools
+
 # 参数行：缩进 + 参数名 + ":" + 描述（参数名是合法 Python 标识符，描述可含任意内容含冒号）
 _ARG_LINE_RE = re.compile(r"^\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*)$")
 
@@ -57,17 +59,16 @@ def inject_tool_descriptions(mcp) -> tuple[int, int]:
     """遍历已注册工具，把 Args: 描述注入 inputSchema。返回 (注入数, 仍缺失的参数数)。
 
     只补「还没有 description」的字段（若已用 Annotated[Field] 显式提供则跳过），
-    不覆盖已有值。依赖 mcp._tool_manager 私有属性（SDK 升级可能变动），用 getattr 防御。
+    不覆盖已有值。工具注册表经 servers.utils.registered_tools 访问（隔离私有属性依赖）。
     """
     injected = 0
     missing = 0
 
-    tool_manager = getattr(mcp, "_tool_manager", None)
-    tools = getattr(tool_manager, "_tools", {}) if tool_manager is not None else {}
+    tools = registered_tools(mcp)
     if not tools:
         return 0, 0
 
-    for tool in tools.values():
+    for tool in tools:
         fn = getattr(tool, "fn", None)
         descs = parse_args_descriptions(getattr(fn, "__doc__", None))
 
@@ -104,9 +105,8 @@ def trim_tool_descriptions(mcp) -> int:
     ``tool.fn.__doc__`` 供人类查看，不丢失信息。
     """
     trimmed = 0
-    tool_manager = getattr(mcp, "_tool_manager", None)
-    tools = getattr(tool_manager, "_tools", {}) if tool_manager is not None else {}
-    for tool in tools.values():
+    tools = registered_tools(mcp)
+    for tool in tools:
         fn = getattr(tool, "fn", None)
         doc = (getattr(fn, "__doc__", "") or "").strip()
         if not doc:

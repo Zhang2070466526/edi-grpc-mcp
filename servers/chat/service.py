@@ -164,11 +164,12 @@ def _auto_build_chat_tools() -> tuple[dict[str, Any], list[dict]]:
     FastMCP 的 t.parameters 已经是标准 JSON Schema，直接用作 function parameters。
     """
     from servers import mcp as _mcp
+    from servers.utils import registered_tools
 
     tool_map: dict[str, Any] = {}
     schema: list[dict] = []
 
-    for t in _mcp._tool_manager._tools.values():
+    for t in registered_tools(_mcp):
         if t.name in _CHAT_EXCLUDED_TOOLS:
             continue
 

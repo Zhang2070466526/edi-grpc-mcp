@@ -153,3 +153,16 @@ def build_file_link(path: str, label: str = "打开文件") -> dict:
         "file_uri": uri,
         "markdown_link": f"[{label}]({uri})",
     }
+
+
+# ── MCP 工具注册表内省 ──
+
+def registered_tools(mcp) -> list:
+    """返回 FastMCP 已注册工具对象列表。
+
+    隔离对 FastMCP 私有属性 ``mcp._tool_manager._tools`` 的依赖：SDK 升级若改动
+    内部结构，只需在此处适配，而不是改散落在多个文件的各处访问。
+    """
+    tool_manager = getattr(mcp, "_tool_manager", None)
+    tools = getattr(tool_manager, "_tools", {}) if tool_manager is not None else {}
+    return list(tools.values())
