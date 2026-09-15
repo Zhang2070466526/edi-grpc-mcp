@@ -1,9 +1,7 @@
 """测试 health 端点逻辑。"""
-import sys
 import asyncio
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def test_tcp_check_unavailable():

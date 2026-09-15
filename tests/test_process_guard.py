@@ -1,11 +1,9 @@
 """进程白名单守卫测试 —— exe 路径 + 命令行反查与白名单匹配。"""
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def test_norm():

@@ -1,10 +1,8 @@
 """测试公共工具层 utils.py —— 文件校验、错误响应、地址管理、链接生成。"""
-import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 class TestValidateFile:

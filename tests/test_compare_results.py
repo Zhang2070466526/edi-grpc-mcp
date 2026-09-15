@@ -2,11 +2,9 @@
 
 回归：修复 range(n) 未定义 bug（应使用 file_count）。
 """
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def _setup(tmp_path, monkeypatch, x_values=(1.0, 2.0, 3.0)):

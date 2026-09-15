@@ -1,9 +1,7 @@
 """测试异步仿真任务 — 注册表、回调、状态、结果、清理。"""
-import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 class TestTaskRegistry:

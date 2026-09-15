@@ -1,11 +1,9 @@
 """SimulationAgent 集成测试 —— 客户端 session/request_id/调用/错误映射 + 工具 payload + Resource。"""
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def _resp(status_code, payload=None, text=""):

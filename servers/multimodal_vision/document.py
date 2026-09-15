@@ -7,6 +7,7 @@ register_document_url — 供 report 等模块注册文档 Token 并返回预览
 from __future__ import annotations
 
 import logging
+import mimetypes
 import os
 from pathlib import Path
 from typing import Any
@@ -29,10 +30,22 @@ _ALLOWED_EXTENSIONS = {
 }
 _doc_store = TokenStore(route="/documents")
 
-_MIME_TYPES: dict[str, tuple[str, str]] = {
-    ".pdf": ("application/pdf", "inline"),
-    ".docx": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "attachment"),
-}
+# 仅 disposition 覆盖（业务语义）；MIME 交给 mimetypes 推断，覆盖全部 _ALLOWED_EXTENSIONS。
+# 显式补 openxml 三类：mimetypes 在部分平台不识别，会误落 octet-stream。
+for _ext, _mime in {
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+}.items():
+    mimetypes.add_type(_mime, _ext)
+
+_DISPOSITION: dict[str, str] = {".pdf": "inline", ".docx": "attachment"}
+
+
+def _mime_and_disposition(ext: str) -> tuple[str, str]:
+    """返回 (mime, disposition)：mime 由 mimetypes 推断，disposition 由业务覆盖表决定。"""
+    mime, _ = mimetypes.guess_type("f" + ext)
+    return mime or "application/octet-stream", _DISPOSITION.get(ext, "attachment")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -128,7 +141,7 @@ def open_document(
         disposition = "inline"
 
     ext = path.suffix.lower()
-    mime, _ = _MIME_TYPES.get(ext, ("application/octet-stream", "attachment"))
+    mime, _ = _mime_and_disposition(ext)
     _, url = _doc_store.register(str(path), disposition=disposition)
 
     return {
@@ -158,7 +171,7 @@ async def serve_document(request: Request) -> FileResponse | JSONResponse:
         return JSONResponse({"error": "file gone"}, status_code=404)
 
     ext = path.suffix.lower()
-    mime, default_disp = _MIME_TYPES.get(ext, ("application/octet-stream", "attachment"))
+    mime, default_disp = _mime_and_disposition(ext)
     disp = entry.get("disposition", default_disp)
 
     return FileResponse(

@@ -62,7 +62,7 @@ if _cfg_issues:
 
 from servers import mcp, __version__ as _server_ver
 from servers.eda.config import EDA_GRPC_SERVER as _grpc_cfg_addr
-from servers.utils import set_server_address, registered_tools
+from servers.utils import set_server_address, registered_tools, tcp_port_open
 from servers.process_guard import ProcessProbeMiddleware, ProcessWhitelistMiddleware
 import servers.registry_server  # — 触发工具注册
 
@@ -205,12 +205,7 @@ def _run_http_server(port: int, transport: str = "streamable-http") -> None:
     host = "127.0.0.1"
 
     # 端口占用检查：被占用时自动结束占用进程，释放后继续启动
-    _test = socket.socket()
-    try:
-        _test.settimeout(1)
-        occupied = _test.connect_ex(("127.0.0.1", port)) == 0
-    finally:
-        _test.close()
+    occupied = tcp_port_open("127.0.0.1", port)
 
     if occupied:
         print(f"端口 {port} 已被占用，尝试自动结束占用进程后重启...")
@@ -220,13 +215,8 @@ def _run_http_server(port: int, transport: str = "streamable-http") -> None:
         # 等待端口释放（进程退出后端口可能短暂处于 TIME_WAIT）
         deadline = time.monotonic() + 5
         while True:
-            _test = socket.socket()
-            try:
-                _test.settimeout(1)
-                if _test.connect_ex(("127.0.0.1", port)) != 0:
-                    break
-            finally:
-                _test.close()
+            if not tcp_port_open("127.0.0.1", port):
+                break
             if time.monotonic() >= deadline:
                 print(f"端口 {port} 未能释放，请手动处理。")
                 sys.exit(1)

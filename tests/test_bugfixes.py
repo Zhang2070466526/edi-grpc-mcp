@@ -11,7 +11,6 @@
   8. Chat _prune 跳过持锁会话 + /upload 大小限制
 """
 import asyncio
-import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -19,7 +18,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 # ── 1. 异步仿真超时校验 ──────────────────────────────────────────
@@ -64,10 +62,7 @@ def test_launch_edi_no_wait_returns_success(tmp_path, monkeypatch):
     exe.write_text("")
     monkeypatch.setattr(edi_launcher, "EDI_PATH", str(exe))
 
-    def _conn_fail(*a, **k):
-        raise OSError("not running")
-
-    monkeypatch.setattr(edi_launcher.socket, "create_connection", _conn_fail)
+    monkeypatch.setattr(edi_launcher, "tcp_port_open", lambda *a, **k: False)
     monkeypatch.setattr(edi_launcher.subprocess, "Popen", lambda *a, **k: None)
 
     r = edi_launcher.launch_edi(wait_for_grpc=False)

@@ -1,10 +1,8 @@
 """测试 list_simulation_components 的过滤与分页。"""
-import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from servers.eda.simulation_components import list_simulation_components
 

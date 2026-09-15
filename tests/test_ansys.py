@@ -1,11 +1,9 @@
 """测试 ANSYS HFSS 模块 —— 队列迁移后的逻辑（mock COM/AEDT，不依赖真实 AEDT）。"""
-import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def _patch_com():

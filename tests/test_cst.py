@@ -2,11 +2,9 @@
 
 不依赖本机 CST 环境：纯函数直接测，会话/结果 API 用 mock 打桩。
 """
-import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 # ── 共享函数（cst_api.py） ──

@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import datetime
 import re
-import socket
 import subprocess
 import time
 from pathlib import Path
@@ -18,7 +17,7 @@ import grpc
 from servers.eda.config import EDA_GRPC_SERVER, EDI_PATH
 from servers.settings import get_settings
 from servers.eda.grpc_client import get_cached_channel, is_queue_busy, MAX_RECEIVE_MB
-from servers.utils import error_response
+from servers.utils import error_response, tcp_port_open
 from servers import mcp
 
 
@@ -58,12 +57,7 @@ def launch_edi(
             port = int(port_str)
     except (ValueError, TypeError):
         raise ValueError(f"EDA_GRPC_SERVER 配置无效（需要 host:port）: {EDA_GRPC_SERVER}") from None
-    already_running = False
-    try:
-        with socket.create_connection((host, port), timeout=1):
-            already_running = True
-    except OSError:
-        pass
+    already_running = tcp_port_open(host, port)
 
     if already_running:
         return {
@@ -97,16 +91,14 @@ def launch_edi(
     if wait_for_grpc:
         started = time.monotonic()
         while time.monotonic() - started < timeout_seconds:
-            try:
-                with socket.create_connection((host, port), timeout=1):
-                    result["grpc_ready"] = True
-                    result["success"] = True
-                    result["message"] += (
-                        f"，gRPC 服务已就绪（{time.monotonic() - started:.1f}s）"
-                    )
-                    return result
-            except OSError:
-                time.sleep(1)
+            if tcp_port_open(host, port):
+                result["grpc_ready"] = True
+                result["success"] = True
+                result["message"] += (
+                    f"，gRPC 服务已就绪（{time.monotonic() - started:.1f}s）"
+                )
+                return result
+            time.sleep(1)
 
         result["success"] = False
         result["message"] += "，gRPC 服务未在规定时间内就绪"

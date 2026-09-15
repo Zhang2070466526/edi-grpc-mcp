@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import math
+import socket
 import threading
 import time
 import uuid
@@ -38,6 +39,15 @@ def is_network_path(path) -> bool:
     """判断路径是否为网络路径（UNC \\\\ 或 URL //），此类路径无法本地校验。"""
     s = str(path)
     return s.startswith(r"\\") or s.startswith("//")
+
+
+def tcp_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
+    """探测 TCP 端口是否可连（用于「服务是否在跑」类检查，连接成功即关闭）。"""
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
 
 
 # ── 参数校验 ──

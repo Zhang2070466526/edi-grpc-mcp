@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import csv
 import logging
 import math
 import os
@@ -220,26 +221,20 @@ def compare_simulation_results(
 def _read_curve_csv_xy(path: str) -> tuple[list[float], list[float]]:
     """Read turbocharts CSV — returns (x_values, y_values) from first two columns."""
     try:
-        with open(path) as f:
-            lines = f.readlines()
+        with open(path, newline="") as f:
+            rows = list(csv.reader(f))
     except OSError:
         return [], []
-    if len(lines) < 2:
-        return [], []
-    headers = lines[0].strip().split(",")
-    if len(headers) < 2:
+    if len(rows) < 2 or len(rows[0]) < 2:
         return [], []
     x_vals: list[float] = []
     y_vals: list[float] = []
-    for line in lines[1:]:
-        if not line.strip():
-            continue
-        vals = line.strip().split(",")
-        if len(vals) < 2:
+    for row in rows[1:]:
+        if len(row) < 2:
             continue
         try:
-            x = float(vals[0])
-            y = float(vals[1])
+            x = float(row[0])
+            y = float(row[1])
         except ValueError:
             continue
         # 成对追加，避免 x 成功、y 失败导致两个列表长度错位

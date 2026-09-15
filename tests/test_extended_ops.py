@@ -6,53 +6,42 @@
   schematic_ops.py   list_ideal_components / add_ideal_component / clear_schematic / add_wire
 所有测试 mock call_grpc，不访问真实 EDI。
 """
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
-def _fake_caller():
-    from proto import ecserver_pb2
-    calls = []
-
-    def _fake(task_type, payload, timeout, max_timeout_seconds=300):
-        calls.append((task_type, payload))
-        return {"success": True, "status": "SUCCEEDED"}
-
-    return ecserver_pb2, calls, _fake
 
 
 # ── 工作区 ──────────────────────────────────────────────────
 
-def test_create_workspace_payload(monkeypatch):
+def test_create_workspace_payload(monkeypatch, fake_caller):
     from servers.eda import workspace_ops as wo
-    ecserver_pb2, calls, _fake = _fake_caller()
+    ecserver_pb2, calls, _fake = fake_caller
     monkeypatch.setattr(wo, "call_grpc", _fake)
     wo.create_workspace("D:/EDI-Workspace-New")
     assert calls[-1][0] == ecserver_pb2.CREATE_WORKSPACE
     assert calls[-1][1] == {"path": "D:/EDI-Workspace-New"}
 
 
-def test_create_workspace_rejects_empty(monkeypatch):
+def test_create_workspace_rejects_empty(monkeypatch, fake_caller):
     from servers.eda import workspace_ops as wo
     monkeypatch.setattr(wo, "call_grpc", lambda *a, **k: {"success": True})
     r = wo.create_workspace("   ")
     assert r["success"] is False and r["error_code"] == "INVALID_PARAMETERS"
 
 
-def test_switch_workspace_payload(monkeypatch):
+def test_switch_workspace_payload(monkeypatch, fake_caller):
     from servers.eda import workspace_ops as wo
-    ecserver_pb2, calls, _fake = _fake_caller()
+    ecserver_pb2, calls, _fake = fake_caller
     monkeypatch.setattr(wo, "call_grpc", _fake)
     wo.switch_workspace("D:/EDI-Workspace-New")
     assert calls[-1][0] == ecserver_pb2.SWITCH_WORKSPACE
     assert calls[-1][1] == {"path": "D:/EDI-Workspace-New"}
 
 
-def test_get_current_workspace_payload(monkeypatch):
+def test_get_current_workspace_payload(monkeypatch, fake_caller):
     from servers.eda import workspace_ops as wo
-    ecserver_pb2, calls, _fake = _fake_caller()
+    ecserver_pb2, calls, _fake = fake_caller
     monkeypatch.setattr(wo, "call_grpc", _fake)
     wo.get_current_workspace()
     assert calls[-1][0] == ecserver_pb2.GET_CURRENT_WORKSPACE
@@ -61,18 +50,18 @@ def test_get_current_workspace_payload(monkeypatch):
 
 # ── 模型库（MMS 导入 / 性能器件放置）──────────────────────────
 
-def test_load_performance_component_payload(monkeypatch):
+def test_load_performance_component_payload(monkeypatch, fake_caller):
     from servers.eda import model_library as ml
-    ecserver_pb2, calls, _fake = _fake_caller()
+    ecserver_pb2, calls, _fake = fake_caller
     monkeypatch.setattr(ml, "call_grpc", _fake)
     ml.load_performance_component_from_mms("12345678-1234-4234-8234-123456789abc")
     assert calls[-1][0] == ecserver_pb2.LOAD_PERFORMANCE_COMPONENT_FROM_MMS
     assert calls[-1][1] == {"original_uuid": "12345678-1234-4234-8234-123456789abc"}
 
 
-def test_add_performance_component_payload(monkeypatch):
+def test_add_performance_component_payload(monkeypatch, fake_caller):
     from servers.eda import model_library as ml
-    ecserver_pb2, calls, _fake = _fake_caller()
+    ecserver_pb2, calls, _fake = fake_caller
     monkeypatch.setattr(ml, "validate_project_path", lambda p: p)
     monkeypatch.setattr(ml, "call_grpc", _fake)
     ml.add_performance_component("C:/test.epp", "12345678-1234-4234-8234-123456789abc", {"x": 0, "y": 0})
@@ -81,7 +70,7 @@ def test_add_performance_component_payload(monkeypatch):
                             "position": {"x": 0, "y": 0}}
 
 
-def test_add_performance_component_rejects_bad_position(monkeypatch):
+def test_add_performance_component_rejects_bad_position(monkeypatch, fake_caller):
     from servers.eda import model_library as ml
     monkeypatch.setattr(ml, "validate_project_path", lambda p: p)
     monkeypatch.setattr(ml, "call_grpc", lambda *a, **k: {"success": True})
@@ -92,18 +81,18 @@ def test_add_performance_component_rejects_bad_position(monkeypatch):
 
 # ── 原理图扩展（内置器件 / 清空 / 连线）────────────────────────
 
-def test_list_ideal_components_payload(monkeypatch):
+def test_list_ideal_components_payload(monkeypatch, fake_caller):
     from servers.eda import schematic_ops as so
-    ecserver_pb2, calls, _fake = _fake_caller()
+    ecserver_pb2, calls, _fake = fake_caller
     monkeypatch.setattr(so, "call_grpc", _fake)
     so.list_ideal_components()
     assert calls[-1][0] == ecserver_pb2.LIST_IDEAL_COMPONENTS
     assert calls[-1][1] == {}
 
 
-def test_add_ideal_component_payload(monkeypatch):
+def test_add_ideal_component_payload(monkeypatch, fake_caller):
     from servers.eda import schematic_ops as so
-    ecserver_pb2, calls, _fake = _fake_caller()
+    ecserver_pb2, calls, _fake = fake_caller
     monkeypatch.setattr(so, "validate_project_path", lambda p: p)
     monkeypatch.setattr(so, "call_grpc", _fake)
     so.add_ideal_component("C:/test.epp", "R", {"x": 100, "y": 200})
@@ -112,7 +101,7 @@ def test_add_ideal_component_payload(monkeypatch):
                             "position": {"x": 100, "y": 200}}
 
 
-def test_add_ideal_component_rejects_bad_position(monkeypatch):
+def test_add_ideal_component_rejects_bad_position(monkeypatch, fake_caller):
     from servers.eda import schematic_ops as so
     monkeypatch.setattr(so, "validate_project_path", lambda p: p)
     monkeypatch.setattr(so, "call_grpc", lambda *a, **k: {"success": True})
@@ -121,9 +110,9 @@ def test_add_ideal_component_rejects_bad_position(monkeypatch):
         assert r["success"] is False and r["error_code"] == "INVALID_PARAMETERS", pos
 
 
-def test_clear_schematic_requires_confirm(monkeypatch):
+def test_clear_schematic_requires_confirm(monkeypatch, fake_caller):
     from servers.eda import schematic_ops as so
-    ecserver_pb2, calls, _fake = _fake_caller()
+    ecserver_pb2, calls, _fake = fake_caller
     monkeypatch.setattr(so, "validate_project_path", lambda p: p)
     monkeypatch.setattr(so, "call_grpc", _fake)
     # 未确认 → 拒绝，不调用 gRPC
@@ -136,9 +125,9 @@ def test_clear_schematic_requires_confirm(monkeypatch):
     assert calls[-1][1] == {"project_path": "C:/test.epp"}
 
 
-def test_add_wire_payload(monkeypatch):
+def test_add_wire_payload(monkeypatch, fake_caller):
     from servers.eda import schematic_ops as so
-    ecserver_pb2, calls, _fake = _fake_caller()
+    ecserver_pb2, calls, _fake = fake_caller
     monkeypatch.setattr(so, "validate_project_path", lambda p: p)
     monkeypatch.setattr(so, "call_grpc", _fake)
     so.add_wire("C:/test.epp", "R1", 0, "C1", 1)

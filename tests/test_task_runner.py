@@ -3,12 +3,10 @@
 TaskRunner 是 CST 求解 / 远场导出（后续 EDA / HFSS 也会迁移）共用的基础组件，
 这里用内存线程池验证其状态机与边界行为，不依赖任何外部软件。
 """
-import sys
 import threading
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from servers.task_runner import TaskRunner
 

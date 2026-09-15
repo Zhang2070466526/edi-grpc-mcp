@@ -1,12 +1,10 @@
 """测试配置加载 settings.py —— 环境变量读取、类型转换、范围校验、启动校验。"""
-import sys
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 class TestSettingsRead:

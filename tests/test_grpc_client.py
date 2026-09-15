@@ -1,9 +1,7 @@
 """测试 gRPC 通信层 — parse、emit、返回结构。"""
 import json
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 class TestParsePayloadJson:
