@@ -213,7 +213,7 @@ Host 无命令行参数，只能改 `.env` 的 `MCP_HOST`。
 **确认已就绪**：浏览器打开 `http://127.0.0.1:50026/ready`（启动中返回 503，等几秒刷新）。真机实测返回：
 
 ```json
-{"status":"ready","transport":"streamable-http","stateless":true,"version":"0.1.8",
+{"status":"ready","transport":"streamable-http","stateless":true,"version":"0.1.9",
  "grpc":"online","tool_count":90,"tools_hash":"ae6cd062","started_at":1789351514.9886186}
 ```
 
@@ -221,7 +221,7 @@ Host 无命令行参数，只能改 `.env` 的 `MCP_HOST`。
 |---|---|
 | `status` | `ready` = 初始化完成可服务 |
 | `transport` | 当前通信方式 |
-| `version` | 服务版本（基线 0.1.8） |
+| `version` | 服务版本（基线 0.1.9） |
 | `grpc` | `online` = `EDA_GRPC_SERVER` 已连通；`offline` = EDI 没起/地址不对 |
 | `tool_count` | 注册工具数（基线 **90**） |
 | `tools_hash` | 工具集指纹（基线 `ae6cd062`）；与客户端不一致 = 两边不是同一版 |
