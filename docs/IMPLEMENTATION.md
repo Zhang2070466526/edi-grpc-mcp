@@ -458,7 +458,6 @@ if ".." in name or "/" in name or "\\" in name:
 | `_load_catalog()` | — | `dict` | `@lru_cache(maxsize=1)` 加载 JSON，失败返回 `{}` |
 | `_resolve_parameter_schema(name)` | `"Freq"` | `(schema_dict, "Freq[1]")` | 先查 `parameters` 字典 → 再用正则匹配 `parameter_patterns` → 提取 index → 验证范围 |
 | `_prepare_parameters(op, allow_empty)` | 公开参数 dict | `(wire_dict, None)` 或 `(None, error_dict)` | 11 步校验管线（见 §1.3） |
-| `_to_wire_parameters()` | `{"Freq": ...}` | `{"Freq[1]": ...}` | 逐参数调 `_resolve_parameter_schema` |
 | `_from_wire_parameters()` | `{"Freq[1]": ...}` | `{"Freq": ...}` | 固定映射优先 → 动态正则补全 → 不可映射的保持原样 |
 | `_find_component_by_instance(path, name)` | `"C:/test.epp"`, `"HB1"` | `(component_dict, None)` 或 `(None, error_dict)` | 遍历所有原理图，按 `name` 精确匹配。多处返回 `AMBIGUOUS_INSTANCE_NAME` |
 

@@ -193,7 +193,7 @@ def _kill_port_process(port: int) -> bool:
         return False
 
 
-def _run_http_server(port: int, transport: str = "streamable-http") -> None:
+def _run_http_server(port: int) -> None:
     """Streamable HTTP 模式入口。"""
     _install_shutdown_handlers()
 
@@ -301,7 +301,7 @@ def main() -> None:
 
     if args.transport == "streamable-http":
         _setup_logging()
-        _run_http_server(args.port, transport=args.transport)
+        _run_http_server(args.port)
     else:
         mcp.run(transport="stdio")
 

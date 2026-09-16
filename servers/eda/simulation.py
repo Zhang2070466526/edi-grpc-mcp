@@ -554,29 +554,24 @@ def list_eda_tasks(status: str = "") -> dict[str, Any]:
     status_filter = status.strip().upper()
     if status_filter and status_filter not in _VALID_TASK_STATUSES:
         return error_response("INVALID_STATUS", f"无效状态: {status}，可选: {sorted(_VALID_TASK_STATUSES)}")
-    _prune_tasks()
-    snapshot_ids: list[str] = []
     with _sim_lock:
-        snapshot_ids = list(_sim_tasks.keys())
-    tasks: list[dict] = []
-    for tid in snapshot_ids:
-        t = _get_task_snapshot(tid)
-        if t is None:
-            continue
-        st = t.get("status", "UNKNOWN")
-        if status_filter and st.upper() != status_filter:
-            continue
-        tasks.append({
-            "task_id": t["task_id"],
-            "status": st,
-            "operation": t.get("operation", ""),
-            "project_path": t.get("project_path", ""),
-            "message": t.get("message", ""),
-            "created_at": t.get("created_at"),
-            "started_at": t.get("started_at"),
-            "finished_at": t.get("finished_at"),
-            "error": t.get("error"),
-        })
+        _prune_tasks_locked()
+        tasks = []
+        for task in _sim_tasks.values():
+            st = task.get("status", "UNKNOWN")
+            if status_filter and st.upper() != status_filter:
+                continue
+            tasks.append({
+                "task_id": task["task_id"],
+                "status": st,
+                "operation": task.get("operation", ""),
+                "project_path": task.get("project_path", ""),
+                "message": task.get("message", ""),
+                "created_at": task.get("created_at"),
+                "started_at": task.get("started_at"),
+                "finished_at": task.get("finished_at"),
+                "error": task.get("error"),
+            })
     return {
         "success": True,
         "total": len(tasks),

@@ -145,7 +145,6 @@ class TestChatSimContext:
                             {"project_path": "/p.epp"},
                             {"success": True, "task_id": "sim-001"})
         assert s.last_simulation_task_id == "sim-001"
-        assert "sim-001" in s.simulation_task_ids
 
     def test_task_id_auto_fill(self):
         from servers.chat.service import ChatService
@@ -155,18 +154,6 @@ class TestChatSimContext:
         ok, args = svc._validate("get_simulation_async_status", {}, s)
         assert ok
         assert args["task_id"] == "sim-002"
-
-    def test_sim_ids_capped_at_20(self):
-        from servers.chat.service import ChatService
-        svc = ChatService.instance()
-        s = svc._get_or_create("")  # 空 ID 创建新会话
-        for i in range(25):
-            svc._update_context(s, "start_simulation_async",
-                                {"project_path": "/p.epp"},
-                                {"success": True, "task_id": f"sim-{i:03d}"})
-        assert len(s.simulation_task_ids) <= 20
-        assert s.last_simulation_task_id == "sim-024"
-
 
 class TestCompletedSemantics:
     """Bug 修复：completed 以 finished_at 为准。"""

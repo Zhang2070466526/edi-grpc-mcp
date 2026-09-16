@@ -17,8 +17,6 @@ import winreg
 from servers.task_runner import TaskRunner
 from servers.utils import error_response
 
-logger = logging.getLogger(__name__)
-
 # CST 全局串行队列：求解（simulate）和结果导出（result_export）共用。
 # CST 一次只能跑一个会话，run_solver 与 execute_vba 不能并发。
 cst_runner = TaskRunner(name_prefix="cst", max_run_seconds=7200)
@@ -64,23 +62,6 @@ def to_writable_copy(model_path: str) -> str:
     return tmp_model
 
 
-def status_payload(task_id: str, snap: dict) -> dict:
-    """把任务快照转成统一的查询返回体（进度部分），供各异步查询工具 *_query 复用。
-
-    查询工具在此进度快照上按状态补充结果字段（model_path / farfield_txts）。
-    """
-    return {
-        "success": True,
-        "task_id": task_id,
-        "status": snap["status"],
-        "completed": snap.get("finished_at") is not None,
-        "message": snap["message"],
-        "error": snap["error"],
-        "started_at": snap["started_at"],
-        "finished_at": snap["finished_at"],
-    }
-
-
 def query_task(
     task_id: str,
     snap: dict | None,
@@ -99,7 +80,16 @@ def query_task(
     """
     if snap is None:
         return error_response("TASK_NOT_FOUND", not_found_msg)
-    payload = status_payload(task_id, snap)
+    payload = {
+        "success": True,
+        "task_id": task_id,
+        "status": snap["status"],
+        "completed": snap.get("finished_at") is not None,
+        "message": snap["message"],
+        "error": snap["error"],
+        "started_at": snap["started_at"],
+        "finished_at": snap["finished_at"],
+    }
     if snap.get("finished_at") is None:
         payload["message"] = running_msg
         return payload
@@ -114,7 +104,6 @@ class CstApi:
     """CST 官方 Python 接口封装（安装检测 + 会话管理）。"""
 
     def __init__(self) -> None:
-        self._api_path: str | None = None
         self._cst_interface = None
         self._cst_results = None
 

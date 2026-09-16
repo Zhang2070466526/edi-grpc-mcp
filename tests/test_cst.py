@@ -7,31 +7,6 @@ from unittest.mock import MagicMock, patch
 
 
 
-# ── 共享函数（cst_api.py） ──
-
-class TestStatusPayload:
-    def test_running_fields(self):
-        from servers.cst.cst_api import status_payload
-        snap = {"status": "RUNNING", "message": "等待执行", "error": None,
-                "started_at": 1.0, "finished_at": None}
-        p = status_payload("t1", snap)
-        assert p["success"] is True
-        assert p["task_id"] == "t1"
-        assert p["status"] == "RUNNING"
-        assert p["completed"] is False
-        assert p["message"] == "等待执行"
-        assert p["error"] is None
-        assert p["started_at"] == 1.0
-        assert p["finished_at"] is None
-
-    def test_completed_flag_from_finished_at(self):
-        from servers.cst.cst_api import status_payload
-        snap = {"status": "SUCCEEDED", "message": "done", "error": None,
-                "started_at": 1.0, "finished_at": 2.0}
-        p = status_payload("t1", snap)
-        assert p["completed"] is True
-
-
 class TestToWritableCopy:
     def test_writable_returns_self(self, tmp_path, monkeypatch):
         from servers.cst.cst_api import to_writable_copy

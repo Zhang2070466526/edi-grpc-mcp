@@ -20,7 +20,6 @@ from servers.eda.simulation_components import (
     _catalog_component,
     _resolve_parameter_schema,
     _prepare_parameters,
-    _to_wire_parameters,
     _from_wire_parameters,
     _find_component_by_instance,
     _format_component_parameters,
@@ -279,20 +278,6 @@ class TestPrepareParameters:
 # ═══════════════════════════════════════════════════════════
 
 class TestWireConversion:
-    def test_to_wire_hb(self):
-        wire = _to_wire_parameters("HarmonicBalance", {
-            "Freq": {"value": "1", "unit": "GHz"},
-            "Order": {"value": "5"},
-        })
-        assert "Freq[1]" in wire
-        assert "Order[1]" in wire
-
-    def test_to_wire_dynamic(self):
-        wire = _to_wire_parameters("HarmonicBalance", {
-            "Freq[3]": {"value": "3", "unit": "GHz"},
-        })
-        assert "Freq[3]" in wire
-
     def test_from_wire_fixed(self):
         public = _from_wire_parameters("HarmonicBalance", {
             "Freq[1]": {"value": "1", "unit": "GHz"},

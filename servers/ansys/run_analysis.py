@@ -36,7 +36,7 @@ def _run_hfss_analysis_task(
         _, desktop = _attach_aedt()
         project = desktop.SetActiveProject(project_name)
         design = project.SetActiveDesign(design_name)
-        module, _ = get_setup_module(design)
+        module = get_setup_module(design)
         setups = list(module.GetSetups())
         if setup_name not in setups:
             raise RuntimeError(f"Setup {setup_name} not found. Available: {setups}")
@@ -95,7 +95,7 @@ def _validate_setups(project_path: str, design_name: str) -> dict:
                         "requested_design": design_name, "available_designs": names}
 
             try:
-                module, _ = get_setup_module(design)
+                module = get_setup_module(design)
                 setups = list(module.GetSetups())
             except Exception:
                 setups = []

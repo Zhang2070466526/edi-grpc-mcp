@@ -206,7 +206,6 @@ class Activity:
     status: str          # "success" | "error"
     duration_ms: float = 0
     summary: str = ""     # 简短描述
-    args: dict | None = None
     result: Any = None
     error: str = ""
 
@@ -237,7 +236,6 @@ class ChatSession:
     last_folder_path: str | None = None
     last_projects: list[dict] = field(default_factory=list)
     last_simulation_task_id: str | None = None
-    simulation_task_ids: list[str] = field(default_factory=list)
     updated_at: float = field(default_factory=time.time)
     pending_action: PendingAction | None = None
     chat_lock: Any = field(default_factory=lambda: asyncio.Lock())
@@ -778,8 +776,6 @@ class ChatService:
             task_id = result.get("task_id")
             if task_id:
                 session.last_simulation_task_id = task_id
-                session.simulation_task_ids.append(task_id)
-                session.simulation_task_ids = session.simulation_task_ids[-20:]
 
     # ── 上下文导出 ──
 

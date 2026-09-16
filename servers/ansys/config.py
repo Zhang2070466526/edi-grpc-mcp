@@ -138,7 +138,7 @@ def get_setup_module(design):
     """统一获取 AnalysisSetup 或 SolveSetups 模块。"""
     for mod_name in ("AnalysisSetup", "SolveSetups"):
         try:
-            return design.GetModule(mod_name), mod_name
+            return design.GetModule(mod_name)
         except Exception:
             continue
     raise RuntimeError("No AnalysisSetup or SolveSetups module found")

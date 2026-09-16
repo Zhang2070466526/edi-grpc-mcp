@@ -22,6 +22,17 @@ IMAGE_MIME_MAP: dict[str, str] = {
 }
 
 
+def validate_local_file(p: Path, allowed: set[str], kind: str) -> Path:
+    """resolved 后统一校验：拒绝网络路径 → 存在 → 扩展名白名单。"""
+    if is_network_path(p):
+        raise PermissionError(f"禁止访问网络路径: {p}")
+    if not p.is_file():
+        raise FileNotFoundError(f"{kind}不存在: {p}")
+    if p.suffix.lower() not in allowed:
+        raise ValueError(f"不支持的{kind}格式: {p.suffix}，允许: {sorted(allowed)}")
+    return p
+
+
 def validate_image_path(image_path: str, allowed: set[str] | None = None) -> Path:
     """校验图片路径和扩展名，通过则返回 resolved Path。
 
@@ -35,14 +46,7 @@ def validate_image_path(image_path: str, allowed: set[str] | None = None) -> Pat
         ValueError: 不支持的扩展名。
     """
     exts = allowed or _ALLOWED_EXTENSIONS
-    path = Path(image_path).expanduser().resolve()
-    if is_network_path(path):
-        raise PermissionError(f"禁止访问网络路径: {path}")
-    if not path.is_file():
-        raise FileNotFoundError(f"图片不存在: {path}")
-    if path.suffix.lower() not in exts:
-        raise ValueError(f"不支持的图片格式: {path.suffix}")
-    return path
+    return validate_local_file(Path(image_path).expanduser().resolve(), exts, "图片")
 
 
 def validate_image_content(path: Path) -> None:

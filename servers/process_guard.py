@@ -14,8 +14,6 @@ r"""进程白名单守卫 —— 只放行指定进程访问 MCP 服务。
 
 阶段 1（探针）：ProcessProbeMiddleware 只打印来源进程，不拦截，用于确认白名单值。
 阶段 2（白名单）：ProcessWhitelistMiddleware 未命中白名单返回 403。
-
-参考文档：docs/ACCESS_CONTROL.md
 """
 
 from __future__ import annotations

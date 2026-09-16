@@ -19,9 +19,9 @@ from starlette.responses import FileResponse, JSONResponse
 from servers import mcp
 from servers.token_registry import TokenStore
 from servers.utils import is_network_path, error_response
+from servers.multimodal_vision.validators import validate_local_file
 
 load_dotenv()
-_logger = logging.getLogger("multimodal.document")
 
 # 支持的文档格式（link 和 local 两种模式共用）
 _ALLOWED_EXTENSIONS = {
@@ -57,14 +57,7 @@ def _validate_path(file_path: str, allowed: set[str]) -> Path:
     raw = Path(file_path).expanduser()
     if not raw.is_absolute():
         raise ValueError("file_path 必须是绝对路径")
-    p = raw.resolve()
-    if is_network_path(p):
-        raise PermissionError(f"禁止访问网络路径: {p}")
-    if not p.is_file():
-        raise FileNotFoundError(f"文件不存在: {p}")
-    if p.suffix.lower() not in allowed:
-        raise ValueError(f"不支持的文件格式: {p.suffix}，允许: {sorted(allowed)}")
-    return p
+    return validate_local_file(raw.resolve(), allowed, "文件")
 
 
 # ═══════════════════════════════════════════════════════════

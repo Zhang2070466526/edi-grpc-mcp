@@ -72,28 +72,23 @@ def _validate(image_path: str) -> tuple[Path | None, dict | None]:
     return path, None
 
 
-def _encode(path: Path) -> tuple[str | None, dict | None]:
-    """返回 (data_url, None) 成功，或 (None, error_dict) 失败。
-    注意：成功时第二个值是 None，不是 MIME 字符串——
-    之前版本返回 (data_url, mime_str) 导致 mime 被当作 error 返回。"""
-    ext = path.suffix.lower()
-    mime = _MIME_MAP.get(ext, "application/octet-stream")
+def _encode(path: Path) -> tuple[str | None, str | None, dict | None]:
+    """返回 (data_url, mime, None) 成功，或 (None, None, error_dict) 失败。"""
     try:
         data = base64.b64encode(path.read_bytes()).decode("ascii")
     except OSError as e:
-        return None, error_response("INVALID_IMAGE", f"读取图片失败: {e}")
-    return f"data:{mime};base64,{data}", None  # 成功：第二个值 None ≠ 错误
+        return None, None, error_response("INVALID_IMAGE", f"读取图片失败: {e}")
+    mime = _MIME_MAP[path.suffix.lower()]  # 后缀已由 _validate 限制为白名单，必命中
+    return f"data:{mime};base64,{data}", mime, None
 
 
 # ── 视觉模型调用 ──
 
 def _call_vision(path: Path, prompt: str, detail: str, max_tokens: int) -> dict:
     """编码图片并调用视觉模型 API，返回分析结果或错误。"""
-    data_url, err = _encode(path)
+    data_url, mime, err = _encode(path)
     if err:
         return err
-
-    mime = _MIME_MAP.get(path.suffix.lower(), "image/png")
 
     payload = {
         "model": VISION_MODEL,

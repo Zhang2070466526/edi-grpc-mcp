@@ -311,18 +311,6 @@ def _supported_param_names(component_type: str) -> list[str]:
 # Wire ↔ public name conversion
 # ═══════════════════════════════════════════════════════════
 
-def _to_wire_parameters(component_type: str, parameters: dict) -> dict:
-    """Convert public parameter names to wire names."""
-    result: dict = {}
-    for pname, pval in parameters.items():
-        schema, wire_name = _resolve_parameter_schema(component_type, pname)
-        if wire_name:
-            result[wire_name] = pval
-        else:
-            result[pname] = pval
-    return result
-
-
 def _from_wire_parameters(component_type: str, parameters: dict) -> dict:
     """Convert wire parameter names back to public names."""
     comp = _catalog_component(component_type)

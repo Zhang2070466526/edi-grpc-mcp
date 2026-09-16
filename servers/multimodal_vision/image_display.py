@@ -22,7 +22,6 @@ from servers.token_registry import TokenStore
 from servers.multimodal_vision.validators import validate_image_path, IMAGE_MIME_MAP
 
 load_dotenv()
-_logger = logging.getLogger("multimodal.display")
 
 _MAX_NATIVE_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
 _image_store = TokenStore(route="/images")
@@ -33,11 +32,6 @@ _MIME_TYPES = IMAGE_MIME_MAP
 # ═══════════════════════════════════════════════════════════
 # show_image
 # ═══════════════════════════════════════════════════════════
-
-def _workspace_note() -> str:
-    """返回查看图片的提示文案（工作区复制功能已移除）。"""
-    return "请使用资源管理器打开该文件。"
-
 
 @mcp.tool(structured_output=False)
 def show_image(image_path: str) -> list[Any]:
@@ -50,7 +44,7 @@ def show_image(image_path: str) -> list[Any]:
         image_path: 图片文件绝对路径。
     """
     path = validate_image_path(image_path)
-    ws_note = _workspace_note()
+    ws_note = "请使用资源管理器打开该文件。"
 
     size = path.stat().st_size
     if size > _MAX_NATIVE_IMAGE_SIZE:

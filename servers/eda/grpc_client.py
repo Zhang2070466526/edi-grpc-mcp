@@ -90,22 +90,6 @@ def _get_channel(target: str) -> grpc.Channel:
         return ch
 
 
-class _ChannelHandle:
-    """上下文管理器包装：退出时不关闭缓存的 channel。"""
-
-    def __init__(self, ch: grpc.Channel):
-        """包装一个 channel，供 with 语句使用。"""
-        self._ch = ch
-
-    def __enter__(self) -> grpc.Channel:
-        """返回被包装的 channel。"""
-        return self._ch
-
-    def __exit__(self, *args: object) -> None:
-        """退出时不关闭 channel（缓存复用）。"""
-        pass  # 缓存复用，不关闭
-
-
 # 回调类型
 GrpcEventCallback = Callable[[dict[str, Any]], None]
 
@@ -247,17 +231,6 @@ def call_grpc(
     global _queue_busy
     _queue_busy = True
     try:
-        if time.monotonic() >= deadline:
-            # 排队耗时耗尽预算，未开始执行（几乎不可达：acquire 成功意味着未超时）
-            return _terminal_result(
-                success=False, status="QUEUE_TIMEOUT",
-                message=f"等待 EDA 执行槽位超时（{timeout_seconds:.0f}s）",
-                client_uuid=actual_client_uuid, task_id=actual_task_id,
-                task_type_name=ecserver_pb2.EventType.Name(task_type),
-                project_path=payload.get("project_path", ""),
-                result_path="", ads_output="", log_complete=False,
-                latest_details={},
-            )
         return _call_grpc_unlocked(
             task_type, payload, deadline,
             task_id=actual_task_id,
@@ -322,161 +295,161 @@ def _call_grpc_unlocked(
         )
 
     try:
-        with _ChannelHandle(_get_channel(EDA_GRPC_SERVER)) as channel:
-            stub = ecserver_pb2_grpc.ExternalCallStub(channel)
+        channel = _get_channel(EDA_GRPC_SERVER)
+        stub = ecserver_pb2_grpc.ExternalCallStub(channel)
 
-            # ── 1. 先建立 FetchEvent 订阅 ──
-            _logger.info("task=%s client=%s type=%s phase=SUBSCRIBING",
-                         task_id[:12], client_uuid[:12], task_type_name)
-            event_stream = stub.FetchEvent(
-                ecserver_pb2.FetchEventRequest(client_uuid=client_uuid),
-                timeout=remaining(),
-            )
-            _logger.info("task=%s phase=SUBSCRIBED", task_id[:12])
+        # ── 1. 先建立 FetchEvent 订阅 ──
+        _logger.info("task=%s client=%s type=%s phase=SUBSCRIBING",
+                     task_id[:12], client_uuid[:12], task_type_name)
+        event_stream = stub.FetchEvent(
+            ecserver_pb2.FetchEventRequest(client_uuid=client_uuid),
+            timeout=remaining(),
+        )
+        _logger.info("task=%s phase=SUBSCRIBED", task_id[:12])
 
-            # ── 2. 再提交 PerformAction ──
-            _logger.info("task=%s phase=PERFORM_ACTION", task_id[:12])
-            response = stub.PerformAction(
-                request,
-                timeout=min(_PERFORM_ACTION_TIMEOUT, remaining()),
-            )
+        # ── 2. 再提交 PerformAction ──
+        _logger.info("task=%s phase=PERFORM_ACTION", task_id[:12])
+        response = stub.PerformAction(
+            request,
+            timeout=min(_PERFORM_ACTION_TIMEOUT, remaining()),
+        )
 
-            # ── 3. 未受理 ──
-            if response.code != 0:
-                message = response.message or f"EDA 服务未受理 {task_type_name} 任务"
-                _logger.warning("task=%s phase=REJECTED code=%d message=%s",
-                                task_id[:12], response.code, message)
-                _emit_event(on_event, {
-                    "phase": "REJECTED",
-                    "client_uuid": client_uuid,
-                    "task_id": task_id,
-                    "task_type": task_type_name,
-                    "status": "REJECTED",
-                    "message": message,
-                    "ads_output_chunk": "",
-                    "details": {},
-                })
-                return finish(False, "REJECTED", message,
-                              project_path=payload.get("project_path", ""),
-                              log_complete=True, outcome_known=True)
-
-            # ── 4. 回显校验 ──
-            def _mismatch(msg: str) -> dict[str, Any]:
-                _logger.error("task=%s %s", task_id[:12], msg)
-                return finish(False, "PROTOCOL_MISMATCH", msg,
-                              project_path=payload.get("project_path", ""))
-            if response.client_uuid and response.client_uuid != client_uuid:
-                return _mismatch(f"PerformAction client_uuid 不匹配: sent={client_uuid} got={response.client_uuid}")
-            if response.task_id and response.task_id != task_id:
-                return _mismatch(f"PerformAction task_id 不匹配: sent={task_id} got={response.task_id}")
-            if response.event_type not in (
-                    ecserver_pb2.EVENT_TYPE_UNSPECIFIED,
-                    task_type,
-            ):
-                return _mismatch(f"PerformAction event_type 不匹配: sent={task_type_name} got={ecserver_pb2.EventType.Name(response.event_type)}")
-
-            # ── 5. ACCEPTED 回调 ──
-            _logger.info("task=%s phase=ACCEPTED code=0", task_id[:12])
+        # ── 3. 未受理 ──
+        if response.code != 0:
+            message = response.message or f"EDA 服务未受理 {task_type_name} 任务"
+            _logger.warning("task=%s phase=REJECTED code=%d message=%s",
+                            task_id[:12], response.code, message)
             _emit_event(on_event, {
-                "phase": "ACCEPTED",
+                "phase": "REJECTED",
                 "client_uuid": client_uuid,
                 "task_id": task_id,
                 "task_type": task_type_name,
-                "status": "ACCEPTED",
-                "message": response.message or "task accepted",
+                "status": "REJECTED",
+                "message": message,
                 "ads_output_chunk": "",
                 "details": {},
             })
+            return finish(False, "REJECTED", message,
+                          project_path=payload.get("project_path", ""),
+                          log_complete=True, outcome_known=True)
 
-            # ── 6. 消费已建立的事件流 ──
-            # 三重筛选：client_uuid + task_id + event_type 全部匹配才处理
-            # 增量收集 ads_output（不 strip、不覆写），终态事件使用完整日志
-            chunk_count = 0
-            action_accepted = response.code == 0
-            for event in event_stream:
-                chunk = ""  # 防止终态事件先于普通事件到达时 UnboundLocalError
-                if event.client_uuid != client_uuid:
-                    continue
-                if event.task_id != task_id:
-                    continue
-                if event.event_type != task_type:
-                    continue
+        # ── 4. 回显校验 ──
+        def _mismatch(msg: str) -> dict[str, Any]:
+            _logger.error("task=%s %s", task_id[:12], msg)
+            return finish(False, "PROTOCOL_MISMATCH", msg,
+                          project_path=payload.get("project_path", ""))
+        if response.client_uuid and response.client_uuid != client_uuid:
+            return _mismatch(f"PerformAction client_uuid 不匹配: sent={client_uuid} got={response.client_uuid}")
+        if response.task_id and response.task_id != task_id:
+            return _mismatch(f"PerformAction task_id 不匹配: sent={task_id} got={response.task_id}")
+        if response.event_type not in (
+                ecserver_pb2.EVENT_TYPE_UNSPECIFIED,
+                task_type,
+        ):
+            return _mismatch(f"PerformAction event_type 不匹配: sent={task_type_name} got={ecserver_pb2.EventType.Name(response.event_type)}")
 
-                details, parse_error = _parse_payload_json(event.payload_json)
+        # ── 5. ACCEPTED 回调 ──
+        _logger.info("task=%s phase=ACCEPTED code=0", task_id[:12])
+        _emit_event(on_event, {
+            "phase": "ACCEPTED",
+            "client_uuid": client_uuid,
+            "task_id": task_id,
+            "task_type": task_type_name,
+            "status": "ACCEPTED",
+            "message": response.message or "task accepted",
+            "ads_output_chunk": "",
+            "details": {},
+        })
 
-                is_terminal = event.status in (
-                    ecserver_pb2.RESULT_STATUS_SUCCESS,
-                    ecserver_pb2.RESULT_STATUS_FAILED,
-                )
+        # ── 6. 消费已建立的事件流 ──
+        # 三重筛选：client_uuid + task_id + event_type 全部匹配才处理
+        # 增量收集 ads_output（不 strip、不覆写），终态事件使用完整日志
+        chunk_count = 0
+        action_accepted = response.code == 0
+        for event in event_stream:
+            chunk = ""  # 防止终态事件先于普通事件到达时 UnboundLocalError
+            if event.client_uuid != client_uuid:
+                continue
+            if event.task_id != task_id:
+                continue
+            if event.event_type != task_type:
+                continue
 
-                if is_terminal:
-                    # 终态：使用完整日志
-                    final_output = details.get("ads_output", "")
-                    ads_output = final_output if isinstance(final_output, str) and final_output \
-                        else "".join(ads_output_chunks)
-                else:
-                    chunk = details.get("ads_output", "")
-                    if chunk is None:
-                        chunk = ""
-                    elif not isinstance(chunk, str):
-                        chunk = str(chunk)
-                    if chunk:
-                        ads_output_chunks.append(chunk)
-                        chunk_count += 1
+            details, parse_error = _parse_payload_json(event.payload_json)
 
-                for key, value in details.items():
-                    if key != "ads_output":
-                        latest_details[key] = value
+            is_terminal = event.status in (
+                ecserver_pb2.RESULT_STATUS_SUCCESS,
+                ecserver_pb2.RESULT_STATUS_FAILED,
+            )
 
-                status_name = ecserver_pb2.ResultStatus.Name(event.status)
+            if is_terminal:
+                # 终态：使用完整日志
+                final_output = details.get("ads_output", "")
+                ads_output = final_output if isinstance(final_output, str) and final_output \
+                    else "".join(ads_output_chunks)
+            else:
+                chunk = details.get("ads_output", "")
+                if chunk is None:
+                    chunk = ""
+                elif not isinstance(chunk, str):
+                    chunk = str(chunk)
+                if chunk:
+                    ads_output_chunks.append(chunk)
+                    chunk_count += 1
 
-                _emit_event(on_event, {
-                    "phase": "EVENT",
-                    "client_uuid": client_uuid,
-                    "task_id": task_id,
-                    "task_type": task_type_name,
-                    "status": status_name,
-                    "message": event.message,
-                    "ads_output_chunk": chunk,
-                    "details": {k: v for k, v in details.items() if k != "ads_output"},
-                    "payload_parse_error": parse_error,
-                })
+            for key, value in details.items():
+                if key != "ads_output":
+                    latest_details[key] = value
 
-                project_path = latest_details.get("project_path", payload.get("project_path", ""))
-                result_path = latest_details.get("result_path", "")
+            status_name = ecserver_pb2.ResultStatus.Name(event.status)
 
-                if event.status == ecserver_pb2.RESULT_STATUS_SUCCESS:
-                    _logger.info("task=%s phase=COMPLETED status=SUCCEEDED duration=%.1fs chunks=%d",
-                                 task_id[:12], time.monotonic() - started_at, chunk_count)
-                    # Verify payload integrity: SUCCESS must have parseable payload
-                    if parse_error:
-                        _logger.error("task=%s SUCCEEDED but payload_json invalid: %s",
-                                      task_id[:12], parse_error)
-                        return finish(False, "PROTOCOL_MISMATCH",
-                                      f"SUCCEEDED 事件 payload_json 无法解析: {parse_error}",
-                                      project_path=project_path, result_path=result_path,
-                                      ads_output=ads_output, log_complete=True,
-                                      latest_details=latest_details)
-                    return finish(True, "SUCCEEDED", event.message or "task completed",
+            _emit_event(on_event, {
+                "phase": "EVENT",
+                "client_uuid": client_uuid,
+                "task_id": task_id,
+                "task_type": task_type_name,
+                "status": status_name,
+                "message": event.message,
+                "ads_output_chunk": chunk,
+                "details": {k: v for k, v in details.items() if k != "ads_output"},
+                "payload_parse_error": parse_error,
+            })
+
+            project_path = latest_details.get("project_path", payload.get("project_path", ""))
+            result_path = latest_details.get("result_path", "")
+
+            if event.status == ecserver_pb2.RESULT_STATUS_SUCCESS:
+                _logger.info("task=%s phase=COMPLETED status=SUCCEEDED duration=%.1fs chunks=%d",
+                             task_id[:12], time.monotonic() - started_at, chunk_count)
+                # Verify payload integrity: SUCCESS must have parseable payload
+                if parse_error:
+                    _logger.error("task=%s SUCCEEDED but payload_json invalid: %s",
+                                  task_id[:12], parse_error)
+                    return finish(False, "PROTOCOL_MISMATCH",
+                                  f"SUCCEEDED 事件 payload_json 无法解析: {parse_error}",
                                   project_path=project_path, result_path=result_path,
                                   ads_output=ads_output, log_complete=True,
-                                  latest_details=latest_details, outcome_known=True)
+                                  latest_details=latest_details)
+                return finish(True, "SUCCEEDED", event.message or "task completed",
+                              project_path=project_path, result_path=result_path,
+                              ads_output=ads_output, log_complete=True,
+                              latest_details=latest_details, outcome_known=True)
 
-                if event.status == ecserver_pb2.RESULT_STATUS_FAILED:
-                    _logger.info("task=%s phase=COMPLETED status=FAILED duration=%.1fs chunks=%d",
-                                 task_id[:12], time.monotonic() - started_at, chunk_count)
-                    return finish(False, "FAILED", event.message or "task failed",
-                                  project_path=project_path, result_path=result_path,
-                                  ads_output=ads_output, log_complete=True,
-                                  latest_details=latest_details, outcome_known=True)
+            if event.status == ecserver_pb2.RESULT_STATUS_FAILED:
+                _logger.info("task=%s phase=COMPLETED status=FAILED duration=%.1fs chunks=%d",
+                             task_id[:12], time.monotonic() - started_at, chunk_count)
+                return finish(False, "FAILED", event.message or "task failed",
+                              project_path=project_path, result_path=result_path,
+                              ads_output=ads_output, log_complete=True,
+                              latest_details=latest_details, outcome_known=True)
 
-            # ── 流结束但无终态 ──
-            return finish(False, "STREAM_DISCONNECTED",
-                          "FetchEvent 流已结束但未收到终态事件，EDI 端任务状态未知",
-                          project_path=latest_details.get("project_path", payload.get("project_path", "")),
-                          result_path=latest_details.get("result_path", ""),
-                          ads_output="".join(ads_output_chunks),
-                          latest_details=latest_details)
+        # ── 流结束但无终态 ──
+        return finish(False, "STREAM_DISCONNECTED",
+                      "FetchEvent 流已结束但未收到终态事件，EDI 端任务状态未知",
+                      project_path=latest_details.get("project_path", payload.get("project_path", "")),
+                      result_path=latest_details.get("result_path", ""),
+                      ads_output="".join(ads_output_chunks),
+                      latest_details=latest_details)
 
     except grpc.RpcError as exc:
         code = exc.code().name if exc.code() else "UNKNOWN"

@@ -53,7 +53,7 @@ class TestValidateSetups:
         co_init, co_uninit = _patch_com()
         with co_init, co_uninit, \
              patch("servers.ansys.run_analysis._attach_aedt", return_value=(None, desktop)), \
-             patch("servers.ansys.run_analysis.get_setup_module", return_value=(module, None)):
+             patch("servers.ansys.run_analysis.get_setup_module", return_value=module):
             r = run_analysis._validate_setups("C:/demo.aedt", "Design1")
         assert r["success"] is True
         assert r["setups"] == ["Setup1", "Setup2"]

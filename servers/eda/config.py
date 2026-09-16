@@ -21,7 +21,6 @@ from servers.settings import get_settings as _get_settings
 from servers.utils import validate_file
 _settings = _get_settings()
 EDA_GRPC_SERVER = _settings.eda_grpc_server
-MCP_TRANSPORT = _settings.mcp_transport if _settings.mcp_transport else None
 
 # 仿真器件目录类型（SP/HB/XDB），供 simulation_components 与 project_manage 共用
 SIM_COMPONENT_TYPES = {"SParameter", "HarmonicBalance", "XDB"}

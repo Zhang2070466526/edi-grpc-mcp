@@ -30,7 +30,7 @@ from servers.utils import registered_tools
 )
 def resource_service_overview() -> dict[str, Any]:
     """返回服务能力概览。不包含密钥、路径或敏感信息。"""
-    grpc_host = EDA_GRPC_SERVER or "127.0.0.1:50055"
+    grpc_host = EDA_GRPC_SERVER
 
     return {
         "server_name": "EDI gRPC MCP",
@@ -57,7 +57,7 @@ def resource_service_overview() -> dict[str, Any]:
 )
 def resource_service_status() -> dict[str, Any]:
     """返回运行时状态，与 get_service_status 共享数据源。"""
-    target = EDA_GRPC_SERVER or "127.0.0.1:50055"
+    target = EDA_GRPC_SERVER
     ch = get_cached_channel(target)
     state = "unknown"
     if ch is not None:
