@@ -109,7 +109,6 @@ class TestPromptsDirect:
             "C:/test.epp", execution_mode="sync", analyze_log=False)
         # execution_mode 已废弃，始终走异步
         assert "start_simulation_async" in msgs[0]["content"]
-        assert "simulate_project" not in msgs[0]["content"]
 
     def test_configure_create(self):
         from servers.resources_prompts.prompts_component import prompt_configure_simulation_component

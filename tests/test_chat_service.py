@@ -72,11 +72,6 @@ class TestSessionIsolation:
 class TestToolWhitelist:
     """工具白名单测试。"""
 
-    def test_simulate_project_not_in_chat(self):
-        from servers.chat.service import CHAT_TOOL_MAP
-        assert "simulate_project" not in CHAT_TOOL_MAP, \
-            "同步仿真不应出现在聊天工具中"
-
     def test_async_simulation_in_chat(self):
         from servers.chat.service import CHAT_TOOL_MAP
         assert "start_simulation_async" in CHAT_TOOL_MAP

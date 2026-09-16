@@ -99,7 +99,6 @@ from servers.eda.project_manage import (  # noqa: F401
 
 # -- 仿真 --
 from servers.eda.simulation import (  # noqa: F401
-    simulate_project,
     simulate_netlist,
     simulate_netlist_with_ads,
     simulate_anti_burnout,

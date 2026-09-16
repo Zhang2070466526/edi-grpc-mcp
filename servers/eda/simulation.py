@@ -4,7 +4,6 @@ r"""EDA 仿真引擎 — 同步/异步仿真、网表仿真、ADS 控制器。
 任务生命周期：QUEUED → ACCEPTED → RUNNING → SUCCEEDED/FAILED → 2h 后清理。
 
 
-simulate_project              对 .epp 工程执行仿真，等待结果返回
 simulate_netlist              仿真网表，自动返回 RAW 结果和仿真器日志
 simulate_netlist_with_ads    基于网表文件调用 ADS 仿真控制器
 start_simulation_async        启动异步仿真，立即返回 task_id
@@ -426,36 +425,6 @@ def get_simulation_async_result(task_id: str) -> dict[str, Any]:
         "ads_output": _current_ads_output(task),
         "log_complete": False,
     }
-
-
-# 已取消注册为 MCP 工具（同步仿真默认改用异步 start_simulation_async），保留代码备用
-def simulate_project(
-        project_path: str,
-        log_source: str = "mcp_client",
-        timeout_seconds: int = 600,
-) -> dict[str, Any]:
-    """同步执行 EDA 工程仿真，阻塞等待完成。长仿真建议用 start_simulation_async。
-
-    用法："跑一下这个工程的仿真"（同步等待）
-
-    注意：同步阻塞会卡住 HTTP 请求数分钟，Streamable HTTP 模式下请改用
-    start_simulation_async（异步，返回 task_id）+ get_simulation_async_status 轮询；
-    本工具主要用于 stdio 交互场景。
-
-    FetchEvent 长连接期间实时收集 ads_output 增量日志，
-    成功或失败均返回完整日志。
-
-    Args:
-        project_path: EDA 服务所在机器上的 .epp 工程文件绝对路径。
-        log_source: 调用方日志标识。
-        timeout_seconds: 最长等待时间，默认 600 秒。
-
-    Returns:
-        {"success": True, "completed": True, "outcome_known": True,
-         "status": "SUCCEEDED", "result_path": ".../result.raw", "ads_output": "..."}
-    """
-    return call_project_grpc(ecserver_pb2.SIMULATE_PROJECT, project_path, timeout_seconds,
-                             max_timeout_seconds=3600, log_source=log_source)
 
 
 @mcp.tool()

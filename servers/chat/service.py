@@ -721,7 +721,7 @@ class ChatService:
             "open_edi_project", "close_edi_project",
             "get_project_summary", "analyze_variables",
             "capture_schematic", "export_project_netlist",
-            "start_simulation_async", "simulate_project",
+            "start_simulation_async",
             "list_simulation_components",
             "list_schematic_components", "get_schematic_component_info",
             "create_simulation_component", "update_simulation_component",

@@ -233,7 +233,7 @@ let tools = [], edaReady = false, tcReady = false;
 const TOOL_ZH = {
     list_epp_projects:"扫描工程",open_edi_project:"打开工程",close_edi_project:"关闭工程",analyze_variables:"分析变量",
     list_simulation_components:"列出元件",list_schematic_components:"实时器件列表",get_schematic_component_info:"查器件详情",get_project_summary:"工程概览",
-    simulate_project:"执行仿真(同步)",start_simulation_async:"启动异步仿真",get_simulation_async_status:"查询仿真状态",
+    start_simulation_async:"启动异步仿真",get_simulation_async_status:"查询仿真状态",
     get_simulation_async_result:"获取仿真结果",simulate_netlist:"仿真网表",simulate_netlist_with_ads:"ADS仿真控制器",
     export_project_netlist:"导出网表",capture_schematic:"截图原理图",replace_models_from_csv:"批量替换模型",
     launch_edi:"启动EDI",get_service_status:"服务状态",compare_simulation_results:"对比仿真结果",turbocharts_convert:"RAW转曲线图",
@@ -286,7 +286,7 @@ function catFor(name) {
     if (["list_epp_projects","open_edi_project","close_edi_project","get_project_summary","analyze_variables"].includes(name)) return "工程";
     if (["list_schematic_components","get_schematic_component_info","list_simulation_components","get_simulation_component_schema"].includes(name)) return "器件查询";
     if (["create_simulation_component","update_simulation_component","delete_simulation_component","set_component_active_state","generate_schematic_from_netlist","replace_port_component","attach_out_component","replace_schematic_from_file"].includes(name)) return "器件管理";
-    if (["simulate_project","start_simulation_async","get_simulation_async_status","get_simulation_async_result","list_eda_tasks","simulate_netlist","simulate_netlist_with_ads"].includes(name)) return "仿真";
+    if (["start_simulation_async","get_simulation_async_status","get_simulation_async_result","list_eda_tasks","simulate_netlist","simulate_netlist_with_ads"].includes(name)) return "仿真";
     if (["export_project_netlist","capture_schematic","list_result_curves"].includes(name)) return "分析导出";
     if (["turbocharts_convert","compare_simulation_results"].includes(name)) return "图表";
     if (["replace_models_from_csv","get_components_static_params"].includes(name)) return "模型";
