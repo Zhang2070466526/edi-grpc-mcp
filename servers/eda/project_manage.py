@@ -340,6 +340,8 @@ def analyze_variables(project_path: str) -> dict[str, Any]:
 def list_schematic_components(
         project_path: str,
         timeout_seconds: int = 60,
+        summary_only: bool = False,
+        limit: int = 0,
 ) -> dict[str, Any]:
     """通过 gRPC 查询原理图全部器件（含完整参数），比本地文件读取更实时。
 
@@ -352,6 +354,9 @@ def list_schematic_components(
     Args:
         project_path: .epp 工程文件绝对路径。
         timeout_seconds: 最长等待秒数，默认 60。
+        summary_only: True 时每项只保留标量字段（instance_name/component_type/active_state/state），
+            裁掉 parameters 大头，省上下文。
+        limit: 只返回前 N 个器件（0 表示全部）。
 
     Returns:
         gRPC 统一返回结构（业务字段在 details 中）：
@@ -362,6 +367,15 @@ def list_schematic_components(
     """
     result = call_project_grpc(ecserver_pb2.LIST_SCHEMATIC_COMPONENTS, project_path, timeout_seconds)
     if result.get("success"):
+        comps = result.get("details", {}).get("components")
+        if isinstance(comps, list):
+            if summary_only:
+                comps = [{k: v for k, v in c.items() if not isinstance(v, (dict, list))}
+                         if isinstance(c, dict) else c for c in comps]
+            if limit and limit > 0 and len(comps) > limit:
+                comps = comps[:limit]
+                result["details"]["returned"] = limit
+            result["details"]["components"] = comps
         result["message"] = "原理图器件查询成功"
     return result
 

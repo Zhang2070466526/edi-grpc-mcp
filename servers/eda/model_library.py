@@ -22,7 +22,7 @@ from servers import mcp
 
 @mcp.tool()
 def get_model_category_params(timeout_seconds: int = 60,
-                              categories_only: bool = False) -> dict[str, Any]:
+                              categories_only: bool = True) -> dict[str, Any]:
     """获取模型管理模块的全部子类及对应参数列表。
 
     用法："看看模型库有哪些分类"、"获取模型分类和参数"
@@ -32,8 +32,8 @@ def get_model_category_params(timeout_seconds: int = 60,
 
     Args:
         timeout_seconds: 最长等待秒数，默认 60。
-        categories_only: 为 True 时每个子类只保留标量字段（子类id/子类名称/总类id/总类名称），
-            裁掉容器字段（参数列表，158KB 大头）。已按真实 data 结构核对命中。
+        categories_only: 默认 True——每个子类只保留标量字段（子类id/子类名称/总类id/总类名称），
+            裁掉容器字段（参数列表，约 42KB 大头）。需要完整参数列表时显式传 False。
 
     Returns:
         gRPC 统一返回结构，业务字段 data 在 details 中（失败时 data 为空数组）。
@@ -68,6 +68,7 @@ def _search_models(
         filters: list | None,
         task_type: int,
         timeout_seconds: int,
+        limit: int = 0,
 ) -> dict[str, Any]:
     """按子类查询模型库（公共/个人复用，仅 task_type 不同）。"""
     sub_type, err = require_nonempty(sub_type, label="sub_type")
@@ -87,7 +88,15 @@ def _search_models(
         "sub_type": sub_type,
         "filters": filters if filters is not None else [],
     }
-    return call_grpc(task_type, payload, timeout_seconds, max_timeout_seconds=300)
+    result = call_grpc(task_type, payload, timeout_seconds, max_timeout_seconds=300)
+    if limit and limit > 0 and result.get("success"):
+        data = (result.get("details") or {}).get("data")
+        # 真实返回里 data 是 {"count": N, "results": [...]}；也可能是纯 list，两种形状都兼容。
+        bucket = data.get("results") if isinstance(data, dict) else data
+        if isinstance(bucket, list) and len(bucket) > limit:
+            bucket[:] = bucket[:limit]  # 原地截断，dict 形状时 count 保留
+            result.setdefault("details", {})["returned"] = limit
+    return result
 
 
 @mcp.tool()
@@ -95,6 +104,7 @@ def search_public_models(
         sub_type: str,
         filters: list | None = None,
         timeout_seconds: int = 60,
+        limit: int = 0,
 ) -> dict[str, Any]:
     """按子类查询公共模型库。
 
@@ -108,11 +118,12 @@ def search_public_models(
          示例：筛选增益≥20dB → [{"key": "gain", "min": 20}]；
               叠加频段 → [{"key": "gain", "min": 20}, {"key": "min_freq", "min": 27000}]
         timeout_seconds: 最长等待秒数，默认 60。
+        limit: 只返回前 N 条结果（0 表示服务端默认，通常 10 条）。
 
     Returns:
         gRPC 统一返回结构，业务字段（code/message/data）在 details 中。
     """
-    return _search_models(sub_type, filters, ecserver_pb2.SEARCH_PUBLIC_MODELS, timeout_seconds)
+    return _search_models(sub_type, filters, ecserver_pb2.SEARCH_PUBLIC_MODELS, timeout_seconds, limit)
 
 
 @mcp.tool()
@@ -120,6 +131,7 @@ def search_personal_models(
         sub_type: str,
         filters: list | None = None,
         timeout_seconds: int = 60,
+        limit: int = 0,
 ) -> dict[str, Any]:
     """按子类查询个人模型库。
 
@@ -133,11 +145,12 @@ def search_personal_models(
          示例：筛选增益≥20dB → [{"key": "gain", "min": 20}]；
               叠加频段 → [{"key": "gain", "min": 20}, {"key": "min_freq", "min": 27000}]
         timeout_seconds: 最长等待秒数，默认 60。
+        limit: 只返回前 N 条结果（0 表示服务端默认，通常 10 条）。
 
     Returns:
         gRPC 统一返回结构，业务字段（code/message/data）在 details 中。
     """
-    return _search_models(sub_type, filters, ecserver_pb2.SEARCH_PERSONAL_MODELS, timeout_seconds)
+    return _search_models(sub_type, filters, ecserver_pb2.SEARCH_PERSONAL_MODELS, timeout_seconds, limit)
 
 
 @mcp.tool()

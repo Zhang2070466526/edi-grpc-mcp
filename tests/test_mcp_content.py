@@ -343,5 +343,33 @@ class TestModelSearchCategoriesOnly:
             ]},
         }
         monkeypatch.setattr(ms, "call_grpc", lambda *a, **k: result)
-        r = ms.get_model_category_params()  # 默认 categories_only=False
+        r = ms.get_model_category_params(categories_only=False)  # 显式要全量
         assert "params" in r["details"]["data"][0]
+
+
+class TestSearchLimit:
+    """测试 search_*_models 的 limit 裁剪（真实返回 data 是 {count, results} dict）。"""
+
+    def test_limit_truncates_dict_results(self, monkeypatch):
+        from servers.eda import model_library as ms
+        result = {
+            "success": True,
+            "details": {"data": {"count": 10, "results": [{"model": f"m{i}"} for i in range(10)]}},
+        }
+        monkeypatch.setattr(ms, "call_grpc", lambda *a, **k: result)
+        r = ms.search_public_models("62", limit=3)
+        data = r["details"]["data"]
+        assert len(data["results"]) == 3
+        assert data["count"] == 10  # 截断后 count 保留
+        assert r["details"]["returned"] == 3  # 标记截断
+
+    def test_limit_zero_returns_all(self, monkeypatch):
+        from servers.eda import model_library as ms
+        result = {
+            "success": True,
+            "details": {"data": {"count": 5, "results": [{"model": f"m{i}"} for i in range(5)]}},
+        }
+        monkeypatch.setattr(ms, "call_grpc", lambda *a, **k: result)
+        r = ms.search_public_models("62")  # 默认 limit=0，不截断
+        assert len(r["details"]["data"]["results"]) == 5
+        assert "returned" not in r["details"]  # 未截断，无标记
