@@ -39,8 +39,8 @@ _logger = logging.getLogger("eda.simulation")
 
 from proto import ecserver_pb2
 from servers.eda.grpc_client import call_grpc, call_project_grpc
-from servers.eda.config import validate_project_path
-from servers.utils import error_response, submitted_response, validate_file
+from servers.eda.config import require_project_path
+from servers.utils import error_response, submitted_response, require_file
 from servers import mcp
 
 # -- 异步仿真任务注册表 --
@@ -271,7 +271,9 @@ def start_simulation_async(
     Returns:
         {"success": True, "task_id": "abc123...", "client_uuid": "...", "status": "QUEUED"}
     """
-    resolved_path = validate_project_path(project_path)
+    resolved_path, err = require_project_path(project_path)
+    if err:
+        return err
 
     # 与 call_grpc 的范围校验保持一致，避免非法超时值进入后台线程后静默失败
     if timeout_seconds < 1 or timeout_seconds > 3600:
@@ -473,7 +475,9 @@ def simulate_netlist(
         {"success": True, "status": "SUCCEEDED", "result_path": ".../history/result.raw",
          "ads_output": "ADS simulator output..."}
     """
-    resolved_netlist = validate_file(netlist_path)
+    resolved_netlist, err = require_file(netlist_path)
+    if err:
+        return err
     return call_grpc(
         ecserver_pb2.SIMULATE_NETLIST,
         {"netlist_path": resolved_netlist},
@@ -495,7 +499,9 @@ def simulate_netlist_with_ads(
         ads_path: ADS 安装路径，为空则自动判断。
         timeout_seconds: 最长等待时间，默认 120 秒。
     """
-    resolved_netlist = validate_file(netlist_path)
+    resolved_netlist, err = require_file(netlist_path)
+    if err:
+        return err
     return call_grpc(
         ecserver_pb2.CALL_SIMULATION_CONTROLLER,
         {"netlist_path": resolved_netlist, "ads_path": ads_path},

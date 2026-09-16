@@ -62,7 +62,7 @@ def test_load_performance_component_payload(monkeypatch, fake_caller):
 def test_add_performance_component_payload(monkeypatch, fake_caller):
     from servers.eda import model_library as ml
     ecserver_pb2, calls, _fake = fake_caller
-    monkeypatch.setattr(ml, "validate_project_path", lambda p: p)
+    monkeypatch.setattr(ml, "require_project_path", lambda p: (p, None))
     monkeypatch.setattr(ml, "call_grpc", _fake)
     ml.add_performance_component("C:/test.epp", "12345678-1234-4234-8234-123456789abc", {"x": 0, "y": 0})
     assert calls[-1][0] == ecserver_pb2.ADD_PERFORMANCE_COMPONENT
@@ -72,7 +72,7 @@ def test_add_performance_component_payload(monkeypatch, fake_caller):
 
 def test_add_performance_component_rejects_bad_position(monkeypatch, fake_caller):
     from servers.eda import model_library as ml
-    monkeypatch.setattr(ml, "validate_project_path", lambda p: p)
+    monkeypatch.setattr(ml, "require_project_path", lambda p: (p, None))
     monkeypatch.setattr(ml, "call_grpc", lambda *a, **k: {"success": True})
     for pos in (None, {"x": 1}, {"x": "1", "y": 2}, {"x": 1, "y": float("inf")}):
         r = ml.add_performance_component("C:/test.epp", "12345678-1234-4234-8234-123456789abc", pos)
@@ -93,7 +93,7 @@ def test_list_ideal_components_payload(monkeypatch, fake_caller):
 def test_add_ideal_component_payload(monkeypatch, fake_caller):
     from servers.eda import schematic_ops as so
     ecserver_pb2, calls, _fake = fake_caller
-    monkeypatch.setattr(so, "validate_project_path", lambda p: p)
+    monkeypatch.setattr(so, "require_project_path", lambda p: (p, None))
     monkeypatch.setattr(so, "call_grpc", _fake)
     so.add_ideal_component("C:/test.epp", "R", {"x": 100, "y": 200})
     assert calls[-1][0] == ecserver_pb2.ADD_IDEAL_COMPONENT
@@ -103,7 +103,7 @@ def test_add_ideal_component_payload(monkeypatch, fake_caller):
 
 def test_add_ideal_component_rejects_bad_position(monkeypatch, fake_caller):
     from servers.eda import schematic_ops as so
-    monkeypatch.setattr(so, "validate_project_path", lambda p: p)
+    monkeypatch.setattr(so, "require_project_path", lambda p: (p, None))
     monkeypatch.setattr(so, "call_grpc", lambda *a, **k: {"success": True})
     for pos in (None, "x=1", {"x": 1}, {"x": "1", "y": 2}, {"x": 1, "y": float("nan")}):
         r = so.add_ideal_component("C:/test.epp", "R", pos)
@@ -113,7 +113,7 @@ def test_add_ideal_component_rejects_bad_position(monkeypatch, fake_caller):
 def test_clear_schematic_requires_confirm(monkeypatch, fake_caller):
     from servers.eda import schematic_ops as so
     ecserver_pb2, calls, _fake = fake_caller
-    monkeypatch.setattr(so, "validate_project_path", lambda p: p)
+    monkeypatch.setattr(so, "require_project_path", lambda p: (p, None))
     monkeypatch.setattr(so, "call_grpc", _fake)
     # 未确认 → 拒绝，不调用 gRPC
     r = so.clear_schematic("C:/test.epp")
@@ -128,7 +128,7 @@ def test_clear_schematic_requires_confirm(monkeypatch, fake_caller):
 def test_add_wire_payload(monkeypatch, fake_caller):
     from servers.eda import schematic_ops as so
     ecserver_pb2, calls, _fake = fake_caller
-    monkeypatch.setattr(so, "validate_project_path", lambda p: p)
+    monkeypatch.setattr(so, "require_project_path", lambda p: (p, None))
     monkeypatch.setattr(so, "call_grpc", _fake)
     so.add_wire("C:/test.epp", "R1", 0, "C1", 1)
     assert calls[-1][0] == ecserver_pb2.ADD_WIRE
@@ -141,7 +141,7 @@ def test_add_wire_payload(monkeypatch, fake_caller):
 
 def test_add_wire_rejects_bad_pin_index(monkeypatch):
     from servers.eda import schematic_ops as so
-    monkeypatch.setattr(so, "validate_project_path", lambda p: p)
+    monkeypatch.setattr(so, "require_project_path", lambda p: (p, None))
     monkeypatch.setattr(so, "call_grpc", lambda *a, **k: {"success": True})
     for bad in (-1, 2147483648, 1.5, "0", True):
         r = so.add_wire("C:/test.epp", "R1", bad, "C1", 0)
@@ -150,7 +150,7 @@ def test_add_wire_rejects_bad_pin_index(monkeypatch):
 
 def test_attach_out_component_rejects_bool_pin_index(monkeypatch):
     from servers.eda import simulation_components as sc
-    monkeypatch.setattr(sc, "validate_project_path", lambda p: p)
+    monkeypatch.setattr(sc, "require_project_path", lambda p: (p, None))
     monkeypatch.setattr(sc, "call_project_grpc", lambda *a, **k: {"success": True})
     r = sc.attach_out_component("C:/test.epp", "U1", pin_index=True)
     assert r["success"] is False and r["error_code"] == "INVALID_PARAMETERS"

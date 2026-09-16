@@ -35,6 +35,16 @@ def validate_file(path: str, extensions: tuple[str, ...] = ()) -> str:
     return str(p.resolve())
 
 
+def require_file(path: str, extensions: tuple[str, ...] = ()) -> tuple[str, dict[str, Any] | None]:
+    """校验文件存在，返回 (resolved, error)；失败返回统一错误字典而非抛异常。"""
+    try:
+        return validate_file(path, extensions), None
+    except FileNotFoundError as e:
+        return "", error_response("FILE_NOT_FOUND", str(e))
+    except ValueError as e:
+        return "", error_response("INVALID_PATH", str(e))
+
+
 def is_network_path(path) -> bool:
     """判断路径是否为网络路径（UNC \\\\ 或 URL //），此类路径无法本地校验。"""
     s = str(path)

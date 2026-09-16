@@ -27,7 +27,8 @@ def run_turbocharts(
 
     with _TURBOCHARTS_SEMAPHORE:
         try:
-            kwargs = dict(capture_output=True, text=True, timeout=timeout_seconds, check=False)
+            kwargs = dict(capture_output=True, text=True, encoding="utf-8", errors="replace",
+                          timeout=timeout_seconds, check=False)
             if sys.platform == "win32":
                 kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
             t0 = time.monotonic()
@@ -37,7 +38,7 @@ def run_turbocharts(
                          result.returncode, elapsed_ms)
             if result.returncode != 0:
                 _logger.error("turbocharts failed rc=%d stderr=%s",
-                             result.returncode, result.stderr[:300])
+                             result.returncode, (result.stderr or "")[:300])
             return result
         except subprocess.TimeoutExpired:
             _logger.error("turbocharts timeout after %ds", timeout_seconds)

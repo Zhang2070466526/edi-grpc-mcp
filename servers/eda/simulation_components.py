@@ -31,7 +31,7 @@ from typing import Any
 
 from proto import ecserver_pb2
 from servers.eda.config import (
-    validate_project_path,
+    require_project_path,
     SIM_COMPONENT_TYPES,
 )
 from servers.eda.project_reader import ProjectReader, parse_components
@@ -685,7 +685,9 @@ def update_simulation_component(
         component_type: 器件类型（可选），用于参数校验。
         timeout_seconds: 最长等待秒数。
     """
-    resolved = validate_project_path(project_path)
+    resolved, err = require_project_path(project_path)
+    if err:
+        return err
 
     if not isinstance(parameters, dict) or not parameters:
         return error_response("INVALID_PARAMETERS", "parameters 必须是非空对象")
@@ -762,7 +764,9 @@ def replace_port_component(
         parameters: 可选参数字典。
         timeout_seconds: 最长等待秒数（默认 300）。
     """
-    resolved = validate_project_path(project_path)
+    resolved, err = require_project_path(project_path)
+    if err:
+        return err
 
     if not target_instance_name.strip():
         return error_response("EMPTY_INSTANCE_NAME", "target_instance_name 不能为空")
@@ -877,7 +881,9 @@ def generate_schematic_from_netlist(
         confirm_clear: 确认清空操作。clear_before_import=true 时必须同时为 true。
         timeout_seconds: 最长等待秒数，默认 300。
     """
-    resolved = validate_project_path(project_path)
+    resolved, err = require_project_path(project_path)
+    if err:
+        return err
 
     netlist = Path(netlist_path).expanduser().resolve()
     if not netlist.is_file():
@@ -933,7 +939,9 @@ def replace_schematic_from_file(
                         建议传绝对路径，Windows 下路径用 / 或 \\ 分隔）。
         timeout_seconds: 最长等待秒数，默认 300。
     """
-    resolved = validate_project_path(project_path)
+    resolved, err = require_project_path(project_path)
+    if err:
+        return err
 
     # 必填校验：不能为空
     if not schematic_path or not schematic_path.strip():

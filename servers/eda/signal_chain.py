@@ -12,7 +12,7 @@ from typing import Any
 
 from proto import ecserver_pb2
 from servers.eda.grpc_client import call_grpc
-from servers.eda.config import validate_project_path
+from servers.eda.config import require_project_path
 from servers.utils import error_response
 from servers import mcp
 
@@ -210,7 +210,9 @@ def get_signal_chain(
             {"instance": "TermG2", "type": "Port", "role": "load", "model": ""}],
          "branch_count": 0, "truncated": false, "warning": "...", "skipped_lines": 8}
     """
-    resolved = validate_project_path(project_path)
+    resolved, err = require_project_path(project_path)
+    if err:
+        return err
     direction = (direction or "forward").strip().lower()
     if direction not in ("forward", "backward"):
         return error_response("INVALID_PARAMETERS", "direction 必须是 forward 或 backward")

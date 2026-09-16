@@ -67,7 +67,7 @@ def test_use_schematic_create_project_rejects_invalid_uuid(monkeypatch, fake_cal
 def test_use_schematic_import_payload(monkeypatch, fake_caller):
     from servers.eda import model_library as ml
     ecserver_pb2, calls, _fake = fake_caller
-    monkeypatch.setattr(ml, "validate_project_path", lambda p: p)
+    monkeypatch.setattr(ml, "require_project_path", lambda p: (p, None))
     monkeypatch.setattr(ml, "call_grpc", _fake)
     ml.use_schematic_from_library_import("12345678-1234-4234-8234-123456789abc", "C:/test.epp")
     assert calls[-1][0] == ecserver_pb2.USE_SCHEMATIC_FROM_LIBRARY_IMPORT

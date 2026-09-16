@@ -591,8 +591,8 @@ _MOCK_GRPC_OK = {
 }
 
 _VALIDATE_PATCH = patch(
-    "servers.eda.simulation_components.validate_project_path",
-    return_value="C:/test.epp",
+    "servers.eda.simulation_components.require_project_path",
+    return_value=("C:/test.epp", None),
 )
 _CALL_GRPC_PATCH = patch(
     "servers.eda.simulation_components.call_grpc",

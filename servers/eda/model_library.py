@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import Any
 
 from proto import ecserver_pb2
-from servers.eda.config import validate_project_path
+from servers.eda.config import require_project_path
 from servers.eda.grpc_client import call_grpc
 from servers.utils import error_response, require_nonempty, require_position, require_uuid
 from servers import mcp
@@ -214,7 +214,9 @@ def add_performance_component(
     Returns:
         gRPC 统一返回结构，成功提示或失败原因在 message 中。
     """
-    resolved = validate_project_path(project_path)
+    resolved, err = require_project_path(project_path)
+    if err:
+        return err
     component_uuid, err = require_uuid(component_uuid, label="component_uuid")
     if err:
         return err
@@ -337,7 +339,9 @@ def use_schematic_from_library_import(
     file_uuid, err = require_uuid(file_uuid, label="file_uuid")
     if err:
         return err
-    resolved = validate_project_path(project_path)
+    resolved, err = require_project_path(project_path)
+    if err:
+        return err
     return call_grpc(
         ecserver_pb2.USE_SCHEMATIC_FROM_LIBRARY_IMPORT,
         {"file_uuid": file_uuid, "project_path": resolved},

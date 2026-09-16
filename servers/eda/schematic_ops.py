@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from proto import ecserver_pb2
-from servers.eda.config import validate_project_path
+from servers.eda.config import require_project_path
 from servers.eda.grpc_client import call_grpc
 from servers.utils import require_nonempty, error_response, require_position
 from servers import mcp
@@ -67,7 +67,9 @@ def add_ideal_component(
     Returns:
         gRPC 统一返回结构，成功时 details 含 instance_name。
     """
-    resolved = validate_project_path(project_path)
+    resolved, err = require_project_path(project_path)
+    if err:
+        return err
     component_type, err = require_nonempty(component_type, label="component_type")
     if err:
         return err
@@ -104,7 +106,9 @@ def clear_schematic(
     Returns:
         gRPC 统一返回结构，成功提示或失败原因在 message 中。
     """
-    resolved = validate_project_path(project_path)
+    resolved, err = require_project_path(project_path)
+    if err:
+        return err
     if not confirm_clear:
         return error_response(
             "CLEAR_CONFIRMATION_REQUIRED",
@@ -147,7 +151,9 @@ def add_wire(
     Returns:
         gRPC 统一返回结构，成功提示或失败原因在 message 中。
     """
-    resolved = validate_project_path(project_path)
+    resolved, err = require_project_path(project_path)
+    if err:
+        return err
     first_instance_name, err = require_nonempty(first_instance_name, label="first_instance_name")
     if err:
         return err

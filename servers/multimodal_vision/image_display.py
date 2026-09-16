@@ -19,6 +19,7 @@ from starlette.responses import FileResponse, JSONResponse
 
 from servers import mcp
 from servers.token_registry import TokenStore
+from servers.utils import error_response
 from servers.multimodal_vision.validators import validate_image_path, IMAGE_MIME_MAP
 
 load_dotenv()
@@ -34,7 +35,7 @@ _MIME_TYPES = IMAGE_MIME_MAP
 # ═══════════════════════════════════════════════════════════
 
 @mcp.tool(structured_output=False)
-def show_image(image_path: str) -> list[Any]:
+def show_image(image_path: str) -> list[Any] | dict[str, Any]:
     """读取本地图片，返回标准 MCP ImageContent 和本地路径。
 
     不复制文件，不调用工作区工具。即使客户端无法渲染 MCP ImageContent，
@@ -43,7 +44,14 @@ def show_image(image_path: str) -> list[Any]:
     Args:
         image_path: 图片文件绝对路径。
     """
-    path = validate_image_path(image_path)
+    try:
+        path = validate_image_path(image_path)
+    except PermissionError as e:
+        return error_response("INVALID_PATH", str(e))
+    except FileNotFoundError as e:
+        return error_response("FILE_NOT_FOUND", str(e))
+    except ValueError as e:
+        return error_response("UNSUPPORTED_IMAGE_FORMAT", str(e))
     ws_note = "请使用资源管理器打开该文件。"
 
     size = path.stat().st_size

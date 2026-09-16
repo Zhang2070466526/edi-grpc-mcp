@@ -239,11 +239,9 @@ class TestShowImage:
         from servers.multimodal_vision import show_image
         txt = tmp_path / "t.txt"
         txt.write_text("x")
-        try:
-            show_image(str(txt))
-            assert False
-        except ValueError:
-            pass
+        result = show_image(str(txt))
+        assert result["success"] is False
+        assert result["error_code"] == "UNSUPPORTED_IMAGE_FORMAT"
 
     def test_oversized_text_only(self, tmp_path, monkeypatch):
         import servers.multimodal_vision.image_display as dsp

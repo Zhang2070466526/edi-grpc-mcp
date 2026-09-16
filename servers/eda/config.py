@@ -18,7 +18,7 @@ else:
     load_dotenv()
 
 from servers.settings import get_settings as _get_settings
-from servers.utils import validate_file
+from servers.utils import validate_file, error_response
 _settings = _get_settings()
 EDA_GRPC_SERVER = _settings.eda_grpc_server
 
@@ -55,3 +55,13 @@ TURBOCHARTS_PATH = _settings.turbocharts_path or _find_first(*_TC_CANDIDATES)
 def validate_project_path(project_path: str) -> str:
     """校验 .epp 工程路径，返回规范化后的绝对路径。"""
     return validate_file(project_path, (".epp",))
+
+
+def require_project_path(project_path: str) -> tuple[str, dict[str, Any] | None]:
+    """校验 .epp 工程路径，返回 (resolved, error)；失败返回统一错误字典而非抛异常。"""
+    try:
+        return validate_project_path(project_path), None
+    except FileNotFoundError as e:
+        return "", error_response("FILE_NOT_FOUND", str(e))
+    except ValueError as e:
+        return "", error_response("INVALID_PATH", str(e))

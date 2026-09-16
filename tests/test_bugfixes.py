@@ -24,7 +24,7 @@ import pytest
 
 def test_start_simulation_async_rejects_invalid_timeout(monkeypatch):
     from servers.eda import simulation as sim
-    monkeypatch.setattr(sim, "validate_project_path", lambda p: p)
+    monkeypatch.setattr(sim, "require_project_path", lambda p: (p, None))
     for bad in (0, -5, 3601, 99999):
         r = sim.start_simulation_async("C:/test.epp", timeout_seconds=bad)
         assert r["success"] is False, f"timeout_seconds={bad} 应被拒绝"
@@ -35,7 +35,7 @@ def test_start_simulation_async_rejects_invalid_timeout(monkeypatch):
 
 def test_update_rejects_empty_instance_name(monkeypatch):
     from servers.eda import simulation_components as sc
-    monkeypatch.setattr(sc, "validate_project_path", lambda p: p)
+    monkeypatch.setattr(sc, "require_project_path", lambda p: (p, None))
     r = sc.update_simulation_component(
         "C:/test.epp", "   ", {"Freq": {"value": "1", "unit": "GHz"}})
     assert r["success"] is False
@@ -45,7 +45,7 @@ def test_update_rejects_empty_instance_name(monkeypatch):
 def test_update_rejects_ambiguous_instance_name(monkeypatch):
     from servers.eda import simulation_components as sc
     from servers.utils import error_response
-    monkeypatch.setattr(sc, "validate_project_path", lambda p: p)
+    monkeypatch.setattr(sc, "require_project_path", lambda p: (p, None))
     monkeypatch.setattr(sc, "_find_component_by_instance",
                         lambda p, n: (None, error_response("AMBIGUOUS_INSTANCE_NAME", "发现多个同名器件")))
     r = sc.update_simulation_component(

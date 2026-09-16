@@ -10,7 +10,7 @@ import os
 from typing import Any
 
 from servers import mcp
-from servers.utils import validate_file, submitted_response, queue_full_response
+from servers.utils import require_file, submitted_response, queue_full_response
 from servers.cst.cst_api import CstApi, cst_runner, query_task, to_writable_copy
 
 
@@ -55,7 +55,9 @@ def cst_solve_async(model_path: str) -> dict[str, Any]:
     Returns:
         {"success": True, "task_id": "cst-a1b2...", "status": "QUEUED"}
     """
-    resolved = validate_file(model_path, (".cst",))
+    resolved, err = require_file(model_path, (".cst",))
+    if err:
+        return err
     task_id = _simulator.submit_solve(resolved)
     if task_id is None:
         return queue_full_response("CST_QUEUE_FULL", message="当前已有 CST 求解任务在进行，请稍后重试")

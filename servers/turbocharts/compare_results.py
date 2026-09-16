@@ -109,7 +109,7 @@ def compare_simulation_results(
             result_proc = run_turbocharts(cmd, timeout_seconds=60)
             if result_proc.returncode != 0:
                 return error_response("TOOL_EXECUTION_FAILED",
-                                  f"turbocharts 导出 {rp} 失败: {result_proc.stderr[:200]}")
+                                  f"turbocharts 导出 {rp} 失败: {(result_proc.stderr or '')[:200]}")
 
             x_vals, y_vals = _read_curve_csv_xy(tmp_csv)
             if not x_vals:

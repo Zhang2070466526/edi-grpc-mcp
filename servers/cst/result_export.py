@@ -10,7 +10,7 @@ from typing import Any
 import numpy as np
 
 from servers import mcp
-from servers.utils import error_response, validate_file, submitted_response, queue_full_response
+from servers.utils import error_response, require_file, submitted_response, queue_full_response
 from servers.cst.cst_api import CstApi, cst_runner, query_task, to_writable_copy
 
 # 远场方向图导出的 VBA 宏（Sub Main 格式）。
@@ -228,7 +228,9 @@ def cst_export_snp(
     Returns:
         {"success": True, "snp_path": "C:/.../xxx.s2p", "message": "S 参数已导出"}
     """
-    resolved = validate_file(model_path, (".cst",))
+    resolved, err = require_file(model_path, (".cst",))
+    if err:
+        return err
     # 走 cst_runner 串行执行：与求解/远场导出的会话互斥，避免无会话读结果时
     # 与正在求解的会话并发（读到半写结果或 CST 单实例冲突）
     try:
@@ -255,7 +257,9 @@ def cst_export_farfield(model_path: str, output_dir: str = "") -> dict[str, Any]
     Returns:
         {"success": True, "task_id": "cst-a1b2...", "status": "QUEUED"}
     """
-    resolved = validate_file(model_path, (".cst",))
+    resolved, err = require_file(model_path, (".cst",))
+    if err:
+        return err
     if not output_dir:
         output_dir = os.path.dirname(os.path.abspath(resolved))
     task_id = cst_runner.submit(_result_exporter.export_farfield, resolved, output_dir)

@@ -9,7 +9,7 @@ from typing import Any
 
 from proto import ecserver_pb2
 from servers.eda.grpc_client import call_project_grpc
-from servers.utils import validate_file
+from servers.utils import require_file
 from servers import mcp
 
 
@@ -33,6 +33,8 @@ def replace_models_from_csv(
     Returns:
         gRPC 统一返回结构：{"success": True, "completed": True, "status": "SUCCEEDED", ...}
     """
-    resolved_csv = validate_file(input_csv_path, (".csv",))
+    resolved_csv, err = require_file(input_csv_path, (".csv",))
+    if err:
+        return err
     return call_project_grpc(ecserver_pb2.MODEL_REPLACE, project_path, timeout_seconds,
                              csv_path=resolved_csv)

@@ -34,7 +34,7 @@ from typing import Any
 
 from proto import ecserver_pb2
 from servers.eda.grpc_client import call_grpc, call_project_grpc
-from servers.eda.config import SIM_COMPONENT_TYPES
+from servers.eda.config import SIM_COMPONENT_TYPES, require_project_path
 from servers.eda.project_reader import ProjectReader, parse_components
 from servers.utils import require_nonempty, error_response
 from servers import mcp
@@ -182,7 +182,10 @@ def get_project_summary(
          "simulation": [{"component_type": "SParameter", "Freq": "1 GHz", ...}],
          "latest_result": {"path": ".../result.raw", "exists": True, "size": 2048}}
     """
-    reader = ProjectReader(project_path)
+    resolved, err = require_project_path(project_path)
+    if err:
+        return err
+    reader = ProjectReader(resolved)
     metadata = reader.read_metadata()
 
     schematics = reader.list_schematics()
@@ -248,7 +251,10 @@ def analyze_variables(project_path: str) -> dict[str, Any]:
     Args:
         project_path: .epp 工程文件绝对路径。
     """
-    reader = ProjectReader(project_path)
+    resolved, err = require_project_path(project_path)
+    if err:
+        return err
+    reader = ProjectReader(resolved)
     variables: list[dict] = []
     references: list[dict] = []
     sweeps: list[dict] = []

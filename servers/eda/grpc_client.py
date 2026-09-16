@@ -29,7 +29,7 @@ from typing import Any
 import grpc
 
 from proto import ecserver_pb2, ecserver_pb2_grpc
-from servers.eda.config import EDA_GRPC_SERVER, validate_project_path
+from servers.eda.config import EDA_GRPC_SERVER, require_project_path
 
 _logger = logging.getLogger("eda.grpc_client")
 
@@ -524,7 +524,9 @@ def call_project_grpc(
         return call_project_grpc(ecserver_pb2.CLOSE_PROJECT, project_path,
                                  timeout_seconds, need_save=need_save)
     """
-    resolved = validate_project_path(project_path)
+    resolved, err = require_project_path(project_path)
+    if err:
+        return err
     return call_grpc(
         task_type,
         {"project_path": resolved, **payload_extras},
