@@ -24,7 +24,7 @@ class TestValidateSetups:
              patch("servers.ansys.run_analysis._attach_aedt", return_value=(None, desktop)):
             r = run_analysis._validate_setups("C:/demo.aedt", "Design1")
         assert r["success"] is False
-        assert r["error_code"] == "project_not_open"
+        assert r["error_code"] == "PROJECT_NOT_OPEN"
 
     def test_design_not_found(self):
         from servers.ansys import run_analysis
@@ -38,7 +38,7 @@ class TestValidateSetups:
              patch("servers.ansys.run_analysis._attach_aedt", return_value=(None, desktop)):
             r = run_analysis._validate_setups("C:/demo.aedt", "Design1")
         assert r["success"] is False
-        assert r["error_code"] == "design_not_found"
+        assert r["error_code"] == "DESIGN_NOT_FOUND"
 
     def test_success_returns_setups(self):
         from servers.ansys import run_analysis
@@ -118,7 +118,7 @@ class TestStartAsync:
              patch("servers.ansys.run_analysis.aedt_is_running", return_value=False):
             r = run_analysis.start_hfss_analysis_async("C:/demo.aedt", "D1", "Setup1")
         assert r["success"] is False
-        assert r["error_code"] == "aedt_not_running"
+        assert r["error_code"] == "AEDT_NOT_RUNNING"
 
     def test_busy_when_pending(self):
         from servers.ansys import run_analysis
@@ -130,7 +130,7 @@ class TestStartAsync:
              patch.object(run_analysis.hfss_runner, "pending_count", return_value=1):
             r = run_analysis.start_hfss_analysis_async("C:/demo.aedt", "D1", "Setup1")
         assert r["success"] is False
-        assert r["error_code"] == "analysis_busy"
+        assert r["error_code"] == "ANALYSIS_BUSY"
 
 
 if __name__ == "__main__":

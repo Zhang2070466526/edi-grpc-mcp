@@ -42,11 +42,11 @@ def _com_open_project(project_path: str) -> dict[str, Any]:
             if result is not None or project_name in list(desktop.GetProjectList()):
                 return {"status": "opened", "project_name": project_name}
 
-            return {"status": "com_open_failed", "project_name": project_name,
+            return {"status": "COM_OPEN_FAILED", "project_name": project_name,
                     "error": "OpenProject returned None and project not in list"}
         except Exception as exc:
             logger.exception("COM OpenProject failed")
-            return {"status": "com_open_failed", "project_name": Path(project_path).stem,
+            return {"status": "COM_OPEN_FAILED", "project_name": Path(project_path).stem,
                     "error": str(exc)}
 
 
@@ -76,14 +76,14 @@ def open_hfss_project(
     try:
         resolved = validate_file(project_path, (".aedt", ".aedtz"))
     except (FileNotFoundError, ValueError) as exc:
-        return error_response("invalid_path", str(exc))
+        return error_response("INVALID_PATH", str(exc))
 
     exe = aedt_path or AEDT_PATH
     exe_path = Path(exe).expanduser()
     if not exe_path.is_file():
-        return error_response("aedt_not_found", str(exe_path))
+        return error_response("AEDT_NOT_FOUND", str(exe_path))
     if exe_path.name.lower() != "ansysedt.exe":
-        return error_response("invalid_aedt_path", "必须以 ansysedt.exe 结尾")
+        return error_response("INVALID_AEDT_PATH", "必须以 ansysedt.exe 结尾")
 
     project_name = Path(resolved).stem
     global _LAST_PID
@@ -92,7 +92,7 @@ def open_hfss_project(
     lock_result = cleanup_stale_project_lock(resolved)
     if not lock_result["removed"] and lock_result.get("lock_pid"):
         if lock_result.get("status") == "lock_active":
-            return error_response("project_locked",
+            return error_response("PROJECT_LOCKED",
                                   f"工程正在 AEDT PID={lock_result['lock_pid']} 中使用",
                                   lock_pid=lock_result["lock_pid"])
 
@@ -103,7 +103,7 @@ def open_hfss_project(
             state = query_desktop_state()
             if not state["connected"]:
                 logger.warning("AEDT running but COM attach failed: %s", state.get("error"))
-                return error_response("existing_instance_com_unavailable",
+                return error_response("EXISTING_INSTANCE_COM_UNAVAILABLE",
                                       "AEDT 已运行但无法附着 COM，未创建第二个实例",
                                       aedt_running=True, project_opened=False)
 
@@ -118,7 +118,7 @@ def open_hfss_project(
                         logger.warning("SetActiveProject 失败 (%s): %s", project_name, exc)
                 if attach_error is not None:
                     # 工程已在 AEDT 中列出但激活失败，不能假装成功
-                    return error_response("com_open_failed", "工程已在 AEDT 中列出，但激活失败，请重试",
+                    return error_response("COM_OPEN_FAILED", "工程已在 AEDT 中列出，但激活失败，请重试",
                                           aedt_running=True, project_opened=False,
                                           project_name=project_name, project_path=resolved,
                                           method="com", com_error=attach_error)
@@ -144,7 +144,7 @@ def open_hfss_project(
                 }
 
             logger.error("COM open failed: %s", result.get("error"))
-            return error_response("com_open_failed", "AEDT 已运行，但打开工程失败",
+            return error_response("COM_OPEN_FAILED", "AEDT 已运行，但打开工程失败",
                                   aedt_running=True, project_opened=False, verified=True,
                                   project_name=project_name, project_path=resolved,
                                   method="com", com_error=result.get("error"))
@@ -156,12 +156,12 @@ def open_hfss_project(
             logger.info("Launched AEDT PID=%d for %s", proc.pid, project_name)
         except Exception as exc:
             logger.exception("AEDT launch failed")
-            return error_response("launch_failed", str(exc))
+            return error_response("LAUNCH_FAILED", str(exc))
 
         deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:
             if proc.poll() is not None:
-                return error_response("process_exited", f"AEDT 进程已退出，退出码: {proc.returncode}",
+                return error_response("PROCESS_EXITED", f"AEDT 进程已退出，退出码: {proc.returncode}",
                                       aedt_running=False, project_opened=False)
             state = query_desktop_state()
             if state["connected"] and project_name in state["projects"]:
@@ -209,17 +209,17 @@ def close_hfss_project(
 
     if force:
         if _LAST_PID is None:
-            return error_response("no_managed_process", "没有由当前 MCP 启动的 AEDT 进程")
+            return error_response("NO_MANAGED_PROCESS", "没有由当前 MCP 启动的 AEDT 进程")
 
         pid = _LAST_PID
         try:
             proc = psutil.Process(pid)
             if not proc.is_running() or proc.name().lower() != "ansysedt.exe":
                 _LAST_PID = None
-                return error_response("managed_process_not_found", "记录的 PID 已不存在或不再属于 AEDT，未执行终止")
+                return error_response("MANAGED_PROCESS_NOT_FOUND", "记录的 PID 已不存在或不再属于 AEDT，未执行终止")
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             _LAST_PID = None
-            return error_response("managed_process_not_found", "记录的 PID 已不存在，未执行终止")
+            return error_response("MANAGED_PROCESS_NOT_FOUND", "记录的 PID 已不存在，未执行终止")
 
         try:
             completed = subprocess.run(
@@ -227,7 +227,7 @@ def close_hfss_project(
                 capture_output=True, text=True, timeout=10, check=False,
             )
             if completed.returncode != 0:
-                return error_response("taskkill_failed",
+                return error_response("TASKKILL_FAILED",
                                       completed.stderr.strip() or completed.stdout.strip(), pid=pid)
 
             try:
@@ -235,7 +235,7 @@ def close_hfss_project(
             except psutil.NoSuchProcess:
                 pass
             except psutil.TimeoutExpired:
-                return error_response("termination_timeout", f"已发送终止信号，但 PID {pid} 未在 10s 内退出")
+                return error_response("TERMINATION_TIMEOUT", f"已发送终止信号，但 PID {pid} 未在 10s 内退出")
 
             _LAST_PID = None
 
@@ -251,10 +251,10 @@ def close_hfss_project(
             return {"success": True, "method": "taskkill",
                     "message": f"已终止 PID {pid}", **lock_cleanup}
         except Exception as exc:
-            return error_response("close_failed", str(exc))
+            return error_response("CLOSE_FAILED", str(exc))
 
     if not aedt_is_running():
-        return error_response("aedt_not_running", "AEDT 未运行")
+        return error_response("AEDT_NOT_RUNNING", "AEDT 未运行")
 
     with com_session():
         try:
@@ -275,7 +275,7 @@ def close_hfss_project(
                 if not target:
                     target = names[0] if names else ""
             if not target:
-                return error_response("no_project_to_close", "没有可关闭的项目")
+                return error_response("NO_PROJECT_TO_CLOSE", "没有可关闭的项目")
 
             if save_before_close:
                 try:
@@ -308,7 +308,7 @@ def close_hfss_project(
             }
         except Exception as exc:
             logger.exception("COM close failed")
-            return error_response("close_failed", f"关闭失败: {exc}")
+            return error_response("CLOSE_FAILED", f"关闭失败: {exc}")
 
 
 @mcp.tool()
@@ -335,9 +335,9 @@ def launch_aedt(
     exe = aedt_path or AEDT_PATH
     exe_path = Path(exe).expanduser()
     if not exe_path.is_file():
-        return error_response("aedt_not_found", str(exe_path))
+        return error_response("AEDT_NOT_FOUND", str(exe_path))
     if exe_path.name.lower() != "ansysedt.exe":
-        return error_response("invalid_aedt_path", "必须以 ansysedt.exe 结尾")
+        return error_response("INVALID_AEDT_PATH", "必须以 ansysedt.exe 结尾")
 
     with _AEDT_LOCK:
         if aedt_is_running():
@@ -349,7 +349,7 @@ def launch_aedt(
             proc = subprocess.Popen([str(exe_path)], cwd=str(exe_path.parent))
             _LAST_PID = proc.pid
         except Exception as exc:
-            return error_response("launch_failed", str(exc))
+            return error_response("LAUNCH_FAILED", str(exc))
 
         deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:
