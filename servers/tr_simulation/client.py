@@ -131,6 +131,14 @@ def _http_error_operation(resp: httpx.Response) -> dict[str, Any]:
         detail = resp.json()
     except Exception:
         detail = resp.text[:300]
+    # 解析上游 JSON：提取 error / error_type 字段，别把整段 dict 塞进 message（agent 无法解析）
+    error_type = None
+    if isinstance(detail, dict):
+        error_type = detail.get("error_type")
+        detail = detail.get("error") or detail.get("message") or detail.get("detail") or detail
+    # 剥离上游英文样板（「Please try again」与 hint=do_not_retry 语义相反）
+    if isinstance(detail, str):
+        detail = detail.replace("An error occurred while running the tool. Please try again. Error: ", "")
     if code == 400:
         msg = f"请求格式错误 (HTTP 400): {detail}"
     elif code == 404:
@@ -138,10 +146,10 @@ def _http_error_operation(resp: httpx.Response) -> dict[str, Any]:
     elif code == 409:
         msg = f"幂等冲突或缺少用户确认 (HTTP 409): {detail}"
     elif code == 422:
-        msg = f"工具执行异常 (HTTP 422): {detail}"
+        msg = f"工具执行异常: {detail}"
     else:
         msg = f"SimulationAgent 调用失败 (HTTP {code}): {detail}"
-    return {"status": "failed", "error": msg, "http_status": code}
+    return {"status": "failed", "error": msg, "http_status": code, "error_type": error_type}
 
 
 def _invoke(tool: str, arguments: dict[str, Any], epp_path: str | None,

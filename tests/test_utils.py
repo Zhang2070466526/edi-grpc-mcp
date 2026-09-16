@@ -40,12 +40,16 @@ class TestValidateFile:
 class TestToolError:
     def test_basic(self):
         from servers.utils import error_response
-        assert error_response("CODE", "msg") == {"success": False, "error_code": "CODE", "message": "msg"}
+        assert error_response("CODE", "msg") == {
+            "success": False, "error_code": "CODE", "message": "msg",
+            "hint": "do_not_retry",
+        }
 
     def test_retryable(self):
         from servers.utils import error_response
         r = error_response("CODE", "msg", retryable=True)
         assert r["retryable"] is True
+        assert r["hint"] == "retry_safe"
 
     def test_extra(self):
         from servers.utils import error_response

@@ -14,6 +14,7 @@ from typing import Any
 
 from servers import mcp
 from servers.tr_simulation.client import call_tool
+from servers.utils import error_response
 
 
 @mcp.tool()
@@ -86,6 +87,8 @@ def tr_read_netlist(epp_path: str = "", netlist_path: str = "", start_line: int 
         start_line: 起始行（从 1 开始，默认 1）。
         max_lines: 最多返回行数（默认 400，范围 1~1000）。
     """
+    if not epp_path.strip() and not netlist_path.strip():
+        return error_response("MISSING_REQUIRED_ARGUMENT", "epp_path 与 netlist_path 至少提供一个")
     return call_tool("tr_read_netlist", {
         "epp_path": epp_path, "netlist_path": netlist_path,
         "start_line": start_line, "max_lines": max_lines,
@@ -211,7 +214,7 @@ def tr_parse_raw(raw_path: str, indicator: str, input_port: int = 1, output_port
     maximum/unit，以及 image_path、csv_path、curve_name、simulation_type。
 
     Args:
-        raw_path: ADS result.raw 路径。
+        raw_path: ADS result.raw 路径（必须属于当前会话目录，否则会被拒绝）。
         indicator: 指标名。
         input_port: 输入端口号（默认 1）。
         output_port: 输出端口号（默认 2）。
@@ -299,6 +302,8 @@ def tr_prepare_report(project_id: str = "", model_name: str = "") -> dict[str, A
         project_id: 工程 ID（默认空）。
         model_name: 产品型号名称（默认空）。
     """
+    if not project_id.strip():
+        return error_response("MISSING_REQUIRED_ARGUMENT", "project_id 必填")
     return call_tool("tr_prepare_report", {"project_id": project_id, "model_name": model_name})
 
 

@@ -30,13 +30,13 @@ def test_create_workspace_rejects_empty(monkeypatch, fake_caller):
     assert r["success"] is False and r["error_code"] == "INVALID_PARAMETERS"
 
 
-def test_switch_workspace_payload(monkeypatch, fake_caller):
+def test_switch_workspace_payload(monkeypatch, fake_caller, tmp_path):
     from servers.eda import workspace_ops as wo
     ecserver_pb2, calls, _fake = fake_caller
     monkeypatch.setattr(wo, "call_grpc", _fake)
-    wo.switch_workspace("D:/EDI-Workspace-New")
+    wo.switch_workspace(str(tmp_path))
     assert calls[-1][0] == ecserver_pb2.SWITCH_WORKSPACE
-    assert calls[-1][1] == {"path": "D:/EDI-Workspace-New"}
+    assert calls[-1][1] == {"path": str(tmp_path)}
 
 
 def test_get_current_workspace_payload(monkeypatch, fake_caller):

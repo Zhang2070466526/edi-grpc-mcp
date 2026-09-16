@@ -54,10 +54,10 @@ def list_epp_projects(folder_path: str) -> dict[str, Any]:
          "projects": [{"name": "demo1", "path": "C:/.../demo1.epp", "size": 0}, ...]}
     """
     if not folder_path or not folder_path.strip():
-        raise ValueError("folder_path 不能为空，请提供要扫描的目录")
+        return error_response("INVALID_PARAMETERS", "folder_path 不能为空，请提供要扫描的目录")
     root = Path(folder_path).expanduser()
     if not root.is_dir():
-        raise FileNotFoundError(f"文件夹不存在: {folder_path}")
+        return error_response("FILE_NOT_FOUND", f"文件夹不存在: {folder_path}")
 
     _MAX_PROJECTS = 1000
     all_epp = sorted(root.rglob("*.epp"))

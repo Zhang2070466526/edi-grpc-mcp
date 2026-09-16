@@ -5,19 +5,29 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from proto import ecserver_pb2
 from servers.eda.grpc_client import call_grpc
-from servers.utils import require_nonempty
+from servers.utils import require_nonempty, error_response
 from servers import mcp
 
 
 def _set_workspace(path: str, task_type: int, timeout_seconds: int) -> dict[str, Any]:
-    """创建/切换工作区的公共实现（二者仅 task_type 不同）。"""
+    """创建/切换工作区的公共实现（二者仅 task_type 不同 + 路径语义校验）。"""
     path, err = require_nonempty(path, label="path")
     if err:
         return err
+    p = Path(path).expanduser()
+    if task_type == ecserver_pb2.CREATE_WORKSPACE:
+        if p.suffix.lower() == ".epp":
+            return error_response("INVALID_PARAMETERS", "工作区路径不能是 .epp 工程文件，请传目录路径")
+        if p.is_dir() and any(p.iterdir()):
+            return error_response("INVALID_PARAMETERS", f"目标目录已存在且非空: {path}")
+    elif task_type == ecserver_pb2.SWITCH_WORKSPACE:
+        if not p.is_dir():
+            return error_response("INVALID_PARAMETERS", f"工作区目录不存在: {path}")
     return call_grpc(task_type, {"path": path}, timeout_seconds, max_timeout_seconds=300)
 
 

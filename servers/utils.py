@@ -102,9 +102,13 @@ def require_uuid(value: str, *, label: str = "uuid") -> tuple[str, dict[str, Any
 
 # ── 统一响应构建 ──
 
-def error_response(code: str, message: str, retryable: bool = False, **extra) -> dict[str, Any]:
-    """构建工具统一错误响应。"""
-    result: dict[str, Any] = {"success": False, "error_code": code, "message": message}
+def error_response(code: str, message: str, retryable: bool = False,
+                   hint: str | None = None, **extra) -> dict[str, Any]:
+    """构建工具统一错误响应。hint 为显式形参，避免被 **extra 吞进 details。"""
+    result: dict[str, Any] = {
+        "success": False, "error_code": code, "message": message,
+        "hint": hint if hint is not None else ("retry_safe" if retryable else "do_not_retry"),
+    }
     if retryable:
         result["retryable"] = True
     if extra:
@@ -116,7 +120,7 @@ def submitted_response(task_id: str, *, status: str = "QUEUED",
                        message: str = "任务已提交", **extra: Any) -> dict[str, Any]:
     """构建异步任务提交成功响应（统一 task_id/status/message 结构）。"""
     return {"success": True, "task_id": task_id, "status": status,
-            "message": message, **extra}
+            "message": message, "hint": "poll", **extra}
 
 
 def queue_full_response(code: str = "QUEUE_FULL", retryable: bool = True,

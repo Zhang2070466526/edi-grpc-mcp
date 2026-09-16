@@ -100,6 +100,7 @@ def compare_simulation_results(
                 TURBOCHARTS_PATH,
                 "--raw", rp,
                 "--csv", tmp_csv,
+                "--img", os.path.join(tmpdir, f"tmp_{i}.png"),
                 "--type", chart_type,
                 "--linename", curve,
             ]

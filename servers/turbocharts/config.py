@@ -27,7 +27,7 @@ def run_turbocharts(
 
     with _TURBOCHARTS_SEMAPHORE:
         try:
-            kwargs = dict(capture_output=True, text=True, encoding="utf-8", errors="replace",
+            kwargs = dict(capture_output=True, text=True, errors="replace",
                           timeout=timeout_seconds, check=False)
             if sys.platform == "win32":
                 kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW

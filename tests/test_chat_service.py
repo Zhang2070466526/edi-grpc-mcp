@@ -10,27 +10,21 @@ class TestParameterValidation:
 
     def test_list_epp_projects_rejects_empty_folder(self):
         from servers.eda.project_manage import list_epp_projects
-        try:
-            list_epp_projects("")
-            assert False, "should raise"
-        except ValueError as e:
-            assert "不能为空" in str(e)
+        r = list_epp_projects("")
+        assert r["success"] is False
+        assert r["error_code"] == "INVALID_PARAMETERS"
 
     def test_list_epp_projects_rejects_whitespace_folder(self):
         from servers.eda.project_manage import list_epp_projects
-        try:
-            list_epp_projects("   ")
-            assert False, "should raise"
-        except ValueError as e:
-            assert "不能为空" in str(e)
+        r = list_epp_projects("   ")
+        assert r["success"] is False
+        assert r["error_code"] == "INVALID_PARAMETERS"
 
     def test_list_epp_projects_rejects_nonexistent_folder(self):
         from servers.eda.project_manage import list_epp_projects
-        try:
-            list_epp_projects("C:/__nonexistent_folder_12345__")
-            assert False, "should raise"
-        except FileNotFoundError:
-            pass
+        r = list_epp_projects("C:/__nonexistent_folder_12345__")
+        assert r["success"] is False
+        assert r["error_code"] == "FILE_NOT_FOUND"
 
 
 class TestSessionIsolation:

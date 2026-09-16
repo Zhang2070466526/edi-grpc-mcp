@@ -12,7 +12,7 @@ from servers.ansys.config import (
     _attach_aedt,
 )
 from servers.task_runner import TaskRunner
-from servers.utils import submitted_response, validate_file
+from servers.utils import submitted_response, validate_file, error_response
 from servers import mcp
 
 # HFSS 全局串行队列：AEDT 是单实例桌面程序，同一时间只能跑一个仿真。
@@ -83,16 +83,16 @@ def _validate_setups(project_path: str, design_name: str) -> dict:
             projects = list(desktop.GetProjectList())
 
             if project_name not in projects:
-                return {"success": False, "status": "project_not_open",
-                        "project_name": project_name, "open_projects": projects}
+                return error_response("project_not_open", f"工程 {project_name} 未打开",
+                                      project_name=project_name, open_projects=projects)
 
             project = desktop.SetActiveProject(project_name)
             try:
                 design = project.SetActiveDesign(design_name)
             except Exception:
                 names = list(project.GetDesignNames()) if hasattr(project, "GetDesignNames") else []
-                return {"success": False, "status": "design_not_found",
-                        "requested_design": design_name, "available_designs": names}
+                return error_response("design_not_found", f"设计 {design_name} 未找到",
+                                      requested_design=design_name, available_designs=names)
 
             try:
                 module = get_setup_module(design)
@@ -102,7 +102,7 @@ def _validate_setups(project_path: str, design_name: str) -> dict:
             return {"success": True, "project_name": project_name,
                     "design_name": design_name, "setups": setups}
         except Exception as exc:
-            return {"success": False, "status": "com_error", "error": str(exc)}
+            return error_response("com_error", str(exc))
 
 
 @mcp.tool()
@@ -132,19 +132,18 @@ def start_hfss_analysis_async(
     try:
         resolved = validate_file(project_path, (".aedt", ".aedtz"))
     except (FileNotFoundError, ValueError) as exc:
-        return {"success": False, "status": "invalid_path", "message": str(exc)}
+        return error_response("invalid_path", str(exc))
 
     if not aedt_is_running():
-        return {"success": False, "status": "aedt_not_running",
-                "message": "AEDT 未运行，请先用 open_hfss_project 打开工程"}
+        return error_response("aedt_not_running", "AEDT 未运行，请先用 open_hfss_project 打开工程")
 
     validation = _validate_setups(resolved, design_name)
     if not validation["success"]:
         return validation
 
     if setup_name not in validation["setups"]:
-        return {"success": False, "status": "setup_not_found",
-                "requested_setup": setup_name, "available_setups": validation["setups"]}
+        return error_response("setup_not_found", f"Setup {setup_name} 未找到",
+                              requested_setup=setup_name, available_setups=validation["setups"])
 
     project_name = Path(resolved).stem
 
@@ -165,10 +164,8 @@ def start_hfss_analysis_async(
     if task_id is None:
         # 原子提交失败：非空闲（analysis_busy）或任务数达上限（task_limit_reached）
         if hfss_runner.pending_count() > 0:
-            return {"success": False, "status": "analysis_busy",
-                    "message": "当前已有 HFSS 仿真正在运行"}
-        return {"success": False, "status": "task_limit_reached",
-                "message": "HFSS 任务数已达上限，请稍后重试"}
+            return error_response("analysis_busy", "当前已有 HFSS 仿真正在运行")
+        return error_response("task_limit_reached", "HFSS 任务数已达上限，请稍后重试")
 
     return submitted_response(task_id, project_name=project_name, design_name=design_name,
                               setup_name=setup_name, message="HFSS 仿真任务已提交")

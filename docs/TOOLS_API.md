@@ -1756,6 +1756,7 @@ response = await svc.chat(session_id="abc123", message="打开第一个工程")
     "completed": true,
     "outcome_known": true,
     "task_success": true,
+    "hint": "ok",
     "client_uuid": "a1b2c3d4",
     "task_id": "e5f6g7h8",
     "task_type": "OPEN_PROJECT",
@@ -1770,6 +1771,8 @@ response = await svc.chat(session_id="abc123", message="打开第一个工程")
 ```
 
 各 `status`（成功 / 失败情况）语义：
+
+> `hint` 是机器可读动作指令，agent 优先读它而非从 `success`/`task_success`/`outcome_known` 做布尔推断。EDA gRPC 家族取值：`ok` / `task_failed` / `outcome_unknown` / `service_unavailable` / `busy` / `rejected` / `protocol_error` / `too_large`；通用错误响应 `retry_safe` / `do_not_retry`；异步提交 `poll`。
 
 | status | 含义 | success | outcome_known | task_success |
 |---|---|---|---|---|
