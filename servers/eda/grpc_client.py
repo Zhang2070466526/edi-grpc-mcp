@@ -128,6 +128,20 @@ def _emit_event(callback: GrpcEventCallback | None, update: dict[str, Any]) -> N
 # 终端结果构建
 # ---------------------------------------------------------------------------
 
+# status → 机器可读 hint（供 agent 决策，避免从 success/task_success/outcome_known 做布尔推断）
+_HINT_BY_STATUS = {
+    "SUCCEEDED": "ok",              # 任务成功
+    "FAILED": "task_failed",        # EDI 业务任务失败（工具本身没坏）
+    "TIMEOUT": "outcome_unknown",   # 结果未知，别当失败、别自动重试非幂等
+    "STREAM_DISCONNECTED": "outcome_unknown",
+    "GRPC_UNAVAILABLE": "service_unavailable",  # EDI 没起，先 launch_edi 再重试
+    "QUEUE_TIMEOUT": "busy",        # 排队超时，稍后重试
+    "REJECTED": "rejected",         # 请求被拒，修参数
+    "PROTOCOL_MISMATCH": "protocol_error",
+    "PAYLOAD_TOO_LARGE": "too_large",
+}
+
+
 def _terminal_result(
         success: bool,
         status: str,
@@ -147,6 +161,7 @@ def _terminal_result(
 
     outcome_known=True 表示已收到 EDI 的最终事件（SUCCEEDED/FAILED），
     此时 task_success 有意义；False 表示 EDI 任务结果未知（超时/断连等）。
+    hint 是由 status 派生的机器可读动作指令，agent 优先读它而不是自己做布尔推断。
     """
     latest_details = latest_details or {}
     # project_path / result_path 已在顶层单独返回，从 details 中移除避免重复
@@ -157,6 +172,7 @@ def _terminal_result(
         "completed": True,
         "outcome_known": outcome_known,
         "task_success": success if outcome_known else None,
+        "hint": _HINT_BY_STATUS.get(status, "unknown"),
         "client_uuid": client_uuid,
         "task_id": task_id,
         "task_type": task_type_name,

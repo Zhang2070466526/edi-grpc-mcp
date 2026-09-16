@@ -219,6 +219,23 @@ class TestGrpcStubBehavior:
         assert r["status"] == "PROTOCOL_MISMATCH"
         assert r["success"] is False
 
+    def test_hint_field_from_status(self):
+        from servers.eda.grpc_client import _terminal_result
+        expected = {
+            "SUCCEEDED": "ok",
+            "FAILED": "task_failed",
+            "TIMEOUT": "outcome_unknown",
+            "STREAM_DISCONNECTED": "outcome_unknown",
+            "GRPC_UNAVAILABLE": "service_unavailable",
+            "QUEUE_TIMEOUT": "busy",
+            "REJECTED": "rejected",
+            "PROTOCOL_MISMATCH": "protocol_error",
+            "PAYLOAD_TOO_LARGE": "too_large",
+        }
+        for status, hint in expected.items():
+            r = _terminal_result(status == "SUCCEEDED", status, "m", "u1", "t1", "OPEN_PROJECT")
+            assert r["hint"] == hint, status
+
     def test_success_message_is_task_completed_not_simulation(self):
         from servers.eda.grpc_client import _terminal_result
         for ttype in ("OPEN_PROJECT", "CREATE_SIMULATION_COMPONENT",

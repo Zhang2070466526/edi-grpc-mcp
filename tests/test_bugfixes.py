@@ -253,11 +253,11 @@ def test_export_snp_rejects_invalid_port_count():
         exporter._export_snp_from_3d("C:/m.cst", "", 0, result_3d)
 
 
-def test_tool_args_summary_redacts_forward_slash_path():
-    from servers.chat.service import _tool_args_summary
-    result = _tool_args_summary("open_edi_project", {"project_path": "C:/Users/John/test.epp"})
-    assert "test.epp" in result
-    assert "John" not in result
+def test_safe_args_redacts_paths():
+    from servers.chat.service import _safe_args
+    result = _safe_args({"project_path": "C:/Users/John/test.epp"})
+    assert result["project_path"] == "test.epp"
+    assert "John" not in result["project_path"]
 
 
 def test_async_result_success_reflects_business_result(monkeypatch):

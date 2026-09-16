@@ -648,11 +648,10 @@ class ChatService:
                         # 记录运行时指标（次数/失败/耗时，供 /metrics 端点）
                         record_tool_call(tool_name, act.status == "success", act.duration_ms)
 
-                        # 记录关键参数（脱敏：不记录完整路径中的用户名）
-                        tool_args_log = _tool_args_summary(tool_name, validation_result)
-                        _logger.info("request=%s tool=%s args=%s duration=%dms success=%s",
-                                     request_id, tool_name, tool_args_log, act.duration_ms,
-                                     act.status == "success")
+                        # 结构化日志：tool/request_id/duration/success + 脱敏 args（路径只记 basename）
+                        _logger.info("request=%s tool=%s duration_ms=%d success=%s args=%s",
+                                     request_id, tool_name, act.duration_ms, act.status == "success",
+                                     _safe_args(validation_result))
 
                         # show_image：用原始 image_path 注册 HTTP URL 供前端渲染
                         if tool_name == "show_image" and act.status == "success":
@@ -932,31 +931,12 @@ _TOOL_LABELS: dict[str, str] = {
 }
 
 
-def _tool_args_summary(tool_name: str, args: dict) -> str:
-    """提取工具调用的关键参数用于日志（脱敏）。"""
-    key_fields = {
-        "list_epp_projects": ["folder_path"],
-        "open_edi_project": ["project_path"],
-        "start_simulation_async": ["project_path"],
-        "turbocharts_convert": ["chart_type", "linename"],
-        "analyze_image": ["image_path"],
-        "generate_simulation_report": ["output_path", "model_name"],
-        "capture_schematic": ["project_path"],
-        "compare_simulation_results": ["curve", "alignment"],
-        "show_image": ["image_path"],
-        "delete_simulation_component": ["instance_name"],
-        "update_simulation_component": ["instance_name"],
+def _safe_args(args: dict) -> dict:
+    """脱敏 args：路径值只保留 basename（不暴露完整路径中的用户名）。"""
+    return {
+        k: (Path(v).name if isinstance(v, str) and ("\\" in v or "/" in v) else v)
+        for k, v in args.items()
     }
-    fields = key_fields.get(tool_name, ["project_path"])
-    parts = []
-    for f in fields:
-        val = args.get(f, "")
-        if val and isinstance(val, str) and ("\\" in val or "/" in val):
-            # 只记录文件名，不暴露完整路径中的用户名
-            parts.append(f"{f}={Path(str(val)).name}")
-        elif val:
-            parts.append(f"{f}={val}")
-    return " ".join(parts) if parts else ""
 
 
 def _tool_label(name: str) -> str:

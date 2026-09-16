@@ -1,0 +1,96 @@
+# EDI gRPC MCP 工具清单
+
+> 自动生成，勿手改。权威数量见 /ready 的 tool_count。
+
+共 90 个工具：
+
+- `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
+- `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
+- `add_wire` — 连接指定工程内两个器件的指定引脚，按需创建或合并网段并保存。
+- `analyze_image` — 调用视觉模型分析本地图片内容，返回结构化文字结果。
+- `analyze_variables` — 分析工程中的变量定义和引用关系。
+- `attach_out_component` — 为目标器件引脚挂载一个 Out 器件，并自动连线。
+- `batch_query_component` — 按器件型号字符串列表批量查询模型信息，返回对齐到输入顺序的结果。
+- `capture_schematic` — 截取 EDA 工程原理图为图片。
+- `clear_schematic` — 清空工程原理图中的全部器件和网段并保存（破坏性操作）。
+- `close_edi_project` — 关闭一个.epp 工程。
+- `close_hfss_project` — 关闭 AEDT 项目（COM 优先，force 仅结束 MCP 最后启动的 PID）。
+- `compare_simulation_results` — 比较多个 RAW 仿真结果文件中的同一条曲线并生成对比图。
+- `create_project` — 创建新的 EDI 工程（不显示创建向导，也不自动打开）。
+- `create_simulation_component` — 使用 EDI 器件工厂默认参数创建器件。
+- `create_workspace` — 创建一个新的工作区，不自动切换。
+- `cst_export_farfield` — 导出 CST 模型的远场方向图为 ASCII .txt（自动判断是否已求解）。
+- `cst_export_farfield_query` — 查询远场导出任务：返回进度，完成时附带 farfield_txts。
+- `cst_export_snp` — 导出 CST 模型的 S 参数为 Touchstone .sNp 文件（需先求解）。
+- `cst_solve_async` — 异步求解 CST 模型（.cst），立即返回 task_id。
+- `cst_solve_query` — 查询 CST 求解任务：返回进度，完成时附带 model_path。
+- `delete_simulation_component` — 按实例名删除原理图器件及其连接线。
+- `download_soft_ip_model` — 按软 IP UUID 和频率下载 AEDT 模型文件到指定路径。
+- `export_project_netlist` — 查看 EDA .epp 工程的网表，返回网表文件路径。
+- `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV。
+- `generate_schematic_from_netlist` — 将网表文件导入工程生成 main 原理图。
+- `generate_simulation_report` — 生成本地仿真报告（PDF/DOCX），16 步校验后调用本地渲染服务。
+- `get_components_static_params` — 查询器件的固有参数（重量、尺寸、封装、所属厂商、成本等）。
+- `get_current_workspace` — 查询程序当前实际加载的工作区目录。
+- `get_hfss_analysis_status` — 查询 HFSS 异步仿真状态（默认只读本地，不访问 AEDT）。
+- `get_hfss_project_info` — 查询当前 AEDT 打开的项目和活动设计（纯查询，不启动 AEDT）。
+- `get_model_category_params` — 获取模型管理模块的全部子类及对应参数列表。
+- `get_project_summary` — 获取 .epp 工程完整概览：元数据、原理图、元件统计、仿真配置、最近结果。
+- `get_schematic_component_info` — 通过 gRPC 按实例名查询单个器件的完整信息。
+- `get_service_logs` — 读取 EDI 服务端日志，检查运行异常（含 ERROR/WARN/异常堆栈分析）。
+- `get_service_status` — 返回 EDI gRPC 通道状态和队列占用信息（只读，不占执行槽位），用于诊断：通道是否健康、是否有任务在排队。
+- `get_signal_chain` — 追踪工程原理图的信号链路（节点接力算法，从源到负载）。
+- `get_simulation_async_result` — 获取异步仿真最终结果，完整仿真日志在 ads_output 字段。运行中返回部分日志，完成后返回完整结果。
+- `get_simulation_async_status` — 查询异步仿真进度和实时日志（仿真日志在 ads_output 字段）。运行中即可调用，不阻塞。
+- `get_simulation_component_schema` — 查询已建模器件类型的参数 Schema 和权限。
+- `launch_aedt` — 启动 AEDT（不打开项目）。已运行时仅返回状态。
+- `launch_edi` — 启动 EDI 客户端并等待 gRPC 就绪。已运行时跳过启动。
+- `list_eda_tasks` — 列出当前所有异步仿真任务，可选按状态过滤。不阻塞。
+- `list_epp_projects` — 扫描指定文件夹中的 .epp 工程文件。
+- `list_ideal_components` — 列出内置器件类型及其简要说明。
+- `list_result_curves` — 解析 ADS RAW 仿真结果文件，返回可用曲线名和依赖轴。
+- `list_schematic_components` — 通过 gRPC 查询原理图全部器件（含完整参数），比本地文件读取更实时。
+- `list_simulation_components` — 列出已保存工程中的全部器件及参数（含 wire→public 参数名映射）。
+- `load_performance_component_from_mms` — 从 MMS 下载性能模型并导入当前工作区本地模型库。
+- `open_document` — 打开本地文档：link 模式生成 10 分钟 HTTP 链接，local 模式用系统默认程序打开。
+- `open_edi_project` — 打开一个 .epp 工程。
+- `open_hfss_project` — 启动 AEDT 并打开 .aedt 项目（COM 附着优先，subprocess 单次启动兜底）。
+- `replace_models_from_csv` — 按 CSV 文件批量替换工程中的元件模型。
+- `replace_port_component` — 将原理图中的端口器件替换为另一种类型。
+- `replace_schematic_from_file` — 从 .ep 文件整体替换原理图（对应 gRPC LOAD_SCHEMATIC_FROM_FILE）。
+- `search_personal_models` — 按子类查询个人模型库。
+- `search_personal_soft_ip_models` — 查询当前用户的个人软 IP 模型（自动合并分页结果）。
+- `search_public_models` — 按子类查询公共模型库。
+- `search_public_soft_ip_models` — 查询公共软 IP 模型（自动合并分页结果）。
+- `search_schematic_from_personal_library` — 按拓扑描述查询个人原理图库。
+- `search_schematic_from_public_library` — 按拓扑描述查询公共原理图库。
+- `search_soft_ip_categories` — 查询全部软 IP 分类（自动合并分页结果）。
+- `set_component_active_state` — 确定性设置器件状态为 NORMAL、DISABLED 或 SHORTED。
+- `show_image` — 读取本地图片，返回标准 MCP ImageContent 和本地路径。
+- `simulate_anti_burnout` — 对工程原理图中具备抗烧毁数据的器件执行输入功率仿真和抗烧毁风险评估。
+- `simulate_netlist` — 仿真指定 netlist.log 文件，不需打开 .epp 工程。返回 RAW 结果+日志。
+- `simulate_netlist_with_ads` — 调用 ADS 仿真控制器。
+- `start_hfss_analysis_async` — 异步启动 HFSS Setup 仿真，立即返回 task_id。
+- `start_simulation_async` — 启动异步仿真，立即返回 task_id 供 get_simulation_async_status 查进度；仿真日志在结果查询的 ads_output 字段。
+- `switch_workspace` — 设置下次启动程序时使用的工作区，当前工作区保持不变。
+- `tr_execute_simulation_plan` — 按已确认的计划批量执行多个指标：每项自动完成网表修订→ADS 仿真→RAW 解析→登记。
+- `tr_find_paths` — 查找 EPP 的端口和全部有效有向端口组合，每个端口对只取第一条路径。
+- `tr_generate_document` — 校验主 Agent 完成的报告草稿并生成 PDF、DOCX 和输入快照。
+- `tr_get_project_netlist` — 获取工程当前真实网表并保存到会话目录。
+- `tr_get_simulation_capabilities` — 查询 TR 仿真实际支持的指标、单位、结果语义和必需参数。
+- `tr_get_workflow_state` — 查询当前会话持久化的计划、工程、链路、指标、尝试和报告状态。
+- `tr_modify_netlist` — 创建可追溯的新网表修订版，设置第一条有效链路并注入指标控制器。
+- `tr_parse_raw` — 解析 ADS result.raw，生成 CSV、曲线图片和标准化指标结果。
+- `tr_prepare_report` — 从当前工作流生成完整报告草稿和主 Agent 所需的判定证据。
+- `tr_query_components` — 取得工程器件的类别、厂家和关键规格。
+- `tr_query_schematic_components` — 查询工程原理图中的器件信息。
+- `tr_read_guide` — 读取 guides 目录中的可编辑 Word 指南。
+- `tr_read_netlist` — 读取 EDI 当前网表，或者分页读取 Agent 已创建的网表修订版。
+- `tr_restore_schematic` — 把 EDI 工程原理图整体回退到本会话初始化时备份的最初状态。
+- `tr_run_simulation` — 执行一个网表修订版，通过 EDI/ADS 获取 result.raw。
+- `tr_set_workflow_plan` — 持久化用户已经确认的完整链路仿真计划。
+- `tr_sync_project_components` — 将网表变更同步到工程原理图（尽力而为，不阻断仿真）。
+- `turbocharts_convert` — ADS RAW 转曲线图+CSV（SP/HB/XDB）；linename 为「单位_线段名」，多条用 & 分隔。
+- `update_simulation_component` — 按实例名更新器件参数。
+- `use_schematic_from_library_create_project` — 从在线原理图库下载内容，在当前工作区创建并打开新工程。
+- `use_schematic_from_library_import` — 从在线原理图库下载内容，替换指定工程的当前原理图并保存。

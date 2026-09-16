@@ -146,8 +146,8 @@ async def ready_check(request):
 
     return JSONResponse({
         "status": "ready",
-        "transport": "streamable-http",
-        "stateless": True,
+        "transport": _cfg.mcp_transport,
+        "stateless": _cfg.mcp_stateless_http,
         "version": _server_ver,
         "grpc": "online" if grpc_ok else "offline",
         "tool_count": len(tools),

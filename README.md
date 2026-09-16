@@ -368,6 +368,7 @@ Streamable HTTP 模式启用 `stateless_http=True`，服务不保留 MCP 会话�
     "completed": bool,      # MCP 侧任务是否结束
     "outcome_known": bool,  # 是否收到 EDI 最终事件（SUCCEEDED/FAILED）
     "task_success": bool,   # EDI 任务是否成功（仅 outcome_known=True 有意义）
+    "hint": str,            # 机器可读动作指令：ok / task_failed / outcome_unknown / service_unavailable / busy / rejected / protocol_error / too_large
     "status": str,          # SUCCEEDED / FAILED / TIMEOUT / STREAM_DISCONNECTED / ...
     "message": str,         # 描述信息
     "project_path": str,    # 工程路径
@@ -387,6 +388,8 @@ QUEUED → ACCEPTED → RUNNING → SUCCEEDED / FAILED
 ```
 
 超时/断连时：`outcome_known=False, task_success=None`，不冒充 EDI 业务失败。
+
+`hint` 是给 agent 的机器可读动作指令，优先读它而不是从 `success`/`task_success`/`outcome_known` 做布尔推断：`ok`（成功）、`task_failed`（业务失败，工具没坏）、`outcome_unknown`（结果未知，别当失败、别自动重试非幂等）、`service_unavailable`（EDI 没起，先 `launch_edi`）、`busy`（排队超时，稍后重试）、`rejected`（请求被拒，修参数）、`protocol_error`、`too_large`。
 
 ### 产物格式 (artifacts)
 
