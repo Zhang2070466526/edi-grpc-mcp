@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from servers.utils import decode_console
+from servers.utils import decode_local_text
 
 
 class ProjectReader:
@@ -33,7 +33,7 @@ class ProjectReader:
         p = self.workspace / relative_path
         if not p.is_file():
             return None
-        return decode_console(p.read_bytes())
+        return decode_local_text(p.read_bytes())
 
     def read_metadata(self) -> dict[str, Any]:
         """读取工程元数据（project_id、name、author、version、created）。"""

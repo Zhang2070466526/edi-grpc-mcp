@@ -13,7 +13,7 @@ from typing import Any
 from proto import ecserver_pb2
 from servers.eda.grpc_client import call_grpc
 from servers.eda.config import require_project_path
-from servers.utils import error_response, decode_console
+from servers.utils import error_response, decode_local_text
 from servers import mcp
 
 # 仿真控制块行类型（跳过）；其余带冒号的行都视为器件/端口行（不穷举器件类型，
@@ -28,7 +28,7 @@ def _acquire_netlist(project_path: str, timeout_seconds: int) -> tuple[str | Non
     local = Path(project_path).parent / "netlist.log"
     if local.is_file():
         try:
-            return decode_console(local.read_bytes()), ""
+            return decode_local_text(local.read_bytes()), ""
         except OSError as exc:
             return None, f"读取本地网表失败: {exc}"
 
@@ -43,7 +43,7 @@ def _acquire_netlist(project_path: str, timeout_seconds: int) -> tuple[str | Non
         details = result.get("details", {})
         netlist_path = details.get("netlist_path", "") or result.get("result_path", "")
         if netlist_path and Path(netlist_path).is_file():
-            text = decode_console(Path(netlist_path).read_bytes())
+            text = decode_local_text(Path(netlist_path).read_bytes())
             return text, "已通过 gRPC 现场导出网表"
     except Exception as exc:
         return None, f"网表获取失败: {exc}"

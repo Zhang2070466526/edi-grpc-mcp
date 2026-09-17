@@ -29,6 +29,7 @@ batch_query_component         按器件型号列表批量查询模型信息
 
 from __future__ import annotations
 
+from itertools import islice
 from pathlib import Path
 from typing import Any
 
@@ -60,15 +61,22 @@ def list_epp_projects(folder_path: str) -> dict[str, Any]:
         return error_response("FILE_NOT_FOUND", f"文件夹不存在: {folder_path}")
 
     _MAX_PROJECTS = 1000
-    all_epp = sorted(root.rglob("*.epp"))
-    total = len(all_epp)
+    try:
+        epp_paths = sorted(islice(root.rglob("*.epp"), _MAX_PROJECTS + 1))
+    except PermissionError as exc:
+        return error_response("PERMISSION_DENIED", f"扫描目录失败（权限不足）: {exc}")
+    truncated = len(epp_paths) > _MAX_PROJECTS
+    epp_paths = epp_paths[:_MAX_PROJECTS]
     projects = []
-    for epp in all_epp[:_MAX_PROJECTS]:
-        projects.append({
-            "name": epp.stem,
-            "path": str(epp.resolve()),
-            "size": epp.stat().st_size,
-        })
+    skipped = 0
+    for epp in epp_paths:
+        try:
+            path = str(epp.resolve())
+            size = epp.stat().st_size
+        except OSError:
+            skipped += 1
+            continue
+        projects.append({"name": epp.stem, "path": path, "size": size})
 
     result: dict[str, Any] = {
         "success": True,
@@ -76,10 +84,14 @@ def list_epp_projects(folder_path: str) -> dict[str, Any]:
         "count": len(projects),
         "projects": projects,
     }
-    if total > _MAX_PROJECTS:
+    if skipped:
+        result["skipped"] = skipped
+    if truncated:
         result["truncated"] = True
-        result["total"] = total
-        result["message"] = f"共检测到 {total} 个工程，已截断到前 {_MAX_PROJECTS} 个，可缩小扫描范围获取全部"
+        result["message"] = (
+            f"检测到超过 {_MAX_PROJECTS} 个工程，已截断到前 {_MAX_PROJECTS} 个，"
+            "可缩小扫描范围获取全部"
+        )
     return result
 
 
@@ -217,14 +229,17 @@ def get_project_summary(
     if include_latest_result:
         result_paths = list(reader.workspace.rglob("*.raw"))
         if result_paths:
-            rp = sorted(
-                result_paths, key=lambda x: x.stat().st_mtime, reverse=True
-            )[0]
-            latest_result = {
-                "path": str(rp.resolve()),
-                "exists": True,
-                "size": rp.stat().st_size,
-            }
+            try:
+                rp = sorted(
+                    result_paths, key=lambda x: x.stat().st_mtime, reverse=True
+                )[0]
+                latest_result = {
+                    "path": str(rp.resolve()),
+                    "exists": True,
+                    "size": rp.stat().st_size,
+                }
+            except OSError:
+                latest_result = {}
 
     warnings: list[str] = []
     if not schematics:

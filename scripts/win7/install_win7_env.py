@@ -94,7 +94,7 @@ def check_host(allow_any_python: bool, req: Path) -> bool:
 
     for dll in ("vcruntime140.dll", "msvcp140.dll"):
         p = system32 / dll
-        step("系统里有 %s（x64 扩展的 C++ 运行时）" % dll, True,
+        step("系统里有 %s（x64 扩展的 C++ 运行时）" % dll, p.exists(),
              "已装" if p.exists() else "未装 —— 若后面扩展加载失败（WinError 126），装 VC++ 2015-2022 x64 运行库")
 
     step("找到 %s" % req.name, req.exists(), str(req))

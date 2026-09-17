@@ -136,3 +136,26 @@ def test_whitelist_path_exemption(monkeypatch):
     assert client.get("/chat").status_code == 200
     # 受保护路径：非白名单进程拒绝
     assert client.get("/mcp").status_code == 403
+
+
+def test_whitelist_allows_matching_process(monkeypatch):
+    """白名单命中的进程在 /mcp 上应放行（200），与非白名单 403 互补。"""
+    from starlette.applications import Starlette
+    from starlette.responses import PlainTextResponse
+    from starlette.routing import Route
+    from starlette.testclient import TestClient
+    from servers import process_guard as pg
+
+    monkeypatch.setattr(
+        pg, "resolve_client_process",
+        lambda client_port, server_port: (r"C:\Tools\edi-agent\edi-agent.exe", "edi-agent serve"),
+    )
+
+    async def ok(request):
+        return PlainTextResponse("ok")
+
+    app = Starlette(routes=[Route("/mcp", ok)])
+    app.add_middleware(pg.ProcessWhitelistMiddleware, server_port=50026, allowed=["edi-agent"])
+
+    client = TestClient(app)
+    assert client.get("/mcp").status_code == 200

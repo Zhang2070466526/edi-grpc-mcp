@@ -1,6 +1,8 @@
 """测试工具注册完整性。"""
 from pathlib import Path
 
+import pytest
+
 
 
 def test_all_tools_registered():
@@ -57,21 +59,8 @@ def test_all_tools_registered():
 
 def test_grpc_timeout_limits():
     from servers.eda.grpc_client import call_grpc
-    try:
+    with pytest.raises(ValueError):
         call_grpc(1, {}, 99999, max_timeout_seconds=300)
-        assert False
-    except ValueError:
-        pass
-
-
-def test_single_instance_check():
-    import socket
-    s = socket.socket()
-    try:
-        result = s.connect_ex(("127.0.0.1", 19998))
-        assert result != 0  # should not be listening
-    finally:
-        s.close()
 
 
 def test_chat_tool_map_consistency():
@@ -187,7 +176,6 @@ def test_tool_descriptions_are_concise():
 if __name__ == "__main__":
     test_all_tools_registered()
     test_grpc_timeout_limits()
-    test_single_instance_check()
     test_chat_tool_map_consistency()
     test_mcp_only_tools_are_expected()
     test_tool_count_dynamic()

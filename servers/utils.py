@@ -107,21 +107,23 @@ def require_uuid(value: str, *, label: str = "uuid") -> tuple[str, dict[str, Any
     return s, None
 
 
-def decode_console(raw: bytes | None) -> str:
-    """按 utf-8 → cp936 顺序解码字节，兜底 errors="replace"。
+def decode_local_text(raw: bytes | None) -> str:
+    """解码**本机 Windows 生成的文本**（EDI 的 .ep/netlist.log、Qt 工具控制台输出）。
 
-    Windows 中文环境：EDI 的 .ep 文件、turbocharts / taskkill 的控制台输出常是
-    ANSI(GBK)，英文提示是 ASCII。先试 utf-8（英文提示 / 上游哪天改 UTF-8 都对），
-    失败回退 cp936。不依赖 locale 或 PYTHONUTF8，两种环境都稳定。
+    顺序必须 cp936 优先：GBK 汉字约 9.2% 的字节序列同时是合法 UTF-8，若先试
+    utf-8 会静默解成西里尔/拉丁字母（如 '专业'→'רҵ'）。BOM 是唯一的无歧义
+    UTF-8 信号，优先识别。**本函数不是通用解码器**——不要用它读配置/上游 UTF-8 文本。
     """
     if not raw:
         return ""
-    for enc in ("utf-8", "cp936"):
+    if raw.startswith(b"\xef\xbb\xbf"):  # UTF-8 BOM
+        return raw.decode("utf-8-sig", errors="replace")
+    for enc in ("cp936", "utf-8"):
         try:
             return raw.decode(enc)
         except UnicodeDecodeError:
             continue
-    return raw.decode("utf-8", errors="replace")
+    return raw.decode("cp936", errors="replace")
 
 
 # ── 统一响应构建 ──

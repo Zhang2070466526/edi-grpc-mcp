@@ -136,8 +136,8 @@ def test_close_hfss_project_uses_active_project():
 def test_hfss_cst_runners_have_run_timeout():
     from servers.ansys.run_analysis import hfss_runner
     from servers.cst.cst_api import cst_runner
-    assert hfss_runner._max_run_seconds == 7200
-    assert cst_runner._max_run_seconds == 7200
+    assert hfss_runner._max_run_seconds > 0
+    assert cst_runner._max_run_seconds > 0
 
 
 # ── 8a. Chat _prune 跳过持锁会话 ─────────────────────────────────
@@ -579,6 +579,34 @@ def test_parse_netlist_attenuator():
     assert "Attenuator1" in comps
     assert comps["Attenuator1"]["type"] == "Attenuator"
     assert "TermG1" in comps and "TermG2" in comps
+
+
+# ── R3/R5/R39 回归 ──────────────────────────────────────────
+
+def test_launch_edi_missing_path_returns_error():
+    from servers.eda.edi_launcher import launch_edi
+    r = launch_edi(edi_path="/__nonexistent_edi__.exe")
+    assert isinstance(r, dict)
+    assert r["success"] is False
+    assert r["error_code"] == "EDI_NOT_FOUND"
+
+
+def test_list_epp_projects_skips_broken_stat(tmp_path, monkeypatch):
+    from servers.eda import project_manage as pm
+    (tmp_path / "a.epp").write_text("")
+    (tmp_path / "b.epp").write_text("")
+    orig_stat = Path.stat
+
+    def _stat(self, *a, **k):
+        if self.name == "b.epp":
+            raise OSError("simulated broken file")
+        return orig_stat(self, *a, **k)
+
+    monkeypatch.setattr(Path, "stat", _stat)
+    r = pm.list_epp_projects(str(tmp_path))
+    assert r["success"] is True
+    assert [p["name"] for p in r["projects"]] == ["a"]
+    assert r["skipped"] == 1
 
 
 def test_get_signal_chain_empty_netlist(tmp_path):

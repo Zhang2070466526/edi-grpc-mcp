@@ -126,7 +126,7 @@ def main():
             say("    " + n)
     else:
         say("  没有 _internal 目录（一体式包？）")
-    step("清单已列出", True)
+    say("  [信息] 清单已列出")
 
     say("\n[4/5] 实机跑 exe：/ready 探活（端口 %d，最多 %d 秒）" % (a.port, a.timeout))
     if not has_exe:
@@ -149,7 +149,7 @@ def main():
                                                               j.get("tools_hash"), j.get("grpc")))
 
     say("\n[5/5] 收尾")
-    step("冒烟进程已结束", True, "--port %d 已释放" % a.port)
+    say("  [信息] 冒烟进程已结束，--port %d 已释放" % a.port)
 
     say("\n" + "=" * 74)
     if FAILS:

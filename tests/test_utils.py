@@ -159,19 +159,23 @@ class TestUptime:
         assert server_uptime_seconds() >= 0
 
 
-class TestDecodeConsole:
-    def test_utf8(self):
-        from servers.utils import decode_console
-        assert decode_console("中文".encode("utf-8")) == "中文"
-
+class TestDecodeLocalText:
     def test_gbk(self):
-        from servers.utils import decode_console
-        assert decode_console("中文".encode("gbk")) == "中文"
+        from servers.utils import decode_local_text
+        assert decode_local_text("专业".encode("gbk")) == "专业"
+
+    def test_utf8_bom(self):
+        from servers.utils import decode_local_text
+        assert decode_local_text(b"\xef\xbb\xbf" + "专业".encode("utf-8")) == "专业"
+
+    def test_ascii(self):
+        from servers.utils import decode_local_text
+        assert decode_local_text(b"freq 1.0") == "freq 1.0"
 
     def test_none_and_empty(self):
-        from servers.utils import decode_console
-        assert decode_console(None) == ""
-        assert decode_console(b"") == ""
+        from servers.utils import decode_local_text
+        assert decode_local_text(None) == ""
+        assert decode_local_text(b"") == ""
 
 
 if __name__ == "__main__":

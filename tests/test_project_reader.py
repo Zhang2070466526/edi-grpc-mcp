@@ -1,10 +1,5 @@
 """测试 S-expression 解析器和 ProjectReader。"""
 
-from pathlib import Path
-
-import pytest
-
-
 from servers.eda.project_reader import parse_sexp, _kv, _walk_find, parse_paramsinfo, parse_components, ProjectReader
 
 
@@ -39,11 +34,9 @@ def test_walk_find():
     assert len(pins) == 2
 
 
-def test_parse_components_from_real_file():
-    project = r"C:\Users\JGL\EDI-Workspace\EDI_TEST\EDI_TEST.epp"
-    if not Path(project).is_file():
-        pytest.skip(f"依赖本机工程文件: {project}")
-    r = ProjectReader(project)
+def test_parse_components_from_real_file(real_project):
+    """依赖本机参考工程（conftest.real_project），无工程时自动 skip。"""
+    r = ProjectReader(real_project)
     raw = r.read_schematic("main")
     assert raw is not None
     comps = parse_components(raw)
@@ -51,12 +44,3 @@ def test_parse_components_from_real_file():
     terms = [c for c in comps if c["type"] == "TermG"]
     assert len(terms) >= 1
     assert terms[0]["pin_count"] >= 1
-
-
-if __name__ == "__main__":
-    test_parse_sexp_simple()
-    test_parse_sexp_nested()
-    test_parse_sexp_escaped_quotes()
-    test_walk_find()
-    test_parse_components_from_real_file()
-    print("test_project_reader.py: all passed")

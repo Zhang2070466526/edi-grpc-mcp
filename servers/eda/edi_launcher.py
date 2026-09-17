@@ -45,7 +45,7 @@ def launch_edi(
         return error_response("EDI_NOT_FOUND", "未检测到 EDI.exe 路径，请设置 EDI_PATH 或将其放在项目同级目录")
     exe_path = Path(exe).expanduser()
     if not exe_path.is_file():
-        raise FileNotFoundError(f"EDI.exe 不存在: {exe_path}")
+        return error_response("EDI_NOT_FOUND", f"EDI.exe 不存在: {exe_path}")
 
     try:
         server = EDA_GRPC_SERVER.strip()
@@ -56,7 +56,7 @@ def launch_edi(
             host, _, port_str = server.rpartition(":")
             port = int(port_str)
     except (ValueError, TypeError):
-        raise ValueError(f"EDA_GRPC_SERVER 配置无效（需要 host:port）: {EDA_GRPC_SERVER}") from None
+        return error_response("INVALID_PATH", f"EDA_GRPC_SERVER 配置无效（需要 host:port）: {EDA_GRPC_SERVER}")
     already_running = tcp_port_open(host, port)
 
     if already_running:
@@ -77,7 +77,7 @@ def launch_edi(
             stderr=subprocess.DEVNULL,
         )
     except OSError as exc:
-        raise RuntimeError(f"无法启动 EDI.exe: {exc}") from exc
+        return error_response("LAUNCH_FAILED", f"无法启动 EDI.exe: {exc}")
 
     result: dict[str, Any] = {
         "process_started": True,

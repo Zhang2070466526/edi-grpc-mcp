@@ -13,7 +13,7 @@ import threading
 import time
 from collections.abc import Sequence
 
-from servers.utils import decode_console
+from servers.utils import decode_local_text
 
 _logger = logging.getLogger("turbocharts")
 _TURBOCHARTS_SEMAPHORE = threading.BoundedSemaphore(1)
@@ -36,8 +36,8 @@ def run_turbocharts(
             t0 = time.monotonic()
             result = subprocess.run(list(command), **kwargs)
             # 先拿 bytes 再解码为 str（下游调用方无需改）
-            result.stdout = decode_console(result.stdout)
-            result.stderr = decode_console(result.stderr)
+            result.stdout = decode_local_text(result.stdout)
+            result.stderr = decode_local_text(result.stderr)
             elapsed_ms = round((time.monotonic() - t0) * 1000)
             _logger.info("turbocharts done rc=%d elapsed=%dms",
                          result.returncode, elapsed_ms)
