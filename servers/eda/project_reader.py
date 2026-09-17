@@ -13,6 +13,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from servers.utils import decode_console
+
 
 class ProjectReader:
     """读取 EDA 工作空间中的工程文件。"""
@@ -31,7 +33,7 @@ class ProjectReader:
         p = self.workspace / relative_path
         if not p.is_file():
             return None
-        return p.read_text(encoding="utf-8")
+        return decode_console(p.read_bytes())
 
     def read_metadata(self) -> dict[str, Any]:
         """读取工程元数据（project_id、name、author、version、created）。"""

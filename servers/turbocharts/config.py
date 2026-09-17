@@ -13,24 +13,10 @@ import threading
 import time
 from collections.abc import Sequence
 
+from servers.utils import decode_console
+
 _logger = logging.getLogger("turbocharts")
 _TURBOCHARTS_SEMAPHORE = threading.BoundedSemaphore(1)
-
-
-def _decode_console(raw: bytes | None) -> str:
-    """Windows 控制台 / Qt 程序的中文输出是 ANSI(GBK)，英文提示是 ASCII。
-
-    先按 utf-8 试（英文提示 / 上游哪天改 UTF-8 都对），失败回退 cp936。
-    不依赖 locale 或 PYTHONUTF8，两种环境下都稳定。
-    """
-    if not raw:
-        return ""
-    for enc in ("utf-8", "cp936"):
-        try:
-            return raw.decode(enc)
-        except UnicodeDecodeError:
-            continue
-    return raw.decode("utf-8", errors="replace")
 
 
 def run_turbocharts(
@@ -50,8 +36,8 @@ def run_turbocharts(
             t0 = time.monotonic()
             result = subprocess.run(list(command), **kwargs)
             # 先拿 bytes 再解码为 str（下游调用方无需改）
-            result.stdout = _decode_console(result.stdout)
-            result.stderr = _decode_console(result.stderr)
+            result.stdout = decode_console(result.stdout)
+            result.stderr = decode_console(result.stderr)
             elapsed_ms = round((time.monotonic() - t0) * 1000)
             _logger.info("turbocharts done rc=%d elapsed=%dms",
                          result.returncode, elapsed_ms)

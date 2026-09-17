@@ -36,6 +36,12 @@ class TestValidateFile:
         f.write_text("x")
         assert validate_file(str(f), (".cst",)) == str(f.resolve())
 
+    def test_rejects_non_str(self):
+        from servers.utils import validate_file
+        for bad in (None, 123, ["x"], {"p": 1}):
+            with pytest.raises(ValueError):
+                validate_file(bad)
+
 
 class TestToolError:
     def test_basic(self):
@@ -100,6 +106,30 @@ class TestRequireUuid:
             v, err = require_uuid(bad)
             assert v == "" and err["error_code"] == "INVALID_PARAMETERS"
 
+    def test_rejects_non_str(self):
+        from servers.utils import require_uuid
+        v, err = require_uuid(123)
+        assert v == "" and err["error_code"] == "INVALID_PARAMETERS"
+
+
+class TestRequireNonempty:
+    def test_valid(self):
+        from servers.utils import require_nonempty
+        v, err = require_nonempty("  x  ")
+        assert err is None and v == "x"
+
+    def test_rejects_empty(self):
+        from servers.utils import require_nonempty
+        for bad in ("", "   "):
+            v, err = require_nonempty(bad)
+            assert v == "" and err["error_code"] == "INVALID_PARAMETERS"
+
+    def test_rejects_non_str(self):
+        from servers.utils import require_nonempty
+        for bad in (None, 123, ["x"]):
+            v, err = require_nonempty(bad)
+            assert v == "" and err["error_code"] == "INVALID_PARAMETERS"
+
 
 class TestBuildFileLink:
     def test_markdown_link(self, tmp_path):
@@ -127,6 +157,21 @@ class TestUptime:
     def test_non_negative(self):
         from servers.utils import server_uptime_seconds
         assert server_uptime_seconds() >= 0
+
+
+class TestDecodeConsole:
+    def test_utf8(self):
+        from servers.utils import decode_console
+        assert decode_console("中文".encode("utf-8")) == "中文"
+
+    def test_gbk(self):
+        from servers.utils import decode_console
+        assert decode_console("中文".encode("gbk")) == "中文"
+
+    def test_none_and_empty(self):
+        from servers.utils import decode_console
+        assert decode_console(None) == ""
+        assert decode_console(b"") == ""
 
 
 if __name__ == "__main__":
