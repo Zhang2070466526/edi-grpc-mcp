@@ -163,13 +163,25 @@ class ProcessWhitelistMiddleware(BaseHTTPMiddleware):
                 if not exe and not cmd:
                     if not self._fail_open:
                         _log.warning("无法识别来源进程，拒绝 %s:%s path=%s", client.host, client.port, path)
-                        return JSONResponse({"error": "forbidden"}, status_code=403)
+                        return JSONResponse({
+                            "error": "forbidden",
+                            "error_code": "PROCESS_UNKNOWN",
+                            "message": "无法识别来源进程，拒绝访问 /mcp",
+                            "hint": "确认客户端与服务端同机；请检查白名单设置",
+                        }, status_code=403)
                     _log.warning("无法识别来源进程，fail_open 放行 %s:%s path=%s", client.host, client.port, path)
                 else:
                     matched = next((a for a in self._allowed if _matches_whitelist(a, exe, cmd)), None)
                     if matched is None:
                         _log.warning("拒绝非白名单进程 exe=%s cmd=%s path=%s", exe, cmd, path)
-                        return JSONResponse({"error": "forbidden"}, status_code=403)
+                        return JSONResponse({
+                            "error": "forbidden",
+                            "error_code": "PROCESS_NOT_ALLOWED",
+                            "message": "来源进程不在白名单，拒绝访问 /mcp",
+                            "exe": exe,
+                            "cmdline": cmd,
+                            "hint": "来源进程不在白名单，拒绝访问",
+                        }, status_code=403)
                     # _log.info("放行白名单进程 pattern=%r exe=%s cmd=%s path=%s", matched, exe, cmd, path)
                     # print("放行白名单进程 pattern={!r} exe={} cmd={} path={}".format(matched, exe, cmd, path))
         return await call_next(request)
