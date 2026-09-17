@@ -88,6 +88,8 @@ def compare_simulation_results(
         csv_path = str(Path(csv_path).expanduser().resolve())
     if not Path(output_path).parent.is_dir():
         return error_response("OUTPUT_DIRECTORY_NOT_FOUND", f"输出目录不存在: {Path(output_path).parent}")
+    if csv_path and not Path(csv_path).parent.is_dir():
+        return error_response("OUTPUT_DIRECTORY_NOT_FOUND", f"CSV 输出目录不存在: {Path(csv_path).parent}")
 
     # Step 1: export each RAW to temp CSV (serialized via runner)
     dep_key = dependency
@@ -107,7 +109,10 @@ def compare_simulation_results(
             if dependency:
                 cmd.extend(["--dependcy", dependency])
 
-            result_proc = run_turbocharts(cmd, timeout_seconds=60)
+            try:
+                result_proc = run_turbocharts(cmd, timeout_seconds=60)
+            except RuntimeError as exc:
+                return error_response("TOOL_TIMEOUT", str(exc))
             if result_proc.returncode != 0:
                 return error_response("TOOL_EXECUTION_FAILED",
                                   f"turbocharts 导出 {rp} 失败: {(result_proc.stderr or '')[:200]}")

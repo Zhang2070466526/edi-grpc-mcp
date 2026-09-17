@@ -289,3 +289,16 @@ def test_guide_resource_falls_back_when_file_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(tr_resource, "guide_path", lambda: tmp_path / "nope.txt")
     text = tr_resource.resource_turbocharts_guide()
     assert "无法读取引擎自带说明" in text and "--linename" in text
+
+
+def test_turbocharts_timeout_returns_error(env, monkeypatch):
+    """run_turbocharts 超时抛 RuntimeError 时应返回 TOOL_TIMEOUT，而非崩溃。"""
+    def _raise_timeout(cmd, timeout_seconds=60):
+        raise RuntimeError("Turbocharts 执行超时（120 秒）")
+    monkeypatch.setattr(cr, "run_turbocharts", _raise_timeout)
+
+    resp = cr.turbocharts_convert(
+        raw_path=str(env.raw), output_path=str(env.tmp / "o.png"), chart_type="HB",
+        linename="dBm_Out1")
+    assert resp["success"] is False
+    assert resp["error_code"] == "TOOL_TIMEOUT"

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import math
+import os
 import socket
 import threading
 import time
@@ -27,6 +28,8 @@ def server_uptime_seconds() -> float:
 
 def validate_file(path: str, extensions: tuple[str, ...] = ()) -> str:
     """校验文件存在，可选限制扩展名，返回规范化绝对路径。"""
+    if not isinstance(path, (str, os.PathLike)):
+        raise ValueError(f"路径必须是字符串: {path!r}")
     p = Path(path).expanduser()
     if not p.is_file():
         raise FileNotFoundError(f"文件不存在: {p}")
@@ -65,7 +68,9 @@ def tcp_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
 def require_nonempty(value: str, *, error_code: str = "INVALID_PARAMETERS",
                      label: str = "") -> tuple[str, dict[str, Any] | None]:
     """校验字符串非空，返回 (stripped_value, error)。为空时返回统一错误字典。"""
-    s = (value or "").strip()
+    if not isinstance(value, str):
+        return "", error_response(error_code, f"{label or '参数'} 必须是字符串")
+    s = value.strip()
     if not s:
         return "", error_response(error_code, f"{label or '参数'} 不能为空")
     return s, None
@@ -90,7 +95,9 @@ def require_position(position: Any) -> tuple[dict[str, Any] | None, dict[str, An
 
 def require_uuid(value: str, *, label: str = "uuid") -> tuple[str, dict[str, Any] | None]:
     """校验字符串为合法 UUID（如 12345678-1234-4234-8234-123456789abc），返回 (stripped_value, error)。"""
-    s = (value or "").strip()
+    if not isinstance(value, str):
+        return "", error_response("INVALID_PARAMETERS", f"{label} 必须是字符串")
+    s = value.strip()
     if not s:
         return "", error_response("INVALID_PARAMETERS", f"{label} 不能为空")
     try:

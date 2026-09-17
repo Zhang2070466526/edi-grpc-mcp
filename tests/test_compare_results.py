@@ -70,3 +70,34 @@ def test_compare_interpolation_requires_increasing_reference(tmp_path, monkeypat
 
     assert result["success"] is False
     assert result["error_code"] == "INVALID_RAW_DATA"
+
+
+def test_compare_timeout_returns_error(tmp_path, monkeypatch):
+    """run_turbocharts 超时抛 RuntimeError 时应返回 TOOL_TIMEOUT，而非崩溃。"""
+    cr, raw_a, raw_b = _setup(tmp_path, monkeypatch)
+
+    def _raise(cmd, timeout_seconds=60):
+        raise RuntimeError("Turbocharts 执行超时（60 秒）")
+    monkeypatch.setattr(cr, "run_turbocharts", _raise)
+
+    result = cr.compare_simulation_results(
+        result_paths=[str(raw_a), str(raw_b)],
+        curve="DB_S[2,1]",
+        output_path=str(tmp_path / "cmp.png"),
+    )
+    assert result["success"] is False
+    assert result["error_code"] == "TOOL_TIMEOUT"
+
+
+def test_compare_missing_csv_dir_returns_error(tmp_path, monkeypatch):
+    """csv_path 父目录不存在时应返回 OUTPUT_DIRECTORY_NOT_FOUND，而非 FileNotFoundError。"""
+    cr, raw_a, raw_b = _setup(tmp_path, monkeypatch)
+
+    result = cr.compare_simulation_results(
+        result_paths=[str(raw_a), str(raw_b)],
+        curve="DB_S[2,1]",
+        output_path=str(tmp_path / "cmp.png"),
+        csv_path=str(tmp_path / "nonexistent_dir" / "cmp.csv"),
+    )
+    assert result["success"] is False
+    assert result["error_code"] == "OUTPUT_DIRECTORY_NOT_FOUND"

@@ -661,7 +661,10 @@ def turbocharts_convert(
     cmd_img = _build_cmd(raw_file, output_path, chart_type, linename=linename,
                          dependency=dependency, ac_config=ac_config)
 
-    result = run_turbocharts(cmd_img, timeout_seconds=120)
+    try:
+        result = run_turbocharts(cmd_img, timeout_seconds=120)
+    except RuntimeError as exc:
+        return error_response("TOOL_TIMEOUT", str(exc))
     img_generated = Path(output_path).exists()
     img_fingerprint = _file_fingerprint(output_path) if img_generated else None
     if img_generated:
@@ -727,6 +730,9 @@ def turbocharts_convert(
                                  linename="&".join(group), dependency=dependency,
                                  csv_path=target_csv, ac_config=ac_config)
             proc = run_turbocharts(cmd_csv, timeout_seconds=120)
+        except RuntimeError as exc:
+            warnings.append(f"turbocharts 导出超时: {exc}")
+            continue
         finally:
             tmp_img.unlink(missing_ok=True)
         if proc.returncode == 0 and Path(target_csv).exists():

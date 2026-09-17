@@ -768,10 +768,16 @@ def replace_port_component(
     if err:
         return err
 
-    if not target_instance_name.strip():
-        return error_response("EMPTY_INSTANCE_NAME", "target_instance_name 不能为空")
+    target_instance_name, err = require_nonempty(
+        target_instance_name, error_code="EMPTY_INSTANCE_NAME", label="target_instance_name")
+    if err:
+        return err
 
-    rct = replacement_component_type.strip()
+    rct, err = require_nonempty(
+        replacement_component_type, error_code="UNSUPPORTED_COMPONENT_TYPE",
+        label="replacement_component_type")
+    if err:
+        return err
     if rct not in ("TermG", "P_nToneG"):
         return error_response("UNSUPPORTED_COMPONENT_TYPE", "replacement_component_type 仅支持 TermG / P_nToneG")
 
@@ -782,7 +788,7 @@ def replace_port_component(
     return call_grpc(
         ecserver_pb2.REPLACE_PORT_COMPONENT,
         {"project_path": resolved,
-         "target_instance_name": target_instance_name.strip(),
+         "target_instance_name": target_instance_name,
          "replacement_component_type": rct,
          "parameters": params},
         timeout_seconds,
