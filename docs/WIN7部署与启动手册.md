@@ -17,7 +17,7 @@
 
 1. 目标机装两个补丁：**KB4474419**（SHA-2 签名）→ **KB3118401**（UCRT）——**顺序不能反**
 2. 把整个 `edi-mcp\` 目录拷到目标机，例如 `C:\edi-mcp\`（**整个目录，不是只拷 exe**）
-3. 双击 `start_server.bat`
+3. 双击 `start_local.bat`（本机）或 `start_remote.bat`（远程访问，见《远程操作方案》）
 4. 浏览器打开 `http://127.0.0.1:50026/ready` → 看到 `"status":"ready"` 就算成功
 
 **路径 B（从源码建环境并打包）**
@@ -38,7 +38,7 @@ scripts\win7\setup_win7_env.bat
 | 目标系统 | Windows **7 SP1**（32/64 位均可，全程位数要一致；本项目按 **x64** 交付） |
 | 部署形态 | 服务与 `EDI.exe` **必须同机**；**不允许用 VM 绕开** |
 | 服务端口 | MCP/HTTP **50026**；EDI gRPC **50055** |
-| 交付形态 | PyInstaller **目录模式**（`edi_mcp_server.exe` + `_internal\` + `.env` + `start_server.bat`） |
+| 交付形态 | PyInstaller **目录模式**（`edi_mcp_server.exe` + `_internal\` + `.env` + `start_local.bat` / `start_remote.bat`） |
 | 明确不做 | 不自研/替换 mcp 传输层、不改 SDK 架构、不做 14 个依赖的大规模降级 |
 
 ---
@@ -63,7 +63,7 @@ scripts\win7\setup_win7_env.bat
 > 一句话边界：一仓双 venv 解决"同一份代码、两套依赖、一个入口"，但**不能让 Win7 机器跑最新依赖栈**（pydantic-core 2.46 的 Rust 扩展是硬红线）。Win7 上"最新"的天花板 = 最新代码 + 冻结依赖（exe 或跑源码）。
 
 > **布局变更（2026-09-14）**：Win7 相关脚本统一收到 **`scripts/win7/`** —— `install_win7_env.py`、`build_win7_exe.py`、`check_dist_win7.py`、`check_pyd_imports.py`、`patch_mcp_win7.py`、`diag_win7_exe.py`、`setup_win7_env.bat`（本文档全部命令已按新路径写）。
-> 留在 `scripts/` 的是**两边共用**的：`edi_mcp_server.spec`（打包 spec，开发构建也用）、`run.bat`（产物启动脚本来源）、`Logo.ico`、`build.ps1`、`smoke_test_exe.py`。
+> 留在 `scripts/` 的是**两边共用**的：`edi_mcp_server.spec`（打包 spec，开发构建也用）、`start_local.bat` / `start_remote.bat`（产物启动脚本来源）、`Logo.ico`、`build.ps1`、`smoke_test_exe.py`。
 > 现场旧副本如果是扁平布局（`scripts\build_win7_exe.py` 等）**照旧能用**（副本是自包含的）；下次同步时把整个 `scripts\` 重拷一遍即可切到新布局。
 
 ---
@@ -161,7 +161,7 @@ certutil -hashfile edi-mcp-win7.zip MD5
 | 文件/目录 | 说明 |
 |---|---|
 | `edi_mcp_server.exe` | 主程序（窗口模式，约 9.0 MB） |
-| `start_server.bat` | 双击入口（起服务 + 开 UI） |
+| `start_local.bat` / `start_remote.bat` | 双击入口（本机 / 远程两种模式） |
 | `.env` | 全部运行配置（§3.3） |
 | `_internal\` | 运行时依赖（Python / gRPC / 冻结栈…… 几千个文件） |
 
@@ -181,8 +181,8 @@ dir /s /b C:\edi-mcp\*.dll C:\edi-mcp\*.pyd C:\edi-mcp\*.exe | find /c /v ""
 | `EDI_PATH` | 空 | EDI 客户端 exe 路径。**留空=自动探测**（`EDI.exe` > `EDA-PMDS.exe` > `CAIS.exe`）；装在非默认位置或探测报错时才填绝对路径 |
 | `TURBOCHARTS_PATH` | 空 | 同上，自动探测 `turbocharts_app.exe` > `TurboCharts.exe` |
 | `MCP_TRANSPORT` | `streamable-http` | 保持默认；`stdio` 用于被别的程序当子进程拉起的用法 |
-| `MCP_PORT` | `50026` | 服务端口（`start_server.bat` 里提示的 UI/MCP 地址写死 50026，改端口后请手动访问新端口） |
-| `MCP_ALLOWED_PROCESSES` | `edi-agent-service.exe` | **进程白名单**：只有进程名含这些子串（逗号分隔）的进程能调 `/mcp`。**留空=关闭白名单**；客户端换名字后不同步改 → 调用被拒 |
+| `MCP_PORT` | `50026` | 服务端口（默认 50026；改端口后请手动访问新端口） |
+| `MCP_ALLOWED_PROCESSES` | `edi-agent-service.exe` | **进程白名单**（仅本机模式生效）：只有进程名含这些子串（逗号分隔）的进程能调 `/mcp`。**留空=关闭白名单**；**远程模式（`--host 0.0.0.0`）自动忽略**；客户端换名字后不同步改 → 调用被拒 |
 | `VISION_API_KEY` / `VISION_BASE_URL` / `VISION_MODEL` | 空 | 三个都填才启用图片视觉分析 |
 | `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` | 空 | 填了才启用 `/chat` 多轮工具调用 |
 | `REPORT_RENDER_URL` | `http://127.0.0.1:17867/...` | 仿真报告渲染服务地址 |
@@ -191,7 +191,7 @@ dir /s /b C:\edi-mcp\*.dll C:\edi-mcp\*.pyd C:\edi-mcp\*.exe | find /c /v ""
 
 ### 3.4 启动服务
 
-**双击（推荐）**：双击 `start_server.bat` → 它 `cd` 到自己所在目录 → 用默认浏览器打开 UI（`http://127.0.0.1:50026/ui`）→ 前台运行 `edi_mcp_server.exe`（自动读同目录 `.env`）。**关闭窗口 / Ctrl+C = 停服务。**
+**双击（推荐）**：双击 `start_local.bat`（本机，监听 `127.0.0.1`）或 `start_remote.bat`（远程，监听 `0.0.0.0`）→ 前台运行 `edi_mcp_server.exe`（自动读同目录 `.env`）。**关闭窗口 / Ctrl+C = 停服务。**
 
 > ⚠️ exe 是**窗口模式**（spec `console=False`）：**双击后没有任何日志输出，这是设计如此、不是故障**。要日志走下面命令行方式，或用 `/ready`、`/health` 探活。
 
@@ -206,7 +206,7 @@ cd /d C:\edi-mcp && edi_mcp_server.exe --transport streamable-http --port 50026
 | `--transport` | `streamable-http`（默认）/ `stdio` | 一般保持默认 |
 | `--port` | 1–65535 | 覆盖 `.env` 的 `MCP_PORT`；超范围会直接报错退出 |
 
-Host 固定 `127.0.0.1`（代码硬编码，不可配置）。
+Host 默认 `127.0.0.1`；远程模式用 `--host 0.0.0.0`（`start_remote.bat` 已带），详见《远程操作方案》。
 
 **确认已就绪**：浏览器打开 `http://127.0.0.1:50026/ready`（启动中返回 503，等几秒刷新）。真机实测返回：
 
@@ -232,7 +232,7 @@ Host 固定 `127.0.0.1`（代码硬编码，不可配置）。
 | 路径 | 方法 | 用途 |
 |---|---|---|
 | `/ready` | GET | 就绪探针：启动中 503，就绪 200 + JSON |
-| `/ui`、`/` | GET | Web UI（`start_server.bat` 默认打开） |
+| `/ui`、`/` | GET | Web UI（手动浏览器访问；启动脚本不再自动打开） |
 | `/health` | GET | 健康检查 |
 | `/tools/list` | GET | 工具清单 |
 | `/metrics` | GET | 指标 |
@@ -241,12 +241,12 @@ Host 固定 `127.0.0.1`（代码硬编码，不可配置）。
 | `/images/{token}`、`/documents/{token}` | GET | 工具产出的图片/文档 |
 | `/upload` | POST | 上传 |
 
-服务固定只监听 `127.0.0.1`（host 硬编码，不可配置）。
+服务默认监听 `127.0.0.1`；远程模式 `--host 0.0.0.0` 监听所有网卡（见《远程操作方案》）。
 
 ### 3.6 接入客户端
 
-1. **MCP 地址**填 `http://127.0.0.1:50026/mcp`（同机；服务固定只监听本机）。
-2. **进程白名单**：客户端进程名要能匹配 `MCP_ALLOWED_PROCESSES`（默认 `edi-agent-service.exe`）。被拒时服务端日志有 `[process-probe]` 记录。**"客户端连不上 / 403" 先查这条。**
+1. **MCP 地址**填 `http://127.0.0.1:50026/mcp`（本机）或 `http://<远程机IP>:50026/mcp`（远程，见《远程操作方案》）。
+2. **进程白名单**（仅本机模式生效）：客户端进程名要能匹配 `MCP_ALLOWED_PROCESSES`（默认 `edi-agent-service.exe`）。**远程模式（`--host 0.0.0.0`）自动忽略白名单**。被拒时服务端日志有 `[process-probe]` 记录。**"客户端连不上 / 403" 先查这条。**
 3. **一致性自检**：客户端看到的工具数应为 **90**、`tools_hash` 与 `/ready` 相同（基线 `ae6cd062`）。对不上 = 客户端连的不是这版服务。
 
 ### 3.7 停止 / 卸载
@@ -260,8 +260,8 @@ netstat -ano | findstr ":50026"
 
 ### 3.8 常驻 / 开机自启（可选，**未在 Win7 上验证**）
 
-- **方式 A（简单）**：把 `start_server.bat` 快捷方式放进启动文件夹（<kbd>Win</kbd>+<kbd>R</kbd> → `shell:startup`）。
-- **方式 B（服务化）**：任务计划程序 → 触发器"计算机启动时" → 操作 `C:\edi-mcp\start_server.bat`、起始于 `C:\edi-mcp`；"不管用户是否登录"运行需勾"使用最高权限"，且**不能有交互式窗口**。
+- **方式 A（简单）**：把 `start_local.bat`（或 `start_remote.bat`）快捷方式放进启动文件夹（<kbd>Win</kbd>+<kbd>R</kbd> → `shell:startup`）。
+- **方式 B（服务化）**：任务计划程序 → 触发器"计算机启动时" → 操作 `C:\edi-mcp\start_remote.bat`（远程）或 `start_local.bat`（本机）、起始于 `C:\edi-mcp`；"不管用户是否登录"运行需勾"使用最高权限"，且**不能有交互式窗口**。
 
 > ⚠️ 两条路径**都没有真机验证过**，现场用之前先手工验一轮。
 
@@ -357,7 +357,7 @@ cd /d C:\edi-grpc-mcp
 > 打包器会**拒绝非 3.10 解释器**（用 3.12 跑会直接报 `[FAIL] 必须用 Python 3.10 打包`）—— 防的是手滑用开发栈打出上不了 Win7 的 exe。
 > `--dist` 缺省是 `dist/edi-mcp`；开发机的 3.12 构建也在用 `dist/`，所以给 Win7 打包建议显式给 `--dist dist-win7/edi-mcp`（见 §1.5）。
 
-它做五件事：PyInstaller 打 spec → 生成 `dist\edi-mcp\.env` → 拷 `start_server.bat` → `scripts\win7\check_dist_win7.py` 产物体检 →（`--smoke`）起 exe 探 `/ready`。
+它做五件事：PyInstaller 打 spec → 生成 `dist\edi-mcp\.env` → 拷 `start_local.bat` / `start_remote.bat` → `scripts\win7\check_dist_win7.py` 产物体检 →（`--smoke`）起 exe 探 `/ready`。
 `--no-build` 只补 `.env`/拷 bat/体检；`--port N` 指定写进 `.env` 的端口。
 
 ### 6.2 spec 关键点
@@ -432,7 +432,7 @@ cd /d C:\edi-grpc-mcp && .venv-win7\Scripts\python.exe scripts\win7\diag_win7_ex
 | 弹窗/日志 `找不到指定的模块`（126） | 缺系统运行库 | 装 KB3118401；仍不行补 VC++ 2015-2022 x64 |
 | 弹窗/日志 `找不到指定的程序`（127） | 依赖了 Win7 没有的 API（版本红线） | **不要自己升降依赖**；对照 §2 的冻结栈 |
 | `/ready` 连不上 | 进程没起 / 端口被占 / 防火墙 | `tasklist \| findstr edi_mcp_server`、`netstat -ano \| findstr ":50026"`、临时关防火墙试 |
-| 客户端 403 / 连不上 | 进程白名单不匹配 | 改 `MCP_ALLOWED_PROCESSES`（或留空关闭）后重启 |
+| 客户端 403 / 连不上 | 进程白名单不匹配（仅本机模式） | 改 `MCP_ALLOWED_PROCESSES`（或留空关闭）后重启；远程模式已自动忽略白名单 |
 | 工具能列出但一调就报错，`grpc:offline` | EDI 没启动 / gRPC 地址错 | 起 EDI；核对 `.env` 的 `EDA_GRPC_SERVER` |
 | 同一份产物这台机器能跑、那台不行 | 两台机器 UCRT/补丁不同 | 以目标机 `/ready` 实测为准；按 §3.1 补补丁 |
 | 改了 `.env` 没生效 | 没重启服务 / 存成了 UTF-16 | 重启；记事本另存为 ANSI 或 UTF-8 |
@@ -441,7 +441,7 @@ cd /d C:\edi-grpc-mcp && .venv-win7\Scripts\python.exe scripts\win7\diag_win7_ex
 
 ## 10. 尚未验证
 
-1. **开机自启**：`scripts\run.bat` 没在 3.10/Win7 上跑过（§3.8 两种做法都待验证）。
+1. **开机自启**：`scripts\start_local.bat` / `start_remote.bat` 没在 3.10/Win7 上跑过（§3.8 两种做法都待验证）。
 2. **与 EDI 联动**：现场那次 `grpc:offline`（那台机器 EDI 服务没起），"EDI 起来后 exe 调 gRPC 是否正常"仍待现场确认。
 3. **现场接线细节**：服务端口、客户端侧 MCP 配置、进程白名单放行客户端 exe（现场日志里看 `[process-probe]`）。
 
