@@ -2,7 +2,7 @@
 """Win7 exe 一键打包（路线⑤：PythonWin7 3.10 + 冻结依赖）。
 
 等价于 scripts/build.ps1，但**不依赖 uv / PowerShell**（Win7 上都没有）：
-    打包 → 生成 dist/edi-mcp/.env → 拷 start_server.bat → 产物 Win7 体检 →（可选）冒烟
+    打包 → 生成 dist/edi-mcp/.env → 拷 start_local.bat / start_remote.bat → 产物 Win7 体检 →（可选）冒烟
 
 用法：
     python scripts/win7/build_win7_exe.py                 # 打包 + 体检
@@ -13,7 +13,7 @@
 
 必须用 **Python 3.10** 跑（本脚本会拒绝其它版本）：3.12 下打出来的 exe 在 Win7 上必崩
 （pydantic-core 2.46 的 Rust 扩展导入 Win8+/Win10 符号）。用：
-    .venv-win7\\Scripts\\python.exe scripts\\build_win7_exe.py --smoke
+    .venv-win7\\Scripts\\python.exe scripts\\win7\\build_win7_exe.py --smoke
 
 前置（一次性）：
     .venv-win7\\Scripts\\python.exe -m pip install pyinstaller==6.22.3
@@ -189,7 +189,7 @@ def main() -> int:
     if sys.version_info[:2] != (3, 10):
         say("")
         say("[FAIL] 必须用 Python 3.10 打包（当前 %d.%d）—— 3.12 打出来的 exe 在 Win7 上必崩。" % sys.version_info[:2])
-        say("       请改用: .venv-win7\\Scripts\\python.exe scripts\\build_win7_exe.py ...")
+        say("       请改用: .venv-win7\\Scripts\\python.exe scripts\\win7\\build_win7_exe.py ...")
         return 1
 
     ok = True
@@ -214,7 +214,7 @@ def main() -> int:
     say("\n%s（%d 项，失败 %d）" % ("全部通过" if not failed else "有失败", len(results), len(failed)))
     if ok:
         say("产物: %s" % DIST)
-        say("上机: 整个目录拷到 Win7 → 跑 start_server.bat（或 edi_mcp_server.exe --port %d）" % a.port)
+        say("上机: 整个目录拷到 Win7 → 跑 start_local.bat（本机）或 start_remote.bat（远程，或 edi_mcp_server.exe --host 0.0.0.0 --port %d）" % a.port)
     say("BUILD_RESULT steps=%d failed=%d" % (len(results), len(failed)))
     return 0 if ok else 1
 

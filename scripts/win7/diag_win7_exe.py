@@ -7,8 +7,8 @@
       本脚本比对 md5 取证，并实际起一次 exe 探 /ready。
 
 用法（现场，单行）：
-    .venv-win7\\Scripts\\python.exe scripts\\diag_win7_exe.py
-    .venv-win7\\Scripts\\python.exe scripts\\diag_win7_exe.py --dist dist\\edi-mcp --port 50027
+    .venv-win7\\Scripts\\python.exe scripts\\win7\\diag_win7_exe.py
+    .venv-win7\\Scripts\\python.exe scripts\\win7\\diag_win7_exe.py --dist dist\\edi-mcp --port 50027
 
 末行 ASCII 契约：DIAG_RESULT checks=N failed=M     rc=0 全过 / rc=1 有失败
 输出只用 ASCII + GBK 可编码字符，禁用 U+2713/U+2717/U+2705/U+274C 这类符号（GBK 控制台会 UnicodeEncodeError）。

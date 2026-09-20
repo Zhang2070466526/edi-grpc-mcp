@@ -2,8 +2,8 @@
 """打包产物体检 —— 判断 dist 目录打出来的东西能不能在 Win7 跑（不用把 exe 搬过去试）。
 
 用法：
-    python scripts/check_dist_win7.py [dist 目录，默认 dist/edi-mcp]
-    python scripts/check_dist_win7.py --dir dist/edi-mcp
+    python scripts/win7/check_dist_win7.py [dist 目录，默认 dist/edi-mcp]
+    python scripts/win7/check_dist_win7.py --dir dist/edi-mcp
 
 查三件事（对应现场三类报错）：
   1. 每个 PE 文件（bootloader 本体 + 所有 .pyd/.dll）是否导入了 Win8+/Win10 才有的符号
