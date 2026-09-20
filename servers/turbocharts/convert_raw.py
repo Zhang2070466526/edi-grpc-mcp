@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from servers.eda.config import TURBOCHARTS_PATH
-from servers.utils import build_artifact, build_file_link, error_response, validate_file
+from servers.utils import build_artifact, build_file_link, error_response, per_tool_mutex, validate_file
 from servers.turbocharts.config import run_turbocharts
 from servers import mcp
 
@@ -551,6 +551,7 @@ def _read_csv_labels(path: str) -> tuple[list[str], int]:
 
 
 @mcp.tool()
+@per_tool_mutex
 def turbocharts_convert(
     raw_path: str,
     output_path: str,

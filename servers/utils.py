@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import functools
 import math
 import os
 import socket
@@ -23,6 +24,23 @@ SERVER_STARTED_AT: float = time.time()
 def server_uptime_seconds() -> float:
     """返回服务启动以来的运行秒数。"""
     return time.time() - SERVER_STARTED_AT
+
+
+def per_tool_mutex(fn):
+    """给工具函数加一把独立互斥锁。
+
+    同步工具统一 offload 到工作线程后，同类工具并发会争用共享资源（turbocharts
+    子进程、Matplotlib 全局状态、报告渲染服务）。此装饰器给每个被装饰函数一把
+    独立锁，同类工具互斥、不同工具互不阻塞。
+    """
+    lock = threading.Lock()
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with lock:
+            return fn(*args, **kwargs)
+
+    return wrapper
 
 
 # ── 文件 / 路径校验 ──

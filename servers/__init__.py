@@ -68,3 +68,31 @@ mcp = FastMCP(
         and _settings.mcp_stateless_http
     ),
 )
+
+"""
+── 同步工具统一 offload（保持函数 sync，只在 MCP 调用层 offload）────────── FastMCP 的 Tool.run 对同步工具直接同步执行 fn(...)（见 call_fn_with_arg_validation
+的 else 分支 `return fn(...)`），慢工具执行期间整个事件循环被冻结（下载 / 探活 /其它会话轮询全堵）。
+
+这里 monkeypatch Tool.run：同步工具整段丢到工作线程（asyncio.run 驱动，因为 run是 async 方法），
+事件循环立即回来接单。工具函数本身保持 sync，直接调用仍返回dict（Python API 不变、测试不破）。
+anyio.to_thread 会复制 context（Host 推导的contextvar 传得进线程），与产物链接机制不冲突。
+
+"""
+
+import asyncio
+
+import anyio
+from mcp.server.fastmcp.tools import base as _tb
+
+_orig_run = _tb.Tool.run
+
+
+async def _offloading_run(self, arguments, context=None, convert_result=False):
+    if self.is_async:
+        return await _orig_run(self, arguments, context, convert_result)
+    return await anyio.to_thread.run_sync(
+        lambda: asyncio.run(_orig_run(self, arguments, context, convert_result))
+    )
+
+
+_tb.Tool.run = _offloading_run

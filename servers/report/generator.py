@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 
 from servers import mcp
 from servers.settings import get_settings
-from servers.utils import build_artifact, build_file_link, is_network_path, error_response
+from servers.utils import build_artifact, build_file_link, is_network_path, error_response, per_tool_mutex
 from servers.multimodal_vision.document import register_document_url
 
 load_dotenv()
@@ -193,6 +193,7 @@ def _validate_schematic(path: str) -> tuple[str | None, bool, dict | None]:
 # ═══════════════════════════════════════════════════════════
 
 @mcp.tool()
+@per_tool_mutex
 def generate_simulation_report(
     output_path: str,
     model_name: str,

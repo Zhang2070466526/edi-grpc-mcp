@@ -241,7 +241,7 @@ python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto 
   - **多台远程机**：主机侧并列多个 server 条目即可（`eda-hfss`/`eda-cst`…，工具名带前缀、可并行）；≥3 台或要自动选机再上「主机侧网关」（§5.2 L1/L2/L3）。
   - **重启 / 关机**：任务状态在内存，重启即丢；旧 `task_id` → `TASK_NOT_FOUND` + **`outcome_known=false`**（结果未知）；孤儿软件进程 / 残留锁 / 半成品处置见 §6.3；**重启机器后记得重开 EDI**（否则 `/ready` 的 `grpc=offline`）。
   - **异常排查**：`docs/HTTP_API.md`「远程排障速查」（421/403/连不上/404/断点续传）。
-  - 远程机制见 `docs/IMPLEMENTATION.md` 三、特殊机制；代码问题 `R41`–`R46`（审查报告 §14.5 / §14.6 / §14.8）
+  - 远程机制见 `docs/IMPLEMENTATION.md` 三、特殊机制；**未修代码问题**见 `docs/审查报告.md`（远程剩余项 §13.3、可追溯与日志 §13.1）
 
 ### Chat 与工具注册
 - Chat 工具列表从 MCP 元数据自动生成，排除同步阻塞和 COM 依赖工具

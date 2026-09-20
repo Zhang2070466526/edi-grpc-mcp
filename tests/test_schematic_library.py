@@ -25,9 +25,10 @@ def test_search_public_schematic_empty(monkeypatch, fake_caller):
     from servers.eda import model_library as ml
     ecserver_pb2, calls, _fake = fake_caller
     monkeypatch.setattr(ml, "call_grpc", _fake)
-    ml.search_schematic_from_public_library("")
-    assert calls[-1][0] == ecserver_pb2.SEARCH_SCHEMATIC_FROM_PUBLIC_LIBRARY
-    assert calls[-1][1] == {"search_name": ""}
+    r = ml.search_schematic_from_public_library("")
+    assert r["success"] is False
+    assert r["error_code"] == "INVALID_PARAMETERS"
+    assert calls == []  # 空参数本地拦下，不打 gRPC
 
 
 def test_search_personal_schematic_payload(monkeypatch, fake_caller):

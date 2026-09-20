@@ -21,12 +21,13 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from servers.eda.config import TURBOCHARTS_PATH
-from servers.utils import build_artifact, build_file_link, error_response
+from servers.utils import build_artifact, build_file_link, error_response, per_tool_mutex
 from servers.turbocharts.config import run_turbocharts
 from servers import mcp
 
 
 @mcp.tool()
+@per_tool_mutex
 def compare_simulation_results(
     result_paths: list[str],
     curve: str,
@@ -91,7 +92,7 @@ def compare_simulation_results(
     if csv_path and not Path(csv_path).parent.is_dir():
         return error_response("OUTPUT_DIRECTORY_NOT_FOUND", f"CSV 输出目录不存在: {Path(csv_path).parent}")
 
-    # Step 1: export each RAW to temp CSV (serialized via runner)
+    # Step 1: export each RAW to temp CSV (per_tool_mutex via runner)
     dep_key = dependency
     raw_curves: list[tuple[list[float], list[float]]] = []
 
