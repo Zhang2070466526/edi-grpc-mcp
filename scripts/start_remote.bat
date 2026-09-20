@@ -20,5 +20,4 @@ echo   Whitelist disabled - remote clients cannot be identified.
 echo   Close this window or press Ctrl+C to stop.
 echo ====================================================
 echo.
-set MCP_ALLOWED_PROCESSES=
 edi_mcp_server.exe --host 0.0.0.0
