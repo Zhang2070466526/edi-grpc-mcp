@@ -2,7 +2,7 @@
 
 流程：校验路径 → Base64 编码 → POST /v1/chat/completions → 解析 choices[0].message.content
 并发控制：BoundedSemaphore(2)，超限返回 VISION_BUSY
-_encode 返回值：成功 (data_url, None)，失败 (None, error_dict) — 注意第二个值是 None 不是 MIME
+_encode 返回三元组 (data_url, mime, err)：成功 (data_url, mime, None)，失败 (None, None, error_dict)
 """
 
 from __future__ import annotations
@@ -140,7 +140,7 @@ def _call_vision(path: Path, prompt: str, detail: str, max_tokens: int) -> dict:
     except Exception:
         return error_response("INVALID_VISION_RESPONSE", "返回内容无法解析")
 
-    usage = data.get("usage", {})
+    usage = data.get("usage") or {}
     choices = data.get("choices", [])
     if not choices:
         return error_response("INVALID_VISION_RESPONSE", "返回为空")

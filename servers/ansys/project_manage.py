@@ -224,7 +224,7 @@ def close_hfss_project(
         try:
             completed = subprocess.run(
                 ["taskkill", "/F", "/PID", str(pid)],
-                capture_output=True, text=True, timeout=10, check=False,
+                capture_output=True, text=True, timeout=10, check=False, errors="replace",
             )
             if completed.returncode != 0:
                 return error_response("TASKKILL_FAILED",

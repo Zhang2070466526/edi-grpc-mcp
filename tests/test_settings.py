@@ -57,7 +57,8 @@ class TestSettingsValidate:
     def test_invalid_grpc_address(self):
         from servers.settings import Settings
         s = Settings(eda_grpc_server="no-port", _env_file=None)
-        assert any("EDA_GRPC_SERVER" in i for i in s.validate())
+        with pytest.raises(ValueError, match="EDA_GRPC_SERVER"):
+            s.validate()
 
     def test_invalid_grpc_port(self):
         from servers.settings import Settings

@@ -97,7 +97,7 @@ class TestDuplicateProtection:
 class TestContextUpdate:
     """上下文更新测试。"""
 
-    def test_list_epp_projects_updates_last_projects(self):
+    def test_list_epp_projects_updates_last_folder(self):
         from servers.chat.service import ChatService
         svc = ChatService.instance()
         s = svc._get_or_create("")  # 空 ID 创建新会话
@@ -105,7 +105,6 @@ class TestContextUpdate:
                             {"folder_path": "C:/proj"},
                             {"success": True, "projects": [{"name": "a", "path": "C:/a.epp"}]})
         assert s.last_folder_path == "C:/proj"
-        assert len(s.last_projects) == 1
 
     def test_start_simulation_saves_task_id(self):
         from servers.chat.service import ChatService

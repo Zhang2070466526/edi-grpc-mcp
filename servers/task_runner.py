@@ -79,7 +79,8 @@ class TaskRunner:
             self._prune_locked()
             if require_idle and self._pending_locked() > 0:
                 return None
-            if len(self._tasks) >= self._max_tasks:
+            active = sum(1 for t in self._tasks.values() if t.get("finished_at") is None)
+            if active >= self._max_tasks:
                 return None
             self._tasks[task_id] = task
         try:

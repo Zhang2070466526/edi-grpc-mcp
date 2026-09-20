@@ -86,19 +86,18 @@ class Settings(BaseSettings):
     simulation_agent_timeout: int = Field(default=60, ge=5, le=600)
 
     def validate(self) -> list[str]:
-        """业务级格式校验，返回问题列表。不阻断启动，仅由 start_servers.py 打印警告。"""
+        """业务级格式校验，返回问题列表。致命格式错误（EDA_GRPC_SERVER 缺 :）直接 raise ValueError，其余仅打印警告。"""
         issues: list[str] = []
         # ── gRPC 地址格式（host:port）──
         if ":" not in self.eda_grpc_server:
-            issues.append(f"EDA_GRPC_SERVER 格式无效（需要 host:port）: {self.eda_grpc_server}")
-        else:
-            host, port_str = self.eda_grpc_server.rsplit(":", 1)
-            try:
-                port = int(port_str)
-                if port < 1 or port > 65535:
-                    issues.append(f"EDA_GRPC_SERVER 端口越界: {port}")
-            except ValueError:
-                issues.append(f"EDA_GRPC_SERVER 端口不是整数: {port_str}")
+            raise ValueError(f"EDA_GRPC_SERVER 格式无效（需要 host:port）: {self.eda_grpc_server}")
+        host, port_str = self.eda_grpc_server.rsplit(":", 1)
+        try:
+            port = int(port_str)
+            if port < 1 or port > 65535:
+                issues.append(f"EDA_GRPC_SERVER 端口越界: {port}")
+        except ValueError:
+            issues.append(f"EDA_GRPC_SERVER 端口不是整数: {port_str}")
         # ── 传输方式 ──
         if self.mcp_transport not in ("stdio", "streamable-http"):
             issues.append(f"MCP_TRANSPORT 不支持（streamable-http / stdio）: {self.mcp_transport}")

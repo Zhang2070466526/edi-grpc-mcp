@@ -6,6 +6,7 @@ CstApi 类封装 CST 官方 Python 接口的定位、加载与会话打开/关�
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import shutil
@@ -51,7 +52,7 @@ def to_writable_copy(model_path: str) -> str:
     tmp_dir = os.path.join(tempfile.gettempdir(), "cst_solve")
     os.makedirs(tmp_dir, exist_ok=True)
     _cleanup_stale_tmp_copies(tmp_dir, _CST_TMP_TTL_SECONDS)
-    tmp_model = os.path.join(tmp_dir, os.path.basename(model_path))
+    tmp_model = os.path.join(tmp_dir, f"{hashlib.md5(model_path.encode()).hexdigest()[:8]}_{os.path.basename(model_path)}")
     shutil.copyfile(model_path, tmp_model)
     src_dir = os.path.splitext(model_path)[0]
     dst_dir = os.path.splitext(tmp_model)[0]
@@ -85,7 +86,6 @@ def query_task(
         "task_id": task_id,
         "status": snap["status"],
         "completed": snap.get("finished_at") is not None,
-        "message": snap["message"],
         "error": snap["error"],
         "started_at": snap["started_at"],
         "finished_at": snap["finished_at"],

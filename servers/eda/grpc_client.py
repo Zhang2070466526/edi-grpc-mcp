@@ -382,7 +382,7 @@ def _call_grpc_unlocked(
         # 三重筛选：client_uuid + task_id + event_type 全部匹配才处理
         # 增量收集 ads_output（不 strip、不覆写），终态事件使用完整日志
         chunk_count = 0
-        action_accepted = response.code == 0
+        action_accepted = True  # code != 0 已在上文 return REJECTED
         for event in event_stream:
             chunk = ""  # 防止终态事件先于普通事件到达时 UnboundLocalError
             if event.client_uuid != client_uuid:

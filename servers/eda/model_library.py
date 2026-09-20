@@ -233,9 +233,12 @@ def add_performance_component(
 
 def _search_schematic(search_name: str, task_type: int, timeout_seconds: int) -> dict[str, Any]:
     """按拓扑描述查询原理图库（公共/个人复用，仅 task_type 不同）。"""
+    search_name, err = require_nonempty(search_name, label="search_name")
+    if err:
+        return err
     return call_grpc(
         task_type,
-        {"search_name": search_name or ""},
+        {"search_name": search_name},
         timeout_seconds,
         max_timeout_seconds=60,
     )

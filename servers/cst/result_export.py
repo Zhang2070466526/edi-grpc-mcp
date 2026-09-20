@@ -180,7 +180,7 @@ class CstResultExporter:
     def _run_farfield_vba(self, prj, output_dir: str) -> list[str]:
         """在已打开的会话内执行 VBA 宏导出远场，返回 txt 路径列表。"""
         os.makedirs(output_dir, exist_ok=True)
-        vba = _FARFIELD_VBA.replace("OUTDIR", output_dir.replace("\\", "\\\\"))
+        vba = _FARFIELD_VBA.replace("OUTDIR", output_dir)
         if prj.schematic.execute_vba_code(vba) is False:
             raise RuntimeError("export_farfield: execute_vba_code returned False")
         return sorted(glob.glob(os.path.join(output_dir, "*.txt")))

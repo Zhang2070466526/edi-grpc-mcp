@@ -115,6 +115,9 @@ def resolve_client_process(client_port: int, server_port: int) -> tuple[str, str
             return hit[1]
     exe, cmd = find_client_process(client_port, server_port)
     with _cache_lock:
+        # prune 过期条目，防止无状态 HTTP 每请求新端口导致无界增长
+        for _p in [p for p, (t, _) in _cache.items() if now - t >= _TTL_SECONDS]:
+            del _cache[_p]
         _cache[client_port] = (now, (exe, cmd))
     return exe, cmd
 

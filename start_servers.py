@@ -57,7 +57,11 @@ DEFAULT_PORT = _cfg.mcp_port
 DEFAULT_BIND_HOST = _cfg.mcp_bind_host
 
 # ── 启动时配置校验 ──
-_cfg_issues = _cfg.validate()
+try:
+    _cfg_issues = _cfg.validate()
+except ValueError as exc:
+    print(f"错误：{exc}")
+    sys.exit(1)
 if _cfg_issues:
     print("WARNING: 配置存在问题 —")
     for issue in _cfg_issues:

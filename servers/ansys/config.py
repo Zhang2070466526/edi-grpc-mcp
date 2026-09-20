@@ -146,8 +146,8 @@ def get_setup_module(design):
 
 # -- 工程锁文件 --
 def get_project_lock_path(project_path: str) -> Path:
-    """C:/demo.aedt -> C:/demo.aedt.lock"""
-    return Path(project_path).with_suffix(".aedt.lock")
+    """C:/demo.aedt -> C:/demo.aedt.lock；C:/demo.aedtz -> C:/demo.aedtz.lock"""
+    return Path(str(project_path) + ".lock")
 
 
 def read_project_lock_pid(lock_path: Path) -> int | None:

@@ -234,7 +234,6 @@ class ChatSession:
     current_project_path: str | None = None
     current_project_name: str | None = None
     last_folder_path: str | None = None
-    last_projects: list[dict] = field(default_factory=list)
     last_simulation_task_id: str | None = None
     updated_at: float = field(default_factory=time.time)
     pending_action: PendingAction | None = None
@@ -759,7 +758,6 @@ class ChatService:
 
         if tool_name == "list_epp_projects":
             session.last_folder_path = args.get("folder_path")
-            session.last_projects = result.get("projects", [])
 
         elif tool_name == "open_edi_project":
             session.current_project_path = args.get("project_path")
@@ -804,7 +802,7 @@ class ChatService:
                                 request_id=request_id, reply=f"执行失败: {exc}")
 
         # 判断工具实际是否成功
-        tool_success = not (isinstance(result, dict) and result.get("success") is False)
+        tool_success = isinstance(result, dict) and bool(result.get("success"))
         result_text = _json.dumps(result, ensure_ascii=False)
         if len(result_text) > 2000:
             result_text = result_text[:2000] + "\n...[truncated]"
