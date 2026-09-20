@@ -123,13 +123,17 @@ def write_env(port: int) -> bool:
 
 
 def copy_launcher() -> bool:
-    say("\n[3/4] 拷启动脚本 start_server.bat")
-    src = REPO / "scripts" / "run.bat"
-    dst = DIST / "start_server.bat"
-    if not src.exists():
-        return step("拷 run.bat", False, "找不到 %s" % src)
-    shutil.copyfile(src, dst)
-    return step("%s/start_server.bat" % rel_dist(), dst.exists())
+    say("\n[3/4] 拷启动脚本 start_local.bat / start_remote.bat")
+    ok = True
+    for name in ("start_local.bat", "start_remote.bat"):
+        src = REPO / "scripts" / name
+        dst = DIST / name
+        if not src.exists():
+            ok = step("拷 %s" % name, False, "找不到 %s" % src)
+            continue
+        shutil.copyfile(src, dst)
+        ok = step("%s/%s" % (rel_dist(), name), dst.exists()) and ok
+    return ok
 
 
 def check_dist(py: Path) -> bool:

@@ -48,8 +48,16 @@ class Settings(BaseSettings):
     mcp_port: int = Field(default=50026, ge=1, le=65535)
     mcp_transport: str = "streamable-http"
     mcp_stateless_http: bool = True
-    # 进程白名单：只放行匹配这些子串的进程访问 /mcp（逗号分隔，可填 exe 路径或命令行关键词）；留空禁用
+    # 进程白名单：只放行精确匹配这些条目的进程访问 /mcp（逗号分隔，可填 exe 路径或命令行关键词）；留空禁用
     mcp_allowed_processes: str = ""
+
+    # ── 远程访问（默认值即现状：仅本机、行为与旧版完全一致）──
+    # 监听地址：127.0.0.1 = 仅本机（默认）；0.0.0.0 = 接受局域网/远程访问
+    mcp_bind_host: str = "127.0.0.1"
+    # 额外允许的 Host 头（逗号分隔），用于自动枚举不到的名字（反代域名等）；留空 = 不追加
+    mcp_extra_allowed_hosts: str = ""
+    # 进程探针中间件：无白名单时打印 /mcp 来源进程（唯一审计线索），False = 关闭
+    mcp_probe_enabled: bool = True
 
     # ── 路径（环境变量覆盖优先，空字符串 = 未设置 = 自动检测）──
     edi_path: str = ""
@@ -94,6 +102,14 @@ class Settings(BaseSettings):
         # ── 传输方式 ──
         if self.mcp_transport not in ("stdio", "streamable-http"):
             issues.append(f"MCP_TRANSPORT 不支持（streamable-http / stdio）: {self.mcp_transport}")
+        # ── 监听地址格式（IP 或主机名，不带协议/端口/路径）──
+        _bind = self.mcp_bind_host.strip()
+        if not _bind:
+            issues.append("MCP_BIND_HOST 不能为空")
+        elif _bind not in ("::",) and "://" in _bind:
+            issues.append(f"MCP_BIND_HOST 不应带协议前缀: {_bind}")
+        elif any(c in _bind for c in ("/", "\\")):
+            issues.append(f"MCP_BIND_HOST 不应带路径: {_bind}")
         # ── SimulationAgent 地址格式 ──
         if not self.simulation_agent_url.startswith(("http://", "https://")):
             issues.append(f"SIMULATION_AGENT_URL 格式无效（需 http(s):// 前缀）: {self.simulation_agent_url}")

@@ -69,7 +69,7 @@ EDI_PATH=                    # 留空自动检测
 TURBOCHARTS_PATH=            # 留空自动检测
 MCP_TRANSPORT=streamable-http
 MCP_PORT=50026
-MCP_ALLOWED_PROCESSES=       # 可选：留空不鉴权；配置后只放行匹配这些子串的进程访问 /mcp
+MCP_ALLOWED_PROCESSES=       # 可选：留空不鉴权；配置后只放行「精确匹配」的进程访问 /mcp（整词 token / exe basename / 完整路径）
 ```
 
 自动检测规则：
@@ -107,6 +107,15 @@ curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
     "baseUrl": "http://127.0.0.1:50026/mcp"
 } } }
 ```
+
+### 安全与远程
+
+- **接入控制**：只有进程白名单 `MCP_ALLOWED_PROCESSES`（同机反查来源进程），且**只保护 `/mcp`**——`/tools/list`、`/metrics`、`/ui`、`/upload`、`/chat` 均不校验。留空 = 不拦截。
+- **远程 / 局域网访问**：默认只监听 `127.0.0.1`。**第十八轮已落地 ①–④**：现在只要 **`--host 0.0.0.0`** 就能远程 —— ① `--host` 参数化；② `transport_security` 按本机全部网卡 IP（含非环回 IPv6）+ 主机名（含大小写）动态枚举（原来 `/mcp` 一律 **`421 Invalid Host header`**）；③ 产物链接按请求 `Host` 推导（原来指向客户端自己的 localhost）；④ 白名单远程自动忽略 + 探针开关。**⑤ `fetch_artifact`（拿回 `.snp`/`.raw` 等产物）、⑥⑦ 未做**。**本期不加鉴权（内网直接访问）**；地址**零配置**（实测：LAN IP / 主机名 / IPv6 全部 200，伪造 `Host` 仍 421）。状态见 [`docs/远程操作方案.md`](docs/远程操作方案.md) §18.1。
+- **多台远程机同时用**：主机侧并列多个 server 条目（`eda-hfss` / `eda-cst`…，工具名带前缀）即可并行；≥3 台或要自动选机再上「主机侧网关」（见 §5.2 的 L1/L2/L3）。
+- **重启 / 关机后的状态与「脏数据」**：任务状态在内存里，重启即丢 —— 旧 `task_id` 会返回 `TASK_NOT_FOUND` + **`outcome_known=false`**（「结果未知」，别当失败处理）；孤儿软件进程 / 残留锁 / 半成品的处置见 §6.3。
+- **排查入口**：[`docs/HTTP_API.md`](docs/HTTP_API.md)「**远程排障速查**」（421 / 403 / 连不上 / 产物 404 / 断点续传 / 客户端超时）+ [`docs/远程操作方案.md`](docs/远程操作方案.md) **§十九 异常与边界清单（53 条）**。
+- 完整方案、实测证据与逐文件实施清单见 [`docs/远程操作方案.md`](docs/远程操作方案.md)（§0.5 链路图 / §2.2 / §2.3 / §三 / §九 / §十八）；代码问题登记为 `R41`–`R46`（见 [`docs/审查报告.md`](docs/审查报告.md) §14.5/§14.6/§14.8）。
 
 ---
 
@@ -454,6 +463,9 @@ POST /chat
 | `MCP_TRANSPORT` | `streamable-http` | 传输方式（streamable-http / stdio） |
 | `MCP_STATELESS_HTTP` | `true` | 无状态模式 |
 | `MCP_PORT` | `50026` | HTTP 监听端口 |
+| `MCP_BIND_HOST` | `127.0.0.1` | 监听地址；远程填 `0.0.0.0`（等价 `--host 0.0.0.0`）|
+| `MCP_EXTRA_ALLOWED_HOSTS` | 空 | 手工补 `Host` 允许列表（逗号分隔）；只在客户端用自动枚举不到的名字（反代域名）时才需要 |
+| `MCP_PROBE_ENABLED` | `1` | 白名单留空时的来源进程探针（无鉴权下唯一的「谁在连」线索，建议保持开启）|
 | `MCP_ALLOWED_PROCESSES` | — | 进程白名单（留空不鉴权；配置后只放行匹配这些子串的进程访问 `/mcp`） |
 | `EDI_PATH` | 自动检测 | EDI.exe 路径 |
 | `TURBOCHARTS_PATH` | 自动检测 | turbocharts_app.exe 路径 |
@@ -603,7 +615,8 @@ edi-grpc-mcp/
 ├── scripts/                            # 构建与启动脚本
 │   ├── build.ps1                       #   PyInstaller 打包脚本（体积检查+过滤敏感配置）
 │   ├── edi_mcp_server.spec             #   PyInstaller spec（hiddenimports+excludes）
-│   ├── run.bat                         #   快速启动批处理
+│   ├── start_local.bat                  #   本机模式启动脚本
+│   ├── start_remote.bat                 #   远程模式启动脚本
 │   └── Logo.ico                        #   应用图标
 │
 ├── dist/                               # 打包产物（不提交 Git）

@@ -130,7 +130,7 @@ class ProcessProbeMiddleware(BaseHTTPMiddleware):
         client = request.client
         if client:
             exe, cmd = resolve_client_process(client.port, self._server_port)
-            print(f"[process-probe] {request.url.path} <- {client.host}:{client.port} "
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [process-probe] {request.url.path} <- {client.host}:{client.port} "
                   f"exe={exe} cmd={cmd}", flush=True)
         return await call_next(request)
 

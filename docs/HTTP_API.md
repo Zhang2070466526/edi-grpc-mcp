@@ -3,6 +3,8 @@
 本文档说明 EDI gRPC MCP 服务暴露的全部 HTTP 路由的**请求体、响应体**,以及每个接口在**成功 / 失败各种情况**下的返回。
 
 > 默认地址 `http://127.0.0.1:50026`。所有接口均只监听本机（host 硬编码 `127.0.0.1`）。
+>
+> ⚠️ **访问控制只有进程白名单，且仅作用于 `/mcp`**；远程/局域网部署另有 3 处改动 + 一个 421 坑 —— 见下节「访问控制与远程部署」。
 
 ---
 
@@ -22,6 +24,64 @@
 | POST | `/mcp` | MCP 协议端点（JSON-RPC） |
 
 ---
+
+## 访问控制与远程部署（先读）
+
+**鉴权现状**：本服务**没有 token / 账号体系**（源码已无 `MCP_API_KEY`，全仓零命中），唯一接入控制是进程白名单 `MCP_ALLOWED_PROCESSES`——同机 TCP 反查来源进程，精确匹配命中放行，否则 **403**。
+
+| 路由 | 是否受白名单保护 | 说明 |
+|---|---|---|
+| `POST /mcp` | ✅ **唯一受保护** | 未命中 → 403（`PROCESS_UNKNOWN` = 反查不到进程；`PROCESS_NOT_ALLOWED` = 查到但不在白名单） |
+| `/health`、`/ready`、`/metrics` | ❌ | 诊断路径，放行 |
+| `/ui`、`/` | ❌ | 浏览器界面，放行 |
+| `GET /tools/list` | ❌ | 放行（**直接返回全量工具名 + 描述**） |
+| `POST /upload`、`POST /chat` | ❌ | 放行（LLM 端点、上传端点均无鉴权） |
+| `GET /images/{token}`、`GET /documents/{token}` | ❌ | 无身份校验，靠**不可猜 token**（`secrets.token_urlsafe(24)`，10 分钟有效）。⚠️ **`/documents/{token}` 是通用的"产物下载"通道**：远程取回 `.snp`/`.raw`/图/任意文件都复用它与 `_doc_store`（新增工具 `fetch_artifact`，**不校验扩展名/目录**）——**不要把 Bearer 之类的鉴权加到这个路由上**，否则主机的浏览器/`curl` 下载会失败（它们带不了自定义头）|
+
+白名单**留空 = 不拦截**（此时挂的是 `ProcessProbeMiddleware`：只打印来源进程，并对**每条 `/mcp` 请求**执行一次 `psutil.net_connections()` 全表扫描）。
+
+**远程 / 局域网访问（非 `127.0.0.1`）需要改 7 项，不只是 `--host`**（2026-09-18 实测；逐文件清单见 `docs/远程操作方案.md` §十八）：
+
+> ✅ **第十八轮进度（2026-09-18 落地并端到端实测）**：**①–④ 已落地** —— 现在启动时加 **`--host 0.0.0.0`** 就能远程：LAN IP / 主机名（含大小写）/ 非环回 IPv6 **自动进允许列表**，产物链接**自动按请求 `Host` 生成**（实测 LAN 调用返回 LAN 链接且 `GET` 200 字节一致）；**⑤ `fetch_artifact`、⑥⑦ 未做**。`/ready` 新增 **`bind_host`** 与 **`allowed_hosts`** 两个自述字段（远程排障先看这两个）。逐项状态见 `docs/远程操作方案.md` §18.1；证据 `edi_tmp/verif42.py`（31/31）。
+
+1. ✅ **（已落地）** **host 硬编码**：`start_servers.py:205` `host = "127.0.0.1"`，`main()` 无 `--host` → 加 `--host`（默认仍 `127.0.0.1`，**本机模式零变化**）；
+2. ✅ **（已落地）** ⚠️ **`/mcp` 会被 SDK 的 DNS-rebinding 校验拒**：`mcp 1.28` 的 `FastMCP.__init__` 只在 host 为环回时自动生成 `allowed_hosts`，本仓是**构造之后**才改 `mcp.settings.host`（不重算）→ 实测 `Host=192.168.0.58:PORT` → **`421 Invalid Host header`**（真客户端走 LAN IP 握手失败）。修法（实测通过）= 在 `streamable_http_app()` **之前**显式设 `mcp.settings.transport_security`，**枚举本机全部非环回 IP（psutil）＋主机名/FQDN（含小写）** ＋ `MCP_EXTRA_ALLOWED_HOSTS`。
+   - ⚠️ **实测**：白名单**只列 IP** 时，用**主机名**访问会被 421（`DESKTOP-1NH03PE` → 421，`192.168.0.58` → 200），且**大小写敏感**；
+   - ❌ **不要**改成 `enable_dns_rebinding_protection=False` 图省事：实测伪造 `Host: evil.example.com` 会被**放行**（200），会污染产物链接；
+3. ✅ **（已落地）** **base URL 被强映射**：`get_server_base_url()` 把 `0.0.0.0`/`::` 映射成 `127.0.0.1` → `open_document`/`show_image`/`fetch_artifact` 的 token 链接会指向**客户端自己的 localhost**。修法 = 中间件把请求 `Host` 存 contextvar，`get_server_base_url()` **内部**优先用它（必须在 `servers/utils.py` 内部改：`token_registry` 是 `from ... import` 按名字绑定，外部替换会静默失效），并**校验 Host 属于本机地址集合**；无请求上下文时回落 `MCP_PUBLIC_BASE_URL`；
+4. ✅ **（已落地）** **进程白名单在远程模式自动忽略**（反查不到来源进程，`--host 0.0.0.0` 下自动忽略 `MCP_ALLOWED_PROCESSES`，不再 403）→ 按上表**等于没有任何接入控制**（探针保留 `MCP_PROBE_ENABLED`，默认开，作为唯一的"谁在连"线索）；
+5. ⛔ **（本期未做）** **产物通道**：新增 `fetch_artifact(file_path, ttl_seconds=600)`（只校验文件存在、**不限扩展名与目录**，复用 `_doc_store` + 既有 `/documents/{token}` 路由，返回 `url`/`size_bytes`/`sha256`/`expires_in`）——否则 `.snp`/`.raw` 这类产物**拿不回来**（`open_document` 白名单只认 10 种办公格式，实测 `UNSUPPORTED_FORMAT`）；
+6. ✅ **（已落地，位置有变）** **Host 校验**：放在 `RequestBaseURLMiddleware` 里（只把「允许列表内的 Host」写进 contextvar），比放在 `get_server_base_url()` 内更省一次全网卡枚举；
+7. ⛔ **（本期未做）** **`MCP_PUBLIC_BASE_URL`/`MCP_PUBLIC_SCHEME` 兜底**（反代/端口映射/https/无请求上下文）—— 不挂反代不受影响；**只有**「异步任务里注册产物链接」会回落成 `127.0.0.1`。
+
+> ✅ **地址零配置（已落地）**：绑 `0.0.0.0` + 动态枚举本机 IP/主机名（含非环回 IPv6）+ 产物链接按请求 `Host` 推导 → 主机用什么地址连，链接就是什么地址；只有客户端用**自动枚举不到的名字**（反代域名等）时才需要往 `MCP_EXTRA_ALLOWED_HOSTS` 补一条。动态枚举含**当前已启用的**网卡（VPN 适配器 down 时自然不在列表里，起来就自动进）。
+
+> **鉴权本期不做**（2026-09-18 用户决定：内网直接访问）→ 远程 = **无鉴权开放**；`TokenGuard` 中间件原型**已备好并实测 11/11**（`docs/远程操作方案.md` §3.3），日后想加约 25 行。
+
+> ⚠️ `transport_security` **只作用于 `/mcp`**；上表其余路由（含 `/tools/list`、`/metrics`、`/upload`、`/chat`）**不经过** Host 校验（实测伪造 Host 也 200）——**不要在这些路由上做按 Host 判断的安全决策**。
+
+完整方案见 **`docs/远程操作方案.md`**：§2.2（421 修法代码）、§2.3（Host 推导 + 地址策略 + 两条自查发现）、§三（鉴权四档，含本期决策）、§九（产物通道与实测）、§十三/§十四（路线与风险 17 条）、§十七（客户端侧）、**§十八（文件级实施清单 + 验收标准）**；§十六 为「声称 vs 实测」核对证据。
+
+---
+
+## 远程排障速查（现象 → 原因 → 处置）
+
+| 现象 | 原因 | 处置 |
+|---|---|---|
+| 从别的机器调 `/mcp` 返回 **421 `Invalid Host header`**（**新版已消除绝大部分场景**：LAN IP、主机名含大小写、非环回 IPv6 都自动在列表里，实测 200）| 客户端用的 `Host` **不在**允许列表 —— 典型是**反代域名**或自动枚举不到的地址 | 先看 `/ready` 的 `bind_host` / `allowed_hosts`（**若 `allowed_hosts=3` 说明服务还是旧版**或没传 `--host`）；确属枚举不到的名字再补 `MCP_EXTRA_ALLOWED_HOSTS`。该 Host 校验**只作用于 `/mcp`**（其余路由不校验）|
+| 调用返回 **403 `PROCESS_UNKNOWN`** | 旧版 exe 且白名单没留空（新版远程模式自动忽略白名单，不会再 403）| 用新版 exe（远程自动忽略）；旧版则 `MCP_ALLOWED_PROCESSES=` 清空 |
+| 本机 `curl` 正常、**别的机器连不上** | 服务仍绑在 `127.0.0.1` | 加 `--host 0.0.0.0`（§2.1）|
+| **`/ready` 里 `allowed_hosts` 恒为 `3`** | 服务是**改动前**的版本（SDK 默认只给 3 条环回模式），或启动时没传 `--host` | 用带本改动的版本重启；新版本启动会打印 `Bind: 0.0.0.0:PORT` + `Hosts: N allowed pattern(s)` + `LAN:` 行 |
+| 远程已连上，但**产物链接指向 `127.0.0.1`** | 服务是旧版（链接写死）或客户端用了不在允许列表的地址（链接按设计回落）| 换成带本改动的版本；确认 `/ready` 的 `allowed_hosts` > 3 |
+| 连不上但端口看着开着 | 防火墙未放行（本机三档当前为关闭状态）| 放行入站 TCP `MCP_PORT`（默认 50026）|
+| 工具全失败、但服务本身正常 | EDI 客户端没在跑（ADS gRPC 50055 不通）| 看 **`GET /ready` 的 `grpc` 字段**（`online`/`offline`）—— 最直接的预检；重启机器后**记得重开 EDI** |
+| 产物链接打开 **404** | token 过期（默认 **600 秒**）或文件已删/改名 | 重新调 `fetch_artifact` / `open_document(mode="link")` 注册新链接 |
+| 大文件下载中断后想续传 | —— | 支持 **`Range`**（实测返回 **206**）|
+| 一边跑任务一边下载/探活都卡住 | 同步工具占用了事件循环（服务被冻结）| 见 `docs/远程操作方案.md` §4.3（P0.5 offload + 锁）|
+| 客户端报超时但服务端还在跑 | 客户端 read 超时（Hermes 默认 **300s**）比工具耗时短 | 长任务改走**异步**接口（`start_*` → 轮询）|
+| 服务重启后旧 `task_id` 查不到 | 任务状态在**内存**里，重启即丢 | 返回 `TASK_NOT_FOUND` + **`outcome_known=false`**（"结果未知"，别当失败处理）；日志在 `%TEMP%\edi\data\log\` |
+
+> 更完整的逐条异常清单（53 条，链路/软件/服务/数据/环境五层）见 **`docs/远程操作方案.md` §十九**。
 
 ## 1. GET /health — 健康检查
 
@@ -384,6 +444,8 @@
 **请求 / 响应**：JSON-RPC 2.0 格式，包括 `initialize`、`tools/list`、`tools/call`、`resources/list`、`resources/read`、`prompts/list`、`prompts/get` 等方法。
 
 > 该端点由 FastMCP 框架处理，客户端（Claude Code、OpenClaw 等）通过 MCP SDK 接入，无需手动构造请求。详细协议见 [MCP 规范](https://modelcontextprotocol.io)。
+>
+> ⚠️ **本服务唯一受进程白名单保护的路径就是 `/mcp`**；非环回监听时还会被 SDK 的 DNS-rebinding 校验以 `421 Invalid Host header` 拒绝 —— **该阻塞已修（第十八轮）**：非环回启动时会显式重建允许列表（本机全部 IP + 主机名大小写 + 非环回 IPv6 + `MCP_EXTRA_ALLOWED_HOSTS`）—— 见「访问控制与远程部署」节。
 
 ---
 

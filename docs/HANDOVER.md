@@ -128,14 +128,18 @@ EDI_PATH=C:\Program Files (x86)\EDI\EDI.exe    # 留空自动检测
 TURBOCHARTS_PATH=C:\Program Files (x86)\EDI\turbocharts_app.exe  # 留空自动检测
 MCP_TRANSPORT=streamable-http
 MCP_PORT=50026
-MCP_ALLOWED_PROCESSES=                    # 可选：留空不鉴权；配置后只放行来源进程命中白名单子串的请求
+MCP_ALLOWED_PROCESSES=                    # 可选：留空不鉴权；配置后只放行「精确匹配」白名单的来源进程访问 /mcp
+MCP_BIND_HOST=127.0.0.1                   # 监听地址；远程填 0.0.0.0（等价 --host 0.0.0.0）
+MCP_EXTRA_ALLOWED_HOSTS=                  # 手工补 Host 允许列表（逗号分隔）；只在客户端用自动枚举不到的名字时才需要
+MCP_PROBE_ENABLED=1                       # 白名单留空时的来源进程探针开关（建议保持 1）
 ```
 
 ## 启动方式
 
 ```powershell
 cd D:\GitLabCode\edi-grpc-mcp
-uv run python start_servers.py                        # HTTP 模式（推荐）
+uv run python start_servers.py                        # HTTP 模式（推荐，仅本机 127.0.0.1）
+uv run python start_servers.py --host 0.0.0.0          # 接受局域网/远程访问（第十八轮新增）
 uv run python start_servers.py --transport stdio       # stdio 模式
 ```
 
@@ -180,12 +184,11 @@ uv publish
 
 ```powershell
 powershell -File scripts/build.ps1
-# 输出: dist/edi-mcp/（含 edi_mcp_server.exe + start_server.bat + .env，约 90 MB）
+# 输出: dist/edi-mcp/（含 edi_mcp_server.exe + start_local.bat + start_remote.bat + .env，约 90 MB）
 # 打包完成后自动跑 scripts/smoke_test_exe.py 冒烟测试（启动 exe → 健康检查 → 工具注册），不通过则打包失败
 ```
 
 目录型打包，复制 `dist/edi-mcp/` 到目标电脑后创建 `.env` 即可运行。
-```
 
 ## 工具注册机制
 
@@ -230,7 +233,15 @@ python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto 
 - EDI_PATH / TURBOCHARTS_PATH 留空自动检测
 
 ### 访问控制
-- 通过进程白名单 `MCP_ALLOWED_PROCESSES` 实现：留空不鉴权；配置后只放行来源进程 exe/命令行命中白名单子串的请求，其余返回 403（实现详见 `docs/IMPLEMENTATION.md` §11.17）
+- 通过进程白名单 `MCP_ALLOWED_PROCESSES` 实现（**只保护 `/mcp`**）：留空不鉴权；配置后只放行来源进程 exe/命令行**精确匹配**白名单的请求，其余返回 403（实现详见 `docs/IMPLEMENTATION.md` §11.17、`servers/process_guard.py`）
+- ⚠️ **远程 / 局域网部署**（服务在远程机/引擎机，客户端在主机）：
+  - ✅ **第十八轮已落地 ①–④**：现在启动加 **`--host 0.0.0.0`** 即可远程 —— ① `--host` 参数化；② `transport_security` 按本机全部网卡 IP（含非环回 IPv6）+ 主机名（含大小写）动态枚举（**不做则 `/mcp` 一律 421 `Invalid Host header`**）；③ 产物链接按请求 `Host` 推导（实测 LAN 调用 → LAN 链接且 `GET` 200 字节一致）；④ 白名单远程自动忽略/探针开关。**⛔ 未做：⑤ `fetch_artifact`（取回 `.snp`/`.raw` 等产物）、⑥⑦ Host 校验之外的反代兜底**。**逐文件状态见 `docs/远程操作方案.md` §18.1**；实测 `edi_tmp/verif42.py`（31/31）。⚠️ **远程机上的 exe 必须重新打包**（旧版没有 `--host`）。
+  - **地址零配置**：绑 `0.0.0.0` + 枚举本机 IP/**主机名**（实测：白名单只列 IP 时，用主机名访问会被 421，且大小写敏感）+ 请求 `Host` 推导；`MCP_EXTRA_ALLOWED_HOSTS` 只在看到 421 时补。
+  - **本期不加鉴权**（内网直接访问）：留空白名单后 `/tools/list`、`/metrics`、`/upload`、`/chat` 均匿名可达；`/health` `/metrics` 等自定义路由**不走** Host 校验。
+  - **多台远程机**：主机侧并列多个 server 条目即可（`eda-hfss`/`eda-cst`…，工具名带前缀、可并行）；≥3 台或要自动选机再上「主机侧网关」（§5.2 L1/L2/L3）。
+  - **重启 / 关机**：任务状态在内存，重启即丢；旧 `task_id` → `TASK_NOT_FOUND` + **`outcome_known=false`**（结果未知）；孤儿软件进程 / 残留锁 / 半成品处置见 §6.3；**重启机器后记得重开 EDI**（否则 `/ready` 的 `grpc=offline`）。
+  - **异常排查**：`docs/HTTP_API.md`「远程排障速查」（421/403/连不上/404/断点续传）与 `docs/远程操作方案.md` §十九（53 条异常边界清单）。
+  - 方案与实测见 `docs/远程操作方案.md`（§0.5 链路图 / §2.2 / §2.3 / §三 / §九 / §十八）；代码问题 `R41`–`R46`（审查报告 §14.5 / §14.6 / §14.8）
 
 ### Chat 与工具注册
 - Chat 工具列表从 MCP 元数据自动生成，排除同步阻塞和 COM 依赖工具

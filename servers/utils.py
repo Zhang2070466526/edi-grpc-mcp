@@ -11,9 +11,10 @@ import socket
 import threading
 import time
 import uuid
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 # ── 服务启动时间戳 ──
 SERVER_STARTED_AT: float = time.time()
@@ -175,13 +176,127 @@ def set_server_address(host: str, port: int) -> None:
         _address.port = port
 
 
+# ── 请求上下文 —— 产物链接按请求 Host 推导 ──
+# start_servers.py 的 RequestBaseURLMiddleware 在每个 HTTP 请求上写入。
+# 同步工具与中间件跑在同一任务上下文里，所以工具内调用 get_server_base_url()
+# 能拿到「客户端实际访问用的地址」；异步任务线程池不继承上下文，读到空串后回退。
+_request_base_url: ContextVar[str] = ContextVar("mcp_request_base_url", default="")
+
+
+def set_request_base_url(base_url: str) -> None:
+    """记录当前请求的 base URL（形如 http://192.168.0.58:50026）。"""
+    _request_base_url.set(base_url)
+
+
+def current_request_base_url() -> str:
+    """返回当前请求的 base URL；不在 HTTP 请求上下文中时返回空字符串。"""
+    return _request_base_url.get()
+
+
 def get_server_base_url() -> str:
-    """返回当前 HTTP 服务的 base URL，供图片 Token 等功能使用。"""
+    """返回当前 HTTP 服务的 base URL，供图片/文档 Token 链接使用。
+
+    优先用当前请求的 Host（远程客户端据此拿到自己访问得通的地址）；
+    无请求上下文时（异步任务、服务自身调用）回退到启动时确定的 host:port。
+    **0.0.0.0/:: 仍映射回 127.0.0.1**：本机用法行为不变；远程场景下异步任务
+    没有请求上下文，需要 MCP_PUBLIC_BASE_URL 兜底（本期未做）。
+    """
+    base = _request_base_url.get()
+    if base:
+        return base
     with _lock:
         host = _address.host
         port = _address.port
     public_host = "127.0.0.1" if host in ("0.0.0.0", "::") else host
     return f"http://{public_host}:{port}"
+
+
+# ── 监听地址与 DNS-rebinding 允许列表（远程访问）──
+
+# 环回写法：SDK 内部默认允许列表用的就是这三种（+ 端口通配）
+_LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "[::1]", "::1")
+
+
+def is_loopback_host(host: str) -> bool:
+    """判断监听地址是否「仅本机」（默认配置）——决定是否需要重建允许列表。"""
+    return (host or "").strip().lower() in _LOOPBACK_HOSTS
+
+
+def host_without_port(host_header: str) -> str:
+    """从 Host 头取主机部分：[::1]:50026 → [::1]；192.168.0.58:50026 → 192.168.0.58。
+
+    无端口时原样返回；裸 IPv6（多个冒号、无方括号）也原样返回。
+    """
+    h = (host_header or "").strip()
+    if h.startswith("["):
+        return h[: h.index("]") + 1] if "]" in h else h
+    if h.count(":") == 1:
+        return h.rsplit(":", 1)[0]
+    return h
+
+
+def local_host_names() -> list[str]:
+    """枚举本机可被客户端用作 Host 头的名字：环回 + 全部网卡 IP + 主机名/FQDN。
+
+    不能用 socket.getaddrinfo(socket.gethostname())：实测它只回主网卡 IPv4，
+    漏掉 VPN/虚拟网卡地址；psutil.net_if_addrs() 才是完整来源（含 VPN 网卡，
+    适配器在用时才出现，down 时自然不在列表里 —— 这就是动态枚举的本意）。
+    IPv6 非环回地址按 Host 头规范加方括号（[fe80::x]:50026），并去掉 Windows
+    的 %scope 后缀；主机名给原样/小写/大写三种写法（Windows 客户端可能发大写，
+    实测大写会被 421 拒）。
+    """
+    hosts: list[str] = list(_LOOPBACK_HOSTS)
+    try:
+        import psutil
+        for _name, addrs in psutil.net_if_addrs().items():
+            for a in addrs:
+                if not a.address:
+                    continue
+                if a.family == socket.AF_INET:
+                    hosts.append(a.address)
+                elif a.family == socket.AF_INET6:
+                    addr = a.address.split("%", 1)[0]  # 去 Windows 的 %scope 后缀
+                    if addr != "::1":                  # 环回已在 _LOOPBACK_HOSTS
+                        hosts.append(f"[{addr}]")
+    except Exception:
+        pass  # psutil 缺失/权限不足 → 降级为环回 + 主机名
+    try:
+        hn = socket.gethostname()
+        if hn:
+            hosts += [hn, hn.lower(), hn.upper()]
+        fqdn = socket.getfqdn()
+        if fqdn and fqdn not in hosts:
+            hosts += [fqdn, fqdn.lower()]
+    except OSError:
+        pass
+    return list(dict.fromkeys(h for h in hosts if h))
+
+
+def build_transport_security(extra_hosts: Iterable[str] = ()):
+    """构建 DNS-rebinding 允许列表：本机全部可达地址 + 额外配置的 host。
+
+    每个 host 同时生成「裸名」与「裸名:*」两种模式：SDK 用 host.startswith(base + ":")
+    匹配带端口的 Host，裸名模式覆盖不带端口的边界情况。
+
+    **不关闭** enable_dns_rebinding_protection —— 关掉后任意伪造 Host（实测
+    Host: evil.example.com）都会通过，会污染产物链接、把 token 递给别人。
+    allowed_origins 保持为空（不额外放行浏览器跨源）；本服务客户端不发送 Origin。
+    """
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    names = local_host_names()
+    for h in extra_hosts:
+        h = str(h).strip()
+        if h and h not in names:
+            names.append(h)
+    patterns: list[str] = []
+    for h in names:
+        patterns.append(h)
+        patterns.append(f"{h}:*")
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=patterns,
+    )
 
 
 # ── 产物与文件链接 ──

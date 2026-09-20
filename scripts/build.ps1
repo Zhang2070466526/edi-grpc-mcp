@@ -18,7 +18,11 @@ Remove-Item -Recurse -Force dist, build -ErrorAction SilentlyContinue
 
 # ── [2/7] 测试 ──
 Write-Host "[2/7] Running tests..." -ForegroundColor Yellow
-uv run pytest -q -p no:cacheprovider
+# Fresh basetemp each run: default %TEMP%\pytest-of-JGL's pytest-current junction
+# gets locked by a leftover process -> cleanup PermissionError (false TESTS FAILED).
+# Forward slashes required: uv run swallows backslash paths to pytest (empty basetemp).
+$pytestTmp = (Join-Path $env:TEMP ("edi-pytest-" + (Get-Date -Format "yyyyMMdd-HHmmss-fff"))).Replace("\", "/")
+uv run pytest -q -p no:cacheprovider --basetemp="$pytestTmp"
 if ($LASTEXITCODE -ne 0) { Write-Host "TESTS FAILED" -ForegroundColor Red; Pop-Location; exit $LASTEXITCODE }
 
 # ── [3/7] 构建 ──
@@ -77,13 +81,25 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
     $envContent.TrimStart("`r", "`n") + [Environment]::NewLine,
     $utf8NoBom
 )
-Copy-Item -Force scripts/run.bat "$distDir\start_server.bat"
+Copy-Item -Force scripts/start_local.bat "$distDir\start_local.bat"
+Copy-Item -Force scripts/start_remote.bat "$distDir\start_remote.bat"
 Remove-Item -Recurse -Force build -ErrorAction SilentlyContinue
 Remove-Item -Force "$root\dist\edi_mcp_server.exe" -ErrorAction SilentlyContinue
 
 # ── [7/7] 打包 ZIP ──
 Write-Host "[7/7] Creating archive..." -ForegroundColor Yellow
-Compress-Archive -Path "$distDir\*" -DestinationPath $zipPath -Force
+# 重试 3 次：PyInstaller 刚写完 _internal 时，杀毒软件（Defender）常瞬时锁住 DLL 导致 ZIP 失败
+$zipDone = $false
+for ($i = 1; $i -le 3 -and -not $zipDone; $i++) {
+    try {
+        Compress-Archive -Path "$distDir\*" -DestinationPath $zipPath -Force -ErrorAction Stop
+        $zipDone = $true
+    } catch {
+        Write-Host "  ZIP attempt $i failed: $($_.Exception.Message)" -ForegroundColor Yellow
+        if ($i -lt 3) { Write-Host "  retrying in 3s..." -ForegroundColor Yellow; Start-Sleep -Seconds 3 }
+    }
+}
+if (-not $zipDone) { Write-Host "ZIP FAILED after 3 attempts" -ForegroundColor Red; Pop-Location; exit 1 }
 
 $zipSize = 0
 if (Test-Path $zipPath) {
