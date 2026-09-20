@@ -59,8 +59,9 @@ def test_all_tools_registered():
 
 def test_grpc_timeout_limits():
     from servers.eda.grpc_client import call_grpc
-    with pytest.raises(ValueError):
-        call_grpc(1, {}, 99999, max_timeout_seconds=300)
+    r = call_grpc(1, {}, 99999, max_timeout_seconds=300)
+    assert r["success"] is False
+    assert r["error_code"] == "INVALID_PARAMETERS"
 
 
 def test_chat_tool_map_consistency():

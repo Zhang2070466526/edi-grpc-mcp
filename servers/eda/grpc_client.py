@@ -30,6 +30,7 @@ import grpc
 
 from proto import ecserver_pb2, ecserver_pb2_grpc
 from servers.eda.config import EDA_GRPC_SERVER, require_project_path
+from servers.utils import error_response
 
 _logger = logging.getLogger("eda.grpc_client")
 
@@ -222,9 +223,9 @@ def call_grpc(
          "status": "SUCCEEDED/FAILED/TIMEOUT/...", "ads_output": "...", "log_complete": bool}
     """
     if timeout_seconds < 1:
-        raise ValueError("timeout_seconds 必须大于 0")
+        return error_response("INVALID_PARAMETERS", "timeout_seconds 必须大于 0")
     if timeout_seconds > max_timeout_seconds:
-        raise ValueError(f"timeout_seconds 不能超过 {max_timeout_seconds} 秒")
+        return error_response("INVALID_PARAMETERS", f"timeout_seconds 不能超过 {max_timeout_seconds} 秒")
 
     actual_task_id = task_id or str(uuid.uuid4())
     actual_client_uuid = client_uuid or str(uuid.uuid4())
