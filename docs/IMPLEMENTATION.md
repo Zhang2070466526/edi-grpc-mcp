@@ -1118,7 +1118,7 @@ Chat 工具调用日志对路径做脱敏处理（只记录文件名），不暴
 
 ### 11.17 进程白名单访问控制
 
-MCP 服务只监听本机（`127.0.0.1:50026`），通过进程白名单实现「只放行指定 agent 进程、拒绝其它进程」。核心实现在 `servers/process_guard.py`，接线在 `start_servers.py`。
+MCP 服务默认只监听本机（`127.0.0.1:50026`），加 `--host 0.0.0.0` 可监听所有网卡（远程访问，见 `docs/远程操作方案.md`）。通过进程白名单实现「只放行指定 agent 进程、拒绝其它进程」。核心实现在 `servers/process_guard.py`，接线在 `start_servers.py`。
 
 **机制**：反查「连接由哪个进程发起」。OS 的 TCP 连接表记录每条连接的 owning PID，客户端无法伪造：
 
@@ -1133,13 +1133,13 @@ MCP 服务只监听本机（`127.0.0.1:50026`），通过进程白名单实现�
 - `ProcessProbeMiddleware`：探针，只打印来源进程（`exe=` + `cmd=`），不拦截。
 - `ProcessWhitelistMiddleware`：白名单拦截，命中放行、未命中返回 403。
 
-**配置**（`settings.py` 的 `mcp_allowed_processes`，环境变量 `MCP_ALLOWED_PROCESSES`）：逗号分隔的子串列表，留空禁用。示例 `MCP_ALLOWED_PROCESSES=hermes_cli,edi-agent`。
+**配置**（`settings.py` 的 `mcp_allowed_processes`，环境变量 `MCP_ALLOWED_PROCESSES`）：逗号分隔的**精确匹配**条目列表，留空禁用。示例 `MCP_ALLOWED_PROCESSES=hermes_cli,edi-agent`。
 
-**接线**（`start_servers.py` 的 `_run_http_server`）：留空 → 挂 `ProcessProbeMiddleware`（只打印）；有值 → 挂 `ProcessWhitelistMiddleware`（未命中 403）。
+**接线**（`start_servers.py` 的 `_run_http_server`）：**本机模式**且白名单有值 → 挂 `ProcessWhitelistMiddleware`（未命中 403）；本机留空或**远程模式（`--host` 非环回，白名单自动忽略）** → 挂 `ProcessProbeMiddleware`（只打印）。
 
 **路径豁免** `_PROTECTED_PREFIXES = ("/mcp",)`：只对 `/mcp`（agent 直连的 MCP 协议端点）做白名单校验；`/ui` `/chat` `/tools/list` `/upload`（依赖浏览器访问）和 `/health` `/ready` `/metrics`（诊断 / 冒烟测试）放行。
 
-**匹配规则**：每个白名单条目作为「子串」在 `exe + " " + 命令行`（归一化后）里查找，命中任一 → 放行；反查不到来源进程 → 默认拒绝（`fail_open=False`）。填白名单时优先填命令行关键词（如 `hermes_cli` 精确锁定 `python.exe -m hermes_cli.main gateway run` 这种通用 python 跑专属模块的场景），其次填完整 exe 路径或进程名。
+**匹配规则**：每个白名单条目**精确对应进程身份，不做裸子串/后缀匹配**（见 `_matches_whitelist`）：路径型条目（含 `/`）= exe 路径精确相等或目录前缀；关键词型条目 = 完整命令行 token 或 exe basename。命中任一 → 放行；反查不到来源进程 → 默认拒绝（`fail_open=False`）。填白名单时优先填命令行关键词（如 `hermes_cli` 精确锁定 `python.exe -m hermes_cli.main gateway run` 这种通用 python 跑专属模块的场景），其次填完整 exe 路径或进程名。
 
 **为什么不用 token / clientInfo**：同机同用户下，配置文件里的 token 和客户端自报的 `clientInfo.name` 都能被其它进程读到 / 伪造；只有 OS 记录的「连接来源 PID」无法伪造。局限：进程名 / 路径理论上可被「改名 + 放同路径」绕过，100% 隔离仍需 OS 用户隔离。
 

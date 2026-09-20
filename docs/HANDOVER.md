@@ -131,7 +131,7 @@ MCP_PORT=50026
 MCP_ALLOWED_PROCESSES=                    # 可选：留空不鉴权；配置后只放行「精确匹配」白名单的来源进程访问 /mcp
 MCP_BIND_HOST=127.0.0.1                   # 监听地址；远程填 0.0.0.0（等价 --host 0.0.0.0）
 MCP_EXTRA_ALLOWED_HOSTS=                  # 手工补 Host 允许列表（逗号分隔）；只在客户端用自动枚举不到的名字时才需要
-MCP_PROBE_ENABLED=1                       # 白名单留空时的来源进程探针开关（建议保持 1）
+MCP_PROBE_ENABLED=1                       # 白名单关闭时（本机留空/远程自动忽略）的来源进程探针开关（建议保持 1）
 ```
 
 ## 启动方式

@@ -465,7 +465,7 @@ POST /chat
 | `MCP_PORT` | `50026` | HTTP 监听端口 |
 | `MCP_BIND_HOST` | `127.0.0.1` | 监听地址；远程填 `0.0.0.0`（等价 `--host 0.0.0.0`）|
 | `MCP_EXTRA_ALLOWED_HOSTS` | 空 | 手工补 `Host` 允许列表（逗号分隔）；只在客户端用自动枚举不到的名字（反代域名）时才需要 |
-| `MCP_PROBE_ENABLED` | `1` | 白名单留空时的来源进程探针（无鉴权下唯一的「谁在连」线索，建议保持开启）|
+| `MCP_PROBE_ENABLED` | `1` | 白名单关闭时（本机留空 / 远程自动忽略）的来源进程探针（无鉴权下唯一的「谁在连」线索，建议保持开启）|
 | `MCP_ALLOWED_PROCESSES` | — | 进程白名单（留空不鉴权；配置后只放行匹配这些子串的进程访问 `/mcp`） |
 | `EDI_PATH` | 自动检测 | EDI.exe 路径 |
 | `TURBOCHARTS_PATH` | 自动检测 | turbocharts_app.exe 路径 |
