@@ -601,12 +601,14 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 {
   "id": "4240f1c5-0622-4de1-9786-16003aa1e23a",
   "save_path": "D:/soft-ip/C_10mil4350.aedt",
-  "freq": 25
+  "freq": 25,
+  "bandwidth": 10
 }
 ```
 
 - `id` 必须是合法的软 IP UUID，并作为路径参数请求 `POST /api/v1/soft-ip-manager/soft-ip-models/<id>/download/`。
-- `freq` 必须是大于 `0` 的有限数值；下游 POST 请求体只包含 `{"freq":25}`。
+- `freq` 必须是大于 `0` 的有限数值，并写入下游 POST 请求体。
+- `bandwidth` 为可选的有限数值。未提供时，下游请求体只包含 `{"freq":25}`；提供时，下游请求体自动增加 `bandwidth` 和固定值 `"allow_extrapolation":false`。
 - `save_path` 必须是服务端可访问的完整目标文件路径，不是目录。服务端自动创建父目录，并使用安全写入方式替换同名文件。
 - 下载超时为 120 秒。HTTP 或业务失败、响应为空、目录创建失败、文件写入失败时，最终事件状态为 `RESULT_STATUS_FAILED`，payload 为 `{}`，具体原因位于 `message`。
 - 成功 payload 只返回最终绝对文件路径 `save_path`。
@@ -2010,7 +2012,7 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `44`。分�
   "client_uuid": "postman-test-client-001",
   "task_id": "postman-download-soft-ip-model-001",
   "type": "DOWNLOAD_SOFT_IP_MODEL",
-  "payload_json": "{\"id\":\"4240f1c5-0622-4de1-9786-16003aa1e23a\",\"save_path\":\"D:/soft-ip/C_10mil4350.aedt\",\"freq\":25}"
+  "payload_json": "{\"id\":\"4240f1c5-0622-4de1-9786-16003aa1e23a\",\"save_path\":\"D:/soft-ip/C_10mil4350.aedt\",\"freq\":25,\"bandwidth\":10}"
 }
 ```
 

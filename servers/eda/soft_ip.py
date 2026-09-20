@@ -100,6 +100,7 @@ def download_soft_ip_model(
         soft_ip_id: str,
         save_path: str,
         freq: float,
+        bandwidth: float | None = None,
         timeout_seconds: int = 120,
 ) -> dict[str, Any]:
     """按软 IP UUID 和频率下载 AEDT 模型文件到指定路径。
@@ -107,12 +108,14 @@ def download_soft_ip_model(
     用法："把这个软 IP 的 AEDT 模型下载到 D:/soft-ip/xxx.aedt"
 
     soft_ip_id 是软 IP 的 UUID，save_path 是完整目标文件路径（不是目录），freq 是频率（>0）。
+    bandwidth 是可选相对带宽（有限数值）：提供时下游请求体额外带上 bandwidth 与 allow_extrapolation=false。
     服务端自动创建父目录并安全覆盖同名文件；下载超时 120 秒。
 
     Args:
         soft_ip_id: 软 IP UUID。
         save_path: 目标文件完整路径（如 D:/soft-ip/C_10mil4350.aedt）。
         freq: 频率（大于 0 的有限数值）。
+        bandwidth: 可选相对带宽（有限数值）；不传则下游请求体只含 freq。
         timeout_seconds: 最长等待秒数，默认 120。
 
     Returns:
@@ -127,9 +130,15 @@ def download_soft_ip_model(
     if not isinstance(freq, (int, float)) or isinstance(freq, bool) \
             or not math.isfinite(freq) or freq <= 0:
         return error_response("INVALID_PARAMETERS", "freq 必须是大于 0 的有限数值")
+    payload: dict[str, Any] = {"id": soft_ip_id, "save_path": save_path, "freq": freq}
+    if bandwidth is not None:
+        if not isinstance(bandwidth, (int, float)) or isinstance(bandwidth, bool) \
+                or not math.isfinite(bandwidth):
+            return error_response("INVALID_PARAMETERS", "bandwidth 必须是有限数值")
+        payload["bandwidth"] = bandwidth
     return call_grpc(
         ecserver_pb2.DOWNLOAD_SOFT_IP_MODEL,
-        {"id": soft_ip_id, "save_path": save_path, "freq": freq},
+        payload,
         timeout_seconds,
         max_timeout_seconds=300,
     )
