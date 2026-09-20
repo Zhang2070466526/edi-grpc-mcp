@@ -455,6 +455,8 @@ Content-Type: application/json
 
 ## 3. EDI 客户端 gRPC
 
+> 本文档只收实测过的接口摘要；完整协议（全部 EventType、payload 示例、FetchEvent 事件流）见 [`../proto/grpc接口调用.md`](../proto/grpc接口调用.md)。
+
 验证状态：已连接最新 EDI 客户端 `127.0.0.1:50055` 进行最小实测。
 
 本次实测结果：

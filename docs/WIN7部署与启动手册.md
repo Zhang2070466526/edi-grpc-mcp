@@ -17,7 +17,7 @@
 
 1. 目标机装两个补丁：**KB4474419**（SHA-2 签名）→ **KB3118401**（UCRT）——**顺序不能反**
 2. 把整个 `edi-mcp\` 目录拷到目标机，例如 `C:\edi-mcp\`（**整个目录，不是只拷 exe**）
-3. 双击 `start_local.bat`（本机）或 `start_remote.bat`（远程访问，见《远程操作方案》）
+3. 双击 `start_local.bat`（本机）或 `start_remote.bat`（远程访问，见《实现原理与机制》）
 4. 浏览器打开 `http://127.0.0.1:50026/ready` → 看到 `"status":"ready"` 就算成功
 
 **路径 B（从源码建环境并打包）**
@@ -182,7 +182,7 @@ dir /s /b C:\edi-mcp\*.dll C:\edi-mcp\*.pyd C:\edi-mcp\*.exe | find /c /v ""
 | `TURBOCHARTS_PATH` | 空 | 同上，自动探测 `turbocharts_app.exe` > `TurboCharts.exe` |
 | `MCP_TRANSPORT` | `streamable-http` | 保持默认；`stdio` 用于被别的程序当子进程拉起的用法 |
 | `MCP_PORT` | `50026` | 服务端口（默认 50026；改端口后请手动访问新端口） |
-| `MCP_ALLOWED_PROCESSES` | `edi-agent-service.exe` | **进程白名单**（仅本机模式生效）：只有进程名含这些子串（逗号分隔）的进程能调 `/mcp`。**留空=关闭白名单**；**远程模式（`--host 0.0.0.0`）自动忽略**；客户端换名字后不同步改 → 调用被拒 |
+| `MCP_ALLOWED_PROCESSES` | `edi-agent-service.exe` | **进程白名单**（仅本机模式生效）：**精确匹配**（整词命令行 token / exe 文件名 / 完整路径，**不做裸子串**）。**留空=关闭白名单**；**远程模式（`--host 0.0.0.0`）自动忽略**。**`start_local.bat` 用这里的默认值锁死本机；`start_remote.bat` 脚本里已 `set MCP_ALLOWED_PROCESSES=` 置空**。客户端换名字后不同步改 → 调用被拒 |
 | `VISION_API_KEY` / `VISION_BASE_URL` / `VISION_MODEL` | 空 | 三个都填才启用图片视觉分析 |
 | `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` | 空 | 填了才启用 `/chat` 多轮工具调用 |
 | `REPORT_RENDER_URL` | `http://127.0.0.1:17867/...` | 仿真报告渲染服务地址 |
@@ -192,6 +192,8 @@ dir /s /b C:\edi-mcp\*.dll C:\edi-mcp\*.pyd C:\edi-mcp\*.exe | find /c /v ""
 ### 3.4 启动服务
 
 **双击（推荐）**：双击 `start_local.bat`（本机，监听 `127.0.0.1`）或 `start_remote.bat`（远程，监听 `0.0.0.0`）→ 前台运行 `edi_mcp_server.exe`（自动读同目录 `.env`）。**关闭窗口 / Ctrl+C = 停服务。**
+
+> **本机 / 远程的白名单差异（一句话）**：`start_local.bat` 用 `.env` 的 `MCP_ALLOWED_PROCESSES`（默认 `edi-agent-service.exe`，只放行本地 agent，锁死）；`start_remote.bat` 脚本里已 `set MCP_ALLOWED_PROCESSES=` 置空（远程反查不到来源进程，白名单自动忽略）。**要本机锁死 → 改 `.env` 的 `MCP_ALLOWED_PROCESSES`；要远程 → 双击 `start_remote.bat` 即可。**
 
 > ⚠️ exe 是**窗口模式**（spec `console=False`）：**双击后没有任何日志输出，这是设计如此、不是故障**。要日志走下面命令行方式，或用 `/ready`、`/health` 探活。
 
@@ -206,7 +208,7 @@ cd /d C:\edi-mcp && edi_mcp_server.exe --transport streamable-http --port 50026
 | `--transport` | `streamable-http`（默认）/ `stdio` | 一般保持默认 |
 | `--port` | 1–65535 | 覆盖 `.env` 的 `MCP_PORT`；超范围会直接报错退出 |
 
-Host 默认 `127.0.0.1`；远程模式用 `--host 0.0.0.0`（`start_remote.bat` 已带），详见《远程操作方案》。
+Host 默认 `127.0.0.1`；远程模式用 `--host 0.0.0.0`（`start_remote.bat` 已带），详见《实现原理与机制》。
 
 **确认已就绪**：浏览器打开 `http://127.0.0.1:50026/ready`（启动中返回 503，等几秒刷新）。真机实测返回：
 
@@ -241,11 +243,11 @@ Host 默认 `127.0.0.1`；远程模式用 `--host 0.0.0.0`（`start_remote.bat` 
 | `/images/{token}`、`/documents/{token}` | GET | 工具产出的图片/文档 |
 | `/upload` | POST | 上传 |
 
-服务默认监听 `127.0.0.1`；远程模式 `--host 0.0.0.0` 监听所有网卡（见《远程操作方案》）。
+服务默认监听 `127.0.0.1`；远程模式 `--host 0.0.0.0` 监听所有网卡（见《实现原理与机制》）。
 
 ### 3.6 接入客户端
 
-1. **MCP 地址**填 `http://127.0.0.1:50026/mcp`（本机）或 `http://<远程机IP>:50026/mcp`（远程，见《远程操作方案》）。
+1. **MCP 地址**填 `http://127.0.0.1:50026/mcp`（本机）或 `http://<远程机IP>:50026/mcp`（远程，见《实现原理与机制》）。
 2. **进程白名单**（仅本机模式生效）：客户端进程名要能匹配 `MCP_ALLOWED_PROCESSES`（默认 `edi-agent-service.exe`）。**远程模式（`--host 0.0.0.0`）自动忽略白名单**。被拒时服务端日志有 `[process-probe]` 记录。**"客户端连不上 / 403" 先查这条。**
 3. **一致性自检**：客户端看到的工具数应为 **90**、`tools_hash` 与 `/ready` 相同（基线 `ae6cd062`）。对不上 = 客户端连的不是这版服务。
 

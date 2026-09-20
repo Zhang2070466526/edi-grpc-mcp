@@ -10,7 +10,7 @@
 
 - 🛠️ **90 个 MCP 工具，全链路闭环** — 工程管理 → 器件配置 → 模型选型 → 信号链分析 → 仿真 → 出图 → 出报告，一个服务走到底
 - ⚡ **三大仿真引擎统一封装** — EDI gRPC（ADS）· ANSYS HFSS · CST，同一套工具、同一种返回结构
-- 🌐 **本机 / 远程一键切换** — 双击 `start_local.bat`（本机）或 `start_remote.bat`（远程）；`--host 0.0.0.0` 即远程，**地址零配置、机器不固定、主机端零安装**（详见 [`docs/远程操作方案.md`](docs/远程操作方案.md)）
+- 🌐 **本机 / 远程一键切换** — 双击 `start_local.bat`（本机）或 `start_remote.bat`（远程）；`--host 0.0.0.0` 即远程，**地址零配置、机器不固定、主机端零安装**（详见 [`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md)「三、特殊机制」）
 - 🧠 **自然语言驱动** — 接入 Claude Code / Hermes / OpenClaw，一句「帮我看看工程、跑个仿真」即可
 - 📈 **异步仿真 + 实时日志** — `task_id` 追踪、`ads_output` 增量推送，长任务不阻塞、进度可查
 - 🔒 **统一返回契约** — 每个工具返回 `success` / `error_code` / `hint`（retry_safe / do_not_retry）；异步任务带 `outcome_known`（重启后「结果未知」不会误判成失败）
@@ -120,12 +120,10 @@ curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
 
 ### 安全与远程
 
-- **接入控制**：只有进程白名单 `MCP_ALLOWED_PROCESSES`（同机反查来源进程），且**只保护 `/mcp`**——`/tools/list`、`/metrics`、`/ui`、`/upload`、`/chat` 均不校验。留空 = 不拦截。
-- **远程 / 局域网访问**：默认只监听 `127.0.0.1`。**第十八轮已落地 ①–④**：现在只要 **`--host 0.0.0.0`** 就能远程 —— ① `--host` 参数化；② `transport_security` 按本机全部网卡 IP（含非环回 IPv6）+ 主机名（含大小写）动态枚举（原来 `/mcp` 一律 **`421 Invalid Host header`**）；③ 产物链接按请求 `Host` 推导（原来指向客户端自己的 localhost）；④ 白名单远程自动忽略 + 探针开关。**⑤ `fetch_artifact`（拿回 `.snp`/`.raw` 等产物）、⑥⑦ 未做**。**本期不加鉴权（内网直接访问）**；地址**零配置**（实测：LAN IP / 主机名 / IPv6 全部 200，伪造 `Host` 仍 421）。状态见 [`docs/远程操作方案.md`](docs/远程操作方案.md) §18.1。
-- **多台远程机同时用**：主机侧并列多个 server 条目（`eda-hfss` / `eda-cst`…，工具名带前缀）即可并行；≥3 台或要自动选机再上「主机侧网关」（见 §5.2 的 L1/L2/L3）。
-- **重启 / 关机后的状态与「脏数据」**：任务状态在内存里，重启即丢 —— 旧 `task_id` 会返回 `TASK_NOT_FOUND` + **`outcome_known=false`**（「结果未知」，别当失败处理）；孤儿软件进程 / 残留锁 / 半成品的处置见 §6.3。
-- **排查入口**：[`docs/HTTP_API.md`](docs/HTTP_API.md)「**远程排障速查**」（421 / 403 / 连不上 / 产物 404 / 断点续传 / 客户端超时）+ [`docs/远程操作方案.md`](docs/远程操作方案.md) **§十九 异常与边界清单（53 条）**。
-- 完整方案、实测证据与逐文件实施清单见 [`docs/远程操作方案.md`](docs/远程操作方案.md)（§0.5 链路图 / §2.2 / §2.3 / §三 / §九 / §十八）；代码问题登记为 `R41`–`R46`（见 [`docs/审查报告.md`](docs/审查报告.md) §14.5/§14.6/§14.8）。
+- **本机 / 远程一键切换**：双击 `start_local.bat`（本机）或 `start_remote.bat`（远程）；`--host 0.0.0.0` 即远程。
+- **接入控制**：进程白名单（本机模式生效，远程自动忽略）；本期不加鉴权（内网直接访问）。
+
+> 远程 / 进程白名单等**特殊机制** → [`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md)；**HTTP 路由与访问控制** → [`docs/HTTP_API.md`](docs/HTTP_API.md)；**Win7 现场部署** → [`docs/WIN7部署与启动手册.md`](docs/WIN7部署与启动手册.md)；**待修问题** → [`docs/审查报告.md`](docs/审查报告.md)。
 
 ---
 
@@ -151,346 +149,33 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 
 ## 工具一览（90 个）
 
-> 工具数量由运行时动态统计，此处为当前快照。权威值见 `/ready` 的 `tool_count`（或 `tests/test_tool_registry.py` 的 `required` 列表）。
+90 个工具按领域分组：工程管理 / 仿真器件 / 仿真 / 导出与分析 / 模型库·原理图库 / 软 IP / 启动·诊断 / 工作区 / 原理图扩展 / ANSYS HFSS / CST / TR 仿真集成 / 图表与图片 / 报告与文档。
 
-### 工程管理（10 个）
-
-| 工具 | 说明 |
-|---|---|
-| `list_epp_projects` | 扫描文件夹中的 .epp 工程 |
-| `create_project` | 创建新的 .epp 工程 |
-| `open_edi_project` | 打开 .epp 工程 |
-| `close_edi_project` | 关闭工程 |
-| `list_schematic_components` | 查询原理图全部器件（gRPC，含完整参数） |
-| `get_schematic_component_info` | 按实例名查询器件完整信息（gRPC） |
-| `get_project_summary` | 工程概览（元数据/原理图/仿真配置） |
-| `analyze_variables` | 分析变量定义、引用和 Sweep 配置 |
-| `get_components_static_params` | 查询器件固有参数（重量/尺寸/封装/厂商/成本） |
-| `batch_query_component` | 按器件型号列表批量查询模型信息 |
-
-### 仿真器件（10 个）— 工具 API v3 / gRPC 协议 v2
-
-| 工具 | 说明 |
-|---|---|
-| `get_simulation_component_schema` | 查询 SP/HB/XDB 支持的参数和权限 |
-| `list_simulation_components` | 列出全部器件，支持过滤/分页/隐藏参数（本地读） |
-| `create_simulation_component` | 新增器件（EDI 默认参数，创建后 update 设参） |
-| `update_simulation_component` | 按实例名更新参数（三路类型推断） |
-| `delete_simulation_component` | 按实例名删除器件 |
-| `replace_port_component` | 替换端口器件类型（TermG↔P_nToneG） |
-| `set_component_active_state` | 确定性设置 NORMAL / DISABLED / SHORTED |
-| `generate_schematic_from_netlist` | 从网表导入生成原理图 |
-| `attach_out_component` | 为器件引脚挂载 Out 器件并自动连线 |
-| `replace_schematic_from_file` | 从 .ep 文件整体替换原理图 |
-
-### 仿真（7 个）
-
-| 工具 | 说明 |
-|---|---|
-| `start_simulation_async` | 启动异步仿真，立即返回 task_id（推荐） |
-| `get_simulation_async_status` | 查询实时进度和增量日志 |
-| `get_simulation_async_result` | 获取完整结果和 ads_output |
-| `list_eda_tasks` | 列出当前仿真任务 |
-| `simulate_netlist` | 仿真网表文件 |
-| `simulate_netlist_with_ads` | 调用 ADS 仿真控制器 |
-| `simulate_anti_burnout` | 抗烧毁仿真与风险评估 |
-
-### 导出与分析
-
-| 工具 | 说明 |
-|---|---|
-| `export_project_netlist` | 查看/导出工程网表 |
-| `capture_schematic` | 截取原理图为图片 |
-| `export_schematic_components_to_csv` | 导出器件为 CSV（供模型替换） |
-| `get_signal_chain` | 追踪信号链路（节点接力算法） |
-
-### 模型库 / 原理图库（10 个）
-
-| 工具 | 说明 |
-|---|---|
-| `replace_models_from_csv` | 按 CSV 批量替换模型 |
-| `get_model_category_params` | 获取模型分类及参数列表 |
-| `search_public_models` | 按子类查询公共模型库 |
-| `search_personal_models` | 按子类查询个人模型库 |
-| `load_performance_component_from_mms` | 从 MMS 导入性能模型到本地模型库 |
-| `add_performance_component` | 放置模型库中的性能器件到原理图 |
-| `search_schematic_from_public_library` | 按拓扑描述查询公共原理图库 |
-| `search_schematic_from_personal_library` | 按拓扑描述查询个人原理图库 |
-| `use_schematic_from_library_create_project` | 用原理图库内容创建并打开新工程 |
-| `use_schematic_from_library_import` | 用原理图库内容替换工程原理图 |
-
-### 软 IP（4 个）
-
-| 工具 | 说明 |
-|---|---|
-| `search_soft_ip_categories` | 查询全部软 IP 分类（自动合并分页） |
-| `search_public_soft_ip_models` | 查询公共软 IP 模型（自动合并分页） |
-| `search_personal_soft_ip_models` | 查询个人软 IP 模型（自动合并分页） |
-| `download_soft_ip_model` | 按软 IP UUID 和频率下载 AEDT 模型文件 |
-
-### 启动 / 诊断（3 个）
-
-| 工具 | 说明 |
-|---|---|
-| `launch_edi` | 启动 EDI 客户端并等待 gRPC 就绪 |
-| `get_service_status` | 返回 gRPC 通道状态、队列信息 |
-| `get_service_logs` | 读取 EDI 服务端日志并分析异常 |
-
-### 工作区（3 个）
-
-| 工具 | 说明 |
-|---|---|
-| `create_workspace` | 创建工作区（不自动切换） |
-| `switch_workspace` | 设置下次启动使用的工作区 |
-| `get_current_workspace` | 查询当前实际加载的工作区目录 |
-
-### 原理图扩展（4 个）
-
-| 工具 | 说明 |
-|---|---|
-| `list_ideal_components` | 列出内置器件类型及说明 |
-| `add_ideal_component` | 按指定坐标新增内置器件 |
-| `clear_schematic` | 清空原理图（破坏性，需 confirm_clear） |
-| `add_wire` | 连接两个器件的指定引脚 |
-
-### ANSYS HFSS（6 个）
-
-| 工具 | 说明 |
-|---|---|
-| `open_hfss_project` | 启动 AEDT 并打开 .aedt 项目 |
-| `close_hfss_project` | 关闭 AEDT 项目 |
-| `launch_aedt` | 启动 AEDT |
-| `get_hfss_project_info` | 查询项目列表和活动设计 |
-| `start_hfss_analysis_async` | 异步启动 HFSS 仿真 |
-| `get_hfss_analysis_status` | 查询 HFSS 仿真状态 |
-
-### CST 电磁仿真（5 个）
-
-| 工具 | 说明 |
-|---|---|
-| `cst_solve_async` | 异步求解 .cst 模型（一次性会话） |
-| `cst_solve_query` | 查询求解任务（进度+结果） |
-| `cst_export_snp` | 导出 S 参数为 Touchstone .sNp |
-| `cst_export_farfield` | 导出远场方向图为 ASCII .txt（自动判断求解） |
-| `cst_export_farfield_query` | 查询远场导出任务（进度+结果） |
-
-### TR 仿真集成（17 个，对接 SimulationAgent）
-
-> 封装外部服务 SimulationAgent.exe（`http://127.0.0.1:17866`）的 17 个 `tr_*` HTTP 工具。
-> 工作流规则见 Resource `edi://integration/workflow`（或 [MCP_WORKFLOW.md](servers/tr_simulation/MCP_WORKFLOW.md)）。
-
-| 工具 | 说明 |
-|---|---|
-| `tr_get_workflow_state` | 查询会话持久化的计划/链路/指标/报告状态 |
-| `tr_set_workflow_plan` | 持久化用户确认的完整链路仿真计划 |
-| `tr_get_simulation_capabilities` | 查询 TR 仿真支持的指标/单位/必需参数 |
-| `tr_find_paths` | 查找 EPP 端口和有效有向端口组合 |
-| `tr_read_netlist` | 读取 EDI 网表或会话内修订版（分页） |
-| `tr_modify_netlist` | 创建网表修订版并注入指标控制器 |
-| `tr_execute_simulation_plan` | 按计划批量执行多指标（修订→仿真→解析→登记） |
-| `tr_run_simulation` | 执行网表修订版获取 result.raw |
-| `tr_parse_raw` | 解析 RAW 生成 CSV、曲线图和标准化指标 |
-| `tr_get_project_netlist` | 获取工程当前真实网表并保存到会话 |
-| `tr_query_schematic_components` | 查询工程原理图中的器件信息 |
-| `tr_sync_project_components` | 将网表变更同步到工程原理图（确认门） |
-| `tr_restore_schematic` | 原理图整体回退到会话初始备份（确认门） |
-| `tr_query_components` | 查询器件类别/厂家/关键规格 |
-| `tr_prepare_report` | 生成报告草稿和判定证据 |
-| `tr_generate_document` | 校验报告草稿并生成 PDF/DOCX |
-| `tr_read_guide` | 读取 guides 目录中的 Word 指南 |
-
-### 图表与图片
-
-| 工具 | 说明 |
-|---|---|
-| `list_result_curves` | 解析 RAW 返回可用曲线名 |
-| `turbocharts_convert` | ADS RAW → 曲线图 + CSV（`linename=<前缀>_<变量>`，多条用 `&`；调用前校验并回读 CSV 表头自检） |
-| `compare_simulation_results` | 多 RAW 同曲线对比叠图（Matplotlib） |
-| `show_image` | 返回 MCP ImageContent + 本地路径 |
-| `analyze_image` | 调用视觉模型分析图片内容 |
-
-### 报告与文档
-
-| 工具 | 说明 |
-|---|---|
-| `generate_simulation_report` | 仿真数据 → PDF/DOCX，自动返回 HTTP 预览链接 |
-| `open_document` | 打开本地文档（link 链接 / local 系统打开） |
-
-> 完整参数说明见 [工具 API](./docs/TOOLS_API.md)。
+> 每个工具的**详细参数、返回、示例** → **[`docs/TOOLS_API.md`](docs/TOOLS_API.md)**；工具清单由 `scripts/gen_tool_index.py` 自动生成 → [`docs/TOOL_INDEX.md`](docs/TOOL_INDEX.md)。
 
 ---
-
 ## 接口设计
 
-### 传输方式
-
-| 方式 | 端点 | 适用场景 |
-|---|---|---|
-| **Streamable HTTP**（默认） | `POST http://127.0.0.1:50026/mcp` | OpenClaw、Web 客户端 |
-| **stdio** | 标准输入输出 | Claude Code、本地桌面客户端 |
-
-Streamable HTTP 模式启用 `stateless_http=True`，服务不保留 MCP 会话状态，重启后新请求自动重建连接。
-
-### HTTP 路由
-
-| 路由 | 方法 | 说明 | 响应示例 |
-|---|---|---|---|
-| `/health` | GET | 进程存活 + gRPC 连接状态 | `{"status":"ok","mcp_ready":true,"eda_grpc_ready":true}` |
-| `/ready` | GET | 服务是否完成初始化（启动中返回 503） | `{"status":"ready","transport":"streamable-http","stateless":true,"tool_count":90}` |
-| `/mcp` | POST | MCP 协议端点（Streamable HTTP） | MCP JSON-RPC 响应 |
-| `/ui` | GET | 内置聊天界面 | HTML 页面 |
-| `/chat` | POST | 聊天 API（LLM 多轮工具闭环） | `{"success":true,"reply":"...","activities":[...]}` |
-| `/tools/list` | GET | 已注册工具列表 | `[{"name":"list_epp_projects","description":"..."}]` |
-| `/images/{token}` | GET | 临时图片访问（10 分钟有效） | 图片文件 |
-| `/documents/{token}` | GET | 临时文档访问（10 分钟有效） | PDF/DOCX 文件 |
-| `/upload` | POST | 文件上传（multipart/form-data） | `{"success":true,"file_path":"C:/...","file_name":"..."}` |
-| `/metrics` | GET | 运行时指标（Prometheus 格式） | 见 HTTP_API.md |
-
-### MCP Resources（8 个，只读上下文）
-
-客户端通过 `resources/list` 和 `resources/read` 访问。
-
-| URI | MIME | 说明 |
-|---|---|---|
-| `edi://service/overview` | `application/json` | 服务版本、gRPC 协议 v2、工具 API v3、安全规则、工作区状态 |
-| `edi://service/status` | `application/json` | 实时运行时状态（gRPC 通道、队列占用、工具指纹） |
-| `edi://projects` | `application/json` | 工作区工程目录清单（名称/路径/大小） |
-| `edi://reference/simulation-components` | `application/json` | SP/HB/XDB 参数目录，与 `get_simulation_component_schema` 同源 |
-| `edi://reference/operation-guide` | `text/markdown` | 操作安全约束：创建/删除/网表导入规则 |
-| `edi://reference/error-codes` | `text/markdown` | gRPC 状态码词典及建议动作 |
-| `edi://reference/turbocharts-guide` | `text/plain` | 引擎自带《RAW 转图像工具使用说明》原文（画图前读：参数、linename 单位与线段名、示例） |
-| `edi://integration/workflow` | `text/markdown` | TR 仿真工作流规则（实时拉取 SimulationAgent） |
-
-### MCP Prompts（9 个，可复用工作流）
-
-| Prompt | 参数 | 说明 |
-|---|---|---|
-| `inspect_edi_project` | `project_path`, `detail_level` | 只读检查：概览 → 变量 → 器件 → 仿真配置 |
-| `run_and_review_simulation` | `project_path`, `execution_mode`, `analyze_log` | 异步仿真 + 日志分析，含轮询限制 |
-| `configure_simulation_component` | `project_path`, `action`, `component_type`, `instance_name`, `requirements` | Schema → 参数映射 → 确认 → 创建/更新 |
-| `create_simulation_report` | `project_path`, `output_path`, `overwrite` | 查询工程 → 确认结果 → 生成曲线 → 渲染 PDF/DOCX |
-| `troubleshoot_edi_error` | `status`, `error_code` | 按状态码查错误词典、检查服务状态、给排查建议 |
-| `assess_anti_burnout` | `project_path` | 抗烧毁评估并按功率裕量排序 |
-| `select_component` | `sub_type_id`, `requirement` | 从公共/个人模型库选型（含替换闭环） |
-| `analyze_signal_chain` | `project_path`, `start` | 追踪信号链路并逐级说明 |
-| `run_tr_simulation` | `epp_path` | TR 仿真工作流：工程发现→参数确认→保存计划→仿真→报告→原理图同步 |
+- **传输**：Streamable HTTP（stateless）或 stdio。
+- **HTTP 路由**（每个路由的请求/响应体）→ [`docs/HTTP_API.md`](docs/HTTP_API.md)。
+- **实现原理与机制**（底层通信 / 公有设置方法 / 特殊机制 / 工具 / Resources / Prompts）→ [`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md)。
 
 ---
-
 ## 工具返回结构
 
-### gRPC 工具统一返回
-
-```python
-{
-    "success": bool,        # 本次 MCP 调用是否成功
-    "completed": bool,      # MCP 侧任务是否结束
-    "outcome_known": bool,  # 是否收到 EDI 最终事件（SUCCEEDED/FAILED）
-    "task_success": bool,   # EDI 任务是否成功（仅 outcome_known=True 有意义）
-    "hint": str,            # 机器可读动作指令：ok / task_failed / outcome_unknown / service_unavailable / busy / rejected / protocol_error / too_large
-    "status": str,          # SUCCEEDED / FAILED / TIMEOUT / STREAM_DISCONNECTED / ...
-    "message": str,         # 描述信息
-    "project_path": str,    # 工程路径
-    "result_path": str,     # 结果文件路径（如 RAW 文件）
-    "ads_output": str,      # 增量拼接的完整仿真器日志
-    "log_complete": bool,   # 日志是否完整接收
-    "details": dict,        # 原始事件 payload 字段
-}
-```
-
-### 异步仿真生命周期
-
-```
-QUEUED → ACCEPTED → RUNNING → SUCCEEDED / FAILED
-                                     ↓
-                              2 小时后自动清理
-```
-
-超时/断连时：`outcome_known=False, task_success=None`，不冒充 EDI 业务失败。
-
-`hint` 是给 agent 的机器可读动作指令，优先读它而不是从 `success`/`task_success`/`outcome_known` 做布尔推断：`ok`（成功）、`task_failed`（业务失败，工具没坏）、`outcome_unknown`（结果未知，别当失败、别自动重试非幂等）、`service_unavailable`（EDI 没起，先 `launch_edi`）、`busy`（排队超时，稍后重试）、`rejected`（请求被拒，修参数）、`protocol_error`、`too_large`。
-
-### 产物格式 (artifacts)
-
-`turbocharts_convert`、`capture_schematic`、`compare_simulation_results`、`generate_simulation_report` 返回统一产物：
-
-```json
-{
-  "success": true,
-  "artifacts": [
-    {"type": "image", "path": "C:/.../gain.png", "name": "gain.png", "generated_by": "turbocharts_convert"},
-    {"type": "csv", "path": "C:/.../gain.csv", "name": "gain.csv", "generated_by": "turbocharts_convert"}
-  ],
-  "message": "曲线图已生成。"
-}
-```
-
-报告额外返回 `preview_url`（10 分钟有效 HTTP 链接）。
+统一返回契约：`success` / `error_code` / `message` / `hint`；gRPC 工具业务数据在 `details`；异步任务走 `task_id` + `status` + `outcome_known`。完整结构 → [`docs/TOOLS_API.md`](docs/TOOLS_API.md)。
 
 ---
-
 ## Chat 接口
 
-内置 LLM 多轮工具调用闭环，通过 `POST /chat` 和浏览器 `/ui` 访问。
-
-### 请求
-
-```json
-POST /chat
-{"session_id": "", "message": "帮我扫描 C:/Projects 下的工程"}
-```
-
-### 响应
-
-```json
-{
-  "success": true,
-  "session_id": "a1b2c3d4",
-  "reply": "找到 3 个工程：demo1.epp, demo2.epp, test.epp",
-  "activities": [{"tool": "list_epp_projects", "status": "success", "summary": "找到 3 个工程"}],
-  "context": {"current_project_name": null},
-  "media": []
-}
-```
-
-### 特性
-
-- 会话保持（2h TTL，100 上限），自动记忆当前工程和最近仿真 task_id
-- 最多 5 轮工具调用，单轮最多 8 个工具
-- 参数自动补齐：`project_path` 从会话上下文，`task_id` 从最近仿真
-- 破坏性操作确认门：delete/replace/close_save/overwrite 需用户确认，支持肯定词
-- 默认值透明：产生输出文件或采用默认值时，先告知用户输出位置/默认值并询问是否调整
-- 重复调用保护：同轮同参数指纹去重
-- 空 session_id 自动创建，服务重启后旧 session 返回 Session not found
+内置 LLM 多轮工具闭环（`/chat`，需配 `LLM_*`）。请求/响应格式 → [`docs/HTTP_API.md`](docs/HTTP_API.md) §5。
 
 ---
+## 配置
 
-## 配置一览
-
-| 环境变量 | 默认值 | 说明 |
-|---|---|---|
-| `EDA_GRPC_SERVER` | `127.0.0.1:50055` | EDI gRPC 服务地址 |
-| `MCP_TRANSPORT` | `streamable-http` | 传输方式（streamable-http / stdio） |
-| `MCP_STATELESS_HTTP` | `true` | 无状态模式 |
-| `MCP_PORT` | `50026` | HTTP 监听端口 |
-| `MCP_BIND_HOST` | `127.0.0.1` | 监听地址；远程填 `0.0.0.0`（等价 `--host 0.0.0.0`）|
-| `MCP_EXTRA_ALLOWED_HOSTS` | 空 | 手工补 `Host` 允许列表（逗号分隔）；只在客户端用自动枚举不到的名字（反代域名）时才需要 |
-| `MCP_PROBE_ENABLED` | `1` | 白名单关闭时（本机留空 / 远程自动忽略）的来源进程探针（无鉴权下唯一的「谁在连」线索，建议保持开启）|
-| `MCP_ALLOWED_PROCESSES` | — | 进程白名单（留空不鉴权；配置后只放行匹配这些子串的进程访问 `/mcp`） |
-| `EDI_PATH` | 自动检测 | EDI.exe 路径 |
-| `TURBOCHARTS_PATH` | 自动检测 | turbocharts_app.exe 路径 |
-| `LLM_API_KEY` | — | Chat AI 功能 |
-| `LLM_BASE_URL` | — | LLM API 地址 |
-| `LLM_MODEL` | — | 模型名称 |
-| `VISION_API_KEY` | — | 视觉分析（三项全填开启） |
-| `VISION_BASE_URL` | — | 视觉模型 API 地址 |
-| `VISION_MODEL` | — | 视觉模型名称 |
-| `REPORT_RENDER_URL` | `http://127.0.0.1:17867/api/v1/reports/render` | 报告渲染服务 |
-| `SIMULATION_AGENT_URL` | `http://127.0.0.1:17866` | SimulationAgent（TR 仿真集成）服务地址 |
-| `SIMULATION_AGENT_TIMEOUT` | `60` | SimulationAgent 单次 HTTP 请求超时（秒） |
+`.env` 配置项**完整清单** → [`docs/HANDOVER.md`](docs/HANDOVER.md)「配置说明」；Win7 现场必改项 → [`docs/WIN7部署与启动手册.md`](docs/WIN7部署与启动手册.md)。
 
 ---
-
 ## 项目结构
 
 ```
@@ -595,8 +280,7 @@ edi-grpc-mcp/
 │   ├── WIN7部署与启动手册.md           #   部署指南（打包产物、客户端配置）
 │   ├── TOOLS_API.md                    #   工具 API（90 个工具完整签名+返回值示例）
 │   ├── HTTP_API.md                     #   HTTP 接口（请求体、响应体、成功/失败情况）
-│   ├── IMPLEMENTATION.md               #   实现原理（通信类型、校验管线、并发控制、工具动机与依赖）
-│   ├── RESOURCES_PROMPTS.md            #   Resource & Prompt 说明（8 Resource + 9 Prompt 的用途与实现）
+│   ├── IMPLEMENTATION.md               #   实现原理与机制（通信原理、公有方法、特殊机制、工具、Resource/Prompt）
 │   ├── HANDOVER.md                     #   交接文档（架构设计、技术栈、47 条注意事项）
 │   └── EDI系统接口与外部调用汇总.md    #   EDI 系统全量对外接口
 │
@@ -693,8 +377,7 @@ powershell -File scripts/build.ps1  # PyInstaller
 | [部署指南](./docs/WIN7部署与启动手册.md) | 打包产物使用、客户端配置 |
 | [工具 API](./docs/TOOLS_API.md) | 全部 90 个工具参数、返回值、示例 |
 | [HTTP 接口](./docs/HTTP_API.md) | 全部 HTTP 路由的请求体、响应体、成功/失败情况 |
-| [实现原理](./docs/IMPLEMENTATION.md) | 5 种通信类型、校验管线、并发控制、工具动机与依赖 |
-| [Resource & Prompt](./docs/RESOURCES_PROMPTS.md) | 8 Resource + 9 Prompt 的用途、功能与实现 |
+| [实现原理与机制](./docs/IMPLEMENTATION.md) | 通信原理、公有方法、特殊机制、工具、8 Resource + 9 Prompt |
 | [交接文档](./docs/HANDOVER.md) | 架构设计、技术栈、扩展开发、47 条注意事项 |
 | [gRPC 协议](./proto/grpc接口调用.md) | ExternalCall 接口调用说明 |
 | [EDI 系统接口汇总](./docs/EDI系统接口与外部调用汇总.md) | EDI 全量对外接口 |

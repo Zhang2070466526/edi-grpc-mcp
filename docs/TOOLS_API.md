@@ -871,16 +871,17 @@ search_personal_soft_ip_models(filters: list, timeout_seconds: int = 60) -> dict
 ```python
 from servers.eda.soft_ip import download_soft_ip_model
 
-download_soft_ip_model(soft_ip_id: str, save_path: str, freq: float, timeout_seconds: int = 120) -> dict
+download_soft_ip_model(soft_ip_id: str, save_path: str, freq: float, bandwidth: float | None = None, timeout_seconds: int = 120) -> dict
 ```
 
-按软 IP UUID 和频率下载 AEDT 模型文件到指定路径。`soft_ip_id` 是软 IP UUID，`save_path` 是完整目标文件路径（不是目录），`freq` 是频率（>0）。服务端自动创建父目录并安全覆盖同名文件；下载超时 120 秒。
+按软 IP UUID 和频率下载 AEDT 模型文件到指定路径。`soft_ip_id` 是软 IP UUID，`save_path` 是完整目标文件路径（不是目录），`freq` 是频率（>0）。`bandwidth` 是可选带宽（有限数值），提供时下游请求体额外带上 `bandwidth` 与固定 `allow_extrapolation=false`。服务端自动创建父目录并安全覆盖同名文件；下载超时 120 秒。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `soft_ip_id` | str | 是 | — | 软 IP UUID |
 | `save_path` | str | 是 | — | 目标文件完整路径（如 `D:/soft-ip/C_10mil4350.aedt`） |
 | `freq` | float | 是 | — | 频率（大于 0 的有限数值） |
+| `bandwidth` | float | 否 | None | 可选带宽（有限数值）；不传则下游请求体只含 freq |
 | `timeout_seconds` | int | 否 | 120 | 最长等待秒数 |
 
 返回（gRPC 统一结构，成功时 `details.save_path` 为最终绝对路径）：
