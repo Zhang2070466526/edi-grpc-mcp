@@ -1,8 +1,8 @@
 # EDI gRPC MCP 实现原理与机制
 
-> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 90 个工具的逐类实现，再到 8 个 Resource 与 9 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
+> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 91 个工具的逐类实现，再到 8 个 Resource 与 9 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
 
-> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（90 个工具接口参数/返回）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由请求/响应体）。
+> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（91 个工具接口参数/返回）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由请求/响应体）。
 
 ---
 
@@ -44,7 +44,7 @@
   - `3.6` 日志系统
   - `3.7` Chat 会话与破坏性确认
 
-- **[四、工具实现](#四工具实现)** —— 90 个工具按通信类型分组 + 设计动机
+- **[四、工具实现](#四工具实现)** —— 91 个工具按通信类型分组 + 设计动机
   - `4.1` 工程管理
   - `4.2` 仿真器件
   - `4.3` 仿真
@@ -683,14 +683,15 @@ def fetch_artifact(file_path: str, ttl_seconds: int = 600) -> dict:
 | ANSYS COM 操作 | `threading.RLock` | 保护 AEDT COM 对象 |
 | Chat 会话 | `threading.Lock` / `asyncio.Lock` | 保护 `_sessions` 字典、同会话串行 |
 | 图片 token | `threading.RLock` | 保护 `_IMAGE_TOKENS` 字典 |
+| 慢同步工具（`turbocharts_convert` / `compare_simulation_results` / `generate_simulation_report`） | `per_tool_mutex`（各一把 `threading.Lock`） | offload 后同类工具串行，防并发争用共享资源 |
 
-#### 同步工具会冻结整个服务
+#### 同步工具统一 offload（已实现）
 
 FastMCP 对**同步工具**是直接调用（无 `to_thread`）→ 工具跑在**事件循环线程**上，执行期间整个服务停摆：产物下载、`/health`/`/ready`、其它会话的轮询全部排队。实测 `turbocharts_convert`（1.6s）期间探活从 3ms 涨到 1344ms。
 
-受影响的主要是「同步慢工具」：`turbocharts_convert`、`compare_simulation_results`、`generate_simulation_report`、`cst_export_snp`/`cst_export_farfield`、以及所有走 gRPC 阻塞等待的 EDA 工具。**异步任务不受影响**（worker 在 `ThreadPoolExecutor` 里）——「长任务用异步接口」是避免冻结的唯一办法。
+**实现**：在 `servers/__init__.py` monkeypatch `Tool.run`，所有同步工具在 MCP 调用时整段丢到工作线程（`anyio.to_thread.run_sync` + 子线程 `asyncio.run` 驱动），事件循环立即回来接单；工具函数本身保持 sync（直接调用仍返回 dict，Python API 不变）。异步任务不受影响（worker 在 `ThreadPoolExecutor` 里）。
 
-修法：慢同步工具改 `async def` + 内部 `await anyio.to_thread.run_sync(原实现)`。⚠️ **offload 必须同时加锁**——这些工具现在「串行」靠的是占满事件循环这一副作用，offload 后并发冲突会暴露（实测并发 2 个 turbocharts 耗时 3.7×）。
+**配套加锁**：offload 后同类工具并发会争用共享资源（turbocharts 子进程、Matplotlib 全局状态、报告渲染服务）。`servers/utils.py` 的 `per_tool_mutex` 装饰器给 `turbocharts_convert` / `compare_simulation_results` / `generate_simulation_report` 各加一把独立锁，同类工具互斥、不同工具互不阻塞（实测不锁时并发 2 个 turbocharts 耗时 3.7×）。
 
 ### 3.5 重启恢复与生命周期
 

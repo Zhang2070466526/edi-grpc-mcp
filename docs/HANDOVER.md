@@ -98,7 +98,7 @@ PyPI: https://pypi.org/project/edi-grpc-mcp/  |  当前版本：0.1.9
 
 ## MCP 工具清单
 
-工具总数随版本变化（当前 90 个，以运行时 `/ready` 的 `tool_count` 为准），按功能分 13 类：
+工具总数随版本变化（当前 91 个，以运行时 `/ready` 的 `tool_count` 为准），按功能分 13 类：
 
 | 分类 | 数量 | 说明 |
 |---|---|---|
@@ -114,7 +114,7 @@ PyPI: https://pypi.org/project/edi-grpc-mcp/  |  当前版本：0.1.9
 | CST 电磁仿真 | 5 | 异步求解 .cst、导出 S 参数 / 远场方向图 |
 | TR 仿真集成 | 17 | 对接 SimulationAgent：网表、仿真、解析、报告、原理图同步 |
 | 图表与图片 | 5 | RAW 曲线、转图、结果对比、显示、视觉分析 |
-| 报告与文档 | 2 | 生成仿真报告、打开本地文档 |
+| 报告与文档 | 3 | 生成仿真报告、打开本地文档、下载任意产物（fetch_artifact） |
 
 > 完整工具签名、参数、返回格式见 [TOOLS_API.md](./TOOLS_API.md)，工具一览表见 [README.md](../README.md)。
 

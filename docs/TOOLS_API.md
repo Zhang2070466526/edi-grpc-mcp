@@ -1621,7 +1621,7 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 
 ## Resources & Prompts
 
-除了 Tool（启动时动态统计，当前 90 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
+除了 Tool（启动时动态统计，当前 91 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
 
 ### Resources（8 个）
 
@@ -1658,7 +1658,7 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 
 ---
 
-## 文档（1 个）
+## 文档（2 个）
 
 ### `open_document`
 
@@ -1679,6 +1679,23 @@ open_document(file_path: str, mode: str = "link", disposition: str = "inline") -
 返回（link 模式）：`{"success": True, "url": "http://...", "file_name": "...", "expires_in": 600, "markdown_link": "[...](...)"}`
 
 返回（local 模式）：`{"success": True, "status": "OPEN_REQUESTED", "file_path": "...", "file_type": ".pdf"}`
+
+### `fetch_artifact`
+
+```python
+from servers.multimodal_vision import fetch_artifact
+
+fetch_artifact(file_path: str, ttl_seconds: int = 600) -> dict
+```
+
+把本机（引擎机）上的任意产物文件（.snp/.raw/图/报告/二进制）注册成可下载 URL。与 open_document 不同：不校验扩展名，远程场景下主机用返回的 url 直接下载，sha256 供下载后校验字节一致。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `file_path` | str | 是 | — | 产物文件绝对路径（任意扩展名） |
+| `ttl_seconds` | int | 否 | 600 | 链接有效秒数（钳制到 30-3600） |
+
+返回：`{"success": True, "url": "http://...", "file_name": "...", "size_bytes": N, "sha256": "...", "expires_in": 600}`
 
 ---
 
