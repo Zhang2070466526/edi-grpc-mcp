@@ -30,14 +30,18 @@ class TokenStore:
             for t in [t for t, v in self._tokens.items() if v["expires_at"] < now]:
                 del self._tokens[t]
 
-    def register(self, path: str, **extra: Any) -> tuple[str, str]:
-        """注册一个 Token，返回 (token, url)。extra 存附加字段（如 disposition）。"""
+    def register(self, path: str, ttl: int | None = None, **extra: Any) -> tuple[str, str]:
+        """注册一个 Token，返回 (token, url)。extra 存附加字段（如 disposition）。
+
+        ttl 为 per-token 过期秒数，None 用实例默认。注意不要通过改 self._ttl 来临时
+        调 TTL——那会永久污染所有复用同一 store 的调用方。
+        """
         self.cleanup_expired()
         token = secrets.token_urlsafe(24)
         with self._lock:
             self._tokens[token] = {
                 "path": str(path),
-                "expires_at": time.time() + self._ttl,
+                "expires_at": time.time() + (ttl if ttl is not None else self._ttl),
                 **extra,
             }
         return token, f"{get_server_base_url()}{self._route}/{token}"

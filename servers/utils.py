@@ -325,16 +325,36 @@ def build_artifact(type_: str, path: str, generated_by: str) -> dict[str, Any]:
             "generated_by": generated_by}
 
 
-def build_file_link(path: str, label: str = "打开文件") -> dict:
-    """为本地文件生成 file:// URI 和 Markdown 链接。
+def build_file_link(path: str, label: str = "打开文件", *,
+                    ttl: int = 3600, disposition: str = "inline") -> dict:
+    """为本地文件生成 file:// URI、可下载 token 链接和 Markdown 链接。
 
-    只在 MCP 服务与客户端同机时可靠。
+    file_uri 是服务端本机路径（仅同机可靠）；download_url / markdown_link 指向
+    token 链接（远程也能下载）。注册失败时 markdown_link 回退到 file:// 并标注
+    「仅引擎机有效」。
+
+    ttl / disposition 透传给 token 注册（默认 3600 秒、inline）；需要按格式区分
+    预览/下载时由调用方显式传，例如报告：PDF→inline、DOCX→attachment。
     """
     p = Path(path).resolve()
     uri = p.as_uri()
+    download_url = ""
+    if p.is_file():
+        try:
+            # 延迟 import 避免循环依赖（document.py 模块级 import 本模块）
+            from servers.multimodal_vision.document import _register_any_file_url
+            download_url = _register_any_file_url(str(p), ttl=ttl, disposition=disposition)
+        except Exception:
+            download_url = ""
+    markdown_link = (
+        f"[{label}]({download_url})"
+        if download_url
+        else f"[{label}]({uri})（仅引擎机有效）"
+    )
     return {
         "file_uri": uri,
-        "markdown_link": f"[{label}]({uri})",
+        "download_url": download_url,
+        "markdown_link": markdown_link,
     }
 
 

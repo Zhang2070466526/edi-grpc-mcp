@@ -3,7 +3,7 @@
 校验顺序：output_path → model_name → description/conclusion → spec_table（固定7列）
 → charts（绝对路径+后缀）→ components（四项全字符串，支持中英文key）→ schematic
 调用后自验证：文件存在、非空、路径一致。
-返回：preview_url（10 分钟 HTTP Token）+ markdown_link + artifacts + 本地路径兜底。
+返回：preview_url / download_url / markdown_link（**同一 token 链接，60 分钟**）+ file_uri（本机路径，兼容）+ artifacts + 本地路径兜底。
 """
 
 from __future__ import annotations
@@ -20,7 +20,6 @@ from dotenv import load_dotenv
 from servers import mcp
 from servers.settings import get_settings
 from servers.utils import build_artifact, build_file_link, is_network_path, error_response, per_tool_mutex
-from servers.multimodal_vision.document import register_document_url
 
 load_dotenv()
 _logger = logging.getLogger("report.generator")
@@ -391,9 +390,15 @@ def generate_simulation_report(
     if schematic_missing:
         warnings.append("原理图文件未找到，已跳过链路拓扑章节")
 
-    preview_url = register_document_url(str(expected_output),
-                                         disposition="inline" if file_type == "pdf" else "attachment")
-    md_link = f"[打开{file_type.upper()}报告]({preview_url})"
+    # 只注册一条 token 链接：preview_url / markdown_link / message 三处共用同一 URL
+    # （PDF→inline 预览，DOCX→attachment 下载；TTL 60 分钟，远程主机也能点开）
+    link = build_file_link(
+        str(expected_output),
+        f"打开{file_type.upper()}报告",
+        disposition="inline" if file_type == "pdf" else "attachment",
+    )
+    token_url = link["download_url"] or link["file_uri"]
+    md_link = link["markdown_link"]
 
     result = {
         "success": True,
@@ -401,9 +406,9 @@ def generate_simulation_report(
         "file_type": data.get("file_type", file_type),
         "file_size": actual_size,
         "artifacts": [build_artifact(file_type, str(expected_output), "generate_simulation_report")],
-        "preview_url": preview_url,
+        "preview_url": token_url,
         "markdown_link": md_link,
-        "message": f"报告已生成：{md_link}\n\n本地路径：{expected_output}\n\n链接 10 分钟有效，仅本机可访问。",
+        "message": f"报告已生成：{md_link}\n\n本地路径：{expected_output}\n\n链接 60 分钟内有效，主机/远程客户端均可点开（可直接下载）。",
         "sections": data.get("sections", []),
         "chart_count": data.get("chart_count", 0),
         "component_count": data.get("component_count", 0),
@@ -412,7 +417,7 @@ def generate_simulation_report(
         "warnings": warnings,
         "output_verified": True,
     }
-    result["file_uri"] = build_file_link(str(expected_output), f"打开{file_type.upper()}报告")["file_uri"]
+    result.update(link)
     return result
 
 

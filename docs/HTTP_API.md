@@ -42,7 +42,7 @@
 
 **远程 / 局域网访问（非 `127.0.0.1`）需要改 7 项，不只是 `--host`**（2026-09-18 实测）：
 
-> ✅ **第十八轮进度（2026-09-18 落地并端到端实测）**：**①–④ 已落地** —— 现在启动时加 **`--host 0.0.0.0`** 就能远程：LAN IP / 主机名（含大小写）/ 非环回 IPv6 **自动进允许列表**，产物链接**自动按请求 `Host` 生成**（实测 LAN 调用返回 LAN 链接且 `GET` 200 字节一致）；**⑤ `fetch_artifact`、⑥⑦ 未做**。`/ready` 新增 **`bind_host`** 与 **`allowed_hosts`** 两个自述字段（远程排障先看这两个）。逐项状态见 `docs/IMPLEMENTATION.md`；证据 `edi_tmp/verif42.py`（31/31）。
+> ✅ **第十八轮进度（2026-09-18 落地并端到端实测）**：**①–④ 已落地** —— 现在启动时加 **`--host 0.0.0.0`** 就能远程：LAN IP / 主机名（含大小写）/ 非环回 IPv6 **自动进允许列表**，产物链接**自动按请求 `Host` 生成**（实测 LAN 调用返回 LAN 链接且 `GET` 200 字节一致）；**⑤ `fetch_artifact`、⑥⑦ 未做**。`/ready` 新增 **`bind_host`** 与 **`allowed_hosts`** 两个自述字段（远程排障先看这两个）。逐项状态见 `docs/IMPLEMENTATION.md`；已端到端实测 **31/31**。
 
 1. ✅ **（已落地）** **host 硬编码**：`start_servers.py:205` `host = "127.0.0.1"`，`main()` 无 `--host` → 加 `--host`（默认仍 `127.0.0.1`，**本机模式零变化**）；
 2. ✅ **（已落地）** ⚠️ **`/mcp` 会被 SDK 的 DNS-rebinding 校验拒**：`mcp 1.28` 的 `FastMCP.__init__` 只在 host 为环回时自动生成 `allowed_hosts`，本仓是**构造之后**才改 `mcp.settings.host`（不重算）→ 实测 `Host=192.168.0.58:PORT` → **`421 Invalid Host header`**（真客户端走 LAN IP 握手失败）。修法（实测通过）= 在 `streamable_http_app()` **之前**显式设 `mcp.settings.transport_security`，**枚举本机全部非环回 IP（psutil）＋主机名/FQDN（含小写）** ＋ `MCP_EXTRA_ALLOWED_HOSTS`。

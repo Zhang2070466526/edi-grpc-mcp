@@ -51,6 +51,7 @@ def test_all_tools_registered():
         "tr_parse_raw", "tr_read_guide", "tr_get_project_netlist",
         "tr_query_schematic_components", "tr_sync_project_components",
         "tr_prepare_report", "tr_generate_document", "tr_query_components",
+        "fetch_artifact",
     ]
     assert len(tools) == len(required), f"expected {len(required)} tools, got {len(tools)} ({sorted(tools)})"
     for name in required:

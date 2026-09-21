@@ -138,7 +138,16 @@ class TestBuildFileLink:
         f.write_text("x")
         r = build_file_link(str(f), label="报告")
         assert r["file_uri"].startswith("file://")
-        assert r["markdown_link"].startswith("[报告](file://")
+        assert r["download_url"].startswith("http")
+        assert "/documents/" in r["download_url"]
+        assert r["markdown_link"].startswith("[报告](http")
+
+    def test_missing_file_fallback(self, tmp_path):
+        from servers.utils import build_file_link
+        r = build_file_link(str(tmp_path / "nope.png"), label="图")
+        assert r["download_url"] == ""
+        assert r["markdown_link"].startswith("[图](file://")
+        assert "仅引擎机有效" in r["markdown_link"]
 
 
 class TestServerAddress:
@@ -176,6 +185,18 @@ class TestDecodeLocalText:
         from servers.utils import decode_local_text
         assert decode_local_text(None) == ""
         assert decode_local_text(b"") == ""
+
+
+class TestTokenStore:
+    def test_per_token_ttl_does_not_affect_default(self):
+        import time
+        from servers.token_registry import TokenStore
+        store = TokenStore(ttl=600, route="/x")
+        now = time.time()
+        t1, _ = store.register("/tmp/a", ttl=30)
+        t2, _ = store.register("/tmp/b")
+        assert store.lookup(t1)["expires_at"] - now == pytest.approx(30, abs=2)
+        assert store.lookup(t2)["expires_at"] - now == pytest.approx(600, abs=2)
 
 
 if __name__ == "__main__":

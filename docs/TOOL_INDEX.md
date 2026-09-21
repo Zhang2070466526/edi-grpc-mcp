@@ -2,7 +2,7 @@
 
 > 自动生成，勿手改。权威数量见 /ready 的 tool_count。
 
-共 90 个工具：
+共 91 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
 - `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
@@ -28,6 +28,7 @@
 - `download_soft_ip_model` — 按软 IP UUID 和频率下载 AEDT 模型文件到指定路径。
 - `export_project_netlist` — 查看 EDA .epp 工程的网表，返回网表文件路径。
 - `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV。
+- `fetch_artifact` — 把本机产物文件注册成可下载 URL（仿真结果 / SNP / RAW / 图 / 报告 / 任意文件）。
 - `generate_schematic_from_netlist` — 将网表文件导入工程生成 main 原理图。
 - `generate_simulation_report` — 生成本地仿真报告（PDF/DOCX），16 步校验后调用本地渲染服务。
 - `get_components_static_params` — 查询器件的固有参数（重量、尺寸、封装、所属厂商、成本等）。
