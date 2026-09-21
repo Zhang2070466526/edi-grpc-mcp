@@ -12,12 +12,12 @@ $MAX_DIR_MB  = 250
 $MAX_ZIP_MB  = 100
 $MAX_EXE_MB  = 80   # 超过此值提示可能重复打包
 
-# ── [1/7] 清理 ──
-Write-Host "[1/7] Cleaning..." -ForegroundColor Yellow
+# ── [1/8] 清理 ──
+Write-Host "[1/8] Cleaning..." -ForegroundColor Yellow
 Remove-Item -Recurse -Force dist, build -ErrorAction SilentlyContinue
 
-# ── [2/7] 测试 ──
-Write-Host "[2/7] Running tests..." -ForegroundColor Yellow
+# ── [2/8] 测试 ──
+Write-Host "[2/8] Running tests..." -ForegroundColor Yellow
 # Fresh basetemp each run: default %TEMP%\pytest-of-JGL's pytest-current junction
 # gets locked by a leftover process -> cleanup PermissionError (false TESTS FAILED).
 # Forward slashes required: uv run swallows backslash paths to pytest (empty basetemp).
@@ -25,12 +25,12 @@ $pytestTmp = (Join-Path $env:TEMP ("edi-pytest-" + (Get-Date -Format "yyyyMMdd-H
 uv run pytest -q -p no:cacheprovider --basetemp="$pytestTmp"
 if ($LASTEXITCODE -ne 0) { Write-Host "TESTS FAILED" -ForegroundColor Red; Pop-Location; exit $LASTEXITCODE }
 
-# ── [3/7] 构建 ──
-Write-Host "[3/7] Building with PyInstaller..." -ForegroundColor Yellow
+# ── [3/8] 构建 ──
+Write-Host "[3/8] Building with PyInstaller..." -ForegroundColor Yellow
 uv run pyinstaller --clean --noconfirm scripts/edi_mcp_server.spec
 
-# ── [4/7] 验证产物 ──
-Write-Host "[4/7] Verifying artifacts..." -ForegroundColor Yellow
+# ── [4/8] 验证产物 ──
+Write-Host "[4/8] Verifying artifacts..." -ForegroundColor Yellow
 $distDir = "$root\dist\edi-mcp"
 $exePath = "$distDir\edi_mcp_server.exe"
 $zipPath = "$root\dist\edi-mcp.zip"
@@ -40,8 +40,8 @@ if (-not (Test-Path $exePath)) {
     Pop-Location; exit 1
 }
 
-# ── [5/7] 统计 ──
-Write-Host "[5/7] Collecting stats..." -ForegroundColor Yellow
+# ── [5/8] 统计 ──
+Write-Host "[5/8] Collecting stats..." -ForegroundColor Yellow
 
 $exeSize  = [math]::Round((Get-Item $exePath).Length / 1MB, 1)
 $dirSize  = [math]::Round((Get-ChildItem $distDir -Recurse -File | Measure-Object -Property Length -Sum).Sum / 1MB, 1)
@@ -50,8 +50,8 @@ $fileCount = (Get-ChildItem $distDir -Recurse -File).Count
 # 最大的 10 个文件
 $topFiles = @(Get-ChildItem $distDir -Recurse -File | Sort-Object Length -Descending | Select-Object -First 10 | ForEach-Object { "$([math]::Round($_.Length/1MB,1)) MB  $($_.Directory.Name)\$($_.Name)" })
 
-# ── [6/7] 生成配置和启动脚本 ──
-Write-Host "[6/7] Generating config + launcher..." -ForegroundColor Yellow
+# ── [6/8] 生成配置和启动脚本 ──
+Write-Host "[6/8] Generating config + launcher..." -ForegroundColor Yellow
 $envContent = @"
 # EDI gRPC MCP configuration - edit paths for this computer
 EDA_GRPC_SERVER=127.0.0.1:50055
@@ -94,8 +94,8 @@ Copy-Item -Force scripts/start_remote.bat "$distDir\start_remote.bat"
 Remove-Item -Recurse -Force build -ErrorAction SilentlyContinue
 Remove-Item -Force "$root\dist\edi_mcp_server.exe" -ErrorAction SilentlyContinue
 
-# ── [7/7] 打包 ZIP ──
-Write-Host "[7/7] Creating archive..." -ForegroundColor Yellow
+# ── [7/8] 打包 ZIP ──
+Write-Host "[7/8] Creating archive..." -ForegroundColor Yellow
 # 重试 3 次：PyInstaller 刚写完 _internal 时，杀毒软件（Defender）常瞬时锁住 DLL 导致 ZIP 失败
 $zipDone = $false
 for ($i = 1; $i -le 3 -and -not $zipDone; $i++) {

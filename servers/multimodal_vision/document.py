@@ -45,7 +45,7 @@ _DISPOSITION: dict[str, str] = {".pdf": "inline", ".docx": "attachment"}
 
 
 def _mime_and_disposition(ext: str) -> tuple[str, str]:
-    """返回 (mime, disposition)：mime 由 mimetypes 推断，disposition 由业务覆盖表决定。"""
+    """返回 (mime, disposition)：mime 由 mimetypes 推断，disposition 仅当调用方未显式指定时按覆盖表兜底。"""
     mime, _ = mimetypes.guess_type("f" + ext)
     return mime or "application/octet-stream", _DISPOSITION.get(ext, "attachment")
 

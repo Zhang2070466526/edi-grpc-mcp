@@ -337,8 +337,9 @@ def tr_query_components(originalid_list: list, epp_path: str = "") -> dict[str, 
     r = call_tool("tr_query_components", {
         "originalid_list": originalid_list, "epp_path": epp_path,
     })
-    # 兜底：data 不保序且未命中被静默丢弃，按 model 字段对齐输入顺序、补 null、加 missing。
-    # 仅当输入能命中 model 字段（model_name 场景）时对齐；UUID 场景 data 项无 model 匹配，保持原样。
+    # ponytail: 替上游补契约——data 不保序、未命中被静默丢弃，这里按 model 字段对齐输入顺序、
+    # 补 null 占位、加 missing 列表。真修复应在上游 SimulationAgent；此兜底有上限：
+    # 只对齐「能命中 model 字段」的 model_name 场景，UUID 场景 data 项无 model 匹配则保持原样。
     if r.get("success") and isinstance(r.get("result"), dict):
         res = r["result"]
         data = res.get("data")

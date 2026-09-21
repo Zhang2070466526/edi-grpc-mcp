@@ -38,6 +38,18 @@ def search_soft_ip_categories(timeout_seconds: int = 60) -> dict[str, Any]:
     )
 
 
+def _search_soft_ip_models(filters: list, task_type: int, timeout_seconds: int) -> dict[str, Any]:
+    """查询软 IP 模型（公共/个人复用，仅 task_type 不同）。"""
+    if not isinstance(filters, list):
+        return error_response("INVALID_PARAMETERS", "filters 必须是数组")
+    return call_grpc(
+        task_type,
+        {"filters": filters},
+        timeout_seconds,
+        max_timeout_seconds=300,
+    )
+
+
 @mcp.tool()
 def search_public_soft_ip_models(
         filters: list,
@@ -57,14 +69,7 @@ def search_public_soft_ip_models(
     Returns:
         gRPC 统一返回结构，业务字段（count/results）在 details 中。
     """
-    if not isinstance(filters, list):
-        return error_response("INVALID_PARAMETERS", "filters 必须是数组")
-    return call_grpc(
-        ecserver_pb2.SEARCH_PUBLIC_SOFT_IP_MODELS,
-        {"filters": filters},
-        timeout_seconds,
-        max_timeout_seconds=300,
-    )
+    return _search_soft_ip_models(filters, ecserver_pb2.SEARCH_PUBLIC_SOFT_IP_MODELS, timeout_seconds)
 
 
 @mcp.tool()
@@ -85,14 +90,7 @@ def search_personal_soft_ip_models(
     Returns:
         gRPC 统一返回结构，业务字段（count/results）在 details 中。
     """
-    if not isinstance(filters, list):
-        return error_response("INVALID_PARAMETERS", "filters 必须是数组")
-    return call_grpc(
-        ecserver_pb2.SEARCH_PERSONAL_SOFT_IP_MODELS,
-        {"filters": filters},
-        timeout_seconds,
-        max_timeout_seconds=300,
-    )
+    return _search_soft_ip_models(filters, ecserver_pb2.SEARCH_PERSONAL_SOFT_IP_MODELS, timeout_seconds)
 
 
 @mcp.tool()

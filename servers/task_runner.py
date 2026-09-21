@@ -9,11 +9,14 @@
 from __future__ import annotations
 
 import atexit
+import logging
 import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable
+
+_log = logging.getLogger("task_runner")
 
 
 class TaskRunner:
@@ -90,6 +93,9 @@ class TaskRunner:
             with self._lock:
                 self._tasks.pop(task_id, None)
             raise
+        meta = dict(metadata or {})
+        op = meta.get("operation", meta.get("project_name", ""))
+        _log.info("task=%s status=QUEUED op=%s", task_id, op)
         return task_id
 
     # ── 查询 ──
@@ -162,6 +168,8 @@ class TaskRunner:
             if task is not None:
                 task["status"] = "RUNNING"
                 task["started_at"] = time.time()
+        _log.info("task=%s status=RUNNING", task_id)
+        started = time.time()
         try:
             result = func(*args, **kwargs)
             with self._lock:
@@ -171,6 +179,7 @@ class TaskRunner:
                     task["status"] = "SUCCEEDED"
                     task["result"] = result
                     task["finished_at"] = time.time()
+            _log.info("task=%s status=SUCCEEDED duration=%.1fs", task_id, time.time() - started)
         except Exception as exc:
             with self._lock:
                 task = self._tasks.get(task_id)
@@ -178,6 +187,7 @@ class TaskRunner:
                     task["status"] = "FAILED"
                     task["error"] = str(exc)
                     task["finished_at"] = time.time()
+            _log.info("task=%s status=FAILED duration=%.1fs error=%s", task_id, time.time() - started, str(exc))
 
     def _prune_locked(self) -> None:
         """（需持锁）清理超过 TTL 的已完成/失败任务；RUNNING 超时兜底标记 FAILED。"""

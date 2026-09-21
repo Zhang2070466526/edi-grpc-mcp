@@ -28,7 +28,9 @@ def _acquire_netlist(project_path: str, timeout_seconds: int) -> tuple[str | Non
     local = Path(project_path).parent / "netlist.log"
     if local.is_file():
         try:
-            return decode_local_text(local.read_bytes()), ""
+            data = local.read_bytes()
+            if data.strip():  # 0 字节/纯空白不短路，走 gRPC 兜底
+                return decode_local_text(data), ""
         except OSError as exc:
             return None, f"读取本地网表失败: {exc}"
 
@@ -184,7 +186,6 @@ def _trace_chain(
 def get_signal_chain(
     project_path: str,
     start_component: str = "",
-    direction: str = "forward",
     max_depth: int = 40,
     timeout_seconds: int = 60,
 ) -> dict[str, Any]:
@@ -199,7 +200,6 @@ def get_signal_chain(
     Args:
         project_path: .epp 工程文件绝对路径。
         start_component: 起始器件实例名，留空自动找激励源（无激励源则取第一个端口）。
-        direction: forward（默认，向下游）/ backward（向上游）。
         max_depth: 最大追踪深度，默认 40（防环路死循环）。
         timeout_seconds: gRPC 网表导出超时，默认 60。
 
@@ -213,9 +213,6 @@ def get_signal_chain(
     resolved, err = require_project_path(project_path)
     if err:
         return err
-    direction = (direction or "forward").strip().lower()
-    if direction not in ("forward", "backward"):
-        return error_response("INVALID_PARAMETERS", "direction 必须是 forward 或 backward")
     try:
         max_depth = max(1, min(int(max_depth), 100))
     except (TypeError, ValueError):
@@ -230,15 +227,10 @@ def get_signal_chain(
     if not comps:
         return error_response("NETLIST_EMPTY", "网表中没有器件/端口（可能是空工程或网表未生成）")
 
-    # 起点处理：未指定时按方向自动找（forward→激励源，backward→负载），
-    # 无对应角色时回退到第一个端口
+    # 起点处理：未指定时自动找激励源，无激励源则回退到第一个端口
     if not start_component:
-        if direction == "backward":
-            loads = [i for i, c in comps.items() if c["role"] == "load"]
-            candidates = loads or [i for i, c in comps.items() if c["type"] == "Port"]
-        else:
-            sources = [i for i, c in comps.items() if c["role"] == "source"]
-            candidates = sources or [i for i, c in comps.items() if c["type"] == "Port"]
+        sources = [i for i, c in comps.items() if c["role"] == "source"]
+        candidates = sources or [i for i, c in comps.items() if c["type"] == "Port"]
         if candidates:
             start_component = candidates[0]
 
@@ -264,7 +256,6 @@ def get_signal_chain(
     return {
         "success": True,
         "start": start_component,
-        "direction": direction,
         "chain": chain_detail,
         "branch_count": branch_count,
         "truncated": truncated,

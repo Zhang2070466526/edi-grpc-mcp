@@ -122,6 +122,26 @@ def _lifecycle_log(event: str, **extra) -> None:
     _log.info("%s %s", event, " ".join(parts))
 
 
+def _startup_self_check() -> None:
+    """启动自检：扫可能残留的软件进程并打 WARN，提示内存态任务已随重启丢失。
+
+    只报告不动作——不杀进程、不动锁，避免误伤正在进行的求解。
+    """
+    try:
+        import psutil
+        orphans = []
+        for proc in psutil.process_iter(["name", "pid"]):
+            name = (proc.info.get("name") or "").lower()
+            if name in ("ansysedt.exe", "cst design environment_amd64.exe"):
+                orphans.append(f"{name}(pid={proc.info['pid']})")
+        if orphans:
+            _log.warning("启动自检：发现可能残留的软件进程 %s（占着软件与锁，可能是上次异常退出遗留）",
+                         ", ".join(orphans))
+    except Exception:
+        pass
+    _log.info("启动自检：服务重启会丢失内存态任务状态，上次若有任务被中断请查日志")
+
+
 # ── 优雅关闭 ──
 def _install_shutdown_handlers() -> None:
     def _handle_shutdown(signum, frame):
@@ -186,7 +206,7 @@ async def ready_check(request):
     try:
         host, port_str = _grpc.rsplit(":", 1)
         s = socket.socket()
-        s.settimeout(0.5)
+        s.settimeout(0.15)
         grpc_ok = s.connect_ex((host, int(port_str))) == 0
         s.close()
     except Exception:
@@ -318,6 +338,7 @@ def _run_http_server(port: int, host: str = "127.0.0.1") -> None:
                    grpc="online" if _grpc_ok else "offline")
     _lifecycle_log("MCP_BIND", host=host, port=port,
                    allowed_hosts=len(_runtime_allowed_hosts))
+    _startup_self_check()
 
     _print_host = host if host not in ("0.0.0.0", "::") else "127.0.0.1"
     print("=" * 50)
@@ -350,15 +371,14 @@ def _run_http_server(port: int, host: str = "127.0.0.1") -> None:
     if _cfg.mcp_allowed_processes and not remote_mode:
         allowed = {p.strip() for p in _cfg.mcp_allowed_processes.split(",") if p.strip()}
         starlette_app.add_middleware(ProcessWhitelistMiddleware, server_port=port, allowed=allowed)
-        print(f"  Guard:  process whitelist enabled ({len(allowed)} pattern(s))")
+        _lifecycle_log("GUARD", mode="whitelist", patterns=len(allowed))
     elif _cfg.mcp_probe_enabled:
         starlette_app.add_middleware(ProcessProbeMiddleware, server_port=port)
-        print("  Probe:  process probe enabled (logging /mcp source process)")
+        _lifecycle_log("GUARD", mode="probe")
     else:
-        print("  Guard:  disabled (no whitelist, probe off)")
+        _lifecycle_log("GUARD", mode="off")
     if remote_mode and _cfg.mcp_allowed_processes:
-        print("  Note:   MCP_ALLOWED_PROCESSES is set but IGNORED in remote mode "
-              "(remote clients cannot be process-whitelisted)")
+        _lifecycle_log("GUARD", mode="whitelist_ignored_remote")
 
     # 给 uvicorn 控制台日志（访问日志 "INFO: ..."）加时间戳
     import copy as _copy

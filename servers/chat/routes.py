@@ -33,7 +33,7 @@ async def _check_tcp(endpoint: str) -> bool:
         host, port_text = endpoint.rsplit(":", 1)
         reader, writer = await asyncio.wait_for(
             asyncio.open_connection(host, int(port_text)),
-            timeout=0.5,
+            timeout=0.15,
         )
         writer.close()
         await writer.wait_closed()

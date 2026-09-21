@@ -93,7 +93,6 @@ def compare_simulation_results(
         return error_response("OUTPUT_DIRECTORY_NOT_FOUND", f"CSV 输出目录不存在: {Path(csv_path).parent}")
 
     # Step 1: export each RAW to temp CSV (per_tool_mutex via runner)
-    dep_key = dependency
     raw_curves: list[tuple[list[float], list[float]]] = []
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -190,18 +189,18 @@ def compare_simulation_results(
     fig.tight_layout()
     fig.savefig(output_path, dpi=150)
     plt.close(fig)
-    img_ok = Path(output_path).exists()
+    img_ok = True
 
     # Step 5: write comparison CSV
     csv_ok = False
     if csv_path:
         with open(csv_path, "w", encoding="utf-8") as f:
-            headers = [dep_key] + [f"{labels[i]}_{curve}" for i in range(file_count)]
+            headers = [dependency] + [f"{labels[i]}_{curve}" for i in range(file_count)]
             f.write(",".join(headers) + "\n")
             for j, x in enumerate(common_x):
                 row = [str(x)] + [str(aligned[i][j]) for i in range(file_count)]
                 f.write(",".join(row) + "\n")
-        csv_ok = Path(csv_path).exists()
+        csv_ok = True
 
     artifacts: list[dict] = []
     if img_ok:
@@ -220,7 +219,7 @@ def compare_simulation_results(
         "artifacts": artifacts,
         "message": "对比图已生成。" if img_ok else "对比图生成失败。",
     }
-    if img_ok and result.get("success"):
+    if img_ok:
         result.update(build_file_link(output_path, "打开对比图"))
     return result
 

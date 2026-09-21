@@ -711,7 +711,7 @@ class ChatService:
             if isinstance(val, str) and val.strip() == "":
                 if key in ("project_path", "folder_path", "netlist_path",
                            "raw_path", "img_path", "csv_path", "image_path",
-                           "component_id", "instance_name", "result_paths", "curve"):
+                           "component_uuid", "instance_name", "curve"):
                     return False, _tool_error("MISSING_REQUIRED_ARGUMENT",
                                               f"{key} 不能为空，请提供正确的 {key}")
 
