@@ -171,3 +171,53 @@ class TestTimeout:
         assert r["error_code"] == "INVALID_REPORT_PARAMETERS"
 
 
+# ═══════════════════════════════════════════════════════════
+# 成功路径（mock 渲染服务）
+# ═══════════════════════════════════════════════════════════
+
+def _mock_render_ok(tmp_path, file_type="pdf"):
+    """构造成功路径：真实输出文件 + mock 渲染服务返回成功。"""
+    out = tmp_path / f"report.{file_type}"
+    out.write_bytes(b"fake-report-content" * 10)
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.text = "{}"
+    mock_resp.json.return_value = {
+        "success": True,
+        "file_path": str(out.resolve()),
+        "file_type": file_type,
+        "file_size": out.stat().st_size,
+        "sections": ["封面"],
+        "chart_count": 0, "component_count": 0, "spec_row_count": 0,
+        "created_at": "2026-08-03T15:30:00",
+    }
+    mock_client = MagicMock()
+    mock_client.__enter__.return_value = mock_client
+    mock_client.post.return_value = mock_resp
+    return out, mock_client
+
+
+class TestSuccessPath:
+    def test_token_links_consistent(self, tmp_path):
+        """成功路径：preview_url == download_url，markdown_link 指向同一 token。"""
+        out, mock_client = _mock_render_ok(tmp_path, "pdf")
+        with patch("servers.report.generator.httpx.Client", return_value=mock_client):
+            r = generate_simulation_report(str(out), "TEST_MODEL", overwrite=True)
+        assert r["success"] is True
+        assert r["preview_url"] == r["download_url"]
+        assert "/documents/" in r["download_url"]
+        assert r["download_url"] in r["markdown_link"]
+
+    def test_docx_uses_attachment(self, tmp_path):
+        """DOCX 报告走 attachment（下载），PDF 走 inline（预览）。"""
+        out, mock_client = _mock_render_ok(tmp_path, "docx")
+        with patch("servers.report.generator.httpx.Client", return_value=mock_client), \
+             patch("servers.report.generator.build_file_link", return_value={
+                 "file_uri": "file:///x",
+                 "download_url": "http://127.0.0.1:50026/documents/tok",
+                 "markdown_link": "[打开DOCX报告](http://127.0.0.1:50026/documents/tok)",
+             }) as mock_bfl:
+            generate_simulation_report(str(out), "M", overwrite=True)
+        assert mock_bfl.call_args.kwargs["disposition"] == "attachment"
+
+

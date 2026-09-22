@@ -1,7 +1,7 @@
 """文档与产物访问工具 — HTTP 临时链接 + 系统默认程序打开。
 
 open_document         — 打开本地文档：link 模式生成 10 分钟 HTTP 链接，local 模式系统默认程序打开
-register_document_url — 供 report 等模块注册文档 Token 并返回预览链接
+register_document_url — 注册办公文档 Token（仅 10 种格式；报告已改用 build_file_link，此函数暂无生产调用点，保留作公共 API）
 fetch_artifact        — 把任意产物文件（.snp/.raw/图/报告）注册成可下载 URL（远程取产物）
 """
 
@@ -69,7 +69,8 @@ def _validate_path(file_path: str, allowed: set[str]) -> Path:
 def register_document_url(file_path: str, disposition: str = "inline") -> str:
     """为本地文档注册临时 HTTP 访问 Token，返回可访问的 URL。
 
-    供其他模块（如报告生成器）在生成文档后直接返回预览链接。
+    仅供限定的 10 种办公格式（_ALLOWED_EXTENSIONS），与 _register_any_file_url
+    （不校验扩展名）语义不同。报告已改用 build_file_link，此函数暂无生产调用点。
     Token 10 分钟后过期，仅本机 127.0.0.1 可访问。
     """
     # 复用 open_document 的路径校验，防止未来调用方传入任意本地路径被注册为可访问 token
