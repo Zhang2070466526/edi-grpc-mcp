@@ -1,36 +1,24 @@
 """CST 仿真求解工具 —— 异步求解 .cst 模型（一次性会话）。
 
-CstSimulator 类封装「可写副本 → 连接 → run_solver → 保存 → 关闭」的一次性会话流程，
+CstSimulator 只负责把「求解」作业投递给 CST 自带解释器的独立进程（见 cst_worker.py），
 通过通用 TaskRunner 异步执行，避免长时间阻塞 MCP 请求。
 """
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from servers import mcp
-from servers.utils import require_file, submitted_response, queue_full_response
-from servers.cst.cst_api import CstApi, cst_runner, query_task, to_writable_copy
+from servers.cst.cst_api import cst_runner, query_task, run_cst_job
+from servers.utils import queue_full_response, require_file, submitted_response
 
 
 class CstSimulator:
     """CST 仿真器 —— 封装异步求解任务的生命周期。"""
 
-    def __init__(self) -> None:
-        self._api = CstApi()
-
     def solve(self, model_path: str) -> str:
         """求解模型（一次性会话），返回求解后的模型路径。"""
-        model_path = to_writable_copy(os.path.abspath(str(model_path)))
-        de, prj = self._api.open_session(model_path)
-        try:
-            if prj.modeler.run_solver() is False:
-                raise RuntimeError("run_solver returned False")
-            prj.save()
-        finally:
-            self._api.close_session(de, prj)
-        return model_path
+        return run_cst_job("solve", model_path=model_path)
 
     def submit_solve(self, model_path: str) -> str | None:
         """提交求解任务，返回 task_id（队列满返回 None）。"""

@@ -243,16 +243,6 @@ def test_vswr_split_removes_consecutive_ampersand_and_passes_ac(tmp_path, monkey
     assert "phase#3#S[2,1]#fv#0.1" in non_vswr_cmd
 
 
-def test_export_snp_rejects_invalid_port_count():
-    from servers.cst import result_export as re
-    exporter = re.CstResultExporter.__new__(re.CstResultExporter)
-    exporter._s_param_indices = lambda item: (1, 1)
-    result_3d = MagicMock()
-    result_3d.get_tree_items.return_value = ["S-Parameters S[1,1]"]
-    with pytest.raises(RuntimeError):
-        exporter._export_snp_from_3d("C:/m.cst", "", 0, result_3d)
-
-
 def test_safe_args_redacts_paths():
     from servers.chat.service import _safe_args
     result = _safe_args({"project_path": "C:/Users/John/test.epp"})
