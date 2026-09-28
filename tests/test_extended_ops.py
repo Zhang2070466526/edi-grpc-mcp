@@ -2,7 +2,7 @@
 
 覆盖：
   workspace_ops.py   create_workspace / switch_workspace / get_current_workspace
-  model_library.py   load_performance_component_from_mms / add_performance_component
+  model_library.py   add_performance_component
   schematic_ops.py   list_ideal_components / add_ideal_component / clear_schematic / add_wire
 所有测试 mock call_grpc，不访问真实 EDI。
 """
@@ -48,16 +48,7 @@ def test_get_current_workspace_payload(monkeypatch, fake_caller):
     assert calls[-1][1] == {}
 
 
-# ── 模型库（MMS 导入 / 性能器件放置）──────────────────────────
-
-def test_load_performance_component_payload(monkeypatch, fake_caller):
-    from servers.eda import model_library as ml
-    ecserver_pb2, calls, _fake = fake_caller
-    monkeypatch.setattr(ml, "call_grpc", _fake)
-    ml.load_performance_component_from_mms("12345678-1234-4234-8234-123456789abc")
-    assert calls[-1][0] == ecserver_pb2.LOAD_PERFORMANCE_COMPONENT_FROM_MMS
-    assert calls[-1][1] == {"original_uuid": "12345678-1234-4234-8234-123456789abc"}
-
+# ── 模型库（性能器件放置）──────────────────────────
 
 def test_add_performance_component_payload(monkeypatch, fake_caller):
     from servers.eda import model_library as ml

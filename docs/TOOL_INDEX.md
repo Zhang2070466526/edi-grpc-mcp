@@ -2,7 +2,7 @@
 
 > 自动生成，勿手改。权威数量见 /ready 的 tool_count。
 
-共 99 个工具：
+共 98 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
 - `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
@@ -60,7 +60,6 @@
 - `list_result_curves` — 解析 ADS RAW 仿真结果文件，返回可用曲线名和依赖轴。
 - `list_schematic_components` — 通过 gRPC 查询原理图全部器件（含完整参数），比本地文件读取更实时。
 - `list_simulation_components` — 列出已保存工程中的全部器件及参数（含 wire→public 参数名映射）。
-- `load_performance_component_from_mms` — 从 MMS 下载性能模型并导入当前工作区本地模型库。
 - `open_document` — 打开本地文档：link 模式生成 10 分钟 HTTP 链接，local 模式用系统默认程序打开。
 - `open_edi_project` — 打开一个 .epp 工程。
 - `open_hfss_project` — 启动 AEDT 并打开 .aedt 项目（COM 附着优先，subprocess 单次启动兜底）。

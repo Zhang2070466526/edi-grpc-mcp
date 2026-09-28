@@ -34,7 +34,7 @@ def test_all_tools_registered():
         "get_model_category_params", "search_public_models", "search_personal_models",
         "list_ideal_components", "create_workspace", "switch_workspace",
         "get_current_workspace",
-        "load_performance_component_from_mms", "add_performance_component",
+        "add_performance_component",
         "add_ideal_component", "clear_schematic", "add_wire",
         "search_schematic_from_public_library", "search_schematic_from_personal_library",
         "use_schematic_from_library_create_project", "use_schematic_from_library_import",

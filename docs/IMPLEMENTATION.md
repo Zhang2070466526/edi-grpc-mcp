@@ -826,7 +826,6 @@ else:                                 # 两者都没有
 |---|---|---|
 | `list_ideal_components` | LIST_IDEAL_COMPONENTS(27) | 无业务参数 |
 | `create_workspace` / `switch_workspace` | CREATE/SWITCH_WORKSPACE(28/29) | `path` 非空 |
-| `load_performance_component_from_mms` | LOAD_PERFORMANCE_COMPONENT_FROM_MMS(30) | `original_uuid` 非空 |
 | `add_performance_component` | ADD_PERFORMANCE_COMPONENT(31) | `component_uuid` 非空 + `position` 有限数值 |
 | `add_ideal_component` | ADD_IDEAL_COMPONENT(32) | `component_type` 非空 + `position` 校验 |
 | `clear_schematic` | CLEAR_SCHEMATIC(33) | `confirm_clear=true` 双重确认 |
@@ -966,8 +965,7 @@ TR 的 17 个 `tr_*` 工具不直接操作 EDI，而是把调用转发给外部�
 | `replace_models_from_csv` | 批量替换元件模型（CSV 驱动） | CSV 文件 | — |
 | `get_model_category_params` | 了解模型库分类和参数 | —（模型服务） | search_*_models 前置 |
 | `search_public_models` / `search_personal_models` | 从公共/个人模型库选型 | sub_type | 选型、add_performance_component |
-| `load_performance_component_from_mms` | 从 MMS 引入性能模型 | original_uuid | add_performance_component |
-| `add_performance_component` | 把模型库 Component 放进原理图 | load（先导入） | — |
+| `add_performance_component` | 把模型库 Component 放进原理图 | 模型库 Component UUID | — |
 | `search_schematic_from_public_library` / `search_schematic_from_personal_library` | 从原理图库找拓扑 | search_name | use_schematic_from_library_* |
 | `use_schematic_from_library_create_project` / `use_schematic_from_library_import` | 用库内容建工程/替换原理图 | 搜索结果的 id | — |
 

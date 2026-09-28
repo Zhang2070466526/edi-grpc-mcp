@@ -708,23 +708,6 @@ search_personal_models(sub_type: str, filters: list | None = None, timeout_secon
 
 ---
 
-### `load_performance_component_from_mms`
-
-```python
-from servers.eda.model_library import load_performance_component_from_mms
-
-load_performance_component_from_mms(original_uuid: str, timeout_seconds: int = 90) -> dict
-```
-
-从 MMS（模型管理系统）下载性能模型并导入当前工作区本地模型库。无需 `.epp`、`project_path` 或工作区路径，不要求打开工程。下载、解压并校验 `library.ep` 后合并至本地模型库，随后复制仿真文件并发起模型库重新扫描（下载超时 60 秒）。成功只表示已发起扫描，不代表异步扫描完成；导入后需等待扫描完成再调用 `add_performance_component`。
-
-| 参数 | 类型 | 必填 | 默认 | 说明 |
-|---|---|---|---|---|
-| `original_uuid` | str | 是 | — | MMS 原始模型 UUID |
-| `timeout_seconds` | int | 否 | 90 | 最长等待秒数 |
-
----
-
 ### `add_performance_component`
 
 ```python

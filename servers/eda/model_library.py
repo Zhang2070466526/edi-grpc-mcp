@@ -1,8 +1,7 @@
 """EDA 模型库 / 原理图库工具 — 模型分类/搜索 + MMS 导入 + 原理图库搜索/使用。
 
 模型库领域：get_model_category_params / search_public_models / search_personal_models
-为只读查询；load_performance_component_from_mms 从 MMS 导入性能模型；
-add_performance_component 将模型库 Component 放置到原理图。
+为只读查询；add_performance_component 将模型库 Component 放置到原理图。
 
 原理图库领域：search_schematic_from_public_library / search_schematic_from_personal_library
 搜索在线原理图库；use_schematic_from_library_create_project /
@@ -154,40 +153,6 @@ def search_personal_models(
 
 
 @mcp.tool()
-def load_performance_component_from_mms(
-        original_uuid: str,
-        timeout_seconds: int = 90,
-) -> dict[str, Any]:
-    """从 MMS 下载性能模型并导入当前工作区本地模型库。
-
-    用法："从 MMS 导入这个性能模型 <uuid>"
-
-    使用程序当前已加载的工作区，无需 .epp、project_path 或工作区路径，不要求打开
-    工程。下载、解压并校验 library.ep 后合并至本地模型库，随后复制仿真文件并
-    发起模型库重新扫描（下载超时 60 秒）。
-
-    注意：成功只表示导入函数返回成功、已发起扫描，不代表异步扫描完成；导入后
-    需等待模型库扫描完成再调用 add_performance_component，否则可能查不到 Component。
-
-    Args:
-        original_uuid: MMS 原始模型 UUID（非空字符串，格式按 Uuid::isValid 校验）。
-        timeout_seconds: 最长等待秒数，默认 90。
-
-    Returns:
-        gRPC 统一返回结构，成功提示或失败原因在 message 中。
-    """
-    original_uuid, err = require_uuid(original_uuid, label="original_uuid")
-    if err:
-        return err
-    return call_grpc(
-        ecserver_pb2.LOAD_PERFORMANCE_COMPONENT_FROM_MMS,
-        {"original_uuid": original_uuid},
-        timeout_seconds,
-        max_timeout_seconds=300,
-    )
-
-
-@mcp.tool()
 def add_performance_component(
         project_path: str,
         component_uuid: str,
@@ -201,9 +166,6 @@ def add_performance_component(
     component_uuid 为工作区模型库中的 Component UUID，不能假定等于 MMS 的
     original_uuid。坐标会吸附到网格。不自动下载模型、不额外设置参数、不自动
     避让重叠、不返回器件实例名。
-
-    注意：load_performance_component_from_mms 导入后需等待模型库扫描完成再调用
-    本工具，否则可能暂时查不到 Component。
 
     Args:
         project_path: .epp 工程文件绝对路径。

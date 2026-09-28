@@ -59,7 +59,6 @@ model_library.py — 模型库 / 原理图库（9 工具）
     get_model_category_params           获取模型分类及参数列表
     search_public_models                按子类查询公共模型库
     search_personal_models              按子类查询个人模型库
-    load_performance_component_from_mms 从 MMS 导入性能模型到本地模型库
     add_performance_component           将模型库 Component 放置到原理图
     search_schematic_from_public_library       按拓扑描述查询公共原理图库
     search_schematic_from_personal_library     按拓扑描述查询个人原理图库
@@ -140,7 +139,6 @@ from servers.eda.model_library import (  # noqa: F401
     get_model_category_params,
     search_public_models,
     search_personal_models,
-    load_performance_component_from_mms,
     add_performance_component,
     search_schematic_from_public_library,
     search_schematic_from_personal_library,
