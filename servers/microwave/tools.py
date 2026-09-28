@@ -40,6 +40,21 @@ def _loss_attr(tl, names):
     return 0.0
 
 
+_C0_MS = 299792458.0  # 光速 m/s
+
+
+def _set_quarterwave_length(tl, f_hz, er):
+    """把线长设为该几何在 f_hz 处的 λ/4（模型内部长度参数以米为单位）。
+
+    必要性：模型里导体/介质损耗 = 「每米损耗 × PHYS_LEN」，而 `analyse()` 只按几何
+    算阻抗、不推导线长 —— 不设线长时损耗恒等于 0（假零）。综合方向的 `synthesize()`
+    自带 ANG_L=90°，故这里对齐同一口径：两个方向报的都是「一条 λ/4 段」的损耗。
+    """
+    eeff = getattr(tl, "eps_eff", None) or er  # Coax 为 TEM、无 eps_eff，等于 er
+    tl.set(P.ANG_L, math.pi / 2.0)
+    tl.set(P.PHYS_LEN, _C0_MS / f_hz / math.sqrt(eeff) / 4.0)
+
+
 @mcp.tool()
 def calculate_transline(
         transline_type: str,
@@ -147,6 +162,8 @@ def calculate_transline(
         if d_in is not None:
             tl.set(P.PHYS_DIAM_IN, d_in * MM)
             tl.analyse()
+            _set_quarterwave_length(tl, f_hz, er)
+            tl.analyse()
             result = {"z0": tl.z0}
         else:
             if (err := _require_positive(z0, "z0")) is not None:
@@ -161,6 +178,8 @@ def calculate_transline(
             if (err := _require_positive(width, "width")) is not None:
                 return err
             tl.set(P.PHYS_WIDTH, width * MM)
+            tl.analyse()
+            _set_quarterwave_length(tl, f_hz, er)
             tl.analyse()
             result = {"z0": tl.z0}
         else:

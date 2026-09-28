@@ -33,6 +33,7 @@ import servers.multimodal_vision          # noqa: F401 — show_image + analyze 
 import servers.report                     # noqa: F401 — generate_simulation_report
 import servers.cst                        # noqa: F401 — cst_solve + cst_export_snp
 import servers.tr_simulation           # noqa: F401 — 17 个 tr_* 工具 + workflow resource + run_tr_simulation prompt
+import servers.microwave                # noqa: F401 — calculate_transline + design_wilkinson
 
 # Resources & Prompts
 import servers.resources_prompts      # noqa: F401 — @mcp.resource() / @mcp.prompt()
