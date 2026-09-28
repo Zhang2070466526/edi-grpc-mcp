@@ -819,6 +819,7 @@ else:                                 # 两者都没有
 | `search_soft_ip_categories` | SEARCH_SOFT_IP_CATEGORIES(42) | 无业务参数 |
 | `search_public_soft_ip_models` / `search_personal_soft_ip_models` | SEARCH_*_SOFT_IP_MODELS(43/44) | `filters` 原样转发 |
 | `download_soft_ip_model` | DOWNLOAD_SOFT_IP_MODEL(45) | `id` UUID + `save_path` 非空 + `freq`>0 + 可选 `bandwidth`（有限数值） |
+| `download_public_soft_ip_model_by_description` | DOWNLOAD_PUBLIC_SOFT_IP_MODEL_BY_DESCRIPTION(48) | `category_name` + `description` + `save_path` 非空 + 可选 `freq`/`bandwidth` |
 
 ### 4.5 工作区 / 原理图扩展
 
@@ -976,6 +977,7 @@ TR 的 17 个 `tr_*` 工具不直接操作 EDI，而是把调用转发给外部�
 | `search_soft_ip_categories` | 了解软 IP 有哪些分类 | — | search_soft_ip_models 前置 |
 | `search_public_soft_ip_models` / `search_personal_soft_ip_models` | 查软 IP 模型 | filters | download_soft_ip_model 前置 |
 | `download_soft_ip_model` | 下载软 IP AEDT 模型 | id + save_path + freq（+可选 bandwidth） | — |
+| `download_public_soft_ip_model_by_description` | 按分类名+描述查公共软 IP 并下载 | category_name + description + save_path（+可选 freq/bandwidth） | — |
 
 #### 工作区 / 原理图扩展
 

@@ -20,7 +20,7 @@ from servers.eda.project_manage import list_epp_projects
 - **[仿真（8 个）](#仿真8个)**：同步 / 异步仿真、网表仿真、抗烧毁评估、任务查询
 - **[导出与分析（4 个）](#导出与分析4个)**：导出网表、截图原理图、器件 CSV、信号链路追踪
 - **[模型库 / 原理图库（10 个）](#模型库--原理图库10个)**：模型分类/查询/搜索、MMS 导入、器件放置、原理图库搜索/使用
-- **[软 IP（4 个）](#软ip4个)**：软 IP 分类查询、模型搜索、AEDT 模型下载
+- **[软 IP（5 个）](#软ip5个)**：软 IP 分类查询、模型搜索、AEDT 模型下载
 - **[工作区（3 个）](#工作区3个)**：创建 / 切换 / 查询当前工作区
 - **[原理图扩展（4 个）](#原理图扩展4个)**：内置器件、清空原理图、连线
 - **[启动 / 诊断（3 个）](#启动--诊断3个)**：启动 EDI、服务诊断、日志读取
@@ -791,7 +791,7 @@ use_schematic_from_library_import(file_uuid: str, project_path: str, timeout_sec
 
 ---
 
-## 软 IP（4 个）
+## 软 IP（5 个）
 
 ### `search_soft_ip_categories`
 
@@ -871,6 +871,31 @@ download_soft_ip_model(soft_ip_id: str, save_path: str, freq: float, bandwidth: 
 
 ```python
 {"success": True, "status": "SUCCEEDED", "details": {"save_path": "D:/soft-ip/C_10mil4350.aedt"}}
+```
+
+### `download_public_soft_ip_model_by_description`
+
+```python
+from servers.eda.soft_ip import download_public_soft_ip_model_by_description
+
+download_public_soft_ip_model_by_description(category_name: str, description: str, save_path: str, freq: float | None = None, bandwidth: float | None = None, timeout_seconds: int = 120) -> dict
+```
+
+按分类名称和描述查询公共软 IP，补齐可选设计参数后下载 AEDT 模型。`category_name` 是分类名称（完全匹配），`description` 是描述关键词。`freq`/`bandwidth` 任一未提供时服务端按插值范围中点补齐。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `category_name` | str | 是 | — | 软 IP 分类名称（非空，完全匹配） |
+| `description` | str | 是 | — | 模型描述关键词（非空） |
+| `save_path` | str | 是 | — | 目标文件完整路径（如 `D:/soft-ip/PCB.aedt`） |
+| `freq` | float | 否 | None | 可选频率（>0）；未提供时服务端按插值中点补齐 |
+| `bandwidth` | float | 否 | None | 可选相对带宽；未提供时同上 |
+| `timeout_seconds` | int | 否 | 120 | 最长等待秒数 |
+
+返回（gRPC 统一结构，成功时 `details` 含 `id`/`model_name`/`category_id`/`save_path`/`freq`/`bandwidth`）：
+
+```python
+{"success": True, "status": "SUCCEEDED", "details": {"save_path": "D:/soft-ip/PCB.aedt", "freq": 25}}
 ```
 
 ---
