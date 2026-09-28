@@ -2,7 +2,7 @@
 
 > 自动生成，勿手改。权威数量见 /ready 的 tool_count。
 
-共 91 个工具：
+共 99 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
 - `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
@@ -22,8 +22,16 @@
 - `cst_export_farfield` — 导出 CST 模型的远场方向图为 ASCII .txt（自动判断是否已求解）。
 - `cst_export_farfield_query` — 查询远场导出任务：返回进度，完成时附带 farfield_txts。
 - `cst_export_snp` — 导出 CST 模型的 S 参数为 Touchstone .sNp 文件（需先求解）。
+- `cst_export_snp_async` — 异步导出 CST 模型的 S 参数为 Touchstone .sNp 文件（需先求解），立即返回 task_id。
+- `cst_export_snp_query` — 查询 S 参数导出任务：返回进度，完成时附带 snp_path。
+- `cst_get_model_info` — 只读查看 CST 模型状态：是否已解、是否解包、端口数、远场监视器有无。
+- `cst_list_results` — 列出 CST 模型结果树里的全部条目（S 参数 / 远场等）与监视器。
+- `cst_open_project` — 打开并保存 CST 模型（= 解包归档文件），不求解。
+- `cst_plot_farfield` — 把 CST 远场 ASCII .txt 画成方向图（极坐标切面 + 直角曲线各一张 PNG）。
 - `cst_solve_async` — 异步求解 CST 模型（.cst），立即返回 task_id。
 - `cst_solve_query` — 查询 CST 求解任务：返回进度，完成时附带 model_path。
+- `cst_task_cancel` — 取消一个 CST 异步任务（排队中的直接取消，运行中的尝试终止其子进程）。
+- `cst_task_list` — 列出当前所有 CST 异步任务（求解 / 导出）及状态。
 - `delete_simulation_component` — 按实例名删除原理图器件及其连接线。
 - `download_soft_ip_model` — 按软 IP UUID 和频率下载 AEDT 模型文件到指定路径。
 - `export_project_netlist` — 查看 EDA .epp 工程的网表，返回网表文件路径。

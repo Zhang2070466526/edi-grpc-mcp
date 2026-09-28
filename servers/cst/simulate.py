@@ -22,7 +22,7 @@ class CstSimulator:
 
     def submit_solve(self, model_path: str) -> str | None:
         """提交求解任务，返回 task_id（队列满返回 None）。"""
-        return cst_runner.submit(self.solve, model_path)
+        return cst_runner.submit(self.solve, model_path, metadata={"op": "solve", "model_path": model_path})
 
 
 _simulator = CstSimulator()
@@ -36,6 +36,9 @@ def cst_solve_async(model_path: str) -> dict[str, Any]:
 
     求解在后台单 worker 串行执行（CST 一次只能跑一个），不阻塞 MCP 请求。
     通过 cst_solve_query 查询进度和结果。
+
+    注意：CST 段跑在 CST 软件自带解释器（Python 3.6~3.9）上；报错里出现
+    "cst package supports only Python 3.6/3.7/3.8/3.9" 是环境约束，不是模型问题。
 
     Args:
         model_path: .cst 模型文件绝对路径。

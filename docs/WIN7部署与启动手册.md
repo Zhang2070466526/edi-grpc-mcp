@@ -7,7 +7,7 @@
 > - **路径 A（推荐）**：拿到的是**已经打包好的** `dist\edi-mcp\` → 直接部署启动，见 **§3**。目标机**不需要** Python / pip / venv / 联网。
 > - **路径 B**：要在 Win7 上**从源码跑/重新打包** → 先建环境（§4）→ 打 SDK 补丁（§5）→ 打包（§6）。
 >
-> **实测基线**：开发机 74 PE / 86.6 MB；Win7 真机 115 PE / 87.5 MB；两者体检均 0 红线；`/ready` → `tool_count=90`、`tools_hash=ae6cd062`。
+> **实测基线**：开发机 74 PE / 86.6 MB；Win7 真机 115 PE / 87.5 MB；两者体检均 0 红线；`/ready` → `tool_count=99`、`tools_hash=5736eea7`。
 
 ---
 
@@ -108,10 +108,10 @@ mcp 侧反推：`1.28.1` 要求 `pydantic>=2.11`（→ 必炸）；`1.13.0` 起�
 |---|---|---|---|
 | 1 | 依赖能 import | `import mcp, grpc, google.protobuf, pydantic, numpy, win32com, matplotlib, psutil` | 通过 |
 | 2 | 全栈 Win7 静态体检 | `python scripts/win7/check_pyd_imports.py` | **98 个扩展 0 命中红线** |
-| 3 | 工具注册 | `import servers.registry_server` | **90 工具**（需 §5 补丁） |
+| 3 | 工具注册 | `import servers.registry_server` | **99 工具**（需 §5 补丁） |
 | 4 | 测试套件 | `python -m pytest tests -q` | 全绿 |
-| 5 | 服务启动 | `/ready` `/health` | `tool_count=90`、`tools_hash=ae6cd062` |
-| 6 | 新旧协议互通 | mcp 1.28.1 客户端 连 1.12.4 服务端 | 握手 `protocol 2025-06-18`，90 工具 / 8 资源 / 9 prompt |
+| 5 | 服务启动 | `/ready` `/health` | `tool_count=99`、`tools_hash=5736eea7` |
+| 6 | 新旧协议互通 | mcp 1.28.1 客户端 连 1.12.4 服务端 | 握手 `protocol 2025-06-18`，99 工具 / 8 资源 / 9 prompt |
 
 真机加载与实机运行两关已于 **2026-09-14 在 Win7 真机验证通过**（见 §6.4、§10）。
 
@@ -214,7 +214,7 @@ Host 默认 `127.0.0.1`；远程模式用 `--host 0.0.0.0`（`start_remote.bat` 
 
 ```json
 {"status":"ready","transport":"streamable-http","stateless":true,"version":"0.1.9",
- "grpc":"online","tool_count":90,"tools_hash":"ae6cd062","started_at":1789351514.9886186}
+ "grpc":"online","tool_count":99,"tools_hash":"5736eea7","started_at":1789351514.9886186}
 ```
 
 | 字段 | 含义 |
@@ -223,8 +223,8 @@ Host 默认 `127.0.0.1`；远程模式用 `--host 0.0.0.0`（`start_remote.bat` 
 | `transport` | 当前通信方式 |
 | `version` | 服务版本（基线 0.1.9） |
 | `grpc` | `online` = `EDA_GRPC_SERVER` 已连通；`offline` = EDI 没起/地址不对 |
-| `tool_count` | 注册工具数（基线 **90**） |
-| `tools_hash` | 工具集指纹（基线 `ae6cd062`）；与客户端不一致 = 两边不是同一版 |
+| `tool_count` | 注册工具数（基线 **99**） |
+| `tools_hash` | 工具集指纹（基线 `5736eea7`）；与客户端不一致 = 两边不是同一版 |
 | `started_at` | 启动时间戳（秒） |
 
 `grpc:offline` 不影响服务自身启动，但**业务工具会失败** —— 先确保 EDI 已启动。
@@ -249,7 +249,7 @@ Host 默认 `127.0.0.1`；远程模式用 `--host 0.0.0.0`（`start_remote.bat` 
 
 1. **MCP 地址**填 `http://127.0.0.1:50026/mcp`（本机）或 `http://<远程机IP>:50026/mcp`（远程，见《实现原理与机制》）。
 2. **进程白名单**（仅本机模式生效）：客户端进程名要能匹配 `MCP_ALLOWED_PROCESSES`（默认 `edi-agent-service.exe`）。**远程模式（`--host 0.0.0.0`）自动忽略白名单**。被拒时服务端日志有 `[process-probe]` 记录。**"客户端连不上 / 403" 先查这条。**
-3. **一致性自检**：客户端看到的工具数应为 **90**、`tools_hash` 与 `/ready` 相同（基线 `ae6cd062`）。对不上 = 客户端连的不是这版服务。
+3. **一致性自检**：客户端看到的工具数应为 **99**、`tools_hash` 与 `/ready` 相同（基线 `5736eea7`）。对不上 = 客户端连的不是这版服务。
 
 ### 3.7 停止 / 卸载
 
@@ -305,7 +305,7 @@ scripts\win7\setup_win7_env.bat                      :: 双击/命令行皆可�
 .venv-win7\Scripts\python.exe scripts\win7\install_win7_env.py --recreate --no-smoke
 ```
 
-脚本收尾四项自检（全部 PASS 才算成）：依赖 import 关 → 全栈 `.pyd` Win7 红线扫描（**0 命中**才过）→ 工具注册数（期望 **90**）→ 起服务探 `/ready`。
+脚本收尾四项自检（全部 PASS 才算成）：依赖 import 关 → 全栈 `.pyd` Win7 红线扫描（**0 命中**才过）→ 工具注册数（期望 **99**）→ 起服务探 `/ready`。
 
 **离线安装**（现场不通网）：先在有网机器下载 wheel，再拷过去装：
 
@@ -384,7 +384,7 @@ cd /d C:\edi-grpc-mcp
 | PE 文件数 | 74 | **115**（多出的是本机 UCRT 垫片） |
 | 体检红线 | 0 | 0（包内 UCRT 与系统同源 → 提示） |
 | 目录体积 | 86.6 MB | 87.5 MB |
-| 冒烟 `/ready` | `tool_count=90`、`tools_hash=ae6cd062` | 同左（当时 `grpc:offline`：EDI 没起） |
+| 冒烟 `/ready` | `tool_count=99`、`tools_hash=5736eea7` | 同左（当时 `grpc:offline`：EDI 没起） |
 
 > 判据速记：**74 PE = 带 msvcp140 捆绑的新 spec；70 PE = 旧 spec（CRT 没随包带）；115 PE = 在 Win7 上打包**。
 
@@ -477,7 +477,7 @@ taskkill /f /im edi_mcp_server.exe
 | PE 文件数 | 现场打包基线 **115** |
 | 目录体积 | 现场打包基线 **87.5 MB** |
 | `/ready` JSON（或截图） | |
-| `tool_count` / `tools_hash` | 基线 **90** / **ae6cd062** |
+| `tool_count` / `tools_hash` | 基线 **99** / **5736eea7** |
 
 ---
 

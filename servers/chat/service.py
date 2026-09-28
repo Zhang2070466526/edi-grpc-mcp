@@ -924,8 +924,16 @@ _TOOL_LABELS: dict[str, str] = {
     "cst_solve_async": "CST求解",
     "cst_solve_query": "CST求解查询",
     "cst_export_snp": "CST导出S参数",
+    "cst_export_snp_async": "CST异步导出S参数",
+    "cst_export_snp_query": "CST导出S参数查询",
     "cst_export_farfield": "CST导出远场方向图",
     "cst_export_farfield_query": "CST导出远场查询",
+    "cst_get_model_info": "CST模型体检",
+    "cst_open_project": "CST解包模型",
+    "cst_task_list": "CST任务列表",
+    "cst_task_cancel": "CST取消任务",
+    "cst_list_results": "CST结果清单",
+    "cst_plot_farfield": "CST远场方向图",
 }
 
 

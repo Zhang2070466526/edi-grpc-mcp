@@ -173,17 +173,115 @@ class TestFarfieldFallback:
         monkeypatch.setattr(cst_worker, "to_writable_copy", lambda p: p)
         de, prj = MagicMock(), MagicMock()
         prj.modeler.run_solver.return_value = True
+
+        def fake_vba(_vba):
+            (tmp_path / "f.txt").write_text("x")
+            return True
+
+        prj.schematic.execute_vba_code.side_effect = fake_vba
         monkeypatch.setattr(cst_worker, "open_session", lambda p: (de, prj))
-        monkeypatch.setattr(cst_worker.glob, "glob", lambda pat: ["f.txt"])
 
         out = cst_worker.do_export_farfield(
             {"model_path": "C:/x.cst", "output_dir": str(tmp_path)})
 
-        assert out == ["f.txt"]
+        assert [Path(p).name for p in out] == ["f.txt"]
         prj.modeler.run_solver.assert_called_once()
         prj.save.assert_called_once()
         prj.schematic.execute_vba_code.assert_called_once()
         prj.close.assert_called_once()
+
+    def test_export_reports_only_files_from_this_run(self, tmp_path, monkeypatch):
+        """目录里既有的 txt 不能被报成本次结果（实测撞到：混进同目录另一份远场文件）。"""
+        from servers.cst import cst_worker
+        stale = tmp_path / "stale.txt"
+        stale.write_text("旧文件")
+        monkeypatch.setattr(cst_worker, "detect_farfield", lambda p: (False, ""))
+        monkeypatch.setattr(cst_worker, "to_writable_copy", lambda p: p)
+        de, prj = MagicMock(), MagicMock()
+
+        def fake_vba(_vba):
+            (tmp_path / "fresh.txt").write_text("新文件")
+            return True
+
+        prj.schematic.execute_vba_code.side_effect = fake_vba
+        monkeypatch.setattr(cst_worker, "open_session", lambda p: (de, prj))
+
+        out = cst_worker.do_export_farfield(
+            {"model_path": "C:/x.cst", "output_dir": str(tmp_path)})
+
+        assert [Path(p).name for p in out] == ["fresh.txt"]
+        prj.modeler.run_solver.assert_not_called()  # 已有远场 → 不再求解
+
+    def test_export_reports_nothing_when_directory_untouched(self, tmp_path, monkeypatch):
+        """VBA 一个文件都没写（模型无 farfield 监视器）→ 返回空列表，不把既有 txt 当结果。"""
+        from servers.cst import cst_worker
+        (tmp_path / "stale.txt").write_text("旧文件")
+        monkeypatch.setattr(cst_worker, "detect_farfield", lambda p: (False, ""))
+        monkeypatch.setattr(cst_worker, "to_writable_copy", lambda p: p)
+        de, prj = MagicMock(), MagicMock()
+        prj.schematic.execute_vba_code.return_value = True
+        monkeypatch.setattr(cst_worker, "open_session", lambda p: (de, prj))
+
+        assert cst_worker.do_export_farfield(
+            {"model_path": "C:/x.cst", "output_dir": str(tmp_path)}) == []
+
+    def test_changed_txts_treats_touched_file_as_fresh(self, tmp_path):
+        from servers.cst import cst_worker
+        f = tmp_path / "same.txt"
+        f.write_text("abc")
+        before = cst_worker.snapshot_txts(str(tmp_path))
+        assert cst_worker.changed_txts(str(tmp_path), before) == []   # 未动 → 不算本次
+        f.write_text("ab")                                            # 大小变化
+        assert [Path(p).name for p in cst_worker.changed_txts(str(tmp_path), before)] == ["same.txt"]
+
+
+class TestFarfieldDetectionHints:
+    """回归 F1：`get_tree_items()` 不含 Farfields 分支，判据必须认派生结果。
+
+    实测 demo_horn_24GHz / Discone 都能导出远场，但结果树里只有
+    `Tables\\1D Results\\GainMax` / 效率表 ⇒ 只认字面 "Farfield" 会漏报。
+    """
+
+    def test_pattern_tables_count_as_farfield(self):
+        from servers.cst.cst_worker import has_farfield
+        assert has_farfield(["Tables\\1D Results\\GainMax"]) is True
+        assert has_farfield(["Tables\\1D Results\\GainPhi90"]) is True
+
+    def test_efficiency_items_count_as_farfield(self):
+        from servers.cst.cst_worker import has_farfield
+        assert has_farfield(["1D Results\\Efficiencies\\Rad. Efficiency [1]"]) is True
+
+    def test_literal_farfield_branch_still_detected(self):
+        from servers.cst.cst_worker import has_farfield
+        assert has_farfield(["1D Results\\Farfields\\farfield (f=1)"]) is True
+
+    def test_s_parameters_only_is_not_farfield(self):
+        from servers.cst.cst_worker import has_farfield
+        items = ["1D Results\\S-Parameters\\S1,1", "1D Results\\Port signals\\i1",
+                 "1D Results\\Power\\Excitation [1]\\Power Radiated"]
+        assert has_farfield(items) is False
+
+
+class TestDoInfoFarfieldMonitors:
+    def _info_with_tree(self, monkeypatch, items):
+        from servers.cst import cst_worker
+        result_3d = MagicMock()
+        result_3d.get_tree_items.return_value = items
+        monkeypatch.setattr(cst_worker, "open_3d_results", lambda p: (MagicMock(), result_3d))
+        return cst_worker.do_info({"model_path": "C:/x.cst"})
+
+    def test_monitors_filled_when_only_gain_tables_exist(self, monkeypatch):
+        info = self._info_with_tree(
+            monkeypatch, ["1D Results\\S-Parameters\\S1,1", "Tables\\1D Results\\GainMax"])
+        assert info["monitors"] == ["Farfield"]
+        assert info["notes"] == ""
+        assert info["solved"] is True
+        assert info["ports"] == 1
+
+    def test_notes_explain_when_no_farfield_signal(self, monkeypatch):
+        info = self._info_with_tree(monkeypatch, ["1D Results\\S-Parameters\\S1,1"])
+        assert info["monitors"] == []
+        assert "远场" in info["notes"]
 
 
 class TestRunJob:

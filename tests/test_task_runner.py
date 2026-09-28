@@ -127,6 +127,40 @@ class TestPrune:
             _wait_until_finished(runner, task_id)
 
 
+def test_cancelled_queued_task_is_not_executed():
+    """回归 F4：取消的**排队**任务排到队后也不得执行。
+
+    旧实现里 `_run` 无条件把任务标回 RUNNING 并真跑 ⇒ 取消只改了状态，
+    「取消了怎么还在跑」。
+    """
+    runner = TaskRunner(name_prefix="cancel-test", max_workers=1)
+    started, release = threading.Event(), threading.Event()
+    calls = []
+
+    def slow():
+        started.set()
+        release.wait(5)
+        return "slow"
+
+    def quick():
+        calls.append("quick")
+        return "quick"
+
+    task1 = runner.submit(slow)
+    assert started.wait(5)
+    task2 = runner.submit(quick)
+    ok, reason = runner.cancel(task2)
+    assert ok is True
+    assert "尚未开始" in reason
+    release.set()
+    deadline = time.time() + 5
+    while time.time() < deadline and runner.pending_count() > 0:
+        time.sleep(0.05)
+    assert calls == [], "被取消的排队任务不得执行"
+    assert runner.snapshot(task2)["status"] == "FAILED"
+    assert runner.snapshot(task1)["status"] == "SUCCEEDED"
+
+
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__, "-v", "-p", "no:cacheprovider"])

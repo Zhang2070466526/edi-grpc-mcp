@@ -110,6 +110,34 @@ class TaskRunner:
             task = self._tasks.get(task_id)
             return dict(task) if task is not None else None
 
+    def list(self) -> list[dict[str, Any]]:
+        """返回所有未过期任务的快照列表（按创建时间排序，浅拷贝脱离锁）。"""
+        with self._lock:
+            self._prune_locked()
+            return [dict(t) for t in sorted(self._tasks.values(), key=lambda t: t["created_at"])]
+
+    def cancel(self, task_id: str, kill: Callable[[], None] | None = None) -> tuple[bool, str]:
+        """取消任务，返回 (是否成功取消, 原因)。
+
+        QUEUED 直接标记取消；RUNNING 标记取消并在持锁外调用 kill()（可选）终止底层
+        子进程。运行中任务被 kill 后，worker 线程的 _run 因 status 已非 RUNNING 而
+        不再覆盖结果，取消原因得以保留。
+        """
+        with self._lock:
+            task = self._tasks.get(task_id)
+            if task is None:
+                return False, "任务不存在或已过期"
+            if task.get("finished_at") is not None:
+                return False, "任务已结束，无法取消"
+            was_running = task["status"] == "RUNNING"
+            msg = "任务已取消（执行中，已尝试终止）" if was_running else "任务已取消（尚未开始）"
+            task["status"] = "FAILED"
+            task["error"] = msg
+            task["finished_at"] = time.time()
+        if was_running and kill is not None:
+            kill()
+        return True, msg
+
     def count(self) -> int:
         """当前任务总数（含已完成未过期的）。"""
         with self._lock:
@@ -165,9 +193,14 @@ class TaskRunner:
         """后台线程执行体：执行 func，把结果/异常写回任务。"""
         with self._lock:
             task = self._tasks.get(task_id)
-            if task is not None:
-                task["status"] = "RUNNING"
-                task["started_at"] = time.time()
+            # 已被取消 / 超时兜底 / 清理的任务不再执行：cancel() 只改状态，但本方法
+            # 早已排在 executor 队列里 —— 少这道门，被取消的**排队**任务排到队后仍会
+            # 真跑，并把状态从「已取消」改回 RUNNING→SUCCEEDED（2026-09-28 复核发现）。
+            if task is None or task.get("finished_at") is not None:
+                _log.info("task=%s skipped (cancelled/finished before start)", task_id)
+                return
+            task["status"] = "RUNNING"
+            task["started_at"] = time.time()
         _log.info("task=%s status=RUNNING", task_id)
         started = time.time()
         try:

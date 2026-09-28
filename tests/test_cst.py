@@ -106,6 +106,37 @@ class TestExportFarfieldQuery:
         assert r["message"] == "导出进行中"
 
 
+class TestExportSnpAsyncQuery:
+    def test_running(self):
+        from servers.cst import result_export
+        with patch.object(result_export.cst_runner, "snapshot", return_value=_snap()):
+            r = result_export.cst_export_snp_query("t1")
+        assert r["completed"] is False
+        assert r["message"] == "导出进行中"
+
+    def test_succeeded(self):
+        from servers.cst import result_export
+        snap = _snap(status="SUCCEEDED", finished_at=2.0, result="C:/x.s2p")
+        with patch.object(result_export.cst_runner, "snapshot", return_value=snap):
+            r = result_export.cst_export_snp_query("t1")
+        assert r["completed"] is True
+        assert r["snp_path"] == "C:/x.s2p"
+
+    def test_failed(self):
+        from servers.cst import result_export
+        snap = _snap(status="FAILED", finished_at=2.0, error="No S-Parameter results found")
+        with patch.object(result_export.cst_runner, "snapshot", return_value=snap):
+            r = result_export.cst_export_snp_query("t1")
+        assert r["success"] is False
+        assert r["error_code"] == "CST_EXPORT_SNP_FAILED"
+
+    def test_not_found(self):
+        from servers.cst import result_export
+        with patch.object(result_export.cst_runner, "snapshot", return_value=None):
+            r = result_export.cst_export_snp_query("t1")
+        assert r["error_code"] == "TASK_NOT_FOUND"
+
+
 # ── CST 解释器定位 ──
 
 class TestCstPythonPath:
@@ -143,23 +174,50 @@ class TestCstPythonPath:
 
 # ── 子进程作业协议 ──
 
-def _fake_runner(write_result=None, returncode=0, out=b"", err=b"", inspect=None):
-    """构造 subprocess.run 替身：按作业文件生成结果文件，并记录调用现场。
+def _fake_popen(write_result=None, returncode=0, out=b"", err=b"", inspect=None, timeout_expires=False):
+    """构造 subprocess.Popen 替身，对齐实现契约：
 
-    注意：形参名不能叫 stdout/stderr —— 那会覆盖被调用方传进来的 PIPE 哨兵值，
-    导致 CompletedProcess 里拿到的不是本替身想给的字节。
+    输出走**文件对象**（不是 PIPE）、父进程用 `wait(timeout)` 等待 —— 替身据此在
+    `wait()` 里把 out/err 写进传入的文件句柄、并按作业文件生成结果文件。
     """
-    def fake_run(cmd, **kwargs):
-        if inspect is not None:
-            inspect["cmd"] = cmd
-            inspect["timeout"] = kwargs.get("timeout")
-        if write_result is not None:
-            job = json.loads(Path(cmd[cmd.index("--job") + 1]).read_text(encoding="utf-8"))
+    class _Proc:
+        def __init__(self, cmd, stdout=None, stderr=None, **kwargs):
+            self.returncode = returncode
+            self.pid = 4321
+            self._cmd = cmd
+            self._stdout = stdout
+            self._stderr = stderr
             if inspect is not None:
-                inspect["job"] = job
-            Path(job["result_path"]).write_text(json.dumps(write_result), encoding="utf-8")
-        return subprocess.CompletedProcess(cmd, returncode, out, err)
-    return fake_run
+                inspect["cmd"] = cmd
+                inspect["stdout"] = stdout
+                inspect["stderr"] = stderr
+                inspect["popen_kwargs"] = kwargs
+
+        def wait(self, timeout=None):
+            if inspect is not None:
+                inspect["timeout"] = timeout
+            if timeout_expires:
+                raise subprocess.TimeoutExpired(self._cmd, timeout or 1)
+            for fh, data in ((self._stdout, out), (self._stderr, err)):
+                if hasattr(fh, "write") and data:
+                    fh.write(data)
+            if write_result is not None:
+                job = json.loads(Path(self._cmd[self._cmd.index("--job") + 1]).read_text(encoding="utf-8"))
+                if inspect is not None:
+                    inspect["job"] = job
+                Path(job["result_path"]).write_text(json.dumps(write_result), encoding="utf-8")
+            return self.returncode
+
+        def poll(self):
+            return None  # 视为仍在运行：kill_process_tree 走 taskkill 分支
+
+        def kill(self):
+            pass
+
+    def fake_popen(cmd, **kwargs):
+        return _Proc(cmd, **kwargs)
+
+    return fake_popen
 
 
 class TestRunCstJob:
@@ -167,8 +225,8 @@ class TestRunCstJob:
         from servers.cst import cst_api
         monkeypatch.setenv("CST_PYTHON_PATH", __file__)  # 任意存在的文件当解释器
         info = {}
-        monkeypatch.setattr(cst_api.subprocess, "run",
-                            _fake_runner({"success": True, "op": "solve", "result": "C:/x.cst"}, inspect=info))
+        monkeypatch.setattr(cst_api.subprocess, "Popen",
+                            _fake_popen({"success": True, "op": "solve", "result": "C:/x.cst"}, inspect=info))
         assert cst_api.run_cst_job("solve", model_path="C:/x.cst") == "C:/x.cst"
         # 作业参数应原样落到 job.json，并带上 op 与 result_path
         assert info["job"]["op"] == "solve"
@@ -182,7 +240,7 @@ class TestRunCstJob:
     def test_failure_payload_raises_with_reason(self, monkeypatch):
         from servers.cst import cst_api
         monkeypatch.setenv("CST_PYTHON_PATH", __file__)
-        monkeypatch.setattr(cst_api.subprocess, "run", _fake_runner({
+        monkeypatch.setattr(cst_api.subprocess, "Popen", _fake_popen({
             "success": False, "op": "solve", "error": "run_solver returned False",
             "traceback": "Traceback (most recent call last):\n  ...",
         }))
@@ -194,31 +252,79 @@ class TestRunCstJob:
     def test_no_result_file_uses_process_output(self, monkeypatch):
         from servers.cst import cst_api
         monkeypatch.setenv("CST_PYTHON_PATH", __file__)
-        monkeypatch.setattr(cst_api.subprocess, "run",
-                            _fake_runner(None, returncode=1, err=b"ImportError: cst gate"))
+        monkeypatch.setattr(cst_api.subprocess, "Popen",
+                            _fake_popen(None, returncode=1, err=b"ImportError: cst gate"))
         with pytest.raises(RuntimeError) as exc:
             cst_api.run_cst_job("solve", model_path="C:/x.cst")
         assert "未产出结果" in str(exc.value)
         assert "ImportError" in str(exc.value)
 
-    def test_timeout_raises(self, monkeypatch):
+    def test_output_goes_to_files_not_pipes(self, monkeypatch):
+        """回归 F3：输出必须走临时文件。PIPE 会被 CST 子进程继承 ⇒ 取消后队列卡死。"""
         from servers.cst import cst_api
         monkeypatch.setenv("CST_PYTHON_PATH", __file__)
+        info = {}
+        monkeypatch.setattr(cst_api.subprocess, "Popen",
+                            _fake_popen({"success": True, "op": "solve", "result": "r"}, inspect=info))
+        assert cst_api.run_cst_job("solve", model_path="C:/x.cst") == "r"
+        assert info["stdout"] is not subprocess.PIPE
+        assert info["stderr"] is not subprocess.PIPE
+        assert hasattr(info["stdout"], "write") and hasattr(info["stderr"], "write")
+        assert info["popen_kwargs"].get("creationflags") == cst_api._CREATE_NEW_PROCESS_GROUP
 
-        def fake_run(cmd, stdout=None, stderr=None, timeout=None):
-            raise subprocess.TimeoutExpired(cmd, timeout or 1)
-
-        monkeypatch.setattr(cst_api.subprocess, "run", fake_run)
+    def test_timeout_kills_process_tree(self, monkeypatch):
+        from servers.cst import cst_api
+        monkeypatch.setenv("CST_PYTHON_PATH", __file__)
+        killed = []
+        monkeypatch.setattr(cst_api, "kill_process_tree", lambda p: killed.append(p))
+        monkeypatch.setattr(cst_api.subprocess, "Popen", _fake_popen(timeout_expires=True))
         with pytest.raises(RuntimeError) as exc:
             cst_api.run_cst_job("solve", model_path="C:/x.cst", timeout=30)
         assert "超时" in str(exc.value)
+        assert len(killed) == 1  # 超时必须走「杀整棵树」，而不是只 kill worker
+
+    def test_kill_process_tree_calls_taskkill_with_tree_flag(self, monkeypatch):
+        from servers.cst import cst_api
+        calls = []
+
+        class _Proc:
+            pid = 4321
+            def poll(self):
+                return None
+            def wait(self, timeout=None):
+                return 0
+            def kill(self):
+                calls.append("kill")
+
+        monkeypatch.setattr(cst_api.subprocess, "run", lambda cmd, **kw: calls.append(cmd))
+        cst_api.kill_process_tree(_Proc())
+        assert calls[0][:3] == ["taskkill", "/T", "/F"]
+        assert "4321" in calls[0]
+
+    def test_kill_process_tree_noop_when_already_exited(self, monkeypatch):
+        from servers.cst import cst_api
+        calls = []
+
+        class _Proc:
+            pid = 4321
+            def poll(self):
+                return 0
+
+        monkeypatch.setattr(cst_api.subprocess, "run", lambda cmd, **kw: calls.append(cmd))
+        cst_api.kill_process_tree(_Proc())
+        assert calls == []
+
+    def test_cancel_active_false_without_running_job(self, monkeypatch):
+        from servers.cst import cst_api
+        monkeypatch.setattr(cst_api, "_active_proc", None)
+        assert cst_api.cst_cancel_active() is False
 
     def test_temp_job_dir_is_removed(self, monkeypatch):
         from servers.cst import cst_api
         monkeypatch.setenv("CST_PYTHON_PATH", __file__)
         info = {}
-        monkeypatch.setattr(cst_api.subprocess, "run",
-                            _fake_runner({"success": True, "op": "solve", "result": "r"}, inspect=info))
+        monkeypatch.setattr(cst_api.subprocess, "Popen",
+                            _fake_popen({"success": True, "op": "solve", "result": "r"}, inspect=info))
         cst_api.run_cst_job("solve", model_path="C:/x.cst")
         job_dir = str(Path(info["job"]["result_path"]).parent)
         assert not Path(job_dir).exists()
@@ -321,6 +427,112 @@ class TestJobDispatch:
         with patch.object(result_export.cst_runner, "submit", return_value=None):
             r = result_export.cst_export_farfield(str(model))
         assert r["error_code"] == "CST_QUEUE_FULL"
+
+    def test_export_snp_async_returns_task_id(self, tmp_path):
+        from servers.cst import result_export
+        model = tmp_path / "m.cst"
+        model.write_text("x")
+        with patch.object(result_export.cst_runner, "submit", return_value="t1") as submit:
+            r = result_export.cst_export_snp_async(str(model))
+        assert r["success"] is True
+        assert r["task_id"] == "t1"
+        assert r["status"] == "QUEUED"
+        assert submit.call_args[0][0] == result_export._result_exporter.export_snp
+
+    def test_export_snp_async_queue_full(self, tmp_path):
+        from servers.cst import result_export
+        model = tmp_path / "m.cst"
+        model.write_text("x")
+        with patch.object(result_export.cst_runner, "submit", return_value=None):
+            r = result_export.cst_export_snp_async(str(model))
+        assert r["error_code"] == "CST_QUEUE_FULL"
+
+    def test_export_snp_async_rejects_missing_file(self, tmp_path):
+        from servers.cst import result_export
+        r = result_export.cst_export_snp_async(str(tmp_path / "nope.cst"))
+        assert r["success"] is False
+
+
+class TestParseFarfield:
+    """远场绘图纯函数：切面参数解析 + 远场 txt 容错解析（不依赖 CST）。"""
+
+    def test_parse_cut(self):
+        from servers.cst import plot
+        assert plot._parse_cut("phi=0") == ("phi", 0.0)
+        assert plot._parse_cut(" theta = -90 ") == ("theta", -90.0)
+
+    def test_parse_cut_rejects_bad(self):
+        from servers.cst import plot
+        with pytest.raises(ValueError):
+            plot._parse_cut("nonsense")
+        with pytest.raises(ValueError):
+            plot._parse_cut("phi=1.2.3")  # 多小数点不合法
+
+    def test_parse_farfield_real_cst_header_with_units_inside_tokens(self):
+        """回归 F2：CST 真表头把单位塞在列名 token 里（`Abs(Gain)[dBi   ]`）并产生孤立 `]`。
+
+        旧实现按「整 token 是 [xx]」跳过单位 ⇒ 列名被数成 14 个，而数据行只有 8 列
+        ⇒ 门槛恒假、每行都被丢掉、报「未解析到数据行」—— 本工具曾在 cst_export_farfield
+        自己产出的文件上 100% 失败（2026-09-28 实测）。
+        """
+        from servers.cst import plot
+        text = (
+            "Theta [deg.]  Phi   [deg.]  Abs(Gain)[dBi   ]   Abs(Theta)[dBi   ]  "
+            "Phase(Theta)[deg.]  Abs(Phi  )[dBi   ]  Phase(Phi  )[deg.]  Ax.Ratio[dB    ]\n"
+            + "-" * 150 + "\n"
+            "-180.000         -90.000           -3.932e+00          -5.231e+00             287.253"
+            "          -9.805e+00             107.253           4.000e+01\n"
+            "-165.000         -90.000           -1.473e+01          -1.535e+01              56.593"
+            "         -2.346e+01             301.817           9.209e+00\n"
+            "   0.000         -90.000            1.447e+01           1.317e+01             260.467"
+            "          8.601e+00             260.467           4.000e+01\n"
+        )
+        parsed = plot._parse_farfield(text)
+        assert (parsed["theta_col"], parsed["phi_col"], parsed["gain_col"]) == (0, 1, 2)
+        assert len(parsed["rows"]) == 3          # 分隔线不算数据行
+        assert parsed["rows"][2][parsed["gain_col"]] == pytest.approx(14.47)
+
+    def test_parse_farfield_columns(self):
+        from servers.cst import plot
+        text = (
+            "Theta [deg.]  Phi [deg.]  Abs(Gain) [dBi]  Phase [deg.]  Ax.Ratio [dB]\n"
+            "0.0  0.0  10.0  0.0  0.0\n"
+            "1.0  0.0  9.5  10.0  0.1\n"
+        )
+        parsed = plot._parse_farfield(text)
+        assert parsed["theta_col"] == 0
+        assert parsed["phi_col"] == 1
+        assert parsed["gain_col"] == 2
+        assert len(parsed["rows"]) == 2
+
+    def test_parse_farfield_reorders_columns(self):
+        from servers.cst import plot
+        text = (
+            "Phi [deg.]  Abs(Gain) [dBi]  Theta [deg.]\n"
+            "0.0  10.0  0.0\n"
+            "90.0  5.0  0.0\n"
+        )
+        parsed = plot._parse_farfield(text)
+        assert parsed["phi_col"] == 0
+        assert parsed["gain_col"] == 1
+        assert parsed["theta_col"] == 2
+
+    def test_parse_farfield_missing_header(self):
+        from servers.cst import plot
+        with pytest.raises(ValueError):
+            plot._parse_farfield("no header here\n1 2 3\n")
+
+    def test_parse_farfield_rejects_multi_section(self):
+        from servers.cst import plot
+        text = (
+            "Theta [deg.]  Phi [deg.]  Abs(Gain) [dBi]\n"
+            "0.0  0.0  10.0\n"
+            "Theta [deg.]  Phi [deg.]  Abs(Gain) [dBi]\n"  # 第二个频段表头
+            "0.0  0.0  11.0\n"
+        )
+        with pytest.raises(ValueError) as exc:
+            plot._parse_farfield(text)
+        assert "多个频点" in str(exc.value)
 
 
 if __name__ == "__main__":

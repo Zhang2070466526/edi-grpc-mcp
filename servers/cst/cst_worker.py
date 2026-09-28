@@ -195,9 +195,20 @@ def freq_unit(xlabel) -> str:
     return "Hz"
 
 
+# 结果树里「有远场」的信号。⚠️ `get_tree_items()` 返回的清单**不含 Farfields 分支**
+# 本身（远场导出走的是另一条查询：Resulttree.GetTreeResults("Farfields","farfield",…)），
+# 所以只认字面 "Farfield" 会漏报：实测 demo_horn_24GHz / Discone 都能导出远场，
+# 却因为树里只有派生结果（模式表 / 效率表）而被判成「无远场」（2026-09-28 实测）。
+_FARFIELD_TREE_HINTS = ("farfield", "gainmax", "gainphi", "gaintheta", "efficiency")
+
+
 def has_farfield(tree_items) -> bool:
-    """结果树里是否存在远场（Farfield）结果。"""
-    return any("Farfield" in t for t in tree_items)
+    """结果树里是否存在远场结果（含派生信号，见 _FARFIELD_TREE_HINTS）。"""
+    for item in tree_items:
+        low = str(item).lower()
+        if any(hint in low for hint in _FARFIELD_TREE_HINTS):
+            return True
+    return False
 
 
 def write_touchstone(output_path, freq, sp_data, port_count, freq_unit_name, ref_z) -> str:
@@ -335,6 +346,36 @@ def detect_farfield(model_path):
         close_3d_results(project_file)
 
 
+def snapshot_txts(output_dir):
+    """记录输出目录里现有 txt 的 {路径: (大小, mtime)}，用于区分「本次导出」与「目录里既有」。"""
+    snap = {}
+    for path in glob.glob(os.path.join(output_dir, "*.txt")):
+        try:
+            st = os.stat(path)
+        except OSError:
+            continue
+        snap[path] = (st.st_size, st.st_mtime)
+    return snap
+
+
+def changed_txts(output_dir, before):
+    """返回本次导出新增/更新过的 txt（新增，或大小/mtime 变化），保持排序。
+
+    只回本任务真正产生的文件：VBA 是把远场表写成 txt，而目录里可能早就有别的
+    txt（上一次导出、同目录其它导出），直接 `glob(输出目录/*.txt)` 会把它们
+    一起报成结果（2026-09-24 实测撞到：结果里混进了同目录的另一份远场文件）。
+    """
+    fresh = []
+    for path in glob.glob(os.path.join(output_dir, "*.txt")):
+        try:
+            st = os.stat(path)
+        except OSError:
+            continue
+        if before.get(path) != (st.st_size, st.st_mtime):
+            fresh.append(path)
+    return sorted(fresh)
+
+
 def do_export_farfield(job):
     """导出远场方向图，自动判断是否已求解，返回 txt 路径列表。
 
@@ -350,6 +391,9 @@ def do_export_farfield(job):
         # 诊断行：父进程只在作业失败时读 stdout/stderr
         print("cst_worker: %s" % note)
 
+    # 导出前记下目录现状，导出后只回本任务新增/更新的文件
+    before = snapshot_txts(output_dir)
+
     de, prj = open_session(model_path)
     try:
         if needs_solve:
@@ -359,15 +403,87 @@ def do_export_farfield(job):
         vba = _FARFIELD_VBA.replace("OUTDIR", output_dir)
         if prj.schematic.execute_vba_code(vba) is False:
             raise RuntimeError("export_farfield: execute_vba_code returned False")
-        return sorted(glob.glob(os.path.join(output_dir, "*.txt")))
+        return changed_txts(output_dir, before)
     finally:
         close_session(de, prj)
+
+
+# ── 作业：只读模型体检 ──
+
+def do_info(job):
+    """只读模型体检：读结果树返回模型状态，不解算、不开 GUI 会话。"""
+    model_path = os.path.abspath(str(job["model_path"]))
+    info = {
+        "model_path": model_path,
+        "solved": False,
+        "unpacked": False,
+        "ports": 0,
+        "freq_range": None,
+        "monitors": [],
+        "result_items": [],
+        "notes": "",
+    }
+    try:
+        project_file, result_3d = open_3d_results(model_path)
+    except Exception as exc:
+        info["notes"] = "结果树不可读（多为归档未解包）：%s" % exc
+        return info
+    try:
+        tree_items = result_3d.get_tree_items() or []
+        info["unpacked"] = True
+        info["result_items"] = tree_items
+        has_ff = has_farfield(tree_items)
+        if has_ff:
+            info["monitors"].append("Farfield")
+        else:
+            info["notes"] = "结果树未发现远场信号（判据：Farfield 分支 / Gain* 模式表 / 效率表）"
+        s_items = [t for t in tree_items if "S-Parameters" in t]
+        info["solved"] = bool(s_items) or has_ff
+        if s_items:
+            ports = set()
+            for t in s_items:
+                i, j = s_param_indices(t)
+                if i >= 1:
+                    ports.add(i)
+                if j >= 1:
+                    ports.add(j)
+            info["ports"] = max(ports) if ports else 0
+            try:
+                run_id = 0
+                for r in result_3d.get_all_run_ids():
+                    m = re.search(r"\d+", str(r))
+                    if m:
+                        run_id = max(run_id, int(m.group()))
+                item = result_3d.get_result_item(sorted(s_items, key=s_param_indices)[0], run_id=run_id)
+                xdata = item.get_xdata()
+                if xdata:
+                    info["freq_range"] = [float(xdata[0]), float(xdata[-1])]
+            except Exception:
+                pass
+    finally:
+        close_3d_results(project_file)
+    return info
+
+
+# ── 作业：只打开并保存（解包） ──
+
+def do_open(job):
+    """只打开并保存（解包归档模型），不求解。"""
+    model_path = to_writable_copy(os.path.abspath(str(job["model_path"])))
+    de, prj = open_session(model_path)
+    try:
+        prj.save()
+    finally:
+        close_session(de, prj)
+    return {"model_path": model_path, "unpacked": True}
 
 
 _OPS = {
     "solve": do_solve,
     "export_snp": do_export_snp,
     "export_farfield": do_export_farfield,
+    "info": do_info,
+    "open": do_open,
 }
 
 
