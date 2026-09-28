@@ -12,11 +12,15 @@ from pathlib import Path
 
 from servers import mcp
 
+import sys as _sys
+
 GUIDE_FILENAME = "RAW 转图像工具使用说明.txt"
 
 
 def guide_path() -> Path:
     """说明文件路径（与 turbocharts_app.exe 的说明同目录存放）。"""
+    if getattr(_sys, "frozen", False):
+        return Path(_sys._MEIPASS) / "servers" / "turbocharts" / GUIDE_FILENAME
     return Path(__file__).with_name(GUIDE_FILENAME)
 
 

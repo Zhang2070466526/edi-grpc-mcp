@@ -43,7 +43,12 @@ _active_proc = None
 _proc_lock = threading.Lock()
 
 # 同目录下的独立执行器（以脚本方式启动，不 import 包，避免 3.6 侧解析不了本包依赖）
-_WORKER_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cst_worker.py")
+# frozen 模式下 __file__ 指向 PYZ.pyz 虚拟路径，须切到 _MEIPASS 才能拿到真实磁盘文件
+import sys as _sys
+if getattr(_sys, "frozen", False):
+    _WORKER_SCRIPT = os.path.join(_sys._MEIPASS, "servers", "cst", "cst_worker.py")
+else:
+    _WORKER_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cst_worker.py")
 
 _CST_APP_PATHS_KEY = r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\CST DESIGN ENVIRONMENT_AMD64.exe"
 

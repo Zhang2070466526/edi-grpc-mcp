@@ -25,6 +25,7 @@ import json as _json
 import logging
 import math
 import re as _re
+import sys as _sys
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -49,13 +50,17 @@ _ACTIVE_STATES = {"NORMAL", "DISABLED", "SHORTED"}
 # Catalog
 # ═══════════════════════════════════════════════════════════
 
+if getattr(_sys, "frozen", False):
+    _CATALOG_PATH = Path(_sys._MEIPASS) / "servers" / "eda" / "simulation_component_catalog.json"
+else:
+    _CATALOG_PATH = Path(__file__).parent / "simulation_component_catalog.json"
+
+
 @lru_cache(maxsize=1)
 def _load_catalog() -> dict:
     """加载仿真器件参数目录 JSON（缓存单例），失败返回空 dict。"""
     try:
-        here = Path(__file__).parent
-        path = here / "simulation_component_catalog.json"
-        return _json.loads(path.read_text(encoding="utf-8"))
+        return _json.loads(_CATALOG_PATH.read_text(encoding="utf-8"))
     except (FileNotFoundError, _json.JSONDecodeError) as exc:
         _logger.error("Failed to load component catalog: %s", exc)
         return {}
