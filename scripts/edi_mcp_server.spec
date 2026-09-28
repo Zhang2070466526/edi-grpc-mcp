@@ -25,7 +25,6 @@ a = Analysis(
     pathex=[str(root)],
     binaries=_msvc_dlls,
     datas=[
-        (str(root / 'proto'), 'proto'),
         (str(root / 'servers' / 'chat' / 'index.html'), 'servers/chat'),
         (str(root / 'servers' / 'eda' / 'simulation_component_catalog.json'), 'servers/eda'),
     ],

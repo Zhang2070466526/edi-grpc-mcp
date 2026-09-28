@@ -250,6 +250,37 @@ def search_schematic_from_personal_library(
 
 
 @mcp.tool()
+def design_schematic_topology(
+        requirement: str,
+        timeout_seconds: int = 180,
+) -> dict[str, Any]:
+    """按自然语言需求在个人/公共原理图库语义检索拓扑，自动创建并打开新工程。
+
+    用法："设计一个 1GHz 功放链路，含输入匹配和偏置"
+
+    requirement 是自然语言需求描述（非空），服务端直接作为语义检索的 topology_description。
+    个人库优先检索，无候选回退公共库；命中后自动生成工程名并在当前工作区创建、打开新工程。
+
+    Args:
+        requirement: 自然语言需求描述（非空字符串）。
+        timeout_seconds: 最长等待秒数，默认 180（含语义检索 + 下载 + 模型库扫描）。
+
+    Returns:
+        gRPC 统一返回结构，成功时 details 含 project_name/project_path/schematic_id/
+        component_count/net_segment_count/status。
+    """
+    requirement, err = require_nonempty(requirement, label="requirement")
+    if err:
+        return err
+    return call_grpc(
+        ecserver_pb2.DESIGN_SCHEMATIC_TOPOLOGY,
+        {"requirement": requirement},
+        timeout_seconds,
+        max_timeout_seconds=300,
+    )
+
+
+@mcp.tool()
 def use_schematic_from_library_create_project(
         file_uuid: str,
         timeout_seconds: int = 180,

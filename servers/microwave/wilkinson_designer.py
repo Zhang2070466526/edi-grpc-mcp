@@ -9,13 +9,16 @@ Multi-Section Wilkinson Power Divider Designer
 
 算法说明：
   - 臂阻抗：基于 Chebyshev 阻抗变换器综合（小反射近似）
-  - 微带线尺寸：Hammerstad 闭式公式（二分法求解）
+  - 微带线尺寸：复用 transline.Microstrip（Hammerstad-Jensen 闭式公式 + 色散
+     + 35 µm 导体厚度修正；综合方向由 transline 内部迭代反解线宽）
   - 隔离电阻：Cohn 方法 + 经验修正（初值，需用 EDA 优化）
 """
 
 import math
 import argparse
 import sys
+
+from servers.microwave.transline import Microstrip, P, MM, MICRON
 
 
 # ============================================================================
@@ -189,61 +192,38 @@ def chebyshev_transformer(z0, zl, n, fbw):
 # Part 2: 微带线计算（Hammerstad 闭式公式）
 # ============================================================================
 
-def microstrip_z_and_eeff(W, h, er):
+def _microstrip_instance(h_mm, er, f0_GHz):
+    """构造并初始化 transline.Microstrip（mm/GHz → SI，含默认电导率/磁导率/无覆盖层）。"""
+    tl = Microstrip()
+    tl.set(P.EPSILONR, er).set(P.H, h_mm * MM).set(P.H_T, 1.0e20)
+    tl.set(P.T, 35.0 * MICRON).set(P.FREQUENCY, f0_GHz * 1e9)
+    tl.set(P.SIGMA, 5.8e7).set(P.MUR, 1.0).set(P.MURC, 1.0).set(P.ROUGH, 0.0)
+    return tl
+
+
+def microstrip_z_and_eeff(W, h, er, f0_GHz=1.0):
     """
     给定线宽 W、基板厚度 h、介电常数 er，返回 (Z0, eeff)。
-    使用 Hammerstad 改进公式。W, h 单位相同即可。
+    复用 transline.Microstrip（Hammerstad-Jensen + 色散 + 厚度 + 覆盖层修正）。
+    W、h 单位一致（mm），结果与 calculate_transline 同源。
     """
-    u = W / h
-    # 有效介电常数
-    if u <= 1:
-        eeff = (er + 1) / 2 + (er - 1) / 2 * (
-            1 / math.sqrt(1 + 12 / u) + 0.04 * (1 - u) ** 2
-        )
-    else:
-        eeff = (er + 1) / 2 + (er - 1) / 2 / math.sqrt(1 + 12 / u)
-
-    # 特性阻抗
-    eta0 = 120 * math.pi  # ~377 Ω
-    if u <= 1:
-        Z0 = eta0 / (2 * math.pi * math.sqrt(eeff)) * math.log(8 / u + u / 4)
-    else:
-        Z0 = eta0 / (math.sqrt(eeff) * (u * 1.393 + 0.667 * math.log(u + 1.444)))
-
-    return Z0, eeff
+    tl = _microstrip_instance(h, er, f0_GHz)
+    tl.set(P.PHYS_WIDTH, W * MM)
+    tl.analyse()
+    return tl.z0, getattr(tl, "eps_eff", er)
 
 
-def microstrip_width_from_z(Z0_target, h, er, tol=1e-6, max_iter=100):
+def microstrip_width_from_z(Z0_target, h, er, f0_GHz=1.0, tol=1e-6, max_iter=100):
     """
     给定目标阻抗 Z0_target (Ω)、基板厚度 h、介电常数 er，
-    用二分法求线宽 W，返回 (W, eeff)。
-    W 和 h 单位相同。
+    反解线宽 W，返回 (W, eeff)。复用 transline.Microstrip 的综合（内部牛顿迭代）。
+    tol/max_iter 仅保留签名兼容，实际收敛由 transline 内部控制。
     """
-    W_low = h * 0.005   # 很窄 -> 高阻抗
-    W_high = h * 50.0   # 很宽 -> 低阻抗
-
-    Z_high_val, _ = microstrip_z_and_eeff(W_low, h, er)   # 窄线 -> 高阻抗
-    Z_low_val, _ = microstrip_z_and_eeff(W_high, h, er)   # 宽线 -> 低阻抗
-
-    if Z0_target < Z_low_val or Z0_target > Z_high_val:
-        raise ValueError(
-            f"目标阻抗 {Z0_target:.1f} Ω 超出微带线可实现范围 "
-            f"({Z_low_val:.1f} ~ {Z_high_val:.1f} Ω)"
-        )
-
-    for _ in range(max_iter):
-        W_mid = (W_low + W_high) / 2
-        Z_mid, eeff_mid = microstrip_z_and_eeff(W_mid, h, er)
-        if abs(Z_mid - Z0_target) / Z0_target < tol:
-            return W_mid, eeff_mid
-        if Z_mid > Z0_target:
-            W_low = W_mid   # 阻抗偏高，加宽
-        else:
-            W_high = W_mid
-
-    W_final = (W_low + W_high) / 2
-    Z_final, eeff_final = microstrip_z_and_eeff(W_final, h, er)
-    return W_final, eeff_final
+    tl = _microstrip_instance(h, er, f0_GHz)
+    tl.set(P.Z0, Z0_target).set(P.ANG_L, math.pi / 2.0)
+    if not tl.synthesize():
+        raise ValueError(f"目标阻抗 {Z0_target:.1f} Ω 超出微带线可实现范围")
+    return tl.width / MM, getattr(tl, "eps_eff", er)
 
 
 def microstrip_quarterwave_length(f0_GHz, Z0, h, er):
@@ -251,7 +231,7 @@ def microstrip_quarterwave_length(f0_GHz, Z0, h, er):
     计算中心频率 f0 (GHz) 处四分之一波长微带线的物理长度。
     返回 (length_mm, eeff)。
     """
-    W, eeff = microstrip_width_from_z(Z0, h, er)
+    W, eeff = microstrip_width_from_z(Z0, h, er, f0_GHz)
     c = 299792458.0
     lambda0_mm = c / (f0_GHz * 1e9) * 1000
     lambda_g = lambda0_mm / math.sqrt(eeff)
@@ -407,7 +387,7 @@ def design_wilkinson(h_mm, er, f0_GHz, n_sections, z0=50.0, fbw=None, ripple_db=
     sections = []
     for i in range(n_sections):
         z_arm = arm_z_lines[i]
-        W, eeff = microstrip_width_from_z(z_arm, h_mm, er)
+        W, eeff = microstrip_width_from_z(z_arm, h_mm, er, f0_GHz)
         L, _ = microstrip_quarterwave_length(f0_GHz, z_arm, h_mm, er)
         sections.append({
             'section': i + 1,
@@ -499,7 +479,7 @@ def print_results(result):
 
     print("【说明】")
     print("  1. 臂阻抗基于 Chebyshev 阻抗变换器综合（小反射近似），阻抗比<3时精度良好。")
-    print("  2. 微带线尺寸使用 Hammerstad 闭式公式计算，未考虑金属厚度和导体损耗。")
+    print("  2. 微带线尺寸由 transline.Microstrip 计算（Hammerstad-Jensen 闭式公式 + 色散，含默认 35 µm 导体厚度修正）；输出为几何尺寸，未含导体/介质损耗。")
     print("  3. 隔离电阻为初值估算，实际电路中需用 ADS/AWR 等电磁仿真工具优化。")
     print("  4. 线长为中心频率处的四分之一波长，未考虑 T 型结等不连续效应的影响。")
     print("  5. 本程序输出为初始设计值，最终参数需通过全波仿真验证和优化。")

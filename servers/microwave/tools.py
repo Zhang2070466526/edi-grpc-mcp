@@ -233,6 +233,8 @@ def design_wilkinson(
         return err
     if (err := _require_positive(f0_ghz, "f0_ghz")) is not None:
         return err
+    if (err := _require_positive(z0, "z0")) is not None:
+        return err
     if not isinstance(n_sections, int) or isinstance(n_sections, bool) or n_sections < 1:
         return error_response("INVALID_PARAMETERS", "n_sections 必须是 >=1 的整数")
 

@@ -37,6 +37,7 @@ def test_all_tools_registered():
         "add_performance_component",
         "add_ideal_component", "clear_schematic", "add_wire",
         "search_schematic_from_public_library", "search_schematic_from_personal_library",
+        "design_schematic_topology",
         "use_schematic_from_library_create_project", "use_schematic_from_library_import",
         "export_schematic_components_to_csv",
         "search_soft_ip_categories", "search_public_soft_ip_models",

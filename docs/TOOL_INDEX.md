@@ -2,7 +2,7 @@
 
 > 自动生成，勿手改。权威数量见 /ready 的 tool_count。
 
-共 101 个工具：
+共 102 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
 - `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
@@ -34,6 +34,7 @@
 - `cst_task_cancel` — 取消一个 CST 异步任务（排队中的直接取消，运行中的尝试终止其子进程）。
 - `cst_task_list` — 列出当前所有 CST 异步任务（求解 / 导出）及状态。
 - `delete_simulation_component` — 按实例名删除原理图器件及其连接线。
+- `design_schematic_topology` — 按自然语言需求在个人/公共原理图库语义检索拓扑，自动创建并打开新工程。
 - `design_wilkinson` — 设计多级威尔金森功分器，输出各级微带线宽、线长和隔离电阻。
 - `download_public_soft_ip_model_by_description` — 按分类名称和描述查询公共软 IP，补齐可选设计参数后下载 AEDT 模型。
 - `download_soft_ip_model` — 按软 IP UUID 和频率下载 AEDT 模型文件到指定路径。
