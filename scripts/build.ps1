@@ -66,9 +66,8 @@ MCP_PORT=50026
 MCP_BIND_HOST=127.0.0.1
 # Extra allowed Host headers (comma-separated) for addresses auto-detection misses (e.g. reverse-proxy domain)
 MCP_EXTRA_ALLOWED_HOSTS=
-# Process whitelist (local mode only): comma-separated EXACT-match entries (cmd token / exe basename / full path).
-# NOTE: ignored automatically in remote mode (--host not loopback), since remote clients cannot be identified.
-MCP_ALLOWED_PROCESSES=edi-agent-service.exe
+# Process whitelist default hardcoded in servers/settings.py (hermes_cli.main,edi-agent-service.exe);
+# remote mode auto-ignores it. Override/clear here only if needed.
 # Source-process probe when whitelist is off (local empty / remote auto-ignored). Keep 1 = only audit trail when no auth.
 MCP_PROBE_ENABLED=1
 # Optional: image vision analysis (enabled when all three are configured)

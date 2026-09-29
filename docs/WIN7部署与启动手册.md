@@ -182,7 +182,7 @@ dir /s /b C:\edi-mcp\*.dll C:\edi-mcp\*.pyd C:\edi-mcp\*.exe | find /c /v ""
 | `TURBOCHARTS_PATH` | 空 | 同上，自动探测 `turbocharts_app.exe` > `TurboCharts.exe` |
 | `MCP_TRANSPORT` | `streamable-http` | 保持默认；`stdio` 用于被别的程序当子进程拉起的用法 |
 | `MCP_PORT` | `50026` | 服务端口（默认 50026；改端口后请手动访问新端口） |
-| `MCP_ALLOWED_PROCESSES` | `edi-agent-service.exe` | **进程白名单**（仅本机模式生效）：**精确匹配**（整词命令行 token / exe 文件名 / 完整路径，**不做裸子串**）。**留空=关闭白名单**；**远程模式（`--host 0.0.0.0`）自动忽略**。**`start_local.bat` 用这里的默认值锁死本机；`start_remote.bat` 脚本里已 `set MCP_ALLOWED_PROCESSES=` 置空**。客户端换名字后不同步改 → 调用被拒 |
+| `MCP_ALLOWED_PROCESSES` | `edi-agent-service.exe`（**写死在代码 settings.py，`.env`/dist 无需再填**） | **进程白名单**（仅本机模式生效）：**精确匹配**（整词命令行 token / exe 文件名 / 完整路径，**不做裸子串**）。**默认 `edi-agent-service.exe`，置空=关闭白名单**；**远程模式（`--host 0.0.0.0`）自动忽略**。客户端换名字后不同步改 → 调用被拒 |
 | `VISION_API_KEY` / `VISION_BASE_URL` / `VISION_MODEL` | 空 | 三个都填才启用图片视觉分析 |
 | `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` | 空 | 填了才启用 `/chat` 多轮工具调用 |
 | `REPORT_RENDER_URL` | `http://127.0.0.1:17867/...` | 仿真报告渲染服务地址 |
@@ -193,7 +193,7 @@ dir /s /b C:\edi-mcp\*.dll C:\edi-mcp\*.pyd C:\edi-mcp\*.exe | find /c /v ""
 
 **双击（推荐）**：双击 `start_local.bat`（本机，监听 `127.0.0.1`）或 `start_remote.bat`（远程，监听 `0.0.0.0`）→ 前台运行 `edi_mcp_server.exe`（自动读同目录 `.env`）。**关闭窗口 / Ctrl+C = 停服务。**
 
-> **本机 / 远程的白名单差异（一句话）**：`start_local.bat` 用 `.env` 的 `MCP_ALLOWED_PROCESSES`（默认 `edi-agent-service.exe`，只放行本地 agent，锁死）；`start_remote.bat` 脚本里已 `set MCP_ALLOWED_PROCESSES=` 置空（远程反查不到来源进程，白名单自动忽略）。**要本机锁死 → 改 `.env` 的 `MCP_ALLOWED_PROCESSES`；要远程 → 双击 `start_remote.bat` 即可。**
+> **本机 / 远程的白名单差异（一句话）**：白名单默认 `edi-agent-service.exe`（**写死在代码 settings.py**，`.env`/dist 配置不再写这项），本机模式（`start_local.bat` 监听 127.0.0.1）自动锁死；远程模式（`start_remote.bat` 传 `--host 0.0.0.0`）自动忽略白名单。**要放行其它进程 → 在 `.env` 补 `MCP_ALLOWED_PROCESSES=` 覆盖；要关闭 → 置空；要远程 → 双击 `start_remote.bat` 即可。**
 
 > ⚠️ exe 是**窗口模式**（spec `console=False`）：**双击后没有任何日志输出，这是设计如此、不是故障**。要日志走下面命令行方式，或用 `/ready`、`/health` 探活。
 
@@ -248,7 +248,7 @@ Host 默认 `127.0.0.1`；远程模式用 `--host 0.0.0.0`（`start_remote.bat` 
 ### 3.6 接入客户端
 
 1. **MCP 地址**填 `http://127.0.0.1:50026/mcp`（本机）或 `http://<远程机IP>:50026/mcp`（远程，见《实现原理与机制》）。
-2. **进程白名单**（仅本机模式生效）：客户端进程名要能匹配 `MCP_ALLOWED_PROCESSES`（默认 `edi-agent-service.exe`）。**远程模式（`--host 0.0.0.0`）自动忽略白名单**。被拒时服务端日志有 `[process-probe]` 记录。**"客户端连不上 / 403" 先查这条。**
+2. **进程白名单**（仅本机模式生效）：客户端进程名要能匹配 `MCP_ALLOWED_PROCESSES`（默认 `edi-agent-service.exe`，写死在代码）。**远程模式（`--host 0.0.0.0`）自动忽略白名单**。被拒时服务端日志有 `拒绝非白名单进程 ... 403` 记录。**"客户端连不上 / 403" 先查这条。**
 3. **一致性自检**：客户端看到的工具数应为 **99**、`tools_hash` 与 `/ready` 相同（基线 `5736eea7`）。对不上 = 客户端连的不是这版服务。
 
 ### 3.7 停止 / 卸载
@@ -434,7 +434,7 @@ cd /d C:\edi-grpc-mcp && .venv-win7\Scripts\python.exe scripts\win7\diag_win7_ex
 | 弹窗/日志 `找不到指定的模块`（126） | 缺系统运行库 | 装 KB3118401；仍不行补 VC++ 2015-2022 x64 |
 | 弹窗/日志 `找不到指定的程序`（127） | 依赖了 Win7 没有的 API（版本红线） | **不要自己升降依赖**；对照 §2 的冻结栈 |
 | `/ready` 连不上 | 进程没起 / 端口被占 / 防火墙 | `tasklist \| findstr edi_mcp_server`、`netstat -ano \| findstr ":50026"`、临时关防火墙试 |
-| 客户端 403 / 连不上 | 进程白名单不匹配（仅本机模式） | 改 `MCP_ALLOWED_PROCESSES`（或留空关闭）后重启；远程模式已自动忽略白名单 |
+| 客户端 403 / 连不上 | 进程白名单不匹配（仅本机模式） | 在 `.env` 补 `MCP_ALLOWED_PROCESSES=` 放行客户端（或置空关闭）后重启；远程模式已自动忽略白名单 |
 | 工具能列出但一调就报错，`grpc:offline` | EDI 没启动 / gRPC 地址错 | 起 EDI；核对 `.env` 的 `EDA_GRPC_SERVER` |
 | 同一份产物这台机器能跑、那台不行 | 两台机器 UCRT/补丁不同 | 以目标机 `/ready` 实测为准；按 §3.1 补补丁 |
 | 改了 `.env` 没生效 | 没重启服务 / 存成了 UTF-16 | 重启；记事本另存为 ANSI 或 UTF-8 |

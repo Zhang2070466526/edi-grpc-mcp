@@ -38,7 +38,7 @@
 | `POST /upload`、`POST /chat` | ❌ | 放行（LLM 端点、上传端点均无鉴权） |
 | `GET /images/{token}`、`GET /documents/{token}` | ❌ | 无身份校验，靠**不可猜 token**（`secrets.token_urlsafe(24)`，10 分钟有效）。⚠️ **`/documents/{token}` 是通用的"产物下载"通道**：远程取回 `.snp`/`.raw`/图/任意文件都复用它与 `_doc_store`（新增工具 `fetch_artifact`，**不校验扩展名/目录**）——**不要把 Bearer 之类的鉴权加到这个路由上**，否则主机的浏览器/`curl` 下载会失败（它们带不了自定义头）|
 
-白名单**留空 = 不拦截**（此时挂的是 `ProcessProbeMiddleware`：只打印来源进程，并对**每条 `/mcp` 请求**执行一次 `psutil.net_connections()` 全表扫描）。
+白名单**默认 `edi-agent-service.exe`（写死在 settings.py）**，**显式置空 = 不拦截**（此时挂的是 `ProcessProbeMiddleware`：只打印来源进程，并对**每条 `/mcp` 请求**执行一次 `psutil.net_connections()` 全表扫描）。
 
 **远程 / 局域网访问（非 `127.0.0.1`）需要改 7 项，不只是 `--host`**（2026-09-18 实测）：
 

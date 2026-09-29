@@ -359,7 +359,7 @@ if ac_config:  cmd.extend(["--ac", ac_config])
 
 #### 仿真结果对比（compare_simulation_results）
 
-对比 2-8 个 RAW 同一条曲线：逐 RAW 导出临时 CSV → 读取 x/y → 对齐（`intersection` 取交集 / `interpolation` 以 reference_index 插值）→ 计算差异指标 → Matplotlib 叠图 → 可选导出 CSV。
+对比 2-8 个 RAW 同一条曲线：逐 RAW 导出临时 CSV → 读取 x/y → 对齐（`intersection` 取交集 / `interpolation` 以 reference_index 插值）→ 计算差异指标 → Matplotlib 叠图 → 可选导出 CSV。`chart_type` 默认空 = 从第一个 RAW 的 Plotname 自动识别（SP/HB/XDB），识别不出回退 SP 并告警。
 
 #### EDI 启动（launch_edi）
 
@@ -417,7 +417,7 @@ CST 工具不走 ANSYS COM，用 CST 官方接口（`servers/cst/cst_api.py`，�
 | `mcp_port` | `50026` | HTTP 服务端口 |
 | `mcp_transport` | `streamable-http` | `streamable-http` / `stdio` |
 | `mcp_stateless_http` | `True` | 无状态 HTTP（多客户端） |
-| `mcp_allowed_processes` | 空 | 进程白名单（逗号分隔，留空禁用） |
+| `mcp_allowed_processes` | `edi-agent-service.exe` | 进程白名单（逗号分隔，默认写死在 settings.py，置空关闭） |
 | `mcp_bind_host` | `127.0.0.1` | 监听地址（`0.0.0.0` = 远程） |
 | `mcp_extra_allowed_hosts` | 空 | 手工补 allowed_hosts（看到 421 才需配） |
 | `mcp_probe_enabled` | `True` | 进程探针中间件开关 |
@@ -630,7 +630,7 @@ MCP 服务默认只监听本机，通过进程白名单实现「只放行指定 
 - `ProcessProbeMiddleware`：探针，只打印来源进程（`exe=` + `cmd=`），不拦截。
 - `ProcessWhitelistMiddleware`：白名单拦截，命中放行、未命中 403。
 
-**接线**：本机模式且白名单有值 → 挂 `ProcessWhitelistMiddleware`；本机留空或**远程模式（`--host` 非环回，白名单自动忽略）** → 挂 `ProcessProbeMiddleware`。远程反查不到来源进程（客户端源端口不在本机 TCP 表），若仍启用会把所有远程请求拦成 403。
+**接线**：默认 `edi-agent-service.exe` 写死在 `servers/settings.py`（`MCP_ALLOWED_PROCESSES` 可覆盖、置空关闭）。本机模式且白名单有值 → 挂 `ProcessWhitelistMiddleware`；白名单置空或**远程模式（`--host` 非环回，白名单自动忽略）** → 挂 `ProcessProbeMiddleware`。远程反查不到来源进程（客户端源端口不在本机 TCP 表），若仍启用会把所有远程请求拦成 403。
 
 **匹配规则**：每条白名单条目**精确对应进程身份，不做裸子串/后缀匹配**——路径型条目（含 `/`）= exe 路径精确相等或目录前缀；关键词型 = 完整命令行 token 或 exe basename。反查不到来源进程 → 默认拒绝（`fail_open=False`）。
 
@@ -889,7 +889,7 @@ TR 的 17 个 `tr_*` 工具不直接操作 EDI，而是把调用转发给外部�
 | 工具 | 功能 |
 |---|---|
 | `tr_get_simulation_capabilities` | 查询 TR 仿真支持的指标、单位、结果语义、必需参数 |
-| `tr_find_paths` | 查找端口和全部有效有向端口组合 |
+| `tr_find_paths` | 查找端口和全部有效有向端口组合（`max_paths` 默认 20，大工程截断并回 `total_paths`/`truncated`） |
 | `tr_get_project_netlist` / `tr_read_netlist` | 获取工程当前真实网表 / 读网表修订版 |
 | `tr_read_guide` | 读取 guides 目录中的 Word 指南 |
 | `tr_query_components` / `tr_query_schematic_components` | 查器件类别/厂家/规格、原理图器件 |

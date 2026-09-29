@@ -79,7 +79,7 @@ EDI_PATH=                    # 留空自动检测
 TURBOCHARTS_PATH=            # 留空自动检测
 MCP_TRANSPORT=streamable-http
 MCP_PORT=50026
-MCP_ALLOWED_PROCESSES=       # 可选：留空不鉴权；配置后只放行「精确匹配」的进程访问 /mcp（整词 token / exe basename / 完整路径）
+MCP_ALLOWED_PROCESSES=       # 可选：默认 edi-agent-service.exe（写死在 settings.py），置空=关闭；配置后只放行「精确匹配」的进程访问 /mcp（整词 token / exe basename / 完整路径）
 ```
 
 自动检测规则：
