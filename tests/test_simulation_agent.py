@@ -330,3 +330,64 @@ def test_17_tr_tools_registered():
     missing = expected - tools
     assert not missing, f"缺少 TR 工具: {sorted(missing)}"
     assert "tr_open_document" not in tools, "tr_open_document 应已移除（改用 open_document）"
+
+
+# ---------------------------------------------------------------------------
+# tr_find_paths 体积收敛（GW-4）：大工程全量端口对路径实测 >1 MB
+# ---------------------------------------------------------------------------
+
+def _find_paths_stub(n_paths):
+    """伪造上游返回：paths 有 n_paths 条，其余字段与真实信封一致。"""
+    def fake_call_tool(tool, arguments, *, requires_confirmation=False):
+        assert tool == "tr_find_paths"
+        return {
+            "success": True, "status": "completed", "operation_id": "op_x",
+            "result": {"success": True, "netlist_path": "C:/n.log",
+                       "paths": [{"input_port": i, "output_port": i + 1} for i in range(n_paths)]},
+        }
+    return fake_call_tool
+
+
+def test_find_paths_truncates_by_default(monkeypatch):
+    from servers.tr_simulation import tools as tr_tools
+    monkeypatch.setattr(tr_tools, "call_tool", _find_paths_stub(200))
+    r = tr_tools.tr_find_paths("D:/a.epp")
+    assert len(r["result"]["paths"]) == 20
+    assert r["result"]["total_paths"] == 200      # paths 所在层
+    assert r["total_paths"] == 200                # 顶层也恒定暴露
+    assert r["result"]["truncated"] is True
+    assert r["truncated"] is True
+    assert "max_paths=0" in r["result"]["truncation_note"]
+
+
+def test_find_paths_zero_returns_everything(monkeypatch):
+    from servers.tr_simulation import tools as tr_tools
+    monkeypatch.setattr(tr_tools, "call_tool", _find_paths_stub(200))
+    r = tr_tools.tr_find_paths("D:/a.epp", max_paths=0)
+    assert len(r["result"]["paths"]) == 200
+    assert r["truncated"] is False
+    assert "truncated" not in r["result"]
+
+
+def test_find_paths_small_payload_untouched(monkeypatch):
+    from servers.tr_simulation import tools as tr_tools
+    monkeypatch.setattr(tr_tools, "call_tool", _find_paths_stub(3))
+    r = tr_tools.tr_find_paths("D:/a.epp")
+    assert len(r["result"]["paths"]) == 3
+    assert r["result"]["total_paths"] == 3
+    assert r["total_paths"] == 3            # 未截断时顶层同样给总数
+    assert r["truncated"] is False          # 恒为布尔
+    assert "truncated" not in r["result"]
+
+
+def test_find_paths_unknown_shape_is_not_silent(monkeypatch):
+    """结构不符预期时不静默：超大体积要在 warning 里报出来。"""
+    from servers.tr_simulation import tools as tr_tools
+
+    def fake_call_tool(tool, arguments, *, requires_confirmation=False):
+        return {"success": True, "result": {"blob": "x" * 200_000}}
+
+    monkeypatch.setattr(tr_tools, "call_tool", fake_call_tool)
+    r = tr_tools.tr_find_paths("D:/a.epp")
+    assert "warning" in r
+    assert "未找到 paths" in r["warning"]

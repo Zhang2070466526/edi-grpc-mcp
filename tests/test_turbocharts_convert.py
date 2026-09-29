@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -302,3 +303,19 @@ def test_turbocharts_timeout_returns_error(env, monkeypatch):
         linename="dBm_Out1")
     assert resp["success"] is False
     assert resp["error_code"] == "TOOL_TIMEOUT"
+
+
+def test_nf_regex_has_no_nested_set_warning():
+    r"""回归：nf 变量正则曾写 `[[(]` / `[\])]`（疑似嵌套字符类）⇒ FutureWarning
+    「Possible nested set」，Python 3.13+ 会变硬错误。现改显式转义，识别行为不变。
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", FutureWarning)
+        for name in ("nf", "NF", "nfmin", "nf(1)", "nf[2]", "nf[12]"):
+            curves, _ = cr._suggest_curves(name, "real", "")
+            assert curves == [f"real_{name}"], name
+        # 非噪声系数变量走通用分支（方括号归一成圆括号）
+        for name, expected in (("nfx", "real_nfx"), ("nf1", "real_nf1"),
+                               ("nf[abc]", "real_nf(abc)")):
+            curves, _ = cr._suggest_curves(name, "real", "")
+            assert curves == [expected], name

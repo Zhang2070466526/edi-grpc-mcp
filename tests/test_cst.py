@@ -535,6 +535,94 @@ class TestParseFarfield:
         assert "多个频点" in str(exc.value)
 
 
+def _raise_queue_busy(*args, **kwargs):
+    from servers.task_runner import QueueBusyError
+    raise QueueBusyError("queue busy")
+
+
+class TestCstBusyGuard:
+    """GW-1：CST 忙时同步入口立即回 CST_BUSY（不排队等到客户端超时、不留幽灵任务）。"""
+
+    @staticmethod
+    def _model_path(tmp_path):
+        p = tmp_path / "m.cst"
+        p.write_text("x", encoding="utf-8")
+        return str(p)
+
+    def test_model_info_returns_cst_busy(self, tmp_path, monkeypatch):
+        from servers.cst import model
+        monkeypatch.setattr(model.cst_runner, "run_sync", _raise_queue_busy)
+        r = model.cst_get_model_info(self._model_path(tmp_path))
+        assert r["success"] is False
+        assert r["error_code"] == "CST_BUSY"
+        assert r["retryable"] is True
+
+    def test_list_results_returns_cst_busy(self, tmp_path, monkeypatch):
+        from servers.cst import model
+        monkeypatch.setattr(model.cst_runner, "run_sync", _raise_queue_busy)
+        r = model.cst_list_results(self._model_path(tmp_path))
+        assert r["error_code"] == "CST_BUSY"
+
+    def test_open_project_returns_cst_busy(self, tmp_path, monkeypatch):
+        from servers.cst import model
+        monkeypatch.setattr(model.cst_runner, "run_sync", _raise_queue_busy)
+        r = model.cst_open_project(self._model_path(tmp_path))
+        assert r["error_code"] == "CST_BUSY"
+
+    def test_export_snp_returns_cst_busy(self, tmp_path, monkeypatch):
+        from servers.cst import result_export
+        monkeypatch.setattr(result_export.cst_runner, "run_sync", _raise_queue_busy)
+        r = result_export.cst_export_snp(self._model_path(tmp_path))
+        assert r["error_code"] == "CST_BUSY"
+
+    def test_real_busy_queue_returns_cst_busy(self, tmp_path):
+        """不用 mock：往真实 cst_runner 里放一个占位任务，读类工具必须**立即**回 CST_BUSY。
+
+        这就是 GW-1 的现场：求解 RUNNING 时 cst_list_results 排在单 worker 队列后面，
+        一直等到客户端 120 s 超时，并在队列里留下幽灵任务。
+        """
+        import threading
+        import time as _time
+
+        from servers.cst import cst_api, model
+
+        release = threading.Event()
+        blocker = cst_api.cst_runner.submit(lambda: release.wait(10))
+        assert blocker is not None
+        try:
+            t0 = _time.monotonic()
+            r = model.cst_list_results(self._model_path(tmp_path))
+            elapsed = _time.monotonic() - t0
+            assert r["error_code"] == "CST_BUSY"
+            assert elapsed < 1.0, f"忙时应立即返回，实测 {elapsed:.2f}s"
+        finally:
+            release.set()
+            deadline = _time.time() + 5
+            while _time.time() < deadline and cst_api.cst_runner.pending_count() > 0:
+                _time.sleep(0.05)
+
+    def test_sync_entries_pass_require_idle_and_kill(self, tmp_path, monkeypatch):
+        """接线检查：同步入口必须带 require_idle=True 与 kill=cst_cancel_active。"""
+        from servers.cst import model, result_export
+        seen = []
+
+        def fake_run_sync(func, *args, **kwargs):
+            seen.append(kwargs)
+            return {"result_items": [], "monitors": [], "notes": "",
+                    "unpacked": True, "solved": False, "ports": 0, "freq_range": None}
+
+        monkeypatch.setattr(model.cst_runner, "run_sync", fake_run_sync)
+        path = self._model_path(tmp_path)
+        model.cst_get_model_info(path)
+        model.cst_list_results(path)
+        model.cst_open_project(path)
+        result_export.cst_export_snp(path)
+        assert len(seen) == 4
+        for kwargs in seen:
+            assert kwargs.get("require_idle") is True
+            assert kwargs.get("kill") is model.cst_cancel_active
+
+
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__, "-v", "-p", "no:cacheprovider"])

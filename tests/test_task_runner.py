@@ -7,8 +7,9 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
 
-from servers.task_runner import TaskRunner
+from servers.task_runner import QueueBusyError, TaskRunner
 
 
 def _wait_until_finished(runner: TaskRunner, task_id: str, timeout: float = 5.0) -> dict:
@@ -157,8 +158,59 @@ def test_cancelled_queued_task_is_not_executed():
     while time.time() < deadline and runner.pending_count() > 0:
         time.sleep(0.05)
     assert calls == [], "被取消的排队任务不得执行"
-    assert runner.snapshot(task2)["status"] == "FAILED"
+    assert runner.snapshot(task2)["status"] == "CANCELLED"""
     assert runner.snapshot(task1)["status"] == "SUCCEEDED"
+
+
+class TestRunSync:
+    """run_sync 的队列语义：忙时立即抛 QueueBusyError；超时连任务一起撤销。"""
+
+    def test_require_idle_raises_queue_busy_when_task_pending(self):
+        runner = TaskRunner(name_prefix="busy-test", max_workers=1)
+        release = threading.Event()
+
+        def slow():
+            release.wait(5)
+            return "slow"
+
+        blocker = runner.submit(slow)
+        try:
+            with pytest.raises(QueueBusyError):
+                runner.run_sync(lambda: "never", timeout=1, require_idle=True)
+        finally:
+            release.set()
+            _wait_until_finished(runner, blocker)
+
+    def test_timeout_cancels_task_instead_of_leaving_it_queued(self):
+        """回归 GW-1：超时只抛异常的话，任务仍排在单 worker 队列里、稍后照样执行。"""
+        runner = TaskRunner(name_prefix="timeout-test", max_workers=1)
+        started, release = threading.Event(), threading.Event()
+        calls = []
+
+        def blocking():
+            started.set()
+            release.wait(5)
+            return "blocking"
+
+        def queued():
+            calls.append("queued")
+            return "queued"
+
+        blocker = runner.submit(blocking)
+        assert started.wait(5)
+        try:
+            with pytest.raises(RuntimeError) as exc:
+                runner.run_sync(queued, timeout=0.2, poll_interval=0.01)
+            assert "已自动撤销" in str(exc.value)
+            assert "CANCELLED" in {t["status"] for t in runner.list()}
+        finally:
+            release.set()
+            _wait_until_finished(runner, blocker)
+        assert calls == [], "超时撤销的排队任务不得再执行"
+
+    def test_success_still_returns_result(self):
+        runner = TaskRunner(name_prefix="sync-test")
+        assert runner.run_sync(lambda a, b: a * b, 6, 7, timeout=5) == 42
 
 
 if __name__ == "__main__":

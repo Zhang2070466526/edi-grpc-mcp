@@ -32,6 +32,20 @@ _log = logging.getLogger("cst_api")
 # CST 一次只能跑一个会话，run_solver 与 execute_vba 不能并发。
 cst_runner = TaskRunner(name_prefix="cst", max_run_seconds=7200)
 
+
+def cst_busy_response(what: str = "该操作") -> dict:
+    """CST 忙（队列里有未完成的求解/导出）时的统一响应。
+
+    CST 一次只能跑一个会话：同步读类工具排在求解后面会一直等到客户端超时，并在队列里
+    留下「幽灵任务」，所以忙时立即回 CST_BUSY 而不是排队（2026-09-28 全量体检 GW-1）。
+    """
+    return error_response(
+        "CST_BUSY",
+        f"CST 正忙（有求解/导出任务在排队或执行中），{what}未开始 —— CST 一次只能跑一个会话",
+        retryable=True,
+        hint="先用 cst_task_list 查看队列与进度；稍后重试，或改用对应的 *_async / *_query 工具",
+    )
+
 # 单个作业的整体超时（秒）：求解可能很久，给足余量（与 cst_runner 的兜底一致）
 JOB_TIMEOUT_SECONDS = 7200
 

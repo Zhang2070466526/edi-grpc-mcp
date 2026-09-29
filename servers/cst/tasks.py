@@ -47,7 +47,8 @@ def cst_task_cancel(task_id: str) -> dict[str, Any]:
     用法："把那个求解任务停掉"
 
     注意：运行中的任务只能尽力终止 python worker，真正占资源的 CST 引擎进程未必
-    能立即停下（见 tasklist 判断）。取消后任务状态为 FAILED，错误信息为「已取消」。
+    能立即停下（见 tasklist 判断）。取消后任务状态为 CANCELLED（与 FAILED 区分），
+    取消原因写在 error 字段。
 
     Args:
         task_id: cst_task_list 或各 cst_*_async 返回的 task_id。

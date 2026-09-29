@@ -10,7 +10,13 @@ import os
 from typing import Any
 
 from servers import mcp
-from servers.cst.cst_api import cst_runner, run_cst_job
+from servers.cst.cst_api import (
+    cst_busy_response,
+    cst_cancel_active,
+    cst_runner,
+    run_cst_job,
+)
+from servers.task_runner import QueueBusyError
 from servers.utils import error_response, require_file
 
 
@@ -35,6 +41,9 @@ def cst_get_model_info(model_path: str) -> dict[str, Any]:
 
     不解算、不开 GUI 会话，秒级返回。适合在求解/导出前先确认模型状态，避免盲跑。
 
+    CST 正忙（有求解/导出任务在跑或排队）时立即返回 CST_BUSY，**不排队**（排队只会
+    等到客户端超时）；此时可先用 cst_task_list 看队列。
+
     注意：归档（未解包）的 .cst 读不了结果树，会返回 unpacked=false 并带原因原文，
     可先用 cst_open_project 解包。monitors 是从**结果树**推断的（判据：Farfield 分支
     / Gain* 模式表 / 效率表）；结果树里看不到远场信号时 monitors 为空并在 notes 说明。
@@ -54,8 +63,10 @@ def cst_get_model_info(model_path: str) -> dict[str, Any]:
         info = cst_runner.run_sync(
             _model_ops.info, resolved,
             metadata={"op": "info", "model_path": resolved},
-            timeout=120,
+            timeout=120, require_idle=True, kill=cst_cancel_active,
         )
+    except QueueBusyError:
+        return cst_busy_response("模型体检")
     except Exception as exc:
         return error_response("CST_INFO_FAILED", str(exc))
     return {"success": True, **info}
@@ -70,6 +81,8 @@ def cst_open_project(model_path: str) -> dict[str, Any]:
     归档的 .cst 必须先开一次 CST 才能解包变成可读，否则只能靠求解顺带解包。
     本工具只 open + save，秒级，不跑求解。
 
+    CST 正忙（有求解/导出任务在跑或排队）时立即返回 CST_BUSY，不排队。
+
     Args:
         model_path: .cst 模型文件绝对路径（归档文件也行）。
 
@@ -83,8 +96,10 @@ def cst_open_project(model_path: str) -> dict[str, Any]:
         result = cst_runner.run_sync(
             _model_ops.open_project, resolved,
             metadata={"op": "open", "model_path": resolved},
-            timeout=300,
+            timeout=300, require_idle=True, kill=cst_cancel_active,
         )
+    except QueueBusyError:
+        return cst_busy_response("模型解包")
     except Exception as exc:
         return error_response("CST_OPEN_FAILED", str(exc))
     return {"success": True, **result, "message": "模型已打开并保存（解包完成）"}
@@ -98,6 +113,8 @@ def cst_list_results(model_path: str) -> dict[str, Any]:
 
     只读，不解算、不开 GUI 会话，秒级返回。与 cst_get_model_info 共用读取层，
     但只回结果清单（不含 solved/ports/freq_range 等体检字段）。
+
+    CST 正忙（有求解/导出任务在跑或排队）时立即返回 CST_BUSY，不排队。
 
     注意：归档（未解包）的 .cst 读不了结果树，会返回空清单并带原因原文，
     可先用 cst_open_project 解包。
@@ -115,8 +132,10 @@ def cst_list_results(model_path: str) -> dict[str, Any]:
         info = cst_runner.run_sync(
             _model_ops.info, resolved,
             metadata={"op": "info", "model_path": resolved},
-            timeout=120,
+            timeout=120, require_idle=True, kill=cst_cancel_active,
         )
+    except QueueBusyError:
+        return cst_busy_response("结果清单读取")
     except Exception as exc:
         return error_response("CST_INFO_FAILED", str(exc))
     return {

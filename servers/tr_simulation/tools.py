@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from servers import mcp
@@ -95,17 +96,58 @@ def tr_read_netlist(epp_path: str = "", netlist_path: str = "", start_line: int 
     })
 
 
+def _trim_paths_payload(result: dict[str, Any], max_paths: int) -> dict[str, Any]:
+    """按 max_paths 截断 tr_find_paths 的 paths 列表（0 = 不截断），并标注真实总数。
+
+    大工程（198 器件 / 17 端口）的全量端口对路径实测 >1 MB（2026-09-28 体检 GW-4），
+    一次调用就能把调用方上下文灌满。这里只截断**返回内容**，不改上游行为：total_paths
+    给出真实条数，truncated 标记本次是否被截断。
+    """
+    payload = result.get("result") if isinstance(result.get("result"), dict) else result
+    if not isinstance(payload, dict):
+        return result
+    paths = payload.get("paths")
+    if isinstance(paths, list):
+        total = len(paths)
+        # total_paths / truncated **两个层级、恒定给出**：payload 里 paths 的所在层与顶层
+        # 都写，且 truncated 恒为布尔（未截断也是 False）—— 否则只读顶层的调用方在未截断时
+        # 拿不到任何总数信号（2026-09-28 复核）。
+        payload["total_paths"] = total
+        result["total_paths"] = total
+        result["truncated"] = False
+        if max_paths and total > max_paths:
+            payload["paths"] = paths[:max_paths]
+            payload["truncated"] = True
+            payload["truncation_note"] = (f"paths 只返回前 {max_paths} 条（共 {total} 条）；"
+                                          "需要全量请传 max_paths=0")
+            result["truncated"] = True
+        return result
+    # 结构不符预期时不静默（避免「以为截断了其实没有」）：报出体积供调用方自行处理
+    try:
+        size = len(json.dumps(result, ensure_ascii=False))
+    except (TypeError, ValueError):
+        return result
+    if size > 100_000:
+        result.setdefault("warning",
+                          f"上游返回 {size} 字符且未找到 paths 列表，无法按 max_paths 截断")
+    return result
+
+
 @mcp.tool()
-def tr_find_paths(epp_path: str) -> dict[str, Any]:
+def tr_find_paths(epp_path: str, max_paths: int = 20) -> dict[str, Any]:
     """查找 EPP 的端口和全部有效有向端口组合，每个端口对只取第一条路径。
 
     返回 ports、paths 和只读快照 netlist_path。返回的 netlist_path 可直接作为首次
     tr_modify_netlist 的 source_netlist_path。用户没有唯一指定端口时必须先调用本工具。
 
+    ⚠️ paths 按端口对展开，大工程（198 器件/17 端口）全量可达 MB 级：默认只返回前 20 条
+    并给出 total_paths/truncated；需要全量请传 max_paths=0。
+
     Args:
         epp_path: EPP 工程绝对路径。
+        max_paths: 最多返回多少条端口对路径（默认 20；0 = 全部）。
     """
-    return call_tool("tr_find_paths", {"epp_path": epp_path})
+    return _trim_paths_payload(call_tool("tr_find_paths", {"epp_path": epp_path}), max_paths)
 
 
 @mcp.tool()

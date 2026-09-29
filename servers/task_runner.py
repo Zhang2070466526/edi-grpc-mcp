@@ -3,7 +3,7 @@
 把「提交任务 → 后台执行 → 查询状态」的异步模式抽成单一职责的 TaskRunner 类，
 避免各模块重复造轮子（现有 EDA 仿真 / HFSS 各自有一套，后续逐步迁移到本类）。
 
-状态机：QUEUED → RUNNING → SUCCEEDED / FAILED，完成后超过 TTL 自动清理。
+状态机：QUEUED → RUNNING → SUCCEEDED / FAILED / CANCELLED，完成后超过 TTL 自动清理。
 """
 
 from __future__ import annotations
@@ -17,6 +17,10 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable
 
 _log = logging.getLogger("task_runner")
+
+
+class QueueBusyError(RuntimeError):
+    """队列忙 —— require_idle=True 时已有排队或执行中的任务（工具层据此立即回「忙」）。"""
 
 
 class TaskRunner:
@@ -121,7 +125,7 @@ class TaskRunner:
 
         QUEUED 直接标记取消；RUNNING 标记取消并在持锁外调用 kill()（可选）终止底层
         子进程。运行中任务被 kill 后，worker 线程的 _run 因 status 已非 RUNNING 而
-        不再覆盖结果，取消原因得以保留。
+        不再覆盖结果，取消原因得以保留。终态为 CANCELLED，与真失败的 FAILED 区分。
         """
         with self._lock:
             task = self._tasks.get(task_id)
@@ -131,7 +135,9 @@ class TaskRunner:
                 return False, "任务已结束，无法取消"
             was_running = task["status"] == "RUNNING"
             msg = "任务已取消（执行中，已尝试终止）" if was_running else "任务已取消（尚未开始）"
-            task["status"] = "FAILED"
+            # 取消是独立终态：写成 FAILED 会让调用方分不清「被取消」和「真失败」
+            # （2026-09-28 全量体检 GW-6）。原因仍写在 error 字段。
+            task["status"] = "CANCELLED"
             task["error"] = msg
             task["finished_at"] = time.time()
         if was_running and kill is not None:
@@ -161,7 +167,9 @@ class TaskRunner:
             self._prune_locked()
 
     def run_sync(self, func: Callable[..., Any], *args, metadata: dict[str, Any] | None = None,
-                 poll_interval: float = 0.05, timeout: float | None = None, **kwargs) -> Any:
+                 poll_interval: float = 0.05, timeout: float | None = None,
+                 require_idle: bool = False, kill: Callable[[], None] | None = None,
+                 **kwargs) -> Any:
         """同步执行 func：提交后阻塞等待完成，返回结果；失败抛 RuntimeError。
 
         用于「必须串行化但希望同步拿到结果」的场景（如 cst_export_snp 无会话读结果，
@@ -169,9 +177,15 @@ class TaskRunner:
 
         Args:
             timeout: 可选，最长等待秒数；超时抛 RuntimeError。None 表示无限等待。
+            require_idle: True 时仅当队列空闲才提交（原子「检查+提交」），已有排队/
+                执行中的任务时抛 QueueBusyError —— 让工具层立即回「忙」，而不是排在
+                重量级任务后面傻等到超时。
+            kill: 可选，超时撤销任务时用来终止底层子进程（如 cst_cancel_active）。
         """
-        task_id = self.submit(func, *args, metadata=metadata, **kwargs)
+        task_id = self.submit(func, *args, metadata=metadata, require_idle=require_idle, **kwargs)
         if task_id is None:
+            if require_idle:
+                raise QueueBusyError("队列忙：已有排队或执行中的任务")
             raise RuntimeError("任务队列已满")
         deadline = time.monotonic() + timeout if timeout is not None else None
         while True:
@@ -181,7 +195,10 @@ class TaskRunner:
             if snap.get("finished_at") is not None:
                 break
             if deadline is not None and time.monotonic() >= deadline:
-                raise RuntimeError(f"任务执行超时（>{timeout:.0f}s）")
+                # 超时必须连任务一起撤销：只抛异常的话它仍排在单 worker 队列里，稍后
+                # 照样执行 ⇒ 调用方已放弃、它却在后台跑（幽灵任务，2026-09-28 GW-1）。
+                self.cancel(task_id, kill=kill)
+                raise RuntimeError(f"任务执行超时（>{timeout:.0f}s，已自动撤销该任务）")
             time.sleep(poll_interval)
         if snap["status"] == "SUCCEEDED":
             return snap["result"]

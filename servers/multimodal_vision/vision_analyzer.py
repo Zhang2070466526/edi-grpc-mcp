@@ -188,11 +188,17 @@ def analyze_image(
     detail: str = "auto",
     max_tokens: int = 2048,
 ) -> dict[str, Any]:
-    """调用视觉模型分析本地图片内容，返回结构化文字结果。
+    """调用视觉模型分析本地图片内容，返回结构化文字结果 —— ⚠️ 结果可能编造（实测把电路原理图认成加法器），只作粗看、不得作为工程结论。
 
     本工具会把图片内容发送到配置的第三方视觉模型。
     只有用户明确要求识别或分析图片时才能调用。
     "显示给我看"不等于"上传并分析"——前者应调用 show_image。
+
+    ⚠️ 结果来自第三方视觉模型，可能出错甚至编造（实测把 EDI 电路原理图识别成
+    「16 位行波进位加法器」，并把 16 通道 TR 链路读错）。只作粗看/找线索用，
+    **不得作为工程结论**：拓扑、器件型号、数值读数一律以 EDI 工具
+    （list_schematic_components / get_schematic_component_info / list_result_curves）
+    与 turbocharts 导出的 CSV 为准，不要采信本工具输出。
 
     Args:
         image_path: 本地图片绝对路径（PNG/JPEG/WebP）。

@@ -101,3 +101,106 @@ def test_compare_missing_csv_dir_returns_error(tmp_path, monkeypatch):
     )
     assert result["success"] is False
     assert result["error_code"] == "OUTPUT_DIRECTORY_NOT_FOUND"
+
+
+def _write_mds_raw(path, plotname):
+    """写一个最小 MDS 头（detect_chart_type 只读 Plotname / 变量行）。"""
+    path.write_text(
+        "File Format: MDS\n"
+        f"Plotname: {plotname}\n"
+        "No. Variables: 2\n"
+        "Variables:\n"
+        " 0 freq frequency type=real indep=yes\n"
+        " 1 Out1 dBm type=real indep=no\n"
+        "Values:\n"
+        "1\n"
+        "2\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_compare_auto_detects_chart_type_from_plotname(tmp_path, monkeypatch):
+    """GW-2：不传 chart_type 时按 RAW 的 Plotname 自动识别（HB 数据不再被当 SP 白跑）。"""
+    cr, raw_a, raw_b = _setup(tmp_path, monkeypatch)
+    _write_mds_raw(raw_a, "HB HB1[1] freq=(1 GHz->2 GHz)")
+    _write_mds_raw(raw_b, "HB HB1[1] freq=(1 GHz->2 GHz)")
+
+    result = cr.compare_simulation_results(
+        result_paths=[str(raw_a), str(raw_b)],
+        curve="dBm_out",
+        output_path=str(tmp_path / "cmp.png"),
+    )
+    assert result["success"] is True
+    assert result["chart_type"] == "HB"
+    assert "warning" not in result
+
+
+def test_compare_chart_type_falls_back_to_sp_with_warning(tmp_path, monkeypatch):
+    """识别不出时退回旧默认 SP，但必须带 warning —— 不静默。"""
+    cr, raw_a, raw_b = _setup(tmp_path, monkeypatch)  # 空 RAW，没有 Plotname
+    result = cr.compare_simulation_results(
+        result_paths=[str(raw_a), str(raw_b)],
+        curve="DB_S[2,1]",
+        output_path=str(tmp_path / "cmp.png"),
+    )
+    assert result["chart_type"] == "SP"
+    assert "warning" in result
+
+
+def test_compare_mixed_dataset_types_is_flagged(tmp_path, monkeypatch):
+    """混用 SP + HB 文件时：chart_type 取首个文件，其余文件的类型不一致要写进 warning。"""
+    cr, raw_a, raw_b = _setup(tmp_path, monkeypatch)
+    _write_mds_raw(raw_a, "SP SP1[1] freq=(1 GHz->2 GHz)")
+    _write_mds_raw(raw_b, "HB HB1[1] freq=(1 GHz->2 GHz)")
+
+    result = cr.compare_simulation_results(
+        result_paths=[str(raw_a), str(raw_b)],
+        curve="DB_S[1,1]",
+        output_path=str(tmp_path / "cmp.png"),
+    )
+    assert result["chart_type"] == "SP"        # 首个文件是 SP
+    assert "warning" in result
+    assert "不一致" in result["warning"]
+    assert "b.raw(HB)" in result["warning"]
+
+
+def test_compare_failure_message_names_file_plotname(tmp_path, monkeypatch):
+    """导出失败时，若该文件自己的 Plotname 与 chart_type 不一致，要直接点出来。"""
+    cr, raw_a, raw_b = _setup(tmp_path, monkeypatch)
+    _write_mds_raw(raw_a, "SP SP1[1] freq=(1 GHz->2 GHz)")
+    _write_mds_raw(raw_b, "HB HB1[1] freq=(1 GHz->2 GHz)")
+    calls = {"n": 0}
+
+    def fake_run(cmd, timeout_seconds=60):
+        calls["n"] += 1
+        # 第一个文件（SP，与 chart_type 一致）正常导出；第二个（HB，不一致）按实测崩在 0xC0000005
+        return SimpleNamespace(returncode=0 if calls["n"] == 1 else 3221225477,
+                               stderr="", stdout="")
+
+    monkeypatch.setattr(cr, "run_turbocharts", fake_run)
+    result = cr.compare_simulation_results(
+        result_paths=[str(raw_a), str(raw_b)],
+        curve="DB_S[1,1]",
+        output_path=str(tmp_path / "cmp.png"),
+    )
+    assert result["error_code"] == "TOOL_EXECUTION_FAILED"
+    assert "rc=3221225477" in result["message"]
+    assert "该 RAW 的 Plotname=HB" in result["message"]   # 只在该文件类型与 chart_type 不同时加
+
+
+def test_compare_failure_message_carries_rc_and_stdout(tmp_path, monkeypatch):
+    """GW-2：引擎失败且 stderr 为空时，message 要带 rc + stdout 兜底（原来冒号后为空）。"""
+    cr, raw_a, raw_b = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        cr, "run_turbocharts",
+        lambda cmd, timeout_seconds=60: SimpleNamespace(returncode=1, stderr="", stdout="引擎：未找到曲线"),
+    )
+    result = cr.compare_simulation_results(
+        result_paths=[str(raw_a), str(raw_b)],
+        curve="DB_S[2,1]",
+        output_path=str(tmp_path / "cmp.png"),
+    )
+    assert result["error_code"] == "TOOL_EXECUTION_FAILED"
+    assert "rc=1" in result["message"]
+    assert "未找到曲线" in result["message"]

@@ -220,7 +220,9 @@ def _suggest_curves(
         return curves, notes
 
     if var_type == "real":
-        if re.fullmatch(r'nf(?:min|[[(]\d+[\])])?', var_name, re.IGNORECASE):
+        # ⚠️ 别写 [[(] / [\])]：那是「疑似嵌套字符类」，Python 3.13+ 起会由 FutureWarning
+        # 变硬错误（2026-09-28 复核）。显式转义语义完全相同。
+        if re.fullmatch(r'nf(?:min|[\[(]\d+[\]\)])?', var_name, re.IGNORECASE):
             curves.append(f"real_{var_name}")
             notes.append(
                 f"real_{var_name} 为噪声系数：引擎在 RAW 缺少该曲线时直接段错误，"
@@ -437,6 +439,21 @@ def _parse_raw_header(raw_path: str) -> dict:
     # Unknown
     return {"format": "unknown", "datasets": [],
             "error": "Unsupported RAW format. Expected MDS or XML."}
+
+
+def detect_chart_type(raw_path: str) -> str:
+    """从 RAW 文件头识别第一个 plot 的数据集类型（SP / HB / XDB）。
+
+    给 compare_simulation_results 之类的工具做缺省推断：chart_type 必须与 RAW 的
+    Plotname 一致，猜错时 turbocharts 返回码仍为 0 却不出数据（白跑且报错信息为空）。
+    识别不出（非 MDS/XML、无 Plotname）返回空串，调用方应要求显式指定。
+    """
+    header = _parse_raw_header(raw_path)
+    for dataset in header.get("datasets") or []:
+        plot_type = str(dataset.get("plot_type") or "").upper()
+        if plot_type in ("SP", "HB", "XDB"):
+            return plot_type
+    return ""
 
 
 @mcp.tool()

@@ -11,7 +11,14 @@ import os
 from typing import Any
 
 from servers import mcp
-from servers.cst.cst_api import cst_runner, query_task, run_cst_job
+from servers.cst.cst_api import (
+    cst_busy_response,
+    cst_cancel_active,
+    cst_runner,
+    query_task,
+    run_cst_job,
+)
+from servers.task_runner import QueueBusyError
 from servers.utils import (
     error_response,
     queue_full_response,
@@ -62,6 +69,9 @@ def cst_export_snp(
 
     注意：归档（未解包）的 .cst 读不了结果树，需先用 cst_open_project 解包。
 
+    本工具走同步串行队列：CST 正忙（有求解/导出在跑或排队）时立即返回 CST_BUSY，
+    不排队；需要排队请用 cst_export_snp_async。
+
     Args:
         model_path: .cst 模型文件绝对路径（需已求解，存在 S 参数结果）。
         output_dir: 导出目录（空则默认导出到模型同级目录）。
@@ -79,7 +89,10 @@ def cst_export_snp(
         snp_path = cst_runner.run_sync(
             _result_exporter.export_snp, resolved, output_dir, port_count,
             metadata={"op": "export_snp", "model_path": resolved}, timeout=900,
+            require_idle=True, kill=cst_cancel_active,
         )
+    except QueueBusyError:
+        return cst_busy_response("S 参数导出（要排队请改用 cst_export_snp_async）")
     except Exception as exc:
         return error_response("CST_EXPORT_FAILED", str(exc))
     return {"success": True, "snp_path": snp_path, "message": "S 参数已导出"}

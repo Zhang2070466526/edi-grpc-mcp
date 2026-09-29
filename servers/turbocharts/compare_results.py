@@ -23,6 +23,7 @@ import numpy as np
 from servers.eda.config import TURBOCHARTS_PATH
 from servers.utils import build_artifact, build_file_link, error_response, per_tool_mutex
 from servers.turbocharts.config import run_turbocharts
+from servers.turbocharts.convert_raw import detect_chart_type
 from servers import mcp
 
 
@@ -32,7 +33,7 @@ def compare_simulation_results(
     result_paths: list[str],
     curve: str,
     output_path: str,
-    chart_type: str = "SP",
+    chart_type: str = "",
     labels: list[str] | None = None,
     dependency: str = "freq",
     csv_path: str = "",
@@ -48,7 +49,8 @@ def compare_simulation_results(
         result_paths: RAW 文件路径列表（2-8 个）。
         curve: 曲线名，如 "DB_S[2,1]"。
         output_path: 对比图输出路径。
-        chart_type: 图表类型，默认 "SP"。
+        chart_type: 图表类型 SP / HB / XDB；默认空 = 自动从 RAW 的 Plotname 推断
+            （必须与数据一致：HB 数据传 "SP" 会白跑）。
         labels: 每个结果文件的标签，默认使用文件名。
         dependency: 依赖轴名称，默认 "freq"。
         csv_path: 可选，对比数据 CSV 输出路径。
@@ -71,6 +73,32 @@ def compare_simulation_results(
     for raw_path in result_paths:
         if not Path(raw_path).is_file():
             return error_response("FILE_NOT_FOUND", f"RAW 文件不存在: {raw_path}")
+
+    # chart_type 必须与 RAW 的 Plotname 一致，否则 turbocharts 会「成功但不出数据」；
+    # 没传就按第一个 RAW 自动识别（2026-09-28 体检 GW-2），识别不出退回旧默认 SP 并告警。
+    # 另外**逐文件**探测类型：混用不同数据集时后续文件必然白跑（同一个 curve 名不可能同时
+    # 存在于两种数据集，实测引擎对错配类型还会直接 0xC0000005 崩溃）⇒ 显式记进 notes。
+    file_types: dict[str, str] = {str(p): detect_chart_type(str(p)) for p in result_paths}
+    notes: list[str] = []
+    if not chart_type:
+        detected = file_types[str(result_paths[0])]
+        if detected:
+            chart_type = detected
+            _logger.info("compare_results chart_type auto-detected=%s (%s)",
+                         chart_type, result_paths[0])
+        else:
+            chart_type = "SP"
+            notes.append("无法从 RAW 自动识别 chart_type（缺 Plotname 或未知格式），"
+                         "已按旧默认 SP 处理；HB / XDB 数据请显式传 chart_type")
+            _logger.warning("compare_results chart_type fallback=SP (%s)", result_paths[0])
+    mismatched = [p for p, t in file_types.items() if t and t != chart_type]
+    if mismatched:
+        notes.append(
+            f"以下 RAW 的 Plotname 与 chart_type={chart_type} 不一致："
+            + "、".join(f"{Path(p).name}({file_types[p]})" for p in mismatched)
+            + "（混用不同数据集类型必然白跑，请只对比同类型 RAW）"
+        )
+        _logger.warning("compare_results chart_type mismatch: %s", notes[-1])
 
     if labels is None:
         labels = [Path(raw_path).stem for raw_path in result_paths]
@@ -114,12 +142,27 @@ def compare_simulation_results(
             except RuntimeError as exc:
                 return error_response("TOOL_TIMEOUT", str(exc))
             if result_proc.returncode != 0:
-                return error_response("TOOL_EXECUTION_FAILED",
-                                  f"turbocharts 导出 {rp} 失败: {(result_proc.stderr or '')[:200]}")
+                # 原因必须带上 returncode 与 stdout 兜底：引擎失败时 stderr 可能为空，
+                # 只回「失败: 」等于把真因丢掉（2026-09-28 体检 GW-2）。
+                detail = (result_proc.stderr or result_proc.stdout or "").strip()[:200]
+                return error_response(
+                    "TOOL_EXECUTION_FAILED",
+                    f"turbocharts 导出 {rp} 失败 (rc={result_proc.returncode}, "
+                    f"chart_type={chart_type}{_own_type_hint(file_types, rp, chart_type)}): "
+                    f"{detail or '(引擎未输出任何信息)'}",
+                    **(_notes_detail(notes)),
+                )
 
             x_vals, y_vals = _read_curve_csv_xy(tmp_csv)
             if not x_vals:
-                return error_response("INVALID_RAW_DATA", f"无法解析 {rp} 的 CSV 数据")
+                return error_response(
+                    "INVALID_RAW_DATA",
+                    f"无法从 {rp} 的 CSV 解析出数据（chart_type={chart_type!r}、曲线名 "
+                    f"{curve!r} 与 RAW 不匹配时会这样"
+                    f"{_own_type_hint(file_types, rp, chart_type)}；"
+                    "先用 list_result_curves 取 suggested_curves）",
+                    **(_notes_detail(notes)),
+                )
             raw_curves.append((x_vals, y_vals))
 
     # Step 2: align data (preserve original index order)
@@ -213,15 +256,29 @@ def compare_simulation_results(
         "image_path": output_path,
         "csv_path": csv_path if csv_ok else "",
         "curve": curve,
+        "chart_type": chart_type,
         "alignment": alignment,
         "series": series,
         "metrics": metrics,
         "artifacts": artifacts,
         "message": "对比图已生成。" if img_ok else "对比图生成失败。",
     }
+    if notes:
+        result["warning"] = "；".join(notes)
     if img_ok:
         result.update(build_file_link(output_path, "打开对比图"))
     return result
+
+
+def _notes_detail(notes: list[str]) -> dict[str, Any]:
+    """把 chart_type / 类型一致性提示也塞进错误信封的 details（别只留在 message 文本里）。"""
+    return {"chart_type_notes": list(notes)} if notes else {}
+
+
+def _own_type_hint(file_types: dict[str, str], raw_path: str, chart_type: str) -> str:
+    """失败信息后缀：该 RAW 自己的 Plotname 与本次 chart_type 不一致时点出来。"""
+    own = file_types.get(str(raw_path), "")
+    return f", 该 RAW 的 Plotname={own}" if own and own != chart_type else ""
 
 
 def _read_curve_csv_xy(path: str) -> tuple[list[float], list[float]]:
