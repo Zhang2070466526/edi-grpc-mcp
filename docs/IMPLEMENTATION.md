@@ -413,7 +413,7 @@ CST 工具不走 ANSYS COM，用 CST 官方接口（`servers/cst/cst_api.py`，�
 | `mcp_port` | `50026` | HTTP 服务端口 |
 | `mcp_transport` | `streamable-http` | `streamable-http` / `stdio` |
 | `mcp_stateless_http` | `True` | 无状态 HTTP（多客户端） |
-| `mcp_allowed_processes` | `edi-agent-service.exe` | 进程白名单（逗号分隔，默认写死在 settings.py，置空关闭） |
+| `mcp_allowed_processes` | `hermes_cli.main,edi-agent-service.exe` | 进程白名单（逗号分隔，默认写死在 settings.py，置空关闭） |
 | `mcp_bind_host` | `127.0.0.1` | 监听地址（`0.0.0.0` = 远程） |
 | `mcp_extra_allowed_hosts` | 空 | 手工补 allowed_hosts（看到 421 才需配） |
 | `mcp_probe_enabled` | `True` | 进程探针中间件开关 |
@@ -625,7 +625,7 @@ MCP 服务默认只监听本机，通过进程白名单实现「只放行指定 
 - `ProcessProbeMiddleware`：探针，只打印来源进程（`exe=` + `cmd=`），不拦截。
 - `ProcessWhitelistMiddleware`：白名单拦截，命中放行、未命中 403。
 
-**接线**：默认 `edi-agent-service.exe` 写死在 `servers/settings.py`（`MCP_ALLOWED_PROCESSES` 可覆盖、置空关闭）。本机模式且白名单有值 → 挂 `ProcessWhitelistMiddleware`；白名单置空或**远程模式（`--host` 非环回，白名单自动忽略）** → 挂 `ProcessProbeMiddleware`。远程反查不到来源进程（客户端源端口不在本机 TCP 表），若仍启用会把所有远程请求拦成 403。
+**接线**：默认 `hermes_cli.main,edi-agent-service.exe` 写死在 `servers/settings.py`（`MCP_ALLOWED_PROCESSES` 可覆盖、置空关闭）。本机模式且白名单有值 → 挂 `ProcessWhitelistMiddleware`；白名单置空或**远程模式（`--host` 非环回，白名单自动忽略）** → 挂 `ProcessProbeMiddleware`。远程反查不到来源进程（客户端源端口不在本机 TCP 表），若仍启用会把所有远程请求拦成 403。
 
 **匹配规则**：每条白名单条目**精确对应进程身份，不做裸子串/后缀匹配**——路径型条目（含 `/`）= exe 路径精确相等或目录前缀；关键词型 = 完整命令行 token 或 exe basename。反查不到来源进程 → 默认拒绝（`fail_open=False`）。
 

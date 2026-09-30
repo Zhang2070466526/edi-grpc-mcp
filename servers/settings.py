@@ -50,7 +50,6 @@ class Settings(BaseSettings):
     mcp_stateless_http: bool = True
     # 进程白名单：只放行精确匹配这些条目的进程访问 /mcp（逗号分隔，可填 exe 路径或命令行关键词）；留空禁用。
     # 默认写死 hermes_cli.main + edi-agent-service.exe；要关闭或放行其它进程用环境变量覆盖/置空。
-    # mcp_allowed_processes: str = "hermes_cli.main,edi-agent-service.exe"
     mcp_allowed_processes: str = "hermes_cli.main,edi-agent-service.exe"
 
     # ── 远程访问（默认值即现状：仅本机、行为与旧版完全一致）──

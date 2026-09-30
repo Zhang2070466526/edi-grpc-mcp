@@ -182,7 +182,7 @@ dir /s /b C:\edi-mcp\*.dll C:\edi-mcp\*.pyd C:\edi-mcp\*.exe | find /c /v ""
 | `TURBOCHARTS_PATH` | 空 | 同上，自动探测 `turbocharts_app.exe` > `TurboCharts.exe` |
 | `MCP_TRANSPORT` | `streamable-http` | 保持默认；`stdio` 用于被别的程序当子进程拉起的用法 |
 | `MCP_PORT` | `50026` | 服务端口（默认 50026；改端口后请手动访问新端口） |
-| `MCP_ALLOWED_PROCESSES` | `edi-agent-service.exe`（**写死在代码 settings.py，`.env`/dist 无需再填**） | **进程白名单**（仅本机模式生效）：**精确匹配**（整词命令行 token / exe 文件名 / 完整路径，**不做裸子串**）。**默认 `edi-agent-service.exe`，置空=关闭白名单**；**远程模式（`--host 0.0.0.0`）自动忽略**。客户端换名字后不同步改 → 调用被拒 |
+| `MCP_ALLOWED_PROCESSES` | `hermes_cli.main,edi-agent-service.exe`（**写死在代码 settings.py，`.env`/dist 无需再填**） | **进程白名单**（仅本机模式生效）：**精确匹配**（整词命令行 token / exe 文件名 / 完整路径，**不做裸子串**）。**默认 `hermes_cli.main,edi-agent-service.exe`，置空=关闭白名单**；**远程模式（`--host 0.0.0.0`）自动忽略**。客户端换名字后不同步改 → 调用被拒 |
 | `VISION_API_KEY` / `VISION_BASE_URL` / `VISION_MODEL` | 空 | 三个都填才启用图片视觉分析 |
 | `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` | 空 | 填了才启用 `/chat` 多轮工具调用 |
 | `REPORT_RENDER_URL` | `http://127.0.0.1:17867/...` | 仿真报告渲染服务地址 |
@@ -193,7 +193,7 @@ dir /s /b C:\edi-mcp\*.dll C:\edi-mcp\*.pyd C:\edi-mcp\*.exe | find /c /v ""
 
 **双击（推荐）**：双击 `start_local.bat`（本机，监听 `127.0.0.1`）或 `start_remote.bat`（远程，监听 `0.0.0.0`）→ 前台运行 `edi_mcp_server.exe`（自动读同目录 `.env`）。**关闭窗口 / Ctrl+C = 停服务。**
 
-> **本机 / 远程的白名单差异（一句话）**：白名单默认 `edi-agent-service.exe`（**写死在代码 settings.py**，`.env`/dist 配置不再写这项），本机模式（`start_local.bat` 监听 127.0.0.1）自动锁死；远程模式（`start_remote.bat` 传 `--host 0.0.0.0`）自动忽略白名单。**要放行其它进程 → 在 `.env` 补 `MCP_ALLOWED_PROCESSES=` 覆盖；要关闭 → 置空；要远程 → 双击 `start_remote.bat` 即可。**
+> **本机 / 远程的白名单差异（一句话）**：白名单默认 `hermes_cli.main,edi-agent-service.exe`（**写死在代码 settings.py**，`.env`/dist 配置不再写这项），本机模式（`start_local.bat` 监听 127.0.0.1）自动锁死；远程模式（`start_remote.bat` 传 `--host 0.0.0.0`）自动忽略白名单。**要放行其它进程 → 在 `.env` 补 `MCP_ALLOWED_PROCESSES=` 覆盖；要关闭 → 置空；要远程 → 双击 `start_remote.bat` 即可。**
 
 > ⚠️ exe 是**窗口模式**（spec `console=False`）：**双击后没有任何日志输出，这是设计如此、不是故障**。要日志走下面命令行方式，或用 `/ready`、`/health` 探活。
 
@@ -248,7 +248,7 @@ Host 默认 `127.0.0.1`；远程模式用 `--host 0.0.0.0`（`start_remote.bat` 
 ### 3.6 接入客户端
 
 1. **MCP 地址**填 `http://127.0.0.1:50026/mcp`（本机）或 `http://<远程机IP>:50026/mcp`（远程，见《实现原理与机制》）。
-2. **进程白名单**（仅本机模式生效）：客户端进程名要能匹配 `MCP_ALLOWED_PROCESSES`（默认 `edi-agent-service.exe`，写死在代码）。**远程模式（`--host 0.0.0.0`）自动忽略白名单**。被拒时服务端日志有 `拒绝非白名单进程 ... 403` 记录。**"客户端连不上 / 403" 先查这条。**
+2. **进程白名单**（仅本机模式生效）：客户端进程名要能匹配 `MCP_ALLOWED_PROCESSES`（默认 `hermes_cli.main,edi-agent-service.exe`，写死在代码）。**远程模式（`--host 0.0.0.0`）自动忽略白名单**。被拒时服务端日志有 `拒绝非白名单进程 ... 403` 记录。**"客户端连不上 / 403" 先查这条。**
 3. **一致性自检**：客户端看到的工具数应为 **99**、`tools_hash` 与 `/ready` 相同（基线 `5736eea7`）。对不上 = 客户端连的不是这版服务。
 
 ### 3.7 停止 / 卸载
