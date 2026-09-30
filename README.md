@@ -147,9 +147,9 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 
 ---
 
-## 工具一览（99 个）
+## 工具一览（78 个）
 
-99 个工具按领域分组：工程管理 / 仿真器件 / 仿真 / 导出与分析 / 模型库·原理图库 / 软 IP / 启动·诊断 / 工作区 / 原理图扩展 / ANSYS HFSS / CST / TR 仿真集成 / 图表与图片 / 报告与文档。
+78 个工具按领域分组：工程管理 / 仿真器件 / 仿真 / 导出与分析 / 模型库·原理图库 / 软 IP / 启动·诊断 / 工作区 / 原理图扩展 / ANSYS HFSS / CST / 图表与图片 / 报告与文档。
 
 > 每个工具的**详细参数、返回、示例** → **[`docs/TOOLS_API.md`](docs/TOOLS_API.md)**；工具清单由 `scripts/gen_tool_index.py` 自动生成 → [`docs/TOOL_INDEX.md`](docs/TOOL_INDEX.md)。
 
@@ -251,13 +251,6 @@ edi-grpc-mcp/
 │   │   ├── simulate.py                 #     仿真求解（异步，一次性会话）
 │   │   └── result_export.py            #     结果导出（S 参数 / 远场方向图）
 │   │
-│   ├── tr_simulation/                  #   SimulationAgent 集成 (17 个 tr_* 工具 + 1 Resource + 1 Prompt)
-│   │   ├── __init__.py                 #     公共 API re-export
-│   │   ├── client.py                   #     HTTP 客户端：会话管理 / 稳定 request_id / 调用与轮询
-│   │   ├── tools.py                    #     17 个 tr_* 工具（@mcp.tool()）
-│   │   ├── resource.py                 #     TR 工作流 Resource（edi://integration/workflow）
-│   │   └── prompts.py                  #     TR 工作流 Prompt（run_tr_simulation）
-│   │
 │   ├── multimodal_vision/              #   图片 + 视觉 + 文档 (3 个工具)
 │   │   ├── __init__.py                 #     公共 API re-export
 │   │   ├── validators.py               #     共享校验：图片路径/扩展名/Pillow 内容验证
@@ -349,7 +342,6 @@ edi-grpc-mcp/
 | `test_bugfixes.py` | 历史 bug 修复回归测试 | 33 |
 | `test_extended_ops.py` | 工作区 / 模型库 / 原理图扩展工具 payload / 校验 | 14 |
 | `test_schematic_library.py` | 原理图库 / 导出工具 payload / 校验 | 9 |
-| `test_simulation_agent.py` | TR 集成：session/request_id/调用/错误映射/Resource/Prompt | 17 |
 
 ```powershell
 uv run pytest -q                 # 全量 375 项

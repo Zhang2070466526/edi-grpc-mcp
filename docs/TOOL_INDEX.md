@@ -2,7 +2,7 @@
 
 > 自动生成，勿手改。权威数量见 /ready 的 tool_count。
 
-共 102 个工具：
+共 78 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
 - `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
@@ -34,10 +34,9 @@
 - `cst_task_cancel` — 取消一个 CST 异步任务（排队中的直接取消，运行中的尝试终止其子进程）。
 - `cst_task_list` — 列出当前所有 CST 异步任务（求解 / 导出）及状态。
 - `delete_simulation_component` — 按实例名删除原理图器件及其连接线。
-- `design_schematic_topology` — 按自然语言需求在个人/公共原理图库语义检索拓扑，自动创建并打开新工程。
+- `design_schematic_topology` — 设计这个链路，然后自动创建并打开新工程。
 - `design_wilkinson` — 设计多级威尔金森功分器，输出各级微带线宽、线长和隔离电阻。
 - `download_public_soft_ip_model_by_description` — 按分类名称和描述查询公共软 IP，补齐可选设计参数后下载 AEDT 模型。
-- `download_soft_ip_model` — 按软 IP UUID 和频率下载 AEDT 模型文件到指定路径。
 - `export_project_netlist` — 查看 EDA .epp 工程的网表，返回网表文件路径。
 - `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV。
 - `fetch_artifact` — 把本机产物文件注册成可下载 URL（仿真结果 / SNP / RAW / 图 / 报告 / 任意文件）。
@@ -71,11 +70,7 @@
 - `replace_port_component` — 将原理图中的端口器件替换为另一种类型。
 - `replace_schematic_from_file` — 从 .ep 文件整体替换原理图（对应 gRPC LOAD_SCHEMATIC_FROM_FILE）。
 - `search_personal_models` — 按子类查询个人模型库。
-- `search_personal_soft_ip_models` — 查询当前用户的个人软 IP 模型（自动合并分页结果）。
 - `search_public_models` — 按子类查询公共模型库。
-- `search_public_soft_ip_models` — 查询公共软 IP 模型（自动合并分页结果）。
-- `search_schematic_from_personal_library` — 按拓扑描述查询个人原理图库。
-- `search_schematic_from_public_library` — 按拓扑描述查询公共原理图库。
 - `search_soft_ip_categories` — 查询全部软 IP 分类（自动合并分页结果）。
 - `set_component_active_state` — 确定性设置器件状态为 NORMAL、DISABLED 或 SHORTED。
 - `show_image` — 读取本地图片，返回标准 MCP ImageContent 和本地路径。
@@ -85,24 +80,5 @@
 - `start_hfss_analysis_async` — 异步启动 HFSS Setup 仿真，立即返回 task_id。
 - `start_simulation_async` — 启动异步仿真，立即返回 task_id 供 get_simulation_async_status 查进度；仿真日志在结果查询的 ads_output 字段。
 - `switch_workspace` — 设置下次启动程序时使用的工作区，当前工作区保持不变。
-- `tr_execute_simulation_plan` — 按已确认的计划批量执行多个指标：每项自动完成网表修订→ADS 仿真→RAW 解析→登记。
-- `tr_find_paths` — 查找 EPP 的端口和全部有效有向端口组合，每个端口对只取第一条路径。
-- `tr_generate_document` — 校验主 Agent 完成的报告草稿并生成 PDF、DOCX 和输入快照。
-- `tr_get_project_netlist` — 获取工程当前真实网表并保存到会话目录。
-- `tr_get_simulation_capabilities` — 查询 TR 仿真实际支持的指标、单位、结果语义和必需参数。
-- `tr_get_workflow_state` — 查询当前会话持久化的计划、工程、链路、指标、尝试和报告状态。
-- `tr_modify_netlist` — 创建可追溯的新网表修订版，设置第一条有效链路并注入指标控制器。
-- `tr_parse_raw` — 解析 ADS result.raw，生成 CSV、曲线图片和标准化指标结果。
-- `tr_prepare_report` — 从当前工作流生成完整报告草稿和主 Agent 所需的判定证据。
-- `tr_query_components` — 取得工程器件的类别、厂家和关键规格。
-- `tr_query_schematic_components` — 查询工程原理图中的器件信息。
-- `tr_read_guide` — 读取 guides 目录中的可编辑 Word 指南。
-- `tr_read_netlist` — 读取 EDI 当前网表，或者分页读取 Agent 已创建的网表修订版。
-- `tr_restore_schematic` — 把 EDI 工程原理图整体回退到本会话初始化时备份的最初状态。
-- `tr_run_simulation` — 执行一个网表修订版，通过 EDI/ADS 获取 result.raw。
-- `tr_set_workflow_plan` — 持久化用户已经确认的完整链路仿真计划。
-- `tr_sync_project_components` — 将网表变更同步到工程原理图（尽力而为，不阻断仿真）。
 - `turbocharts_convert` — ADS RAW 转曲线图+CSV（SP/HB/XDB）；linename 为「单位_线段名」，多条用 & 分隔。
 - `update_simulation_component` — 按实例名更新器件参数。
-- `use_schematic_from_library_create_project` — 从在线原理图库下载内容，在当前工作区创建并打开新工程。
-- `use_schematic_from_library_import` — 从在线原理图库下载内容，替换指定工程的当前原理图并保存。

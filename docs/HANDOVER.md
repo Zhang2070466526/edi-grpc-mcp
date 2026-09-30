@@ -112,7 +112,6 @@ PyPI: https://pypi.org/project/edi-grpc-mcp/  |  当前版本：0.1.9
 | 原理图扩展 | 4 | 内置器件、理想器件放置、清空原理图、连线 |
 | ANSYS HFSS | 6 | AEDT 工程开关、HFSS 异步仿真 |
 | CST 电磁仿真 | 5 | 异步求解 .cst、导出 S 参数 / 远场方向图 |
-| TR 仿真集成 | 17 | 对接 SimulationAgent：网表、仿真、解析、报告、原理图同步 |
 | 图表与图片 | 5 | RAW 曲线、转图、结果对比、显示、视觉分析 |
 | 报告与文档 | 3 | 生成仿真报告、打开本地文档、下载任意产物（fetch_artifact） |
 

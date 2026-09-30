@@ -54,10 +54,9 @@
   - `4.7` ANSYS HFSS 与 CST
   - `4.8` 启动 / 诊断
   - `4.9` 图片 / 文档 / 报告
-  - `4.10` TR 仿真集成
   - `4.11` 工具设计动机与数据依赖
 
-- **[五、Resources（8 个）](#五resources8-个)** —— 只读上下文/参考资料逐条详解
+- **[五、Resources（7 个）](#五resources8-个)** —— 只读上下文/参考资料逐条详解
   - `edi://service/overview` — 服务概览
   - `edi://service/status` — 实时运行状态
   - `edi://projects` — 工作区工程目录
@@ -65,9 +64,8 @@
   - `edi://reference/operation-guide` — 操作安全约束
   - `edi://reference/error-codes` — 错误码词典
   - `edi://reference/turbocharts-guide` — RAW 转图说明
-  - `edi://integration/workflow` — TR 仿真工作流规则
 
-- **[六、Prompts（9 个）](#六prompts9-个)** —— 可复用工作流模板逐条详解
+- **[六、Prompts（8 个）](#六prompts9-个)** —— 可复用工作流模板逐条详解
   - `inspect_edi_project` — 工程只读检查
   - `run_and_review_simulation` — 仿真执行 + 日志分析
   - `configure_simulation_component` — 配置仿真器件
@@ -76,7 +74,6 @@
   - `assess_anti_burnout` — 抗烧毁评估
   - `select_component` — 器件选型
   - `analyze_signal_chain` — 信号链分析
-  - `run_tr_simulation` — TR 仿真工作流
 
 ---
 
@@ -94,7 +91,6 @@
 | subprocess 命令行 | 4 | `turbocharts/config.py` 等 | 调 `turbocharts_app.exe`、启动 EDI |
 | COM / CST 接口 | 11 | `ansys/config.py` / `cst/cst_api.py` | ANSYS 6 个走 COM，CST 5 个走官方 API |
 | 图片 / 文档 / 报告 | 4 | `multimodal_vision/` / `report/` | 视觉分析、文档预览、报告渲染 |
-| TR HTTP 转发 | 17 | `tr_simulation/client.py` | 转发给 SimulationAgent（外部 HTTP 服务，会话复用 + 幂等 request_id） |
 
 ### 1.2 gRPC 异步调用模型
 
@@ -407,7 +403,7 @@ CST 工具不走 ANSYS COM，用 CST 官方接口（`servers/cst/cst_api.py`，�
 
 所有环境变量收敛到 `servers/settings.py` → `Settings` dataclass（`frozen=True` + `@lru_cache` 单例）。其他模块通过 `get_settings()` 读取，不再直接 `os.getenv()`。字段名小写下划线，大小写不敏感匹配环境变量（`eda_grpc_server` ↔ `EDA_GRPC_SERVER`）。
 
-启动时 `start_servers.py` 调用 `settings.validate()` 做业务级格式校验（不阻断启动，仅打印警告）：gRPC 地址 host:port 格式、端口范围、传输方式合法性、监听地址格式、SimulationAgent URL 前缀。
+启动时 `start_servers.py` 调用 `settings.validate()` 做业务级格式校验（不阻断启动，仅打印警告）：gRPC 地址 host:port 格式、端口范围、传输方式合法性、监听地址格式。
 
 **完整字段清单**：
 
@@ -426,7 +422,6 @@ CST 工具不走 ANSYS COM，用 CST 官方接口（`servers/cst/cst_api.py`，�
 | `llm_api_key` / `llm_base_url` / `llm_model` | 空 | Chat 的 LLM 配置 |
 | `vision_*` | 空 | 视觉分析（独立于 Chat） |
 | `report_render_url` | `http://127.0.0.1:17867/api/v1/reports/render` | 报告渲染服务 |
-| `simulation_agent_url` | `http://127.0.0.1:17866` | TR 仿真代理（HTTP 转发） |
 
 ### 2.2 公有方法（utils.py）
 
@@ -812,13 +807,9 @@ else:                                 # 两者都没有
 | `replace_models_from_csv` | MODEL_REPLACE(6) | `csv_path` 存在且后缀 `.csv` |
 | `get_model_category_params` | GET_MODEL_CATEGORY_PARAMS(24) | 无业务参数 |
 | `search_public_models` / `search_personal_models` | SEARCH_*_MODELS(25/26) | `sub_type` 非空；`filters` 原样转发 |
-| `search_schematic_from_public_library` / `search_schematic_from_personal_library` | SEARCH_SCHEMATIC_*(38/39) | `search_name` 必需 |
-| `use_schematic_from_library_create_project` / `use_schematic_from_library_import` | USE_SCHEMATIC_*(36/37) | `file_uuid` 非空（import 加 `project_path`） |
 | `export_schematic_components_to_csv` | EXPORT_SCHEMATIC_COMPONENTS_TO_CSV(40) | `csv_path` 非空 |
 | `get_signal_chain` | — | 本地 | 解析网表，节点接力追踪信号链路（源→负载），方向 forward/backward |
 | `search_soft_ip_categories` | SEARCH_SOFT_IP_CATEGORIES(42) | 无业务参数 |
-| `search_public_soft_ip_models` / `search_personal_soft_ip_models` | SEARCH_*_SOFT_IP_MODELS(43/44) | `filters` 原样转发 |
-| `download_soft_ip_model` | DOWNLOAD_SOFT_IP_MODEL(45) | `id` UUID + `save_path` 非空 + `freq`>0 + 可选 `bandwidth`（有限数值） |
 | `download_public_soft_ip_model_by_description` | DOWNLOAD_PUBLIC_SOFT_IP_MODEL_BY_DESCRIPTION(48) | `category_name` + `description` + `save_path` 非空 + 可选 `freq`/`bandwidth` |
 
 ### 4.5 工作区 / 原理图扩展
@@ -869,40 +860,6 @@ else:                                 # 两者都没有
 - **`analyze_image`**：调第三方视觉模型。三项配置全非空即开启；`BoundedSemaphore(2)` 并发控制；system prompt 防图片提示注入；日志不记 Base64/API Key/分析内容；返回 `content_is_untrusted: true`。
 - **`open_document`**：`mode="link"` 生成 10 分钟 HTTP 链接（`/documents/{token}`），`mode="local"` 用 `os.startfile()` 打开；10 种办公格式白名单；UNC 拒绝、nosniff 头。
 - **`generate_simulation_report`**：16 步校验（输出路径/模型名/spec_table/charts/components/schematic）→ POST 渲染服务 → 状态码映射错误码（400→`REPORT_VALIDATION_FAILED`、409→`OUTPUT_FILE_BUSY`、500→`REPORT_RENDER_FAILED`）。只校验数据调 API，不自动仿真、不编造指标、默认禁止覆盖。
-
-### 4.10 TR 仿真集成（HTTP 转发）
-
-TR 的 17 个 `tr_*` 工具不直接操作 EDI，而是把调用转发给外部服务 **SimulationAgent**（默认 `http://127.0.0.1:17866`，仅监听本机、无鉴权），核心在 `servers/tr_simulation/client.py`。
-
-**HTTP 客户端机制**：
-
-| 机制 | 说明 |
-|---|---|
-| 会话复用 | 有 `epp_path` 的工具按归一化路径映射固定 session_id；无 `epp_path` 的复用「当前最近 session」 |
-| 稳定 request_id | 对 (tool, arguments) 取 sha256，相同参数重试命中原 operation（幂等去重，避免超时重试重复仿真） |
-| 后台轮询 | 后台工具在 handler 内轮询 operation 到终态（间隔 1s，超时 600s） |
-| 会话自愈 | 404（SimulationAgent 重启）时重建会话重试一次 |
-| 错误映射 | HTTP 4xx/5xx → `TR_TOOL_FAILED`；连接失败/超时 → `TR_SERVICE_UNAVAILABLE` / `TR_SERVICE_TIMEOUT` |
-
-**17 个工具**（按工作流阶段）：
-
-| 工具 | 功能 |
-|---|---|
-| `tr_get_simulation_capabilities` | 查询 TR 仿真支持的指标、单位、结果语义、必需参数 |
-| `tr_find_paths` | 查找端口和全部有效有向端口组合（`max_paths` 默认 20，大工程截断并回 `total_paths`/`truncated`） |
-| `tr_get_project_netlist` / `tr_read_netlist` | 获取工程当前真实网表 / 读网表修订版 |
-| `tr_read_guide` | 读取 guides 目录中的 Word 指南 |
-| `tr_query_components` / `tr_query_schematic_components` | 查器件类别/厂家/规格、原理图器件 |
-| `tr_set_workflow_plan` | 持久化用户确认的链路仿真计划 |
-| `tr_modify_netlist` | 创建可追溯的网表修订版 + 注入指标控制器 |
-| `tr_run_simulation` | 执行网表修订版，经 EDI/ADS 取 result.raw |
-| `tr_parse_raw` | 解析 result.raw → CSV/曲线图/标准化指标结果 |
-| `tr_execute_simulation_plan` | 按已确认计划批量执行多个指标 |
-| `tr_get_workflow_state` | 查询会话持久化的计划/工程/链路/指标状态 |
-| `tr_prepare_report` | 生成报告草稿和判定证据 |
-| `tr_generate_document` | 校验报告草稿并生成 PDF/DOCX |
-| `tr_sync_project_components` | 网表变更同步回工程原理图 |
-| `tr_restore_schematic` | 原理图回退到会话初始备份 |
 
 ### 4.11 工具设计动机与数据依赖
 
@@ -967,16 +924,11 @@ TR 的 17 个 `tr_*` 工具不直接操作 EDI，而是把调用转发给外部�
 | `get_model_category_params` | 了解模型库分类和参数 | —（模型服务） | search_*_models 前置 |
 | `search_public_models` / `search_personal_models` | 从公共/个人模型库选型 | sub_type | 选型、add_performance_component |
 | `add_performance_component` | 把模型库 Component 放进原理图 | 模型库 Component UUID | — |
-| `search_schematic_from_public_library` / `search_schematic_from_personal_library` | 从原理图库找拓扑 | search_name | use_schematic_from_library_* |
-| `use_schematic_from_library_create_project` / `use_schematic_from_library_import` | 用库内容建工程/替换原理图 | 搜索结果的 id | — |
-
 #### 软 IP
 
 | 工具 | 动机 | 依赖（输入来自） | 被依赖（输出供） |
 |---|---|---|---|
-| `search_soft_ip_categories` | 了解软 IP 有哪些分类 | — | search_soft_ip_models 前置 |
-| `search_public_soft_ip_models` / `search_personal_soft_ip_models` | 查软 IP 模型 | filters | download_soft_ip_model 前置 |
-| `download_soft_ip_model` | 下载软 IP AEDT 模型 | id + save_path + freq（+可选 bandwidth） | — |
+| `search_soft_ip_categories` | 了解软 IP 有哪些分类 | — | download_public_soft_ip_model_by_description 前置 |
 | `download_public_soft_ip_model_by_description` | 按分类名+描述查公共软 IP 并下载 | category_name + description + save_path（+可选 freq/bandwidth） | — |
 
 #### 工作区 / 原理图扩展
@@ -1030,11 +982,11 @@ TR 的 17 个 `tr_*` 工具不直接操作 EDI，而是把调用转发给外部�
 
 ---
 
-## 五、Resources（8 个）
+## 五、Resources（7 个）
 
 Resource 是**只读上下文/参考资料**，客户端通过 `resources/list` → `resources/read` 访问。固定 URI、无参数、返回 JSON 或 Markdown。
 
-注册机制：`servers/resources_prompts/` 内 `@mcp.resource(uri, name, title, description, mime_type)` 装饰器定义，`registry_server.py` 的 `import servers.resources_prompts` 触发注册。其中 6 个在 `resources_prompts/` 包内，另 2 个由业务包自带（turbocharts、tr_simulation）。
+注册机制：`servers/resources_prompts/` 内 `@mcp.resource(uri, name, title, description, mime_type)` 装饰器定义，`registry_server.py` 的 `import servers.resources_prompts` 触发注册。其中 6 个在 `resources_prompts/` 包内，另 1 个由业务包自带（turbocharts）。
 
 ### 1. `edi://service/overview` — 服务概览
 
@@ -1076,14 +1028,7 @@ Resource 是**只读上下文/参考资料**，客户端通过 `resources/list` 
 - **用途**：`turbocharts_convert` / `list_result_curves` 之前的参考——参数怎么传、曲线名（`--linename`）单位与线段名怎么写。
 - **怎么实现**：`servers/turbocharts/resource.py` 直接读引擎自带《RAW 转图像工具使用说明.txt》**原文**（不复制内容，引擎升级换文件即生效）；文件缺失返回带路径与单位要点的提示，不抛异常。
 
-### 8. `edi://integration/workflow` — TR 仿真工作流规则
-
-- **用途**：调用 `tr_*` 工具前必须遵循的工作流规则（会话复用、参数确认、失败纠错、报告事实保护、原理图同步与回退）。
-- **怎么实现**：`servers/tr_simulation/resource.py` 的 `resource_tr_workflow()` 调 `fetch_workflow()` **实时从 SimulationAgent 拉取** `/api/v1/integration/workflow`，版本化、不复制内容。
-
----
-
-## 六、Prompts（9 个）
+## 六、Prompts（8 个）
 
 Prompt 是**可复用工作流模板**，客户端通过 `prompts/list` → `prompts/get` 访问。带参数（如 `project_path`），返回 `[{"role": "user", "content": "..."}]` 给 LLM 的步骤指令。
 
@@ -1121,8 +1066,5 @@ create/update 两条分支：先查 Schema → 映射需求为合法参数 → �
 
 步骤 0 若跑过抗烧毁先 `export_project_netlist` 刷新网表（防 PowerPin 污染）→ `get_signal_chain` 追踪 → 逐级说明器件作用 → 处理 warning → 结合 result.raw 说明功率。
 
-### 9. `run_tr_simulation` — TR 仿真工作流
-
-注入版本化工作流规则，引导 Agent 依次调 `tr_get_simulation_capabilities` → `tr_find_paths` → 确认 → `tr_*` 仿真 → 报告。`servers/tr_simulation/prompts.py` 的 `prompt_run_tr_simulation(epp_path="")`，`epp_path` 缺省时由 Agent 先向用户确认。
 
 

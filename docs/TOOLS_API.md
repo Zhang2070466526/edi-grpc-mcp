@@ -252,7 +252,7 @@ batch_query_component(
 ) -> dict
 ```
 
-按器件型号字符串列表批量查询模型信息。只接受型号串（如 `"MAAD_008866"`），不接受 UUID（按 UUID 查固有参数用 `get_components_static_params`，UUID 或型号都认用 `tr_query_components`）。不需要打开工程，也不需要 `project_path`。gRPC 服务将请求转发到 `POST /api/v1/models/manage/batch_query_component/`。
+按器件型号字符串列表批量查询模型信息。只接受型号串（如 `"MAAD_008866"`），不接受 UUID（按 UUID 查固有参数用 `get_components_static_params`）。不需要打开工程，也不需要 `project_path`。gRPC 服务将请求转发到 `POST /api/v1/models/manage/batch_query_component/`。
 
 下游模型服务只返回命中的型号且不保序。本工具会将返回的 `data` 按输入 `model_name_list` 顺序对齐：未命中的型号补 `null` 占位，并在 `missing` 中列出未命中的型号。
 
@@ -636,7 +636,7 @@ get_signal_chain(project_path: str, start_component: str = "",
 
 ---
 
-## 模型库 / 原理图库（10 个）
+## 模型库 / 原理图库（6 个）
 
 ### `replace_models_from_csv`
 
@@ -727,71 +727,7 @@ add_performance_component(project_path: str, component_uuid: str, position: dict
 
 ---
 
-### `search_schematic_from_public_library`
-
-```python
-from servers.eda.model_library import search_schematic_from_public_library
-
-search_schematic_from_public_library(search_name: str, timeout_seconds: int = 30) -> dict
-```
-
-按拓扑描述查询公共原理图库。search_name 是必需的拓扑描述关键词，服务端固定转换为 topology_description 过滤条件。不需要 project_path、工作区或已打开工程。使用前应提示用户提供对应拓扑描述。成功 payload 含 count 和 results。
-
-| 参数 | 类型 | 必填 | 默认 | 说明 |
-|---|---|---|---|---|
-| `search_name` | str | 是 | — | 拓扑描述关键词（必需） |
-| `timeout_seconds` | int | 否 | 30 | 最长等待秒数 |
-
----
-
-### `search_schematic_from_personal_library`
-
-```python
-from servers.eda.model_library import search_schematic_from_personal_library
-
-search_schematic_from_personal_library(search_name: str, timeout_seconds: int = 30) -> dict
-```
-
-按拓扑描述查询个人原理图库，参数与返回结构同 `search_schematic_from_public_library`。
-
----
-
-### `use_schematic_from_library_create_project`
-
-```python
-from servers.eda.model_library import use_schematic_from_library_create_project
-
-use_schematic_from_library_create_project(file_uuid: str, timeout_seconds: int = 180) -> dict
-```
-
-从在线原理图库下载内容，在当前工作区创建并打开新工程。file_uuid 是在线原理图文件的合法 UUID（取自搜索结果的 id）。下载超时 120 秒，模型库扫描超时 60 秒。同名工程目录存在则失败、不覆盖。
-
-| 参数 | 类型 | 必填 | 默认 | 说明 |
-|---|---|---|---|---|
-| `file_uuid` | str | 是 | — | 在线原理图文件的 UUID |
-| `timeout_seconds` | int | 否 | 180 | 最长等待秒数 |
-
----
-
-### `use_schematic_from_library_import`
-
-```python
-from servers.eda.model_library import use_schematic_from_library_import
-
-use_schematic_from_library_import(file_uuid: str, project_path: str, timeout_seconds: int = 180) -> dict
-```
-
-从在线原理图库下载内容，替换指定工程的当前原理图并保存。⚠️ 会替换工程原理图，请确认 project_path。下载/扫描规则同 create 方式。
-
-| 参数 | 类型 | 必填 | 默认 | 说明 |
-|---|---|---|---|---|
-| `file_uuid` | str | 是 | — | 在线原理图文件的 UUID |
-| `project_path` | str | 是 | — | `.epp` 文件绝对路径 |
-| `timeout_seconds` | int | 否 | 180 | 最长等待秒数 |
-
----
-
-## 软 IP（5 个）
+## 软 IP（2 个）
 
 ### `search_soft_ip_categories`
 
@@ -814,64 +750,6 @@ search_soft_ip_categories(timeout_seconds: int = 60) -> dict
 ```
 
 ---
-
-### `search_public_soft_ip_models`
-
-```python
-from servers.eda.soft_ip import search_public_soft_ip_models
-
-search_public_soft_ip_models(filters: list, timeout_seconds: int = 60) -> dict
-```
-
-查询公共软 IP 模型（自动合并分页）。`filters` 为必填数组，内容由软 IP 服务解释，gRPC 层不修改；空数组也允许传入。服务端每页 15 条请求并自动合并分页。
-
-| 参数 | 类型 | 必填 | 默认 | 说明 |
-|---|---|---|---|---|
-| `filters` | list | 是 | — | 过滤条件数组（可为空数组），原样转发给软 IP 服务 |
-| `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
-
----
-
-### `search_personal_soft_ip_models`
-
-```python
-from servers.eda.soft_ip import search_personal_soft_ip_models
-
-search_personal_soft_ip_models(filters: list, timeout_seconds: int = 60) -> dict
-```
-
-查询当前登录用户的个人软 IP 模型（自动合并分页）。参数与返回结构同 `search_public_soft_ip_models`，查询范围为个人软 IP 库。
-
-| 参数 | 类型 | 必填 | 默认 | 说明 |
-|---|---|---|---|---|
-| `filters` | list | 是 | — | 过滤条件数组（可为空数组），原样转发给软 IP 服务 |
-| `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
-
----
-
-### `download_soft_ip_model`
-
-```python
-from servers.eda.soft_ip import download_soft_ip_model
-
-download_soft_ip_model(soft_ip_id: str, save_path: str, freq: float, bandwidth: float | None = None, timeout_seconds: int = 120) -> dict
-```
-
-按软 IP UUID 和频率下载 AEDT 模型文件到指定路径。`soft_ip_id` 是软 IP UUID，`save_path` 是完整目标文件路径（不是目录），`freq` 是频率（>0）。`bandwidth` 是可选带宽（有限数值），提供时下游请求体额外带上 `bandwidth` 与固定 `allow_extrapolation=false`。服务端自动创建父目录并安全覆盖同名文件；下载超时 120 秒。
-
-| 参数 | 类型 | 必填 | 默认 | 说明 |
-|---|---|---|---|---|
-| `soft_ip_id` | str | 是 | — | 软 IP UUID |
-| `save_path` | str | 是 | — | 目标文件完整路径（如 `D:/soft-ip/C_10mil4350.aedt`） |
-| `freq` | float | 是 | — | 频率（大于 0 的有限数值） |
-| `bandwidth` | float | 否 | None | 可选带宽（有限数值）；不传则下游请求体只含 freq |
-| `timeout_seconds` | int | 否 | 120 | 最长等待秒数 |
-
-返回（gRPC 统一结构，成功时 `details.save_path` 为最终绝对路径）：
-
-```python
-{"success": True, "status": "SUCCEEDED", "details": {"save_path": "D:/soft-ip/C_10mil4350.aedt"}}
-```
 
 ### `download_public_soft_ip_model_by_description`
 
@@ -1631,7 +1509,7 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 
 除了 Tool（启动时动态统计，当前 91 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
 
-### Resources（8 个）
+### Resources（7 个）
 
 | URI | MIME | 说明 |
 |---|---|---|
@@ -1641,12 +1519,11 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 | `edi://service/status` | `application/json` | 实时运行时状态（gRPC 通道、队列占用） |
 | `edi://reference/error-codes` | `text/markdown` | gRPC 状态码词典及建议动作 |
 | `edi://projects` | `application/json` | 工作区工程目录清单（名称/路径/大小） |
-| `edi://integration/workflow` | `text/markdown` | TR 仿真工作流规则（实时拉取 SimulationAgent） |
 | `edi://reference/turbocharts-guide` | `text/plain` | 引擎《RAW 转图像工具使用说明》原文 |
 
 > Resource 是只读上下文，由客户端主动拉取。标准 MCP 客户端可通过 `resources/list` 和 `resources/read` 访问。
 
-### Prompts（9 个）
+### Prompts（8 个）
 
 | Prompt | 参数 | 用途 |
 |---|---|---|
@@ -1658,7 +1535,6 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 | `analyze_signal_chain` | `project_path`, `start` | 追踪信号链路并逐级说明 |
 | `assess_anti_burnout` | `project_path` | 抗烧毁评估并按功率裕量排序 |
 | `select_component` | `sub_type_id`, `requirement` | 从公共/个人模型库选型（含替换闭环） |
-| `run_tr_simulation` | `epp_path` | TR 仿真工作流（发现→计划→仿真→报告→同步） |
 
 > Prompt 是用户主动选择的工作流模板。标准 MCP 客户端可通过 `prompts/list` 和 `prompts/get` 访问。
 

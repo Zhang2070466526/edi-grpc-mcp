@@ -55,15 +55,12 @@ signal_chain.py — 信号链追踪（1 工具）
 model_replace.py — 模型替换（1 工具）
     replace_models_from_csv  根据 CSV 文件批量替换元件模型
 
-model_library.py — 模型库 / 原理图库（9 工具）
+model_library.py — 模型库 / 原理图库（5 工具）
     get_model_category_params           获取模型分类及参数列表
     search_public_models                按子类查询公共模型库
     search_personal_models              按子类查询个人模型库
     add_performance_component           将模型库 Component 放置到原理图
-    search_schematic_from_public_library       按拓扑描述查询公共原理图库
-    search_schematic_from_personal_library     按拓扑描述查询个人原理图库
-    use_schematic_from_library_create_project  用原理图库内容创建新工程
-    use_schematic_from_library_import          用原理图库内容替换工程原理图
+    design_schematic_topology           按自然语言需求直接设计链路并创建工程
 
 edi_launcher.py — 启动/诊断（3 工具）
     launch_edi          启动 EDI 客户端并等待 gRPC 就绪
@@ -140,18 +137,13 @@ from servers.eda.model_library import (  # noqa: F401
     search_public_models,
     search_personal_models,
     add_performance_component,
-    search_schematic_from_public_library,
-    search_schematic_from_personal_library,
-    use_schematic_from_library_create_project,
-    use_schematic_from_library_import,
+    design_schematic_topology,
 )
 
 # -- 软 IP --
 from servers.eda.soft_ip import (  # noqa: F401
     search_soft_ip_categories,
-    search_public_soft_ip_models,
-    search_personal_soft_ip_models,
-    download_soft_ip_model,
+    download_public_soft_ip_model_by_description,
 )
 
 # -- 启动/诊断 --

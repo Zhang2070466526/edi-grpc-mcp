@@ -83,10 +83,6 @@ class Settings(BaseSettings):
     report_render_url: str = "http://127.0.0.1:17867/api/v1/reports/render"
     report_timeout: int = Field(default=45, ge=5, le=120)
 
-    # ── SimulationAgent（TR 仿真集成）──
-    simulation_agent_url: str = "http://127.0.0.1:17866"
-    simulation_agent_timeout: int = Field(default=60, ge=5, le=600)
-
     def validate(self) -> list[str]:
         """业务级格式校验，返回问题列表。致命格式错误（EDA_GRPC_SERVER 缺 :）直接 raise ValueError，其余仅打印警告。"""
         issues: list[str] = []
@@ -111,9 +107,6 @@ class Settings(BaseSettings):
             issues.append(f"MCP_BIND_HOST 不应带协议前缀: {_bind}")
         elif any(c in _bind for c in ("/", "\\")):
             issues.append(f"MCP_BIND_HOST 不应带路径: {_bind}")
-        # ── SimulationAgent 地址格式 ──
-        if not self.simulation_agent_url.startswith(("http://", "https://")):
-            issues.append(f"SIMULATION_AGENT_URL 格式无效（需 http(s):// 前缀）: {self.simulation_agent_url}")
         return issues
 
 

@@ -28,10 +28,8 @@ prompts_report.py — 报告/诊断类（2 个 Prompt）：
   create_simulation_report — 协调多工具生成 PDF/DOCX 仿真报告
   troubleshoot_edi_error   — 诊断 gRPC 调用错误并给排查建议
 
-注意：另有 2 个 Resource + 1 个 Prompt 不在此目录：
+注意：另有 1 个 Resource 不在此目录：
   edi://reference/turbocharts-guide — 在 servers/turbocharts/resource.py（引擎说明原文）
-  edi://integration/workflow        — 在 servers/tr_simulation/resource.py（TR 工作流规则）
-  run_tr_simulation                 — 在 servers/tr_simulation/prompts.py（TR 工作流 Prompt）
 """
 
 from servers.resources_prompts.resources_service import (  # noqa: F401
