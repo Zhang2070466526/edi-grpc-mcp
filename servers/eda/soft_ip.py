@@ -39,36 +39,31 @@ def search_soft_ip_categories(timeout_seconds: int = 60) -> dict[str, Any]:
 
 
 @mcp.tool()
-def download_public_soft_ip_model_by_description(
-        category_name: str,
+def design_soft_ip(
         description: str,
         save_path: str,
         freq: float | None = None,
         bandwidth: float | None = None,
         timeout_seconds: int = 120,
 ) -> dict[str, Any]:
-    """按分类名称和描述查询公共软 IP，补齐可选设计参数后下载 AEDT 模型。
+    """按设计描述获取公共软 IP 设计模型，补齐可选设计参数后下载 AEDT 模型。
 
-    用法："按描述下载带通滤波器的软 IP 模型到 D:/soft-ip/xxx.aedt"
+    用法："帮我设计一个 9 阶带通滤波器的软 IP 模型到 D:/soft-ip/xxx.aedt"
 
-    category_name 是软 IP 分类名称（完全匹配），description 是描述关键词。
+    description 是模型设计需求（非空），服务端走智能检索（smart-search）取第一个候选模型。
     freq/bandwidth 为可选设计参数，任一未提供时服务端按插值范围中点补齐。
-    服务端按 category_name 找分类 → 按 description 查模型取第一个 → 下载。
+    下载时复用 DOWNLOAD_SOFT_IP_MODEL，存在 bandwidth 时自动带 allow_extrapolation=false。
 
     Args:
-        category_name: 软 IP 分类名称（非空字符串，完全匹配）。
-        description: 模型描述关键词（非空字符串）。
+        description: 模型设计需求（非空字符串）。
         save_path: 目标文件完整路径（如 D:/soft-ip/PCB.aedt）。
         freq: 可选频率（大于 0 的有限数值）；未提供时服务端按插值中点补齐。
         bandwidth: 可选相对带宽（有限数值）；未提供时同上。
         timeout_seconds: 最长等待秒数，默认 120。
 
     Returns:
-        gRPC 统一返回结构，成功时 details 含 id/model_name/category_id/save_path/freq/bandwidth。
+        gRPC 统一返回结构，成功时 details 含 save_path/freq（及存在时的 bandwidth/单位字段）。
     """
-    category_name, err = require_nonempty(category_name, label="category_name")
-    if err:
-        return err
     description, err = require_nonempty(description, label="description")
     if err:
         return err
@@ -82,7 +77,6 @@ def download_public_soft_ip_model_by_description(
                                   or not math.isfinite(bandwidth)):
         return error_response("INVALID_PARAMETERS", "bandwidth 必须是有限数值")
     payload: dict[str, Any] = {
-        "category_name": category_name,
         "description": description,
         "save_path": save_path,
     }
@@ -91,7 +85,7 @@ def download_public_soft_ip_model_by_description(
     if bandwidth is not None:
         payload["bandwidth"] = bandwidth
     return call_grpc(
-        ecserver_pb2.DOWNLOAD_PUBLIC_SOFT_IP_MODEL_BY_DESCRIPTION,
+        ecserver_pb2.DESIGN_SOFT_IP,
         payload,
         timeout_seconds,
         max_timeout_seconds=300,

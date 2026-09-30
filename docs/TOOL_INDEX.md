@@ -34,9 +34,9 @@
 - `cst_task_cancel` — 取消一个 CST 异步任务（排队中的直接取消，运行中的尝试终止其子进程）。
 - `cst_task_list` — 列出当前所有 CST 异步任务（求解 / 导出）及状态。
 - `delete_simulation_component` — 按实例名删除原理图器件及其连接线。
-- `design_schematic_topology` — 设计这个链路，然后自动创建并打开新工程。
+- `design_schematic_topology` — 用户输入指标来设计cst天线模型（中心频率），hfss带通滤波器（中心频率，相对带宽）、低通滤波器（截止频率）负载（中心频率）等电路，然后自动创建并打开新工程。
+- `design_soft_ip` — 按设计描述获取公共软 IP 设计模型，补齐可选设计参数后下载 AEDT 模型。
 - `design_wilkinson` — 设计多级威尔金森功分器，输出各级微带线宽、线长和隔离电阻。
-- `download_public_soft_ip_model_by_description` — 按分类名称和描述查询公共软 IP，补齐可选设计参数后下载 AEDT 模型。
 - `export_project_netlist` — 查看 EDA .epp 工程的网表，返回网表文件路径。
 - `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV。
 - `fetch_artifact` — 把本机产物文件注册成可下载 URL（仿真结果 / SNP / RAW / 图 / 报告 / 任意文件）。

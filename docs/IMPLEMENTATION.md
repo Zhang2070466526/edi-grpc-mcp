@@ -810,7 +810,7 @@ else:                                 # 两者都没有
 | `export_schematic_components_to_csv` | EXPORT_SCHEMATIC_COMPONENTS_TO_CSV(40) | `csv_path` 非空 |
 | `get_signal_chain` | — | 本地 | 解析网表，节点接力追踪信号链路（源→负载），方向 forward/backward |
 | `search_soft_ip_categories` | SEARCH_SOFT_IP_CATEGORIES(42) | 无业务参数 |
-| `download_public_soft_ip_model_by_description` | DOWNLOAD_PUBLIC_SOFT_IP_MODEL_BY_DESCRIPTION(48) | `category_name` + `description` + `save_path` 非空 + 可选 `freq`/`bandwidth` |
+| `design_soft_ip` | DESIGN_SOFT_IP(48) | `description` + `save_path` 非空 + 可选 `freq`/`bandwidth` |
 
 ### 4.5 工作区 / 原理图扩展
 
@@ -928,8 +928,8 @@ else:                                 # 两者都没有
 
 | 工具 | 动机 | 依赖（输入来自） | 被依赖（输出供） |
 |---|---|---|---|
-| `search_soft_ip_categories` | 了解软 IP 有哪些分类 | — | download_public_soft_ip_model_by_description 前置 |
-| `download_public_soft_ip_model_by_description` | 按分类名+描述查公共软 IP 并下载 | category_name + description + save_path（+可选 freq/bandwidth） | — |
+| `search_soft_ip_categories` | 了解软 IP 有哪些分类 | — | — |
+| `design_soft_ip` | 按描述智能检索公共软 IP 并下载 | description + save_path（+可选 freq/bandwidth） | — |
 
 #### 工作区 / 原理图扩展
 

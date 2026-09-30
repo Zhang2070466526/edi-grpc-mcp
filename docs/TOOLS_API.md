@@ -751,26 +751,25 @@ search_soft_ip_categories(timeout_seconds: int = 60) -> dict
 
 ---
 
-### `download_public_soft_ip_model_by_description`
+### `design_soft_ip`
 
 ```python
-from servers.eda.soft_ip import download_public_soft_ip_model_by_description
+from servers.eda.soft_ip import design_soft_ip
 
-download_public_soft_ip_model_by_description(category_name: str, description: str, save_path: str, freq: float | None = None, bandwidth: float | None = None, timeout_seconds: int = 120) -> dict
+design_soft_ip(description: str, save_path: str, freq: float | None = None, bandwidth: float | None = None, timeout_seconds: int = 120) -> dict
 ```
 
-按分类名称和描述查询公共软 IP，补齐可选设计参数后下载 AEDT 模型。`category_name` 是分类名称（完全匹配），`description` 是描述关键词。`freq`/`bandwidth` 任一未提供时服务端按插值范围中点补齐。
+按设计描述获取公共软 IP 设计模型，补齐可选设计参数后下载 AEDT 模型。`description` 是模型设计需求，服务端走智能检索（smart-search）取第一个候选模型。`freq`/`bandwidth` 任一未提供时服务端按插值范围中点补齐。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
-| `category_name` | str | 是 | — | 软 IP 分类名称（非空，完全匹配） |
-| `description` | str | 是 | — | 模型描述关键词（非空） |
+| `description` | str | 是 | — | 模型设计需求（非空） |
 | `save_path` | str | 是 | — | 目标文件完整路径（如 `D:/soft-ip/PCB.aedt`） |
 | `freq` | float | 否 | None | 可选频率（>0）；未提供时服务端按插值中点补齐 |
 | `bandwidth` | float | 否 | None | 可选相对带宽；未提供时同上 |
 | `timeout_seconds` | int | 否 | 120 | 最长等待秒数 |
 
-返回（gRPC 统一结构，成功时 `details` 含 `id`/`model_name`/`category_id`/`save_path`/`freq`/`bandwidth`）：
+返回（gRPC 统一结构，成功时 `details` 含 `save_path`/`freq` 及存在时的 `bandwidth`/单位字段）：
 
 ```python
 {"success": True, "status": "SUCCEEDED", "details": {"save_path": "D:/soft-ip/PCB.aedt", "freq": 25}}

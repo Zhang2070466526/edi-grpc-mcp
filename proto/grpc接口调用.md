@@ -86,7 +86,7 @@ enum EventType {
   DOWNLOAD_SOFT_IP_MODEL = 45;
   UPLOAD_AGENT = 46;
   DESIGN_SCHEMATIC_TOPOLOGY = 47;
-  DOWNLOAD_PUBLIC_SOFT_IP_MODEL_BY_DESCRIPTION = 48;
+  DESIGN_SOFT_IP = 48;
 }
 ```
 
@@ -137,7 +137,7 @@ enum EventType {
 - `DOWNLOAD_SOFT_IP_MODEL`：按软 IP UUID 和频率下载 AEDT 模型文件到指定路径。
 - `UPLOAD_AGENT`：将服务端本地的 Agent 记录包上传到 Agent 记录服务。
 - `DESIGN_SCHEMATIC_TOPOLOGY`：智能设计统一入口。按自然语言需求在个人库、公共库中语义检索拓扑，自动生成工程名并在当前工作区创建、打开新工程。
-- `DOWNLOAD_PUBLIC_SOFT_IP_MODEL_BY_DESCRIPTION`：按分类名称和描述查询公共软 IP，补齐可选设计参数后下载模型。
+- `DESIGN_SOFT_IP`：根据设计描述获取公共软 IP 设计模型，补齐可选设计参数后下载。
 ## 4. payload_json 示例
 
 ### OPEN_PROJECT
@@ -634,26 +634,24 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 - 成功和失败的 payload 均为 `{}`；成功时 `message` 优先使用下游服务返回的信息，失败时 `message` 返回文件校验、网络、HTTP、响应解析或业务错误原因。
 - 上传在后台工作线程执行，不阻塞主界面。
 
-### DOWNLOAD_PUBLIC_SOFT_IP_MODEL_BY_DESCRIPTION
+### DESIGN_SOFT_IP
 
 ```json
 {
-  "category_name": "带通滤波器",
-  "description": "2阶PCB带通",
+  "description": "帮我设计一个9阶带通滤波器",
   "save_path": "D:/soft-ip/PCB_2jie_HN.aedt",
   "freq": 25,
   "bandwidth": 4
 }
 ```
 
-- `category_name`、`description`、`save_path` 为必填的非空字符串；`save_path` 是服务端可访问的完整目标文件路径。
+- `description`、`save_path` 为必填的非空字符串；`description` 是模型设计需求，`save_path` 是服务端可访问的完整目标文件路径。
 - `freq`、`bandwidth` 为可选有限数值；`freq` 提供时必须大于 `0`。
-- 服务端第一次调用公共软 IP 查询接口并合并全部分页，按 `category_name` 顺序遍历结果，遇到第一个完全匹配项立即采用其 `category_id`；没有匹配项时返回“未找到指定软 IP 分类”。
-- 服务端使用 `category_id` 和 `description` 过滤条件再次查询公共软 IP，查询结果为空时失败；存在结果时使用第一项模型。
-- `freq` 或 `bandwidth` 任一未提供时，服务端调用 `/api/v1/soft-ip-manager/soft-ip-models/<id>/interp-range/`。缺失的 `freq` 使用 `freq_min + (freq_max - freq_min) / 2`；缺失的 `bandwidth` 使用同样方式计算。若响应不包含带宽范围，则保持不传 `bandwidth`。
+- 服务端调用 `POST /api/v1/models/smart-search/`，将 `description` 映射到下游 `question`，并固定携带 `"model_type":"soft_ip_model"`。存在候选时使用 `results` 的第一项模型。
+- `freq` 或 `bandwidth` 任一未提供时，服务端调用 `/api/v1/soft-ip-manager/soft-ip-models/<id>/interp-range/`。仅当对应的最小值和最大值字段同时存在且为数值时才补齐：缺失的 `freq` 使用 `freq_min + (freq_max - freq_min) / 2`，缺失的 `bandwidth` 使用 `bandwidth_min + (bandwidth_max - bandwidth_min) / 2`。带宽范围字段不存在时不填充 `bandwidth`；频率范围字段不存在且请求也未提供 `freq` 时，任务失败并返回“无法确定软 IP 下载频率”。
 - 下载时复用 `DOWNLOAD_SOFT_IP_MODEL`：存在 `bandwidth` 时自动携带 `allow_extrapolation=false`，否则只携带 `freq`。
-- 成功 payload 返回 `id`、`model_name`、`category_id`、最终绝对路径 `save_path`、实际使用的 `freq`，以及存在时的 `bandwidth`；由插值范围补齐参数时还会返回对应单位字段。
-- 任意查询、范围解析或下载步骤失败时，最终状态为 `RESULT_STATUS_FAILED`，payload 为 `{}`，具体原因位于 `message`。
+- 成功 payload 返回 `status=DESIGN_READY`、`success=true`、最终绝对路径 `save_path`、实际使用的 `freq`，以及存在时的 `bandwidth`；由插值范围补齐参数时还会返对应单位字段。不返回模型名称和模型 ID，对外 `message` 为“软 IP 设计准备完成”。
+- 智能设计的 `results` 为空时，返回 `status=DESIGN_UNSUPPORTED`、`success=false`，`message` 为“当前暂不具备该设计需求的软 IP 设计能力”。插值范围接口返回错误时，当前实现也统一返回该状态和提示；其他错误返回 `status=DESIGN_PREPARE_FAILED`、`success=false`，`message` 为“软 IP 设计准备失败”。
 
 ### LIST_IDEAL_COMPONENTS
 
@@ -726,12 +724,17 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 - 不需要 `file_uuid`、`project_path` 或工作区内已有工程；但要求当前工作区可用，工作区不可用时直接失败。
 - 服务端先在个人原理图库检索，再在公共原理图库检索，个人库优先；两库均按语义相似度降序，优先取个人库最高分候选，个人库无候选时取公共库最高分候选。
 - 检索不复用 `SearchPublicSchematic` / `SearchPersonalSchematic`，改动独立：单次请求、显式指定 `top_k=100`、`threshold=0.3`、不分页，并且保留 `score` 字段（原搜索接口经 `TrimSchematicResults` 裁剪会丢弃 `score`）。
-- 工程名由选中候选的 `name` 生成：先剔除 `\ / : * ? " < > |` 与控制字符，再把空白折叠为 `_`、合并连续 `_`、截断 32 字符；清洗后为空则依次回退候选 `id`、`Design_yyyyMMdd_HHmmss`。同名工程目录自动追加 `_2`、`_3` 序号，不覆盖已有工程。
-- 成功事件的 `payload_json` 中额外带业务状态 `status`，取值为 `SUCCESS`、`NO_SUPPORTED_TOPOLOGY`、`DESIGN_FAILED`，与事件级 `RESULT_STATUS_*` 相互独立：
-  - `SUCCESS`：已创建并打开新工程，事件级状态为 `RESULT_STATUS_SUCCESS`。
-  - `NO_SUPPORTED_TOPOLOGY`：至少一个库检索成功，但两库均无候选，事件级状态为 `RESULT_STATUS_FAILED`。
-  - `DESIGN_FAILED`：工作区不可用、两库检索均失败、或创建工程失败，事件级状态为 `RESULT_STATUS_FAILED`。
-- 成功 payload 包含 `project_name`、`project_path`、`schematic_id`、`component_count`、`net_segment_count`；失败 payload 仅包含 `status`（创建阶段失败时另带 `project_name`），具体原因位于 `message`。
+- 入参 `project_name` 可选，用于指定工程名；存在但不是字符串时受理阶段直接拒绝（`project_name must be a string`），缺省或清洗后为空则由服务端自动生成。
+- 工程名优先取 `project_name`，未提供时取选中候选的 `name`，再回退候选 `id`、`Design_yyyyMMdd_HHmmss`。清洗规则：剔除 `\ / : * ? " < > |` 与控制字符，把空白折叠为 `_`、合并连续 `_`、截断 32 字符。同名工程目录自动追加 `_2`、`_3` 序号，不覆盖已有工程。
+- 工程落地后会把下载包内 `schematics/main/schematic.ep` 的 `edi-schematic` uuid 重新分配（沿用「项目另存为」的既有约定），因此回传的 `schematic_id` 是新建工程中原理图的新 uuid，不等于资源库记录中的 uuid；重复创建同一拓扑不会在同一工作区产生 uuid 相同的原理图。
+- 事件的 `payload_json` 中额外带布尔字段 `success`（正常结束为 `true`，非正常结束为 `false`）与业务状态 `status`，两者均与事件级 `RESULT_STATUS_*` 相互独立：
+  - `DESIGN_COMPLETED`：已找到满足要求的拓扑，并完成工程创建与导入，事件级状态为 `RESULT_STATUS_SUCCESS`，`success` 为 `true`。
+  - `NO_SUPPORTED_TOPOLOGY`：搜索正常完成，但当前资源库没有满足需求的拓扑，事件级状态为 `RESULT_STATUS_FAILED`。
+  - `PROJECT_CREATE_FAILED`：已经匹配到拓扑，但工程创建失败，事件级状态为 `RESULT_STATUS_FAILED`。
+  - `SCHEMATIC_IMPORT_FAILED`：工程已创建，但拓扑下载或导入失败，事件级状态为 `RESULT_STATUS_FAILED`。
+  - `DESIGN_FAILED`：其他内部异常或不可恢复错误（工作区不可用、窗口被关闭、两库检索均失败），事件级状态为 `RESULT_STATUS_FAILED`。
+  - 仅 `DESIGN_COMPLETED` 为正常结束，`success` 为 `true`；其余四种均为非正常结束，`success` 为 `false`，与事件级 `RESULT_STATUS_*` 判定一致。
+- 成功 payload 包含 `success`、`project_name`、`project_path`、`schematic_id`、`component_count`、`net_segment_count`；失败 payload 均含 `success` 与 `project_name`，工程已落地时另含 `project_path`，具体原因位于 `message`。
 - 复用在线原理图创建链路：异步下载 ZIP、校验包内工程与 `schematics/main/schematic.ep`、安装随包模型与符号；同一工作区同时只允许一个在线原理图任务，已有任务在跑时创建阶段直接失败。
 - 下载超时 120 秒，模型库扫描超时 60 秒，语义检索单次请求超时 10 秒。`PerformAction` 返回 `task accepted` 仅表示受理，最终结果必须从 `FetchEvent` 获取。
 
@@ -1003,7 +1006,7 @@ enum ResultStatus {
 - `GET_CURRENT_WORKSPACE`：`workspace_path`，当前实际加载的工作区目录
 - `USE_SCHEMATIC_FROM_LIBRARY_CREATE_PROJECT` / `USE_SCHEMATIC_FROM_LIBRARY_IMPORT`：成功返回 `project_path`、`schematic_uuid`、`component_count`、`net_segment_count`；失败返回 `{}`
 - `SEARCH_SCHEMATIC_FROM_PUBLIC_LIBRARY` / `SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY`：成功返回 `count` 和 `results`；每项包含 `id`、`schematic_id`、`name`、`properties`
-- `DESIGN_SCHEMATIC_TOPOLOGY`：始终返回业务状态 `status`；成功时另有 `project_name`、`project_path`、`schematic_id`、`component_count`、`net_segment_count`，失败时 `status` 为 `NO_SUPPORTED_TOPOLOGY` 或 `DESIGN_FAILED`（创建阶段失败另带 `project_name`），原因位于 `message`
+- `DESIGN_SCHEMATIC_TOPOLOGY`：始终返回布尔字段 `success`（正常结束为 `true`，其余为 `false`）与业务状态 `status`，`status` 取值为 `DESIGN_COMPLETED`、`NO_SUPPORTED_TOPOLOGY`、`PROJECT_CREATE_FAILED`、`SCHEMATIC_IMPORT_FAILED`、`DESIGN_FAILED`；成功时另有 `project_path`、`schematic_id`、`component_count`、`net_segment_count`，成功与失败均带 `project_name`，原因位于 `message`
 - `EXPORT_SCHEMATIC_COMPONENTS_TO_CSV`：成功返回最终文件路径 `csv_path`；失败返回 `{}`
 - `BATCH_QUERY_COMPONENT`：模型服务返回的完整响应对象，通常包含 `code`、`message`、`data`
 - `SEARCH_SOFT_IP_CATEGORIES`：成功仅返回 `count`、`results`，其中分类和参数项不包含 `created_time`、`updated_time`，`count` 等于合并后的 `results` 数组长度；失败返回 `{}`
@@ -1011,7 +1014,7 @@ enum ResultStatus {
 - `SEARCH_PERSONAL_SOFT_IP_MODELS`：成功仅返回 `count`、`results`，每项不包含 `created_time`、`result_download_url`、`updated_time`，`count` 等于合并后的 `results` 数组长度；失败返回 `{}`
 - `DOWNLOAD_SOFT_IP_MODEL`：成功返回最终绝对文件路径 `save_path`；失败返回 `{}`
 - `UPLOAD_AGENT`：成功和失败均返回 `{}`，上传结果或具体失败原因位于 `message`
-- `DOWNLOAD_PUBLIC_SOFT_IP_MODEL_BY_DESCRIPTION`：成功返回选中的模型信息、最终保存路径及实际下载参数；失败返回 `{}`
+- `DESIGN_SOFT_IP`：成功返回 `DESIGN_READY`及最终保存路径和实际设计参数；无匹配模型返回 `DESIGN_UNSUPPORTED`；其他失败返回 `DESIGN_PREPARE_FAILED`
 - `GENERATE_SCHEMATIC_FROM_NETLIST`：`project_path`、`netlist_path`、`schematic_path`、`clear_before_import`、`symbols_added`、`nets_added`、`lines_added`、`net_points_added`
 
 ## 8. SIMULATE_NETLIST 完整调用示例
@@ -2135,7 +2138,18 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `45`。`Perf
 }
 ```
 
-`requirement` 为必填的自然语言描述，不需要 `file_uuid`；服务端自动完成个人库/公共库检索、工程名生成与工程创建。最终成功事件：
+`requirement` 为必填的自然语言描述；`project_name` 可选，用于指定工程名，省略时由服务端自动生成。指定工程名的请求示例：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "design-schematic-topology-002",
+  "type": "DESIGN_SCHEMATIC_TOPOLOGY",
+  "payload_json": "{\"requirement\":\"1GHz 功放链路，含输入匹配和偏置\",\"project_name\":\"PA_1GHz\"}"
+}
+```
+
+不需要 `file_uuid`；服务端自动完成个人库/公共库检索、工程名生成与工程创建。指定的 `project_name` 会按工程名清洗规则处理，同名时追加 `_2`、`_3`；`project_name` 存在但不是字符串时受理阶段直接拒绝。最终成功事件：
 
 ```json
 {
@@ -2144,49 +2158,75 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `45`。`Perf
   "event_type": "DESIGN_SCHEMATIC_TOPOLOGY",
   "status": "RESULT_STATUS_SUCCESS",
   "message": "在线链路工程已打开",
-  "payload_json": "{\"status\":\"SUCCESS\",\"project_name\":\"功放链路\",\"project_path\":\"D:/EDI-Workspace/projects/功放链路/功放链路.epp\",\"schematic_id\":\"12345678-1234-4234-8234-123456789abc\",\"component_count\":12,\"net_segment_count\":8}"
+  "payload_json": "{\"status\":\"DESIGN_COMPLETED\",\"success\":true,\"project_name\":\"功放链路\",\"project_path\":\"D:/EDI-Workspace/projects/功放链路/功放链路.epp\",\"schematic_id\":\"12345678-1234-4234-8234-123456789abc\",\"component_count\":12,\"net_segment_count\":8}"
 }
 ```
 
-检索成功但两库均无匹配拓扑时，事件级 `status` 为 `RESULT_STATUS_FAILED`，`payload_json` 为：
+#### 业务状态定义
+
+`payload_json` 内的布尔字段 `success` 与业务 `status`、事件级 `RESULT_STATUS_*` 相互独立：`success` 为 `true` 表示正常结束，`false` 表示非正常结束，取值如下：
+
+| 状态 | `success` | 含义 | 上层处理建议 | 事件级状态 |
+|---|---|---|---|---|
+| `DESIGN_COMPLETED` | `true` | 已找到满足要求的拓扑，并完成工程创建与导入 | 回复用户「链路拓扑设计完成」 | `RESULT_STATUS_SUCCESS` |
+| `NO_SUPPORTED_TOPOLOGY` | `false` | 搜索正常完成，但当前资源库没有满足需求的拓扑 | 回复用户「当前暂不具备该功能链路的设计能力」 | `RESULT_STATUS_FAILED` |
+| `PROJECT_CREATE_FAILED` | `false` | 已经匹配到拓扑，但工程创建失败 | 提示工程创建失败，不得误报为无设计能力 | `RESULT_STATUS_FAILED` |
+| `SCHEMATIC_IMPORT_FAILED` | `false` | 工程已创建，但拓扑下载或导入失败 | 提示导入失败，并保留错误信息用于排查 | `RESULT_STATUS_FAILED` |
+| `DESIGN_FAILED` | `false` | 其他内部异常或不可恢复错误 | 返回通用设计失败，并记录内部错误码 | `RESULT_STATUS_FAILED` |
+
+`success` 与事件级 `RESULT_STATUS_*` 判定一致：仅 `DESIGN_COMPLETED` 为 `RESULT_STATUS_SUCCESS` 且 `success` 为 `true`，其余四种均为 `RESULT_STATUS_FAILED` 且 `success` 为 `false`。
+
+`PROJECT_CREATE_FAILED` 与 `SCHEMATIC_IMPORT_FAILED` 的阶段区分依据「拓扑获取/导入」与「工程落地」两类环节：下载拓扑包、安装随包模型与符号、补齐缺失模型，以及工程打开后加载原理图的校验失败，均归为 `SCHEMATIC_IMPORT_FAILED`；创建工程目录、打开工程、以及因已有在线任务而无法进入创建流程，归为 `PROJECT_CREATE_FAILED`。
+
+需要说明的是，本实现先下载拓扑包再落地工程，因此下载失败时工程目录尚未创建，此时仍按导入环节归类为 `SCHEMATIC_IMPORT_FAILED`，不会误报为创建失败。工程已落地时 payload 会带 `project_path`，便于上层排查。
+
+各失败状态对应的事件级 `status` 均为 `RESULT_STATUS_FAILED`，例如：
 
 ```json
-{"status":"NO_SUPPORTED_TOPOLOGY"}
+{"status":"NO_SUPPORTED_TOPOLOGY","success":false}
 ```
-
-工作区不可用、两库检索均失败或创建工程失败时，`payload_json` 为：
 
 ```json
-{"status":"DESIGN_FAILED"}
+{"status":"PROJECT_CREATE_FAILED","success":false,"project_name":"功放链路"}
 ```
 
-创建阶段失败时还会带 `project_name`。Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `47`。原有 4 个接口（`SEARCH_SCHEMATIC_FROM_PUBLIC_LIBRARY`、`SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY`、`USE_SCHEMATIC_FROM_LIBRARY_CREATE_PROJECT`、`USE_SCHEMATIC_FROM_LIBRARY_IMPORT`）保持原样可用。
+```json
+{"status":"SCHEMATIC_IMPORT_FAILED","success":false,"project_name":"功放链路","project_path":"D:/EDI-Workspace/projects/功放链路/功放链路.epp"}
+```
 
-### 9.37 按分类名称和描述下载公共软 IP
+```json
+{"status":"DESIGN_FAILED","success":false}
+```
+
+`project_name` 始终为服务端生成或清洗后的最终工程目录名，失败时也会携带。Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `47`。原有 4 个接口（`SEARCH_SCHEMATIC_FROM_PUBLIC_LIBRARY`、`SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY`、`USE_SCHEMATIC_FROM_LIBRARY_CREATE_PROJECT`、`USE_SCHEMATIC_FROM_LIBRARY_IMPORT`）保持原样可用。
+
+### 9.37 设计并下载公共软 IP 模型
 
 ```json
 {
   "client_uuid": "postman-test-client-001",
   "task_id": "postman-download-public-soft-ip-001",
-  "type": "DOWNLOAD_PUBLIC_SOFT_IP_MODEL_BY_DESCRIPTION",
-  "payload_json": "{\"category_name\":\"带通滤波器\",\"description\":\"2阶PCB带通\",\"save_path\":\"D:/soft-ip/PCB_2jie_HN.aedt\"}"
+  "type": "DESIGN_SOFT_IP",
+  "payload_json": "{\"description\":\"帮我设计一个9阶带通滤波器\",\"save_path\":\"D:/soft-ip/PCB_2jie_HN.aedt\"}"
 }
 ```
 
-上例未提供 `freq` 和 `bandwidth`，服务端将查询插值范围并分别使用范围中间值。最终成功事件示意：
+上例未提供 `freq` 和 `bandwidth`，服务端将查询插值范围，分别使用频率和带宽范围的中间值。插值范围查询失败时，按 `DESIGN_UNSUPPORTED` 返回。最终成功事件示意：
 
 ```json
 {
   "client_uuid": "postman-test-client-001",
   "task_id": "postman-download-public-soft-ip-001",
-  "event_type": "DOWNLOAD_PUBLIC_SOFT_IP_MODEL_BY_DESCRIPTION",
+  "event_type": "DESIGN_SOFT_IP",
   "status": "RESULT_STATUS_SUCCESS",
-  "message": "public soft IP model downloaded",
-  "payload_json": "{\"id\":\"cb989f5e-14ee-460d-9163-79cb33828405\",\"model_name\":\"PCB_2jie_HN\",\"category_id\":\"e40c4d6f-4c68-4e7e-aa77-6171f94ec30a\",\"save_path\":\"D:/soft-ip/PCB_2jie_HN.aedt\",\"freq\":29.952228525,\"bandwidth\":3.7529592,\"freq_unit\":\"GHz\",\"bandwidth_unit\":\"%\"}"
+  "message": "软 IP 设计准备完成",
+  "payload_json": "{\"status\":\"DESIGN_READY\",\"success\":true,\"save_path\":\"D:/soft-ip/PCB_2jie_HN.aedt\",\"freq\":29.952228525,\"bandwidth\":3.7529592,\"freq_unit\":\"GHz\",\"bandwidth_unit\":\"%\"}"
 }
 ```
 
-Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `47`。`PerformAction` 成功仅表示任务已受理，最终结果通过 `FetchEvent` 获取。
+无匹配模型时，失败事件的 `payload_json` 为 `{"status":"DESIGN_UNSUPPORTED","success":false,"message":"当前暂不具备该设计需求的软 IP 设计能力"}`；其他错误的 `payload_json` 为 `{"status":"DESIGN_PREPARE_FAILED","success":false,"message":"软 IP 设计准备失败"}`。
+
+Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `48`。`PerformAction` 成功仅表示任务已受理，最终结果通过 `FetchEvent` 获取。
 
 ## 10. 网表生成链路完整调用示例
 
