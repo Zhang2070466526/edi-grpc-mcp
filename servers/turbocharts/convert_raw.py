@@ -20,6 +20,13 @@ list_result_curves    解析 RAW 头部、列出可用曲线名（画图前先�
     · 说明的「驻波只支持单条曲线」与 HB 多曲线 CSV 只落最后一条 → 本工具自动逐条拆分
     · 非法曲线（拼错/不存在/裸线段名）：SP 下引擎段错误、HB 下静默出空图，退出码不可作判据
       → 本工具调用前校验，返回 INVALID_LINENAME / CURVE_NOT_FOUND，不再静默出错图
+    · 引擎的进度/诊断输出**走 stderr(fd 2)**（2026-09-30 11:19 起的构建，用户改 C++ 后重打包）：
+      `main.cpp` 里 `qInstallMessageHandler` + `fwrite(..., stderr)` ⇒ `subprocess` 管道能收到 ——
+      实测 `绘制线名： "…"`、`… 导出成功`、`HB CSV导出失败：x_label_为空，当前没有有效曲线数据`
+      都会进 `command_runs[].stderr`。⚠️ **11:19 之前的构建**把这几行写控制台设备（CONOUT$）⇒ 管道恒
+      0 字节（仅 Qt 参数层报错走 CRT stderr 可捕获）。判成败仍看产物文件：曲线不存在/无数据、RAW 不存在、
+      `--type` 非法一律 rc=0 + 照写空图。每次子进程调用（图片 1 次 + CSV 拆分 N 次）逐条记进返回的
+      command_runs，便于事后对照
 """
 
 from __future__ import annotations
@@ -31,7 +38,8 @@ from typing import Any
 
 from servers.eda.config import TURBOCHARTS_PATH
 from servers.utils import build_artifact, build_file_link, error_response, per_tool_mutex, validate_file
-from servers.turbocharts.config import run_turbocharts
+from servers.turbocharts.config import (append_engine_log, engine_failures, engine_log_path,
+                                        engine_report, record_run, run_turbocharts)
 from servers import mcp
 
 _logger = logging.getLogger("turbocharts.convert")
@@ -578,7 +586,7 @@ def turbocharts_convert(
     dependency: str = "",
     ac_config: str = "",
 ) -> dict[str, Any]:
-    """ADS RAW 转曲线图+CSV（SP/HB/XDB）；linename 为「单位_线段名」，多条用 & 分隔。
+    """ADS RAW 转曲线图+CSV（SP/HB/XDB）；linename 为「单位_线段名」，多条用 & 分隔。返回含引擎原始输出（stderr/command_runs/engine_report）与 log_path（原文已落盘）；**回复时必须把引擎原文与 warnings 原样转述给用户，不得只回一句 message**。
 
     用法："把 result.raw 转成增益曲线"、"生成驻波图同时导出 CSV"
 
@@ -617,6 +625,18 @@ def turbocharts_convert(
          "artifacts": [{"type": "image", "path": "...", "generated_by": "turbocharts_convert"}, ...],
          "warnings": ["CSV 已生成（2 个文件），请核对..."],
          "output_paths": {"img": "...", "csv": "..."}}
+
+        command_runs：本次实际执行的每一次引擎调用（图片 1 次 + CSV 拆分 N 次，顺序即执行顺序），
+        每条含 command / return_code / stdout / stderr（超时那条为 return_code=None + error）。
+        engine_ok / engine_report：**引擎自报的执行成败**（True / False / None）与关键输出行（原措辞，去重）。
+        ⚠️ 引擎 rc 恒为 0（曲线不存在/无数据也 rc=0 并写空图）⇒ **判成败看 `engine_ok` + `img_generated` /
+        `csv_generated` / `output_paths`，不要看 return_code**；engine_ok=None 表示这次没有可判信号。
+
+        log_path / log_lines：引擎原文**追加落盘**到「与 RAW 同目录的 <raw 文件名>.turbocharts.log」，
+        log_lines = 本次新增行数（历史调用累积在同一文件，可随时全文核对）。
+
+        返回里始终带引擎原始输出（stderr / stdout / command_runs）与关键摘录（engine_report）。
+        调用后应把 engine_report 与 warnings **原样转述给用户、不要省略**，不要只回一句 message。
     """
     try:
         raw_file = validate_file(raw_path)
@@ -641,6 +661,7 @@ def turbocharts_convert(
 
     warnings: list[str] = []
     artifacts: list[dict] = []
+    command_runs: list[dict] = []
 
     # ── 第 0 步：目录准备（引擎不会自建目录，失败时它仍返回 0）──
     for candidate in (output_path, csv_path):
@@ -682,7 +703,9 @@ def turbocharts_convert(
     try:
         result = run_turbocharts(cmd_img, timeout_seconds=120)
     except RuntimeError as exc:
-        return error_response("TOOL_TIMEOUT", str(exc))
+        return error_response("TOOL_TIMEOUT", str(exc),
+                              command_runs=[record_run(cmd_img, error=str(exc))])
+    command_runs.append(record_run(cmd_img, result))
     img_generated = Path(output_path).exists()
     img_fingerprint = _file_fingerprint(output_path) if img_generated else None
     if img_generated:
@@ -743,16 +766,18 @@ def turbocharts_convert(
         # 否则每次拆分导出都会用"单条曲线"覆盖掉已画好的多曲线图
         # （2026-09-11 实测：HB 两条曲线经拆分成 2 次后，用户看到只剩最后一条）。
         tmp_img = Path(target_csv).with_name(f"__csv_tmp_{Path(target_csv).stem}.png")
+        cmd_csv = _build_cmd(raw_file, str(tmp_img), chart_type,
+                             linename="&".join(group), dependency=dependency,
+                             csv_path=target_csv, ac_config=ac_config)
         try:
-            cmd_csv = _build_cmd(raw_file, str(tmp_img), chart_type,
-                                 linename="&".join(group), dependency=dependency,
-                                 csv_path=target_csv, ac_config=ac_config)
             proc = run_turbocharts(cmd_csv, timeout_seconds=120)
         except RuntimeError as exc:
+            command_runs.append(record_run(cmd_csv, error=str(exc)))
             warnings.append(f"turbocharts 导出超时: {exc}")
             continue
         finally:
             tmp_img.unlink(missing_ok=True)
+        command_runs.append(record_run(cmd_csv, proc))
         if proc.returncode == 0 and Path(target_csv).exists():
             artifacts.append(build_artifact("csv", target_csv, "turbocharts_convert"))
             labels, data_rows = _read_csv_labels(target_csv)
@@ -787,18 +812,65 @@ def turbocharts_convert(
             "请核对 linename 的变量名大小写与存在性，以及 chart_type 是否与 RAW 的 Plotname 一致。"
         )
 
+    # ── 执行成功判定（引擎 rc 恒 0 ⇒ 靠引擎措辞 + 产物）──
+    _oks = [r.get("ok") for r in command_runs]
+    engine_ok = (False if any(o is False for o in _oks)
+                 else (True if _oks and all(o is True for o in _oks) else None))
+    report = engine_report(command_runs)
+    failures = engine_failures(command_runs)
+    if engine_ok is False and failures:
+        warnings.append("引擎自报未成功：" + "；".join(failures[:3]))
+
+    if not img_generated:
+        message = "图表生成失败，请检查 RAW 文件和参数。"
+    elif csv_path and csv_count == 0:
+        reason = next((l for l in failures if "CSV" in l), failures[0] if failures else "")
+        message = f"CSV 未生成：{reason}" if reason else "CSV 未生成（详见 warnings / command_runs）。"
+    elif engine_ok is False:
+        # 引擎自报未成功（2026-09-30 真机：HB 数据传 --type SP 白跑 → 「绘制线段: ()」
+        # + 照写空图 + rc=0）⇒ 不能再说"曲线图已生成"，否则只看 message 的人/agent 会判成功。
+        reason = failures[0] if failures else "引擎未报出具体原因（详见 command_runs）"
+        message = f"引擎自报未成功：{reason}"
+    else:
+        tail = report[-1] if report else ""
+        message = f"曲线图已生成（引擎：{tail}）" if tail else "曲线图已生成。"
+
+    # 引擎原文落盘（2026-09-30 起）：返回里的 stderr/command_runs 只到模型为止，模型可能省略转述
+    # （用户反馈过"只回一句 message"），落盘后 user/agent 随时可读全文，不依赖模型自觉。
+    log_path, log_lines = "", 0
+    try:
+        log_path, log_lines = append_engine_log(
+            raw_file, command_runs, tool="turbocharts_convert",
+            context={"chart_type": chart_type,
+                     "linename": linename or "(all)",
+                     "img": Path(output_path).name,
+                     "csv": Path(csv_path).name if csv_path else "",
+                     "engine_ok": engine_ok},
+        )
+    except OSError as exc:
+        _logger.warning("引擎原文日志落盘失败 path=%s err=%s", engine_log_path(raw_file), exc)
+        warnings.append(f"引擎原文日志落盘失败：{exc}（原文仍见返回的 stderr / command_runs）")
+
     resp: dict[str, Any] = {
         "success": result.returncode == 0,
         "return_code": result.returncode,
         "command": " ".join(cmd_img),
         "stdout": (result.stdout or "").strip(),
         "stderr": (result.stderr or "").strip(),
+        "command_runs": command_runs,
         "img_generated": img_generated,
         "csv_generated": csv_count > 0,
         "curves": curves,
         "artifacts": artifacts,
-        "output_paths": {"img": output_path} | ({"csv": csv_path} if csv_path and len(csv_plan) <= 1 else {}),
-        "message": "曲线图已生成。" if img_generated else "图表生成失败，请检查 RAW 文件和参数。",
+        "engine_ok": engine_ok,
+        "engine_report": report,
+        # 引擎原文日志（追加写，与 RAW 同目录）：log_lines = 本次新增行数
+        "log_path": log_path,
+        "log_lines": log_lines,
+        # 只在 CSV 真的落盘时才回填路径（TC-1：以前无条件回填，调用方按它取文件必扑空）
+        "output_paths": {"img": output_path}
+        | ({"csv": csv_path} if csv_path and csv_count == 1 and len(csv_plan) <= 1 else {}),
+        "message": message,
     }
     if csv_labels:
         resp["curve_labels"] = csv_labels

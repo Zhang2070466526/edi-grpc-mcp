@@ -751,29 +751,33 @@ search_soft_ip_categories(timeout_seconds: int = 60) -> dict
 
 ---
 
-### `design_soft_ip`
+### `design_chip`
 
 ```python
-from servers.eda.soft_ip import design_soft_ip
+from servers.eda.soft_ip import design_chip
 
-design_soft_ip(description: str, save_path: str, freq: float | None = None, bandwidth: float | None = None, timeout_seconds: int = 120) -> dict
+design_chip(description: str, save_path: str, freq: float | None = None, bandwidth: float | None = None, timeout_seconds: int = 120) -> dict
 ```
 
-按设计描述获取公共软 IP 设计模型，补齐可选设计参数后下载 AEDT 模型。`description` 是模型设计需求，服务端走智能检索（smart-search）取第一个候选模型。`freq`/`bandwidth` 任一未提供时服务端按插值范围中点补齐。
+按用户输入的指标设计芯片电路（天线、滤波器、负载等），生成对应的 AEDT 模型文件，落到 `save_path` 指定路径。阶数/拓扑/指标由所选模型自身决定，本工具不校验指标、也不回模型名。描述写不中 → `FAILED`「指定分类下未找到该描述的模型」。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
-| `description` | str | 是 | — | 模型设计需求（非空） |
+| `description` | str | 是 | — | 模型设计需求（非空）：电路类型（带通/低通滤波器、天线、负载…）+ 指标 |
 | `save_path` | str | 是 | — | 目标文件完整路径（如 `D:/soft-ip/PCB.aedt`） |
-| `freq` | float | 否 | None | 可选频率（>0）；未提供时服务端按插值中点补齐 |
-| `bandwidth` | float | 否 | None | 可选相对带宽；未提供时同上 |
+| `freq` | float | 否 | None | 可选中心频率（>0，GHz）；未提供时服务端按该软 IP 插值范围中点补齐 |
+| `bandwidth` | float | 否 | None | 可选**相对带宽，单位 %**（5 = 5%）；未提供时同上。⚠️ 部分软 IP **必填**（不给 → `FAILED`「缺少相对带宽（bandwidth,单位:%）」）；超出有效范围（实测带通模板 **[1.2267, 6.27922]%，与 freq 无关**：20/25/30 GHz 同区间）也会 `FAILED`，而本工具 payload 固定 `allow_extrapolation=false`（未暴露该参数，见 `审查报告.md` P2-7）⇒ 只能改 `bandwidth` 或改 `freq` |
 | `timeout_seconds` | int | 否 | 120 | 最长等待秒数 |
 
-返回（gRPC 统一结构，成功时 `details` 含 `save_path`/`freq` 及存在时的 `bandwidth`/单位字段）：
+返回（gRPC 统一结构）：
 
 ```python
-{"success": True, "status": "SUCCEEDED", "details": {"save_path": "D:/soft-ip/PCB.aedt", "freq": 25}}
+{"success": True, "status": "SUCCEEDED",
+ "details": {"description": "...", "freq": 20, "bandwidth": 6,
+             "save_path": "D:/soft-ip/BPF_20G.aedt", "status": "MODEL_DESIGN_COMPLETED"}}
 ```
+
+⚠️ **产物路径读 `details.save_path`**（`result_path` 恒为空串）；`details` 只回 `description/freq/bandwidth/save_path/status`。
 
 ---
 

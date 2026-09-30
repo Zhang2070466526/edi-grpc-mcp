@@ -19,6 +19,7 @@ from types import SimpleNamespace
 import pytest
 
 from servers.turbocharts import convert_raw as cr
+from servers.turbocharts.config import judge_engine_output
 
 HB_RAW = """File Format: MDS
 Revision:  2.01
@@ -319,3 +320,116 @@ def test_nf_regex_has_no_nested_set_warning():
                                ("nf[abc]", "real_nf(abc)")):
             curves, _ = cr._suggest_curves(name, "real", "")
             assert curves == [expected], name
+# ── command_runs：每次子进程调用逐条回传（2026-09-29 需求）──────────
+
+def test_command_runs_records_image_and_each_csv_call(env):
+    resp = cr.turbocharts_convert(
+        raw_path=str(env.raw), output_path=str(env.tmp / "o.png"), chart_type="HB",
+        csv_path=str(env.tmp / "o.csv"), linename="dBm_Out1&dBm_Out2")
+    runs = resp["command_runs"]
+    assert len(runs) == 3                     # 图片 1 次 + HB 多曲线拆 2 次
+    assert [r["command"] for r in runs] == [" ".join(c) for c in env.commands]
+    assert all(set(r) == {"command", "return_code", "stdout", "stderr", "ok"} for r in runs)
+    assert all(r["return_code"] == 0 for r in runs)
+    assert f"--img {env.tmp / 'o.png'}" in runs[0]["command"]
+
+
+def test_command_runs_carries_exe_output(env, monkeypatch):
+    """引擎 Qt 参数层报错（GBK 文本 + rc=127）必须原样进 command_runs。"""
+    msg = "错误：缺少必需参数 --raw"
+    monkeypatch.setattr(cr, "run_turbocharts", lambda cmd, timeout_seconds=60: (
+        Path(cmd[cmd.index("--img") + 1]).write_bytes(b"\x89PNG"),
+        SimpleNamespace(returncode=127, stdout="", stderr=msg),
+    )[1])
+    resp = cr.turbocharts_convert(
+        raw_path=str(env.raw), output_path=str(env.tmp / "o.png"), chart_type="HB",
+        linename="dBm_Out1")
+    assert resp["command_runs"][0]["stderr"] == msg
+    assert resp["command_runs"][0]["return_code"] == 127
+    assert resp["stderr"] == msg                 # 顶层字段保持兼容
+
+
+def test_command_runs_marks_csv_timeout(env, monkeypatch):
+    """CSV 拆分调用超时：仍留一条 return_code=None + error 的记录，且不丢已画好的图。"""
+    def _run(cmd, timeout_seconds=60):
+        if "--csv" in cmd:
+            raise RuntimeError("Turbocharts 执行超时（120 秒）")
+        Path(cmd[cmd.index("--img") + 1]).write_bytes(b"\x89PNG")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(cr, "run_turbocharts", _run)
+    resp = cr.turbocharts_convert(
+        raw_path=str(env.raw), output_path=str(env.tmp / "o.png"), chart_type="HB",
+        csv_path=str(env.tmp / "o.csv"), linename="dBm_Out1&dBm_Out2")
+    runs = resp["command_runs"]
+    assert len(runs) == 3
+    assert all("error" in r and r["return_code"] is None for r in runs[1:])
+    assert resp["img_generated"] is True
+    assert any("超时" in w for w in resp["warnings"])
+
+# ── 执行成功判定（引擎 rc 恒 0 ⇒ 靠引擎自报措辞 + 产物）────────────
+
+def test_judge_engine_output_on_real_engine_strings():
+    """判定规则用 2026-09-30 实测抓到的引擎原句做回归。"""
+    ok_out = '绘制线名： "dBm_input_AMP_test1_XH2036"\r\n"C:/t/n.png 导出成功"'
+    assert judge_engine_output(ok_out) is True
+    assert judge_engine_output("绘制线段: ()") is False
+    assert judge_engine_output("linename为空") is False
+    assert judge_engine_output("HB CSV导出失败：x_label_为空，当前没有有效曲线数据") is False
+    assert judge_engine_output("") is None
+    assert judge_engine_output("") is None
+
+
+def test_engine_verdict_flags_failed_csv_with_reason(env, monkeypatch):
+    """不传 linename（TC-1 场景）：引擎自报 x_label_为空 ⇒ engine_ok False、message 带原话、不回填 csv 路径。"""
+    eng_err = ('linename为空\r\n"C:/t/n.png 导出成功"\r\n'
+               'HB CSV导出失败：x_label_为空，当前没有有效曲线数据')
+    monkeypatch.setattr(cr, "run_turbocharts", lambda cmd, timeout_seconds=60: (
+        Path(cmd[cmd.index("--img") + 1]).write_bytes(b"\x89PNG"),
+        SimpleNamespace(returncode=0, stdout="", stderr=eng_err),
+    )[1])
+    resp = cr.turbocharts_convert(
+        raw_path=str(env.raw), output_path=str(env.tmp / "o.png"), chart_type="HB",
+        csv_path=str(env.tmp / "o.csv"))
+    assert resp["engine_ok"] is False
+    assert any("x_label_为空" in line for line in resp["engine_report"])
+    assert resp["message"].startswith("CSV 未生成") and "x_label_为空" in resp["message"]
+    assert "csv" not in resp["output_paths"]                 # TC-1：未生成就不回填
+    assert any("引擎自报未成功" in w for w in resp["warnings"])
+
+
+def test_engine_verdict_ok_keeps_paths(env, monkeypatch):
+    """正常路径：引擎报导出成功 ⇒ engine_ok True、message 带引擎结果、csv 路径照旧回填。"""
+    def _run(cmd, timeout_seconds=60):
+        Path(cmd[cmd.index("--img") + 1]).write_bytes(b"\x89PNG")
+        if "--csv" in cmd:
+            Path(cmd[cmd.index("--csv") + 1]).write_text("freq,dBm(Out1)\n0,-3\n", encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="",
+                               stderr='绘制线名： "Out1"\r\n"x.png 导出成功"')
+    monkeypatch.setattr(cr, "run_turbocharts", _run)
+    resp = cr.turbocharts_convert(
+        raw_path=str(env.raw), output_path=str(env.tmp / "o.png"), chart_type="HB",
+        csv_path=str(env.tmp / "o.csv"), linename="dBm_Out1")
+    assert resp["engine_ok"] is True
+    assert resp["output_paths"]["csv"] == str(env.tmp / "o.csv")
+    assert resp["message"] == "曲线图已生成（引擎：x.png 导出成功）"
+
+
+def test_engine_verdict_failure_overrides_optimistic_message(env, monkeypatch):
+    """白跑（HB 数据传 --type SP）：引擎自报「绘制线段: ()」
+    但仍写空图、rc=0 ⇒ engine_ok False 时 message 不能再报成功。
+    """
+    eng = ('绘制线名： "dBm_Out1"\r\n'
+           '绘制线段: ()\r\n'
+           '绘制依赖: ""\r\n"C:/t/n.png 导出成功"')
+    monkeypatch.setattr(cr, "run_turbocharts", lambda cmd, timeout_seconds=60: (
+        Path(cmd[cmd.index("--img") + 1]).write_bytes(b"\x89PNG"),
+        SimpleNamespace(returncode=0, stdout="", stderr=eng),
+    )[1])
+    resp = cr.turbocharts_convert(
+        raw_path=str(env.raw), output_path=str(env.tmp / "o.png"), chart_type="SP",
+        linename="dBm_Out1")
+    assert resp["img_generated"] is True          # 引擎照样写了空图（rc=0）
+    assert resp["engine_ok"] is False
+    assert resp["message"].startswith("引擎自报未成功")
+    assert "绘制线段: ()" in resp["message"]

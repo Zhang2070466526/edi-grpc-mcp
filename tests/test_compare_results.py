@@ -204,3 +204,36 @@ def test_compare_failure_message_carries_rc_and_stdout(tmp_path, monkeypatch):
     assert result["error_code"] == "TOOL_EXECUTION_FAILED"
     assert "rc=1" in result["message"]
     assert "未找到曲线" in result["message"]
+def test_command_runs_recorded_per_raw(tmp_path, monkeypatch):
+    """compare：每个 RAW 一次的引擎调用逐条回传（引擎多数失败零输出，故要留痕）。"""
+    cr, raw_a, raw_b = _setup(tmp_path, monkeypatch)
+    result = cr.compare_simulation_results(
+        result_paths=[str(raw_a), str(raw_b)], curve="DB_S[2,1]",
+        output_path=str(tmp_path / "cmp.png"),
+    )
+    runs = result["command_runs"]
+    assert len(runs) == 2
+    assert all(set(r) == {"command", "return_code", "stdout", "stderr", "ok"} for r in runs)
+    assert all(r["return_code"] == 0 for r in runs)
+    assert "--raw" in runs[0]["command"]
+
+
+def test_command_runs_in_failure_details(tmp_path, monkeypatch):
+    """导出失败时 details.command_runs 要含失败那条的真实 rc 与输出。"""
+    cr, raw_a, raw_b = _setup(tmp_path, monkeypatch)
+    calls = {"n": 0}
+
+    def fake(cmd, timeout_seconds=60):
+        calls["n"] += 1
+        return SimpleNamespace(returncode=0 if calls["n"] == 1 else 7,
+                               stderr="引擎: 无数据", stdout="")
+
+    monkeypatch.setattr(cr, "run_turbocharts", fake)
+    result = cr.compare_simulation_results(
+        result_paths=[str(raw_a), str(raw_b)], curve="DB_S[2,1]",
+        output_path=str(tmp_path / "cmp.png"),
+    )
+    assert result["error_code"] == "TOOL_EXECUTION_FAILED"
+    runs = result["details"]["command_runs"]
+    assert [r["return_code"] for r in runs] == [0, 7]
+    assert runs[1]["stderr"] == "引擎: 无数据"

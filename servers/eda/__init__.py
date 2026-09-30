@@ -60,7 +60,7 @@ model_library.py — 模型库 / 原理图库（5 工具）
     search_public_models                按子类查询公共模型库
     search_personal_models              按子类查询个人模型库
     add_performance_component           将模型库 Component 放置到原理图
-    design_schematic_topology           按指标设计天线/滤波器/负载等电路并创建工程
+    design_schematic_topology           按需求描述设计电路拓扑并创建打开新工程
 
 edi_launcher.py — 启动/诊断（3 工具）
     launch_edi          启动 EDI 客户端并等待 gRPC 就绪
@@ -143,7 +143,7 @@ from servers.eda.model_library import (  # noqa: F401
 # -- 软 IP --
 from servers.eda.soft_ip import (  # noqa: F401
     search_soft_ip_categories,
-    design_soft_ip,
+    design_chip,
 )
 
 # -- 启动/诊断 --

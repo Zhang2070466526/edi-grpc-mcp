@@ -3,7 +3,7 @@
 模型库领域：get_model_category_params / search_public_models / search_personal_models
 为只读查询；add_performance_component 将模型库 Component 放置到原理图。
 
-原理图库领域：design_schematic_topology 按自然语言需求直接设计链路并创建工程。
+原理图库领域：design_schematic_topology 按需求描述设计电路拓扑并创建打开新工程。
 """
 
 from __future__ import annotations
@@ -194,19 +194,17 @@ def add_performance_component(
 @mcp.tool()
 def design_schematic_topology(
         requirement: str,
-        timeout_seconds: int = 180,
+        timeout_seconds: int = 600,
 ) -> dict[str, Any]:
-    """用户输入指标来设计cst天线模型（中心频率），hfss带通滤波器（中心频率，相对带宽）、低通滤波器（截止频率）负载（中心频率）等电路，然后自动创建并打开新工程。
+    """用户输入指标来设计电路拓扑（收发组件、滤波器、天线等），自动创建并打开新工程。
 
-    用法："设计一个中心频率 25GHz、相对带宽 8% 的带通滤波器"
+    用法："设计一个x波段四通道TR"
 
-    requirement 是自然语言需求描述（非空），描述要设计的电路类型与设计指标（中心频率、
-    相对带宽、截止频率等）。服务端据此到原理图库中取对应的拓扑（个人库优先，无候选回退
-    公共库），命中后自动生成工程名并在当前工作区创建、打开新工程。
+    requirement 是自然语言需求描述（非空），可写工作频率、通道数与收发链路指标（增益、噪声系数、移相/衰减精度、输出功率等）。服务端据此生成对应的电路拓扑，在当前工作区创建并打开新工程。
 
     Args:
         requirement: 自然语言需求描述（非空字符串）。
-        timeout_seconds: 最长等待秒数，默认 180（含取拓扑 + 下载 + 模型库扫描）。
+        timeout_seconds: 最长等待秒数，默认 600（含拓扑生成 + 下载 + 模型库扫描）。
 
     Returns:
         gRPC 统一返回结构，成功时 details 含 project_name/project_path/schematic_id/
@@ -219,5 +217,5 @@ def design_schematic_topology(
         ecserver_pb2.DESIGN_SCHEMATIC_TOPOLOGY,
         {"requirement": requirement},
         timeout_seconds,
-        max_timeout_seconds=300,
+        max_timeout_seconds=600,
     )

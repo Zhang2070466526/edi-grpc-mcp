@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from servers.eda.config import TURBOCHARTS_PATH
 from servers.utils import build_artifact, build_file_link, error_response, per_tool_mutex
-from servers.turbocharts.config import run_turbocharts
+from servers.turbocharts.config import engine_failures, engine_report, record_run, run_turbocharts
 from servers.turbocharts.convert_raw import detect_chart_type
 from servers import mcp
 
@@ -122,6 +122,7 @@ def compare_simulation_results(
 
     # Step 1: export each RAW to temp CSV (per_tool_mutex via runner)
     raw_curves: list[tuple[list[float], list[float]]] = []
+    command_runs: list[dict] = []   # 每个 RAW 一次引擎调用，逐条回传（引擎输出基本为空）
 
     with tempfile.TemporaryDirectory() as tmpdir:
         for i, rp in enumerate(result_paths):
@@ -140,7 +141,9 @@ def compare_simulation_results(
             try:
                 result_proc = run_turbocharts(cmd, timeout_seconds=60)
             except RuntimeError as exc:
-                return error_response("TOOL_TIMEOUT", str(exc))
+                return error_response("TOOL_TIMEOUT", str(exc),
+                                      command_runs=command_runs + [record_run(cmd, error=str(exc))])
+            command_runs.append(record_run(cmd, result_proc))
             if result_proc.returncode != 0:
                 # 原因必须带上 returncode 与 stdout 兜底：引擎失败时 stderr 可能为空，
                 # 只回「失败: 」等于把真因丢掉（2026-09-28 体检 GW-2）。
@@ -150,6 +153,7 @@ def compare_simulation_results(
                     f"turbocharts 导出 {rp} 失败 (rc={result_proc.returncode}, "
                     f"chart_type={chart_type}{_own_type_hint(file_types, rp, chart_type)}): "
                     f"{detail or '(引擎未输出任何信息)'}",
+                    command_runs=command_runs,
                     **(_notes_detail(notes)),
                 )
 
@@ -260,6 +264,10 @@ def compare_simulation_results(
         "alignment": alignment,
         "series": series,
         "metrics": metrics,
+        "command_runs": command_runs,
+        "engine_ok": (False if any(r.get("ok") is False for r in command_runs)
+                      else (True if command_runs and all(r.get("ok") is True for r in command_runs) else None)),
+        "engine_report": engine_report(command_runs),
         "artifacts": artifacts,
         "message": "对比图已生成。" if img_ok else "对比图生成失败。",
     }

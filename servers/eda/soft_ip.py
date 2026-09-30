@@ -39,30 +39,31 @@ def search_soft_ip_categories(timeout_seconds: int = 60) -> dict[str, Any]:
 
 
 @mcp.tool()
-def design_soft_ip(
+def design_chip(
         description: str,
         save_path: str,
         freq: float | None = None,
         bandwidth: float | None = None,
-        timeout_seconds: int = 120,
+        timeout_seconds: int = 600,
 ) -> dict[str, Any]:
-    """按设计描述获取公共软 IP 设计模型，补齐可选设计参数后下载 AEDT 模型。
+    """用户输入指标来设计cst天线模型（中心频率），hfss带通滤波器（中心频率，相对带宽）、低通滤波器（截止频率）负载（中心频率）等电路指标，获取相应的模型文件。（不现场综合设计，也不创建/打开 .epp 工程，存储到save_path中）。
 
-    用法："帮我设计一个 9 阶带通滤波器的软 IP 模型到 D:/soft-ip/xxx.aedt"
+    用法："设计一个中心频率 20GHz、相对带宽 5% 的带通滤波器"
 
-    description 是模型设计需求（非空），服务端走智能检索（smart-search）取第一个候选模型。
-    freq/bandwidth 为可选设计参数，任一未提供时服务端按插值范围中点补齐。
-    下载时复用 DOWNLOAD_SOFT_IP_MODEL，存在 bandwidth 时自动带 allow_extrapolation=false。
+    description 是自然语言设计需求（非空），写清电路类型与设计指标（中心频率、相对带宽、截止频率等）。
+    服务端据此生成对应的芯片模型文件，落到 save_path 指定路径。阶数/拓扑/指标由所选模型自身决定，
+    本工具不校验指标、不回模型名。描述写不中库 → FAILED「指定分类下未找到该描述的模型」。
 
     Args:
-        description: 模型设计需求（非空字符串）。
+        description: 模型设计需求（非空字符串），写清电路类型（带通/低通滤波器、天线、负载…）与指标（中心频率、相对带宽、截止频率）。
         save_path: 目标文件完整路径（如 D:/soft-ip/PCB.aedt）。
-        freq: 可选频率（大于 0 的有限数值）；未提供时服务端按插值中点补齐。
-        bandwidth: 可选相对带宽（有限数值）；未提供时同上。
-        timeout_seconds: 最长等待秒数，默认 120。
+        freq: 可选中心频率（大于 0 的有限数值，按 GHz 理解）；未提供时服务端按该软 IP 插值范围中点补齐。
+        bandwidth: 可选相对带宽，单位 %（如 5 = 5%）；未提供时同上。注意：部分软 IP 该参数必填（不给会 FAILED「缺少相对带宽」）；超出有效范围也会 FAILED。
+        timeout_seconds: 最长等待秒数，默认 600。
 
     Returns:
-        gRPC 统一返回结构，成功时 details 含 save_path/freq（及存在时的 bandwidth/单位字段）。
+        gRPC 统一返回结构。**产物路径读 details.save_path**（result_path 恒为空串）；
+        details 含 description/freq/bandwidth/save_path/status。
     """
     description, err = require_nonempty(description, label="description")
     if err:
@@ -88,5 +89,5 @@ def design_soft_ip(
         ecserver_pb2.DESIGN_SOFT_IP,
         payload,
         timeout_seconds,
-        max_timeout_seconds=300,
+        max_timeout_seconds=600,
     )
