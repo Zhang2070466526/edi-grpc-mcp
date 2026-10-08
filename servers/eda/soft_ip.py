@@ -46,7 +46,7 @@ def design_chip(
         bandwidth: float | None = None,
         timeout_seconds: int = 600,
 ) -> dict[str, Any]:
-    """用户输入指标来设计cst天线模型（中心频率），hfss带通滤波器（中心频率，相对带宽）、低通滤波器（截止频率）负载（中心频率）等电路指标，获取相应的模型文件。（不现场综合设计，也不创建/打开 .epp 工程，存储到save_path中）。
+    """用户输入指标来设计cst天线模型（中心频率），hfss带通滤波器（中心频率，相对带宽）、低通滤波器（截止频率）负载（中心频率）等电路指标，获取相应的模型文件。
 
     用法："设计一个中心频率 20GHz、相对带宽 5% 的带通滤波器"
 
@@ -60,6 +60,8 @@ def design_chip(
         freq: 可选中心频率（大于 0 的有限数值，按 GHz 理解）；未提供时服务端按该软 IP 插值范围中点补齐。
         bandwidth: 可选相对带宽，单位 %（如 5 = 5%）；未提供时同上。注意：部分软 IP 该参数必填（不给会 FAILED「缺少相对带宽」）；超出有效范围也会 FAILED。
         timeout_seconds: 最长等待秒数，默认 600。
+
+    remark: 不现场综合设计，也不创建/打开 .epp 工程，存储到save_path中
 
     Returns:
         gRPC 统一返回结构。**产物路径读 details.save_path**（result_path 恒为空串）；
