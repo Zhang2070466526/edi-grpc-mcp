@@ -9,6 +9,7 @@
   6. close_hfss_project 关闭活动项目
   7. HFSS/CST runner 运行超时兜底
   8. Chat _prune 跳过持锁会话 + /upload 大小限制
+  9. eda/config.py 返回注解用了 Any 但未导入（ruff F821）
 """
 import asyncio
 import time
@@ -18,6 +19,20 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+
+
+# ── 0. 注解可解析（2026-10-08，ruff F821）────────────────────────
+
+def test_eda_config_annotations_resolvable():
+    """回归：`servers/eda/config.py` 的 `require_project_path` 注解写了 `dict[str, Any] | None`
+    却没导入 `Any`（有 `from __future__ import annotations` 所以导入不报错，但内省会 NameError）。
+    """
+    import typing
+
+    from servers.eda import config as eda_config
+
+    hints = typing.get_type_hints(eda_config.require_project_path)
+    assert "return" in hints
 
 
 # ── 1. 异步仿真超时校验 ──────────────────────────────────────────

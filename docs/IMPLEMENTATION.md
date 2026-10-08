@@ -1,8 +1,8 @@
 # EDI gRPC MCP 实现原理与机制
 
-> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 91 个工具的逐类实现，再到 8 个 Resource 与 9 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
+> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 78 个工具的逐类实现，再到 7 个 Resource 与 8 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
 
-> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（91 个工具接口参数/返回）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由请求/响应体）。
+> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（78 个工具接口参数/返回）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由请求/响应体）。
 
 ---
 
@@ -44,7 +44,7 @@
   - `3.6` 日志系统
   - `3.7` Chat 会话与破坏性确认
 
-- **[四、工具实现](#四工具实现)** —— 91 个工具按通信类型分组 + 设计动机
+- **[四、工具实现](#四工具实现)** —— 78 个工具按通信类型分组 + 设计动机
   - `4.1` 工程管理
   - `4.2` 仿真器件
   - `4.3` 仿真
@@ -56,7 +56,7 @@
   - `4.9` 图片 / 文档 / 报告
   - `4.11` 工具设计动机与数据依赖
 
-- **[五、Resources（7 个）](#五resources8-个)** —— 只读上下文/参考资料逐条详解
+- **[五、Resources（7 个）](#五resources7-个)** —— 只读上下文/参考资料逐条详解
   - `edi://service/overview` — 服务概览
   - `edi://service/status` — 实时运行状态
   - `edi://projects` — 工作区工程目录
@@ -65,7 +65,7 @@
   - `edi://reference/error-codes` — 错误码词典
   - `edi://reference/turbocharts-guide` — RAW 转图说明
 
-- **[六、Prompts（8 个）](#六prompts9-个)** —— 可复用工作流模板逐条详解
+- **[六、Prompts（8 个）](#六prompts8-个)** —— 可复用工作流模板逐条详解
   - `inspect_edi_project` — 工程只读检查
   - `run_and_review_simulation` — 仿真执行 + 日志分析
   - `configure_simulation_component` — 配置仿真器件
@@ -81,7 +81,7 @@
 
 ### 1.1 通信类型总览
 
-每个 MCP 工具按底层通信方式分为 7 种实现类型：
+每个 MCP 工具按底层通信方式分为 6 种实现类型：
 
 | 类型 | 工具数 | 核心实现 | 说明 |
 |---|---|---|---|
@@ -89,7 +89,7 @@
 | 本地文件读取 | 7 | `servers/eda/project_reader.py` | 直接读 `.epp` 工程磁盘文件 / EDI 日志，不经 gRPC |
 | 内存服务 | 4 | `simulation.py` / `grpc_client.py` | 读运行时状态（任务注册表、通道状态） |
 | subprocess 命令行 | 4 | `turbocharts/config.py` 等 | 调 `turbocharts_app.exe`、启动 EDI |
-| COM / CST 接口 | 11 | `ansys/config.py` / `cst/cst_api.py` | ANSYS 6 个走 COM，CST 5 个走官方 API |
+| COM / CST 接口 | 19 | `ansys/config.py` / `cst/cst_api.py` | ANSYS 6 个走 COM，CST 13 个走官方 API |
 | 图片 / 文档 / 报告 | 4 | `multimodal_vision/` / `report/` | 视觉分析、文档预览、报告渲染 |
 
 ### 1.2 gRPC 异步调用模型

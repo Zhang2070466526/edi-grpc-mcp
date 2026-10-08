@@ -6,6 +6,7 @@ EDI_PATH / TURBOCHARTS_PATH — 环境变量优先，否则自动检测同级 EX
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import sys as _sys
 from dotenv import load_dotenv

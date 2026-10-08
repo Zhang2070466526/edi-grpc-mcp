@@ -1,4 +1,4 @@
-"""EDA 软 IP（Soft IP）工具 — 分类查询 / 按描述下载 AEDT 模型。
+"""EDA 软 IP（Soft IP）工具 — 分类查询 / 按描述设计芯片并下载 AEDT 模型。
 
 软 IP 由 EDI 的 soft-ip-manager 服务提供，gRPC 层只转发请求、不解释业务字段。
 两个工具均不需要 project_path，也不要求打开工程。

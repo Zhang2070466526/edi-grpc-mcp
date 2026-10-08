@@ -1,4 +1,4 @@
-"""MCP Resources & Prompts — 本目录 6 个 Resource + 8 个 Prompt（全服务合计 8 Resource + 9 Prompt）。
+"""MCP Resources & Prompts — 本目录 6 个 Resource + 8 个 Prompt（全服务合计 7 Resource + 8 Prompt）。
 
 按语义拆为 6 个文件，每个文件的 @mcp.resource() / @mcp.prompt() 装饰器在 import 时触发注册。
 

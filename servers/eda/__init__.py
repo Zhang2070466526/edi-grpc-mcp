@@ -1,4 +1,4 @@
-r"""EDA gRPC MCP 工具包 -- 通过 ExternalCall gRPC 操作 EDI 工程（55 个工具）。
+r"""EDA gRPC MCP 工具包 -- 通过 ExternalCall gRPC 操作 EDI 工程（49 个工具）。
 
 按文件列工具与用途：
 

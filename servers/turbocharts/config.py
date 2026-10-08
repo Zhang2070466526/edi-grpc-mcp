@@ -43,8 +43,10 @@ def record_run(
         "stdout": stdout,
         "stderr": stderr,
         # ok：引擎自报的这一次成败（False=命中失败信号 / True=见成功信号 / None=无可判信号；
-        # 超时等异常直接记 False）。⚠️ rc 恒 0，别拿 return_code 当判据。
-        "ok": False if error else judge_engine_output(stderr, stdout),
+        # 超时等异常、rc≠0 都直接记 False）。⚠️ 数据层失败时 rc 恒 0，别拿 return_code 当判据；
+        # 但 rc≠0 必属更硬的失败（如 Qt 参数层 rc=127）⇒ 那些场合判 False，避免漏判成 None。
+        "ok": (False if error or (result is not None and result.returncode != 0)
+               else judge_engine_output(stderr, stdout)),
     } | ({"error": error} if error else {})
 
 

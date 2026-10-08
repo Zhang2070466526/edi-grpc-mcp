@@ -433,3 +433,19 @@ def test_engine_verdict_failure_overrides_optimistic_message(env, monkeypatch):
     assert resp["engine_ok"] is False
     assert resp["message"].startswith("引擎自报未成功")
     assert "绘制线段: ()" in resp["message"]
+
+def test_record_run_marks_nonzero_rc_as_failure(env, monkeypatch):
+    """rc≠0 属硬失败：Qt 参数层 rc=127 的 stderr 不含任何判据措辞，
+    只靠措辞会漏判成 None ⇒ 必须直接 False（数据层失败 rc 恒 0，方向安全）。
+    """
+    monkeypatch.setattr(cr, "run_turbocharts", lambda cmd, timeout_seconds=60: (
+        Path(cmd[cmd.index("--img") + 1]).write_bytes(b"\x89PNG"),
+        SimpleNamespace(returncode=127, stdout="", stderr="错误：缺少必需参数 --raw"),
+    )[1])
+    resp = cr.turbocharts_convert(
+        raw_path=str(env.raw), output_path=str(env.tmp / "o.png"), chart_type="HB",
+        linename="dBm_Out1")
+    assert resp["command_runs"][0]["ok"] is False
+    assert resp["command_runs"][0]["return_code"] == 127
+    assert resp["engine_ok"] is False
+    assert resp["message"].startswith("引擎自报未成功")

@@ -94,7 +94,7 @@
 ```json
 {
     "status": "ok",
-    "version": "0.1.9",
+    "version": "0.1.11",
     "mcp_ready": true,
     "eda_grpc_ready": true,
     "turbocharts_ready": true,
@@ -123,9 +123,9 @@
     "status": "ready",
     "transport": "streamable-http",
     "stateless": true,
-    "version": "0.1.9",
+    "version": "0.1.11",
     "grpc": "online",
-    "tool_count": 90,
+    "tool_count": 78,
     "started_at": 1750000000.0
 }
 ```

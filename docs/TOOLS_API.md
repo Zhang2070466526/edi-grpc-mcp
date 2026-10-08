@@ -17,20 +17,21 @@ from servers.eda.project_manage import list_epp_projects
 ## 目录
 
 - **[工程管理（10 个）](#工程管理10个)**：创建 / 扫描 / 打开 / 关闭工程、查询器件、分析变量
-- **[仿真（8 个）](#仿真8个)**：同步 / 异步仿真、网表仿真、抗烧毁评估、任务查询
+- **[仿真（7 个）](#仿真7个)**：同步 / 异步仿真、网表仿真、抗烧毁评估、任务查询
 - **[导出与分析（4 个）](#导出与分析4个)**：导出网表、截图原理图、器件 CSV、信号链路追踪
-- **[模型库 / 原理图库（10 个）](#模型库--原理图库10个)**：模型分类/查询/搜索、MMS 导入、器件放置、原理图库搜索/使用
-- **[软 IP（5 个）](#软ip5个)**：软 IP 分类查询、模型搜索、AEDT 模型下载
+- **[模型库 / 原理图库（6 个）](#模型库--原理图库6个)**：模型替换、模型分类/查询/搜索、性能器件放置、拓扑设计
+- **[软 IP（2 个）](#软ip2个)**：软 IP 分类查询、按设计描述下载芯片模型
+- **[微波计算（2 个）](#微波计算2个)**：传输线特性阻抗 / 线宽计算、多级威尔金森功分器设计（本地计算，无任务信封）
 - **[工作区（3 个）](#工作区3个)**：创建 / 切换 / 查询当前工作区
 - **[原理图扩展（4 个）](#原理图扩展4个)**：内置器件、清空原理图、连线
 - **[启动 / 诊断（3 个）](#启动--诊断3个)**：启动 EDI、服务诊断、日志读取
 - **[ANSYS HFSS（6 个）](#ansys-hfss6个)**：AEDT 工程开关、HFSS 异步仿真
-- **[CST 电磁仿真（5 个）](#cst电磁仿真5个)**：异步求解 .cst、导出 S 参数 / 远场方向图
+- **[CST 电磁仿真（13 个）](#cst电磁仿真13个)**：异步求解 .cst、导出 S 参数 / 远场方向图
 - **[图表（3 个）](#图表3个)**：RAW 曲线解析、转图、结果对比
 - **[图片（2 个）](#图片2个)**：显示图片、视觉分析
 - **[仿真器件管理（10 个）](#仿真器件管理10个协议-v3)**：器件 Schema、增删改、状态、网表导入、原理图加载
 - **[Resources & Prompts](#resources--prompts)**：只读资源 + 可复用工作流
-- **[文档（1 个）](#文档1个)**：打开本地文档
+- **[文档（2 个）](#文档2个)**：打开本地文档、下载任意产物
 - **[报告（1 个）](#报告1个)**：生成仿真报告
 - **[辅助](#辅助)**：Chat 上下文
 - **[gRPC 工具统一返回格式](#gRPC工具统一返回格式)**：gRPC 工具的返回结构 + status 语义
@@ -727,6 +728,35 @@ add_performance_component(project_path: str, component_uuid: str, position: dict
 
 ---
 
+### `design_schematic_topology`
+
+```python
+from servers.eda.model_library import design_schematic_topology
+
+design_schematic_topology(requirement: str, timeout_seconds: int = 180) -> dict
+```
+
+按自然语言需求设计电路拓扑（收发组件、滤波器、天线等），在当前工作区新建并打开工程。
+生成后建议核对工程是否与需求一致：比对 `details.component_count` / `schematic_id`，或读工程目录里的 `拓扑描述.txt`。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `requirement` | str | 是 | — | 自然语言需求（非空） |
+| `timeout_seconds` | int | 否 | 180 | 最长等待秒数（含取拓扑 + 下载 + 模型库扫描），上限 300 |
+
+返回（gRPC 统一结构，业务字段在 `details` 中）：
+
+```python
+{"success": True, "status": "SUCCEEDED", "task_success": True, "message": "在线链路工程已打开",
+ "details": {"component_count": 198, "net_segment_count": 228,
+             "project_name": "KuKa波段双频TR组件_理想",
+             "schematic_id": "f5289ae1-e330-4a70-be09-5f97e3b8c50a", "status": "SUCCESS"}}
+```
+
+⚠️ 已知口径：① `details.project_name` 回**基名**——同名工程第二次调用时真实目录会变成 `..._2`（只有 `project_path` 是准的）；② 每次调用都**新建工程目录**，无「复用已有工程」选项。
+
+---
+
 ## 软 IP（2 个）
 
 ### `search_soft_ip_categories`
@@ -1088,7 +1118,9 @@ get_hfss_analysis_status(task_id: str, refresh_from_aedt: bool = False) -> dict
 
 ---
 
-## CST 电磁仿真（5 个）
+## CST 电磁仿真（13 个）
+
+> ⚠️ 本节只收录 5 个。另有 **8 个 CST 工具尚未补本文档**：`cst_open_project` / `cst_get_model_info` / `cst_list_results` / `cst_plot_farfield` / `cst_export_snp_async` / `cst_export_snp_query` / `cst_task_list` / `cst_task_cancel`（参数/返回见运行中服务的 `tools/list`）。
 
 ### `cst_solve_async`
 
@@ -1172,6 +1204,65 @@ cst_export_farfield_query(task_id: str) -> dict
 | `task_id` | str | 是 | `cst_export_farfield` 返回的 task_id |
 
 返回（完成）：`{"success": true, "completed": true, "status": "SUCCEEDED", "farfield_txts": ["C:/.../farfield (...).txt"]}`；运行中 `{"success": true, "completed": false, "status": "RUNNING"}`；失败 `{"success": false, "error_code": "CST_EXPORT_FARFIELD_FAILED"}`。
+
+---
+
+## 微波计算（2 个）
+
+> 本地纯计算（不产生 task 信封，`details` 为 `null`，数据在顶层）。数值解算独立复核过（见 `审查报告.md` §十四）。
+
+### `calculate_transline`
+
+```python
+from servers.microwave.transline import calculate_transline
+
+calculate_transline(transline_type: str, er: float, freq: float, width=None, z0=None, h=None,
+                    t: float = 0.035, gap=None, d_in=None, d_out=None, tand: float = 0.0) -> dict
+```
+
+计算四种传输线的**特性阻抗或线宽**（给 `z0` 求 `width`，或给 `width` 求 `z0`）。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `transline_type` | str | 是 | — | `microstrip` / `stripline` / `gcpw`（接地共面波导）/ `coax` |
+| `er` | float | 是 | — | 介质相对介电常数 |
+| `freq` | float | 是 | — | 频率（GHz） |
+| `width` / `z0` | float | 否 | None | 二选一：给 `z0` 求线宽，或给线宽求 `z0` |
+| `h` | float | 否 | None | 介质厚度（mm）；coax 用 `d_in`/`d_out` |
+| `t` | float | 否 | 0.035 | 铜厚（mm）= 35 µm |
+| `gap` | float | 否 | None | gcpw 槽宽 |
+| `d_in` / `d_out` | float | 否 | None | coax 内/外径 |
+| `tand` | float | 否 | 0.0 | 介质损耗角正切 |
+
+实测：4 种线型**往返自洽**（给 `z0` → 取 `width` → 回代 `z0'`，偏差 **0.0000%**；coax 手算校核 50.03 Ω）。⚠️ 参数只校验 `> 0`、**无物理下限**：`z0 = 1e-9` 也会 `success: true` 并回线宽 **9.08e10 mm**。
+
+---
+
+### `design_wilkinson`
+
+```python
+from servers.microwave.wilkinson_designer import design_wilkinson
+
+design_wilkinson(h_mm: float, er: float, f0_ghz: float, n_sections: int,
+                 z0: float = 50.0, fbw=None, ripple_db=None) -> dict
+```
+
+设计多级威尔金森功分器，输出各级微带线宽 / 线长与隔离电阻值（微带尺寸委托 `calculate_transline`，两者同源）。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `h_mm` | float | 是 | — | 基板厚度（mm） |
+| `er` | float | 是 | — | 基板介电常数 |
+| `f0_ghz` | float | 是 | — | 中心频率（GHz） |
+| `n_sections` | int | 是 | — | 级数（`n=1` 为经典 λ/4 单节） |
+| `z0` | float | 否 | 50.0 | 系统阻抗（Ω） |
+| `fbw` / `ripple_db` | float | 否 | None | 相对带宽 / 带内波纹；二者可互换推导 |
+
+实测（独立节点法 S 参数解算复核）：臂阻抗 **Chebyshev 综合正确**（`n=2` 在 f0 恰好 −20.04 dB、`n=3` 在 f0 精确零点；`n=1` 回经典值 70.7 Ω / 100 Ω）。
+
+⚠️ **两个已知缺陷（未修，详见 `审查报告.md` §十四）**：
+1. **`MW-1` 隔离电阻方向错**：`n ≥ 2` 用启发式拟合，取值**朝输出端单调递减**（正确倾向应递增）。实测 `n=2` 带内最差隔离 **−13.30 dB**（数值最优 ≈ −20.97 dB）；`n=4/5/6/10` 一律同向递减 ⇒ 系统性偏差，n≥2 的隔离电阻值**不可直接采用**。
+2. **`MW-3` 波纹钳位静默失真**：`ripple_db ≤ 9.2` 时 `fbw` 被静默钳到 **1.8（=180% 带宽）**、臂阻抗退化成 `[72.4, 70.7, 69.1]`，而返回仍 `success: true` ⇒ 设计输出不可用但不报错。
 
 ---
 
@@ -1510,7 +1601,7 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 
 ## Resources & Prompts
 
-除了 Tool（启动时动态统计，当前 91 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
+除了 Tool（启动时动态统计，当前 78 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
 
 ### Resources（7 个）
 
