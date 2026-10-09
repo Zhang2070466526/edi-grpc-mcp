@@ -38,7 +38,6 @@ def test_all_tools_registered():
         "add_ideal_component", "clear_schematic", "add_wire",
         "design_schematic_topology",
         "export_schematic_components_to_csv",
-        "search_soft_ip_categories",
         "design_chip",
         "open_hfss_project", "close_hfss_project", "launch_aedt", "get_hfss_project_info",
         "start_hfss_analysis_async", "get_hfss_analysis_status",

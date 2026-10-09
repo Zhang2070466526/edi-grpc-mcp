@@ -57,7 +57,7 @@ servers/
     signal_chain.py       # 信号链路追踪（1 工具）
     model_replace.py      # 模型替换（1 工具）
     model_library.py      # 模型库 + 原理图库 + 拓扑设计（6 工具）
-    soft_ip.py            # 软 IP 分类查询 + 按描述下载芯片模型（2 工具）
+    soft_ip.py            # 按描述下载芯片模型（1 工具）
     edi_launcher.py       # 启动 EDI + 服务诊断（3 工具）
     workspace_ops.py      # 工作区：创建/切换/查询（3 工具）
     schematic_ops.py      # 原理图扩展操作（4 工具）

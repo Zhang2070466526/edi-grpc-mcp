@@ -20,7 +20,7 @@ from servers.eda.project_manage import list_epp_projects
 - **[仿真（7 个）](#仿真7个)**：同步 / 异步仿真、网表仿真、抗烧毁评估、任务查询
 - **[导出与分析（4 个）](#导出与分析4个)**：导出网表、截图原理图、器件 CSV、信号链路追踪
 - **[模型库 / 原理图库（6 个）](#模型库--原理图库6个)**：模型替换、模型分类/查询/搜索、性能器件放置、拓扑设计
-- **[软 IP（2 个）](#软ip2个)**：软 IP 分类查询、按设计描述下载芯片模型
+- **[软 IP（1 个）](#软ip1个)**：按设计描述下载芯片模型
 - **[微波计算（2 个）](#微波计算2个)**：传输线特性阻抗 / 线宽计算、多级威尔金森功分器设计（本地计算，无任务信封）
 - **[工作区（3 个）](#工作区3个)**：创建 / 切换 / 查询当前工作区
 - **[原理图扩展（4 个）](#原理图扩展4个)**：内置器件、清空原理图、连线
@@ -758,29 +758,7 @@ design_schematic_topology(requirement: str, timeout_seconds: int = 180) -> dict
 
 ---
 
-## 软 IP（2 个）
-
-### `search_soft_ip_categories`
-
-```python
-from servers.eda.soft_ip import search_soft_ip_categories
-
-search_soft_ip_categories(timeout_seconds: int = 60) -> dict
-```
-
-查询全部软 IP 分类（自动合并分页）。不接收业务参数。服务端每页 15 条请求软 IP 分类接口并自动合并分页，返回过滤后的 `results` 与 `count`。
-
-| 参数 | 类型 | 必填 | 默认 | 说明 |
-|---|---|---|---|---|
-| `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
-
-返回（gRPC 统一结构，业务字段在 `details` 中）：
-
-```python
-{"success": True, "status": "SUCCEEDED", "details": {"count": 3, "results": [...]}}
-```
-
----
+## 软 IP（1 个）
 
 ### `design_chip`
 

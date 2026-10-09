@@ -2,7 +2,7 @@
 
 > 自动生成，勿手改。权威数量见 /ready 的 tool_count。
 
-共 80 个工具：
+共 79 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
 - `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
@@ -73,7 +73,6 @@
 - `run_tr_simulation` — 跑 TR 链路仿真并提取各链路电参数（结果可直接交给 export_simulation_report 出报告）。
 - `search_personal_models` — 按子类查询个人模型库。
 - `search_public_models` — 按子类查询公共模型库。
-- `search_soft_ip_categories` — 查询全部软 IP 分类（自动合并分页结果）。
 - `set_component_active_state` — 确定性设置器件状态为 NORMAL、DISABLED 或 SHORTED。
 - `show_image` — 读取本地图片，返回标准 MCP ImageContent 和本地路径。
 - `simulate_anti_burnout` — 对工程原理图中具备抗烧毁数据的器件执行输入功率仿真和抗烧毁风险评估。

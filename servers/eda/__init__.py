@@ -142,7 +142,6 @@ from servers.eda.model_library import (  # noqa: F401
 
 # -- 软 IP --
 from servers.eda.soft_ip import (  # noqa: F401
-    search_soft_ip_categories,
     design_chip,
 )
 

@@ -1,7 +1,7 @@
-"""EDA 软 IP（Soft IP）工具 — 分类查询 / 按描述设计芯片并下载 AEDT 模型。
+"""EDA 软 IP（Soft IP）工具 — 按描述设计芯片并下载 AEDT 模型。
 
 软 IP 由 EDI 的 soft-ip-manager 服务提供，gRPC 层只转发请求、不解释业务字段。
-两个工具均不需要 project_path，也不要求打开工程。
+本工具不需要 project_path，也不要求打开工程。
 """
 
 from __future__ import annotations
@@ -13,29 +13,6 @@ from proto import ecserver_pb2
 from servers.eda.grpc_client import call_grpc
 from servers.utils import require_nonempty, error_response
 from servers import mcp
-
-
-@mcp.tool()
-def search_soft_ip_categories(timeout_seconds: int = 60) -> dict[str, Any]:
-    """查询全部软 IP 分类（自动合并分页结果）。
-
-    用法："查一下软 IP 有哪些分类"
-
-    该任务不接收业务参数。服务端每页 15 条请求软 IP 分类接口并自动合并分页，
-    返回过滤后的 results 与 count。
-
-    Args:
-        timeout_seconds: 最长等待秒数，默认 60。
-
-    Returns:
-        gRPC 统一返回结构，业务字段（count/results）在 details 中。
-    """
-    return call_grpc(
-        ecserver_pb2.SEARCH_SOFT_IP_CATEGORIES,
-        {},
-        timeout_seconds,
-        max_timeout_seconds=300,
-    )
 
 
 @mcp.tool()

@@ -809,7 +809,6 @@ else:                                 # 两者都没有
 | `search_public_models` / `search_personal_models` | SEARCH_*_MODELS(25/26) | `sub_type` 非空；`filters` 原样转发 |
 | `export_schematic_components_to_csv` | EXPORT_SCHEMATIC_COMPONENTS_TO_CSV(40) | `csv_path` 非空 |
 | `get_signal_chain` | — | 本地 | 解析网表，节点接力追踪信号链路（源→负载），方向 forward/backward |
-| `search_soft_ip_categories` | SEARCH_SOFT_IP_CATEGORIES(42) | 无业务参数 |
 | `design_chip` | DESIGN_SOFT_IP(48) | `description` + `save_path` 非空 + 可选 `freq`/`bandwidth` |
 
 ### 4.5 工作区 / 原理图扩展
@@ -939,7 +938,6 @@ else:                                 # 两者都没有
 
 | 工具 | 动机 | 依赖（输入来自） | 被依赖（输出供） |
 |---|---|---|---|
-| `search_soft_ip_categories` | 了解软 IP 有哪些分类 | — | — |
 | `design_chip` | 按需求设计芯片并生成 AEDT 模型 | description + save_path（+可选 freq/bandwidth） | — |
 
 #### 工作区 / 原理图扩展
