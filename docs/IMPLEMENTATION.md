@@ -1,8 +1,8 @@
 # EDI gRPC MCP 实现原理与机制
 
-> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 78 个工具的逐类实现，再到 7 个 Resource 与 8 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
+> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 80 个工具的逐类实现，再到 7 个 Resource 与 8 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
 
-> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（78 个工具接口参数/返回）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由请求/响应体）。
+> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（80 个工具接口参数/返回）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由请求/响应体）。
 
 ---
 
@@ -44,7 +44,7 @@
   - `3.6` 日志系统
   - `3.7` Chat 会话与破坏性确认
 
-- **[四、工具实现](#四工具实现)** —— 78 个工具按通信类型分组 + 设计动机
+- **[四、工具实现](#四工具实现)** —— 80 个工具按通信类型分组 + 设计动机
   - `4.1` 工程管理
   - `4.2` 仿真器件
   - `4.3` 仿真
@@ -861,6 +861,17 @@ else:                                 # 两者都没有
 - **`open_document`**：`mode="link"` 生成 10 分钟 HTTP 链接（`/documents/{token}`），`mode="local"` 用 `os.startfile()` 打开；10 种办公格式白名单；UNC 拒绝、nosniff 头。
 - **`generate_simulation_report`**：16 步校验（输出路径/模型名/spec_table/charts/components/schematic）→ POST 渲染服务 → 状态码映射错误码（400→`REPORT_VALIDATION_FAILED`、409→`OUTPUT_FILE_BUSY`、500→`REPORT_RENDER_FAILED`）。只校验数据调 API，不自动仿真、不编造指标、默认禁止覆盖。
 
+### 4.10 独立仿真工具（固定目录 exe，不走 gRPC/HTTP）
+
+直接调用 EDI 安装目录 `simulation_tool/` 下的两个独立 exe（`settings.simulation_tool_dir`，
+默认 `C:\Program Files (x86)\EDI\simulation_tool`）；两个 exe 的 stdout 都是**单行 UTF-8 JSON**、
+退出码 0/1 ⇒ 判成败看退出码 + JSON 里的 `success`/`errors`（与 turbocharts 的 rc 恒 0 不同）。
+
+| 工具 | exe | 通信 | 说明 |
+|---|---|---|---|
+| `export_simulation_report` | `simulation_report/Report_Exporter.exe` | 子进程 | 报告 JSON → `document.pdf` / `document.docx` / `report.json`；图片路径转绝对后再交给 exe（见 `report_export.py:_absolutize_images`） |
+| `run_tr_simulation` | `tr_simulation/TR_Simulator.exe` | 子进程 + gRPC | 网表 → 路径分析 → 开关状态/参数注入 → ADS 仿真 → 结果提取，返回各链路 `electrical_parameters`（可直接喂给上表报告工具） |
+
 ### 4.11 工具设计动机与数据依赖
 
 从「为什么需要这个工具」的视角说明每个工具的设计动机、解决的问题、与其它工具的数据依赖（谁提供输入、输出供谁）。
@@ -970,6 +981,13 @@ else:                                 # 两者都没有
 | `get_hfss_analysis_status` | 查 HFSS 仿真状态 | start（task_id） | LLM 判断进度 |
 | `cst_solve_async` / `cst_solve_query` | 电磁求解（异步） | .cst 模型 | cst_export_* |
 | `cst_export_snp` / `cst_export_farfield` | 导出 S 参数/远场 | 已求解 .cst | 画图/分析 |
+
+#### 独立仿真
+
+| 工具 | 动机 | 依赖（输入来自） | 被依赖（输出供） |
+|---|---|---|---|
+| `export_simulation_report` | 不依赖 HTTP 渲染服务也能出正式 PDF/DOCX 报告 | 报告 JSON（可由 `run_tr_simulation` 产出的 results 直接拼） | `open_document` / 客户端下载 |
+| `run_tr_simulation` | 把"TR 链路仿真"做成一条固定代码路径（不调 AI、不需要 Agent 会话） | EPP 工程 + 链路 JSON + EDI(gRPC 50055) + ADS 许可 | `export_simulation_report`（电参数）/ 结果目录（CSV/PNG） |
 
 #### 图片 / 文档 / 报告
 

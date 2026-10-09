@@ -18,6 +18,7 @@ from starlette.responses import HTMLResponse, JSONResponse
 from servers import mcp, __version__ as _ver
 from servers.chat.service import ChatService
 from servers.eda.config import EDA_GRPC_SERVER, TURBOCHARTS_PATH
+from servers.simulation_tool.config import REPORT_EXPORTER_PATH, TR_SIMULATOR_PATH
 from servers.utils import registered_tools
 
 import sys as _sys
@@ -63,9 +64,10 @@ async def tool_list(request: Request):
 # ── 健康检查 ──
 
 async def health_check(request: Request):
-    """GET /health — 健康检查：gRPC + TurboCharts 状态 + 版本号。"""
+    """GET /health — 健康检查：gRPC + TurboCharts / 独立仿真 exe 状态 + 版本号。"""
     eda_ready = await _check_tcp(EDA_GRPC_SERVER)
     turbocharts_ready = bool(TURBOCHARTS_PATH) and Path(TURBOCHARTS_PATH).is_file()
+    simulation_tool_ready = all(Path(p).is_file() for p in (REPORT_EXPORTER_PATH, TR_SIMULATOR_PATH))
     tools = sorted(t.name for t in registered_tools(mcp))
     tools_hash = hashlib.md5(",".join(tools).encode("utf-8")).hexdigest()[:8]
     return JSONResponse({
@@ -74,6 +76,7 @@ async def health_check(request: Request):
         "mcp_ready": True,
         "eda_grpc_ready": eda_ready,
         "turbocharts_ready": turbocharts_ready,
+        "simulation_tool_ready": simulation_tool_ready,
         "eda_grpc_server": EDA_GRPC_SERVER,
         "tool_count": len(tools),
         "tools_hash": tools_hash,

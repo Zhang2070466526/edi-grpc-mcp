@@ -1602,7 +1602,7 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 
 ## Resources & Prompts
 
-除了 Tool（启动时动态统计，当前 78 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
+除了 Tool（启动时动态统计，当前 80 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
 
 ### Resources（7 个）
 
@@ -1771,7 +1771,7 @@ from servers.simulation_tool import run_tr_simulation
 
 run_tr_simulation(epp_path: str, links: list, indicators: str = "工作频率,输出增益,噪声系数",
                   threads: int = 5, edi_path: str = "", ads_path: str = "",
-                  timeout_seconds: int = 600) -> dict
+                  timeout_seconds: int = 1800) -> dict
 ```
 
 用 `TR_Simulator.exe` 跑 TR 链路仿真（网表→路径分析→ADS→结果提取），返回各链路电参数。
@@ -1784,7 +1784,7 @@ run_tr_simulation(epp_path: str, links: list, indicators: str = "工作频率,�
 | `threads` | int | 否 | 5 | 指标并发线程数（正整数） |
 | `edi_path` | str | 否 | "" | EDI 安装目录，默认用固定目录 |
 | `ads_path` | str | 否 | "" | ADS 安装目录，为空自动探测 `C:/Program Files/Keysight/ADS*` |
-| `timeout_seconds` | int | 否 | 600 | 最长等待秒数 |
+| `timeout_seconds` | int | 否 | 1800 | 最长等待秒数（多链路 × 多指标跑 ADS 可能超过 10 分钟；上限 3600） |
 
 返回：
 ```python

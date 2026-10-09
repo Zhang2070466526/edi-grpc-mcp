@@ -321,6 +321,15 @@ ERROR_CODES = {
     "SIMULATION_ALREADY_RUNNING": "工程已有仿真正在运行",
     "LLM_REQUEST_FAILED": "模型接口请求失败",
     "NO_CURRENT_PROJECT": "当前没有选定工程",
+    # 独立仿真工具（servers/simulation_tool）与报告导出新增码
+    "INVALID_REPORT_JSON": "报告数据不是合法 JSON 对象",
+    "INVALID_OUTPUT_DIR": "输出目录无效",
+    "EXE_NOT_FOUND": "独立仿真工具的 exe 不存在",
+    "REPORT_EXPORT_FAILED": "报告导出失败",
+    "OUTPUT_FILE_BUSY": "输出目录已有同名文件，请换新目录",
+    "NO_LINKS": "至少需要一条链路",
+    "LINK_JSON_INVALID": "链路 JSON 不合法",
+    "SIMULATION_EXECUTION_FAILED": "TR 仿真执行失败",
 }
 
 

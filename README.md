@@ -39,7 +39,7 @@ AI 客户端 (Claude Code / OpenClaw)
    │  Streamable HTTP (stateless) 或 stdio
    │  POST /mcp  │  initialize → tools/list → tools/call
    ▼
-EDI gRPC MCP 服务 (FastMCP, 78 工具, 7 Resource, 8 Prompt)
+EDI gRPC MCP 服务 (FastMCP, 80 工具, 7 Resource, 8 Prompt)
    │
    ├── EDA gRPC 工具 (49) ──→ EDI 客户端 (127.0.0.1:50055)
    │     FetchEvent ← PerformAction 异步模型，增量 ads_output
@@ -101,7 +101,7 @@ curl http://127.0.0.1:50026/health     # 进程 + gRPC 状态
 → {"status":"ok","mcp_ready":true,"eda_grpc_ready":true}
 
 curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
-→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":78}
+→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":80}
 ```
 
 ### 客户端接入
@@ -131,7 +131,7 @@ curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
 
 | 方式 | 说明 |
 |---|---|
-| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 78 个工具 |
+| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 80 个工具 |
 | **聊天界面** | 浏览器访问 `http://127.0.0.1:50026/ui`，内置 LLM 多轮工具闭环 |
 | **Python 调用** | `from servers.eda import list_epp_projects` 直接调用 |
 
@@ -147,9 +147,9 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 
 ---
 
-## 工具一览（78 个）
+## 工具一览（80 个）
 
-78 个工具按领域分组：工程管理 / 仿真器件 / 仿真 / 导出与分析 / 模型库·原理图库 / 软 IP / 启动·诊断 / 工作区 / 原理图扩展 / 微波计算 / ANSYS HFSS / CST / 图表与图片 / 报告与文档。
+80 个工具按领域分组：工程管理 / 仿真器件 / 仿真 / 导出与分析 / 模型库·原理图库 / 软 IP / 启动·诊断 / 工作区 / 原理图扩展 / 微波计算 / ANSYS HFSS / CST / 图表与图片 / 独立仿真 / 报告与文档。
 
 > 每个工具的**详细参数、返回、示例** → **[`docs/TOOLS_API.md`](docs/TOOLS_API.md)**；工具清单由 `scripts/gen_tool_index.py` 自动生成 → [`docs/TOOL_INDEX.md`](docs/TOOL_INDEX.md)。
 
@@ -264,6 +264,12 @@ edi-grpc-mcp/
 │   │   ├── transline.py                #     4 线型特性阻抗/线宽（微带/带状/GCPW/同轴）
 │   │   └── wilkinson_designer.py       #     多级威尔金森功分器（微带尺寸委托 transline）
 │   │
+│   ├── simulation_tool/                #   独立仿真 exe 包装 (2 个)
+│   │   ├── __init__.py                 #     公共 API re-export
+│   │   ├── config.py                   #     固定目录 exe 路径 / 子进程执行器 / ADS 探测
+│   │   ├── report_export.py            #     export_simulation_report（报告 exe → PDF/DOCX/report.json）
+│   │   └── tr_simulation.py            #     run_tr_simulation（TR exe：网表→路径分析→ADS→结果）
+│   │
 │   ├── report/                         #   仿真报告渲染 (1 个工具)
 │   │   ├── __init__.py                 #     公共 API re-export
 │   │   └── generator.py               #     16 步校验 → POST 渲染服务 → 返回 preview_url
@@ -277,7 +283,7 @@ edi-grpc-mcp/
 │
 ├── docs/                               # 项目文档
 │   ├── WIN7部署与启动手册.md           #   部署指南（打包产物、客户端配置）
-│   ├── TOOLS_API.md                    #   工具 API（78 个工具完整签名+返回值示例）
+│   ├── TOOLS_API.md                    #   工具 API（80 个工具完整签名+返回值示例）
 │   ├── HTTP_API.md                     #   HTTP 接口（请求体、响应体、成功/失败情况）
 │   ├── IMPLEMENTATION.md               #   实现原理与机制（通信原理、公有方法、特殊机制、工具、Resource/Prompt）
 │   ├── HANDOVER.md                     #   交接文档（架构设计、技术栈、47 条注意事项）
@@ -373,7 +379,7 @@ powershell -File scripts/build.ps1  # PyInstaller
 | 文档 | 说明 |
 |---|---|
 | [部署指南](./docs/WIN7部署与启动手册.md) | 打包产物使用、客户端配置 |
-| [工具 API](./docs/TOOLS_API.md) | 全部 78 个工具参数、返回值、示例 |
+| [工具 API](./docs/TOOLS_API.md) | 全部 80 个工具参数、返回值、示例 |
 | [HTTP 接口](./docs/HTTP_API.md) | 全部 HTTP 路由的请求体、响应体、成功/失败情况 |
 | [实现原理与机制](./docs/IMPLEMENTATION.md) | 通信原理、公有方法、特殊机制、工具、7 Resource + 8 Prompt |
 | [交接文档](./docs/HANDOVER.md) | 架构设计、技术栈、扩展开发、47 条注意事项 |
