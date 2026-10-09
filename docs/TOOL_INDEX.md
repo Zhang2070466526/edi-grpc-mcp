@@ -2,7 +2,7 @@
 
 > 自动生成，勿手改。权威数量见 /ready 的 tool_count。
 
-共 78 个工具：
+共 80 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
 - `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
@@ -39,6 +39,7 @@
 - `design_wilkinson` — 设计多级威尔金森功分器，输出各级微带线宽、线长和隔离电阻。
 - `export_project_netlist` — 查看 EDA .epp 工程的网表，返回网表文件路径。
 - `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV。
+- `export_simulation_report` — 用 Report_Exporter.exe 把报告 JSON 渲染成 PDF/DOCX/report.json（独立 exe，不依赖 HTTP 渲染服务）。
 - `fetch_artifact` — 把本机产物文件注册成可下载 URL（仿真结果 / SNP / RAW / 图 / 报告 / 任意文件）。
 - `generate_schematic_from_netlist` — 将网表文件导入工程生成 main 原理图。
 - `generate_simulation_report` — 生成本地仿真报告（PDF/DOCX），16 步校验后调用本地渲染服务。
@@ -69,6 +70,7 @@
 - `replace_models_from_csv` — 按 CSV 文件批量替换工程中的元件模型。
 - `replace_port_component` — 将原理图中的端口器件替换为另一种类型。
 - `replace_schematic_from_file` — 从 .ep 文件整体替换原理图（对应 gRPC LOAD_SCHEMATIC_FROM_FILE）。
+- `run_tr_simulation` — 用 TR_Simulator.exe 跑 TR 链路仿真（网表→路径分析→ADS→结果提取），返回各链路电参数。
 - `search_personal_models` — 按子类查询个人模型库。
 - `search_public_models` — 按子类查询公共模型库。
 - `search_soft_ip_categories` — 查询全部软 IP 分类（自动合并分页结果）。

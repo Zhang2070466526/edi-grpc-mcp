@@ -33,6 +33,7 @@ from servers.eda.project_manage import list_epp_projects
 - **[Resources & Prompts](#resources--prompts)**：只读资源 + 可复用工作流
 - **[文档（2 个）](#文档2个)**：打开本地文档、下载任意产物
 - **[报告（1 个）](#报告1个)**：生成仿真报告
+- **[独立仿真工具（2 个）](#独立仿真工具2个)**：报告导出 exe、TR 链路仿真 exe（固定目录直接调 exe）
 - **[辅助](#辅助)**：Chat 上下文
 - **[gRPC 工具统一返回格式](#gRPC工具统一返回格式)**：gRPC 工具的返回结构 + status 语义
 
@@ -1721,6 +1722,78 @@ generate_simulation_report(
 - 报告服务不可用时返回 `REPORT_SERVICE_UNAVAILABLE`
 
 配置：`REPORT_RENDER_URL`（默认 `http://127.0.0.1:17867/api/v1/reports/render`）、`REPORT_RENDER_TIMEOUT_SECONDS`（默认 45）。
+
+---
+
+## 独立仿真工具（2 个）
+
+> 直接调用 EDI 安装目录固定子目录下的两个 exe（`settings.simulation_tool_dir`，默认
+> `C:\Program Files (x86)\EDI\simulation_tool`），**不走 gRPC/HTTP**。两个 exe 的 stdout
+> 都是单行 UTF-8 JSON、退出码 0/1，判成败直接看退出码 + JSON 的 success/errors。
+
+### `export_simulation_report`
+
+```python
+from servers.simulation_tool import export_simulation_report
+
+export_simulation_report(report: dict, output_dir: str, schematic: str = "", timeout_seconds: int = 300) -> dict
+```
+
+用 `Report_Exporter.exe` 把报告 JSON 渲染成 `document.pdf` / `document.docx` / `report.json`
+（独立 exe 版，不依赖 HTTP 渲染服务）。`report` **透传 exe 原生 JSON**，校验交给 exe
+（errors 原样带回 code/stage/message）。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `report` | dict | 是 | — | 报告数据对象，非空 dict。常用字段见下 |
+| `output_dir` | str | 是 | — | 输出目录（自动创建）；三个目标文件任一已存在时 exe 拒绝 |
+| `schematic` | str | 否 | "" | 可选原理图图片路径，覆盖 report 的 schematic_path |
+| `timeout_seconds` | int | 否 | 300 | 最长等待秒数 |
+
+`report` 常用字段：`model_name`（封面型号）/ `description` / `conclusion` /
+`components`（`[{type,model,manufacturer,specs}]`）/
+`links`（`[{name, electrical_parameters:[{indicator,minimum,typical,maximum,unit,requirement,result}]}]`）/
+`charts`（`[{link,indicator,image_path}]`）/ `schematic_path`。
+
+返回：
+```python
+{"success": True, "report_dir": "...", "pdf_path": ".../document.pdf",
+ "docx_path": ".../document.docx", "report_data_path": ".../report.json",
+ "chart_count": 0, "errors": [], "artifacts": [...], "links": {"pdf": {...}, "docx": {...}}}
+```
+
+`links[].electrical_parameters` 结构与 `run_tr_simulation` 的 `results` 一致，可无缝衔接。
+
+### `run_tr_simulation`
+
+```python
+from servers.simulation_tool import run_tr_simulation
+
+run_tr_simulation(epp_path: str, links: list, indicators: str = "工作频率,输出增益,噪声系数",
+                  threads: int = 5, edi_path: str = "", ads_path: str = "",
+                  timeout_seconds: int = 600) -> dict
+```
+
+用 `TR_Simulator.exe` 跑 TR 链路仿真（网表→路径分析→ADS→结果提取），返回各链路电参数。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `epp_path` | str | 是 | — | .epp 工程绝对路径（同目录需有 schematics/main/schematic.ep） |
+| `links` | list | 是 | — | 链路数组（至少一条），每项 `{name, min_freq, max_freq, input_port, output_port, ...}` |
+| `indicators` | str | 否 | 工作频率,输出增益,噪声系数 | 逗号分隔指标 |
+| `threads` | int | 否 | 5 | 指标并发线程数（正整数） |
+| `edi_path` | str | 否 | "" | EDI 安装目录，默认用固定目录 |
+| `ads_path` | str | 否 | "" | ADS 安装目录，为空自动探测 `C:/Program Files/Keysight/ADS*` |
+| `timeout_seconds` | int | 否 | 600 | 最长等待秒数 |
+
+返回：
+```python
+{"success": True, "simulation_path": "...", "results": [...], "errors": [],
+ "artifacts": [...]}
+```
+
+`results` 每项 `{link, electrical_parameters:[{indicator,minimum,typical,maximum,unit}]}`。
+**部分指标失败时 `success` 仍为 True 但 `errors` 非空**，必须检查。
 
 ---
 

@@ -108,6 +108,8 @@ _CHAT_EXCLUDED_TOOLS = {
     "tr_parse_raw",
     "tr_sync_project_components",
     "tr_generate_document",
+    # 直接调 TR_Simulator.exe 跑 ADS 链路仿真：同步阻塞，不适合 Chat
+    "run_tr_simulation",
 }
 
 # 需要增强描述的工具（补充使用注意事项）

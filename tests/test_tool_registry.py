@@ -49,6 +49,7 @@ def test_all_tools_registered():
         "cst_task_list", "cst_task_cancel",
         "fetch_artifact",
         "calculate_transline", "design_wilkinson",
+        "export_simulation_report", "run_tr_simulation",
     ]
     assert len(tools) == len(required), f"expected {len(required)} tools, got {len(tools)} ({sorted(tools)})"
     for name in required:
@@ -107,6 +108,7 @@ def test_mcp_only_tools_are_expected():
         "tr_parse_raw",
         "tr_sync_project_components",
         "tr_generate_document",
+        "run_tr_simulation",          # 直接调 TR_Simulator.exe，同步阻塞 ADS 仿真
     }
     unexpected = mcp_only - expected
     assert not unexpected, (

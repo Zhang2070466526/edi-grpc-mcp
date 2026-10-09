@@ -65,6 +65,8 @@ class Settings(BaseSettings):
     turbocharts_path: str = ""
     aedt_path: str = ""
     edi_log_dir: str = r"C:\Program Files (x86)\EDI\logs"
+    # 独立仿真工具目录（Report_Exporter / TR_Simulator 固定目录）
+    simulation_tool_dir: str = r"C:\Program Files (x86)\EDI\simulation_tool"
 
     # ── LLM / Chat ──
     llm_api_key: str = ""
