@@ -50,7 +50,7 @@ def run_tr_simulation(
     ads_path: str = "",
     timeout_seconds: int = 1800,
 ) -> dict[str, Any]:
-    """用 TR_Simulator.exe 跑 TR 链路仿真（网表→路径分析→ADS→结果提取），返回各链路电参数。
+    """跑 TR 链路仿真并提取各链路电参数（结果可直接交给 export_simulation_report 出报告）。
 
     用法："仿真这个 TR 工程的两条链路"、"提取输出增益和噪声系数"
 

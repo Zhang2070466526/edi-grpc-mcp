@@ -1740,7 +1740,7 @@ export_simulation_report(report: dict, output_dir: str, schematic: str = "", tim
 ```
 
 用 `Report_Exporter.exe` 把报告 JSON 渲染成 `document.pdf` / `document.docx` / `report.json`
-（独立 exe 版，不依赖 HTTP 渲染服务）。`report` **透传 exe 原生 JSON**，校验交给 exe
+（独立 exe 版：不依赖渲染服务，也不需要 EDI）。`report` **透传 exe 原生 JSON**，校验交给 exe
 （errors 原样带回 code/stage/message）。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
@@ -1774,7 +1774,7 @@ run_tr_simulation(epp_path: str, links: list, indicators: str = "工作频率,�
                   timeout_seconds: int = 1800) -> dict
 ```
 
-用 `TR_Simulator.exe` 跑 TR 链路仿真（网表→路径分析→ADS→结果提取），返回各链路电参数。
+跑 TR 链路仿真并提取各链路电参数（前置：EDI 已启动、ADS 许可可用；结果可直接交给 `export_simulation_report` 出报告）。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|

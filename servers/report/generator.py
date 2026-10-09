@@ -205,7 +205,7 @@ def generate_simulation_report(
     overwrite: bool = False,
     timeout_seconds: int | None = None,
 ) -> dict[str, Any]:
-    """生成本地仿真报告（PDF/DOCX），16 步校验后调用本地渲染服务。
+    """生成本地仿真报告（PDF/DOCX），需要本地渲染服务在线；渲染服务不可用时改用 export_simulation_report。
 
     用法："帮我生成这个工程的仿真报告"、"输出 PDF 报告到 C:/report.pdf"
 

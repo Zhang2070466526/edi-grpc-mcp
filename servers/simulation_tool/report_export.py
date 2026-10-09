@@ -60,7 +60,7 @@ def export_simulation_report(
     schematic: str = "",
     timeout_seconds: int = 300,
 ) -> dict[str, Any]:
-    """用 Report_Exporter.exe 把报告 JSON 渲染成 PDF/DOCX/report.json（独立 exe，不依赖 HTTP 渲染服务）。
+    """将提取的各链路参数数据（JSON）导出成正式报告(PDF/DOCX/report.json)
 
     用法："把这组电参数导出成仿真报告"、"生成 PDF 到 D:/reports/run001"
 
