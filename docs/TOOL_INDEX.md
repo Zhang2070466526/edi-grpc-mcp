@@ -39,7 +39,7 @@
 - `design_wilkinson` — 设计多级威尔金森功分器，输出各级微带线宽、线长和隔离电阻。
 - `export_project_netlist` — 查看 EDA .epp 工程的网表，返回网表文件路径。
 - `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV。
-- `export_simulation_report` — 把报告 JSON 导出成 PDF/DOCX/report.json（独立 exe：不需要渲染服务、也不需要 EDI；渲染服务不可用或要离线出报告时用它）。
+- `export_simulation_report` — 将提取的各链路参数数据（JSON）导出成正式报告(PDF/DOCX/report.json)
 - `fetch_artifact` — 把本机产物文件注册成可下载 URL（仿真结果 / SNP / RAW / 图 / 报告 / 任意文件）。
 - `generate_schematic_from_netlist` — 将网表文件导入工程生成 main 原理图。
 - `generate_simulation_report` — 生成本地仿真报告（PDF/DOCX），需要本地渲染服务在线；渲染服务不可用时改用 export_simulation_report。
@@ -70,7 +70,7 @@
 - `replace_models_from_csv` — 按 CSV 文件批量替换工程中的元件模型。
 - `replace_port_component` — 将原理图中的端口器件替换为另一种类型。
 - `replace_schematic_from_file` — 从 .ep 文件整体替换原理图（对应 gRPC LOAD_SCHEMATIC_FROM_FILE）。
-- `run_tr_simulation` — 跑 TR 链路仿真并提取各链路电参数（前置：EDI 已启动、ADS 许可可用；结果可直接交给 export_simulation_report 出报告）。
+- `run_tr_simulation` — 跑 TR 链路仿真并提取各链路电参数（结果可直接交给 export_simulation_report 出报告）。
 - `search_personal_models` — 按子类查询个人模型库。
 - `search_public_models` — 按子类查询公共模型库。
 - `search_soft_ip_categories` — 查询全部软 IP 分类（自动合并分页结果）。
