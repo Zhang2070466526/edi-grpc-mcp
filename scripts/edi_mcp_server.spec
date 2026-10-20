@@ -20,11 +20,18 @@ _msvc_dlls = [
     (str(_sys32 / "msvcp140_atomic_wait.dll"), "."),
 ]
 
+# scipy 子模块多、带动态库；只写两条 hiddenimports 会漏收 —— 2026-10-20 实测：包内
+# _internal/scipy 目录齐全却 import 失败，3 个阶数评估工具全报 DEPENDENCY_MISSING。
+# 用官方 collect_all 一次收全（datas / binaries / hiddenimports 三份都要并入）。
+from PyInstaller.utils.hooks import collect_all
+
+_scipy_datas, _scipy_binaries, _scipy_hiddenimports = collect_all("scipy")
+
 a = Analysis(
     [str(root / 'start_servers.py')],
     pathex=[str(root)],
-    binaries=_msvc_dlls,
-    datas=[
+    binaries=_msvc_dlls + _scipy_binaries,
+    datas=_scipy_datas + [
         (str(root / 'servers' / 'chat' / 'index.html'), 'servers/chat'),
         (str(root / 'servers' / 'eda' / 'simulation_component_catalog.json'), 'servers/eda'),
         (str(root / 'servers' / 'cst' / 'cst_worker.py'), 'servers/cst'),
@@ -105,9 +112,14 @@ a = Analysis(
         'uvicorn.loops',
         'uvicorn.protocols',
 
-        # 滤波器阶数评估（scipy.optimize SLSQP）
-        'scipy',
-        'scipy.optimize',
+        # 滤波器阶数评估（scipy.optimize SLSQP）：子模块/数据由 collect_all 收全
+        *_scipy_hiddenimports,
+        # ⚠️ 三个算法模块由 tools.py 的 importlib.import_module 动态加载，PyInstaller 静态分析
+        # 发现不了 ⇒ 必须逐个列出，否则包里缺模块、3 个工具报 DEPENDENCY_MISSING。
+        # 2026-10-20 实测：包内 scipy 齐全，真因就是缺这 3 个模块（NO module named ...estimator_*）。
+        'servers.microwave.filter_order.filter_order_estimator_lowpass',
+        'servers.microwave.filter_order.filter_order_estimator_highpass',
+        'servers.microwave.filter_order.filter_order_estimator_bandstop',
 
         # Windows COM（ANSYS 依赖）
         'pythoncom',
@@ -129,8 +141,9 @@ a = Analysis(
         'PIL.AvifImagePlugin', 'PIL.BlpImagePlugin',
         # matplotlib 3D 工具（未使用）
         'mpl_toolkits',
-        # 文档模块（不能排除 unittest：matplotlib 依赖的 pyparsing.testing 会 import unittest）
-        'pydoc', 'doctest',
+        # 文档模块（不能排除 unittest：matplotlib 依赖的 pyparsing.testing 会 import unittest；
+        # 也不能排除 pydoc：scipy._lib._docscrape 顶层 import pydoc）
+        'doctest',
     ],
     hooksconfig={
         'matplotlib': {

@@ -8,13 +8,12 @@
 """
 from __future__ import annotations
 
+import importlib
 import math
 from typing import Any
 
 from servers import mcp
 from servers.utils import error_response
-
-import importlib
 
 from .wilkinson_marchand_order import order_final as _wilkinson_order
 
@@ -22,17 +21,21 @@ _GHZ = 1e9
 
 
 def _load_scipy_estimator(module_name: str, func_name: str):
-    """惰性加载依赖 scipy 的阶数评估函数；scipy 缺失时返回 None（不抛 ImportError）。
+    """惰性加载依赖 scipy 的阶数评估函数，返回 (func, None) 或 (None, 失败原因)。
 
-    阶数评估算法脚本顶层 import scipy，而 Win7 现场可能不装 scipy（requirements-win7.txt
-    无此项）。顶层 import 会让 registry_server 整包 import 失败、全部工具不可用；改为
-    调用时才加载，scipy 缺失时只有这 3 个工具返回依赖缺失，其余照常。
+    阶数评估算法脚本顶层 import scipy，而 Win7 现场 / 打包 exe 未必有可用的 scipy
+    （requirements-win7.txt 无此项；PyInstaller 包内也可能收集不全或 DLL 加载失败）。
+    顶层 import 会让 registry_server 整包 import 失败、全部工具不可用；改为调用时才加载，
+    不可用时只有这 3 个工具报错，其余照常。
+
+    失败原因必须回传给调用方：只回「未安装」会把「scipy 在包内但 import/DLL 失败」
+    也当成未安装，打包形态下完全无法定位（2026-10-20 实测：exe 里 scipy 文件齐全却 import 失败）。
     """
     try:
         mod = importlib.import_module(f"servers.microwave.filter_order.{module_name}")
-        return getattr(mod, func_name)
-    except ImportError:
-        return None
+        return getattr(mod, func_name), None
+    except Exception as exc:  # ImportError / OSError(DLL 加载失败) / AttributeError 都要带出来
+        return None, f"{type(exc).__name__}: {exc}"
 
 
 def _require_positive(value, name: str):
@@ -144,9 +147,9 @@ def filter_order_lowpass(
         if spec[0] <= f_p_ghz * _GHZ:
             return error_response("INVALID_PARAMETERS",
                                   f"低通阻带频率 {spec[0] / _GHZ:g} GHz 必须高于通带截止 {f_p_ghz:g} GHz")
-    _est = _load_scipy_estimator("filter_order_estimator_lowpass", "estimate_lowpass_filter_order")
+    _est, _why = _load_scipy_estimator("filter_order_estimator_lowpass", "estimate_lowpass_filter_order")
     if _est is None:
-        return error_response("DEPENDENCY_MISSING", "阶数评估需要 scipy 依赖，当前环境未安装")
+        return error_response("DEPENDENCY_MISSING", f"阶数评估需要 scipy 依赖，当前环境不可用（{_why}）")
     try:
         result = _est(f_p_ghz * _GHZ, specs_hz, RL_dB=rl_db, Q_unloaded=q_unloaded,
                       max_notches=max_notches, verbose=False)
@@ -185,11 +188,21 @@ def filter_order_highpass(
     """
     if (err := _check_common(f_p_ghz, rl_db, q_unloaded, max_notches)) is not None:
         return err
-    _est = _load_scipy_estimator("filter_order_estimator_highpass", "estimate_highpass_filter_order")
-    if _est is None:
-        return error_response("DEPENDENCY_MISSING", "阶数评估需要 scipy 依赖，当前环境未安装")
+    _est_module = "filter_order_estimator_highpass"
     try:
         specs_hz = _stopband_hz(stopband_specs)
+    except ValueError as exc:
+        return error_response("INVALID_PARAMETERS", str(exc))
+    # 高通阻带必须整体落在 f_p 之下；在封装层先校验，scipy 不可用时也能给出参数错误
+    for spec in specs_hz:
+        f_edge = spec[1] if len(spec) == 3 else spec[0]
+        if f_edge >= f_p_ghz * _GHZ:
+            return error_response("INVALID_PARAMETERS",
+                                  f"高通阻带频率 {f_edge / _GHZ:g} GHz 必须低于通带截止 {f_p_ghz:g} GHz")
+    _est, _why = _load_scipy_estimator(_est_module, "estimate_highpass_filter_order")
+    if _est is None:
+        return error_response("DEPENDENCY_MISSING", f"阶数评估需要 scipy 依赖，当前环境不可用（{_why}）")
+    try:
         result = _est(f_p_ghz * _GHZ, specs_hz, RL_dB=rl_db, Q_unloaded=q_unloaded,
                       max_notches=max_notches, verbose=False)
     except ValueError as exc:
@@ -241,9 +254,7 @@ def filter_order_bandstop(
         return err
     if not isinstance(max_notches, int) or isinstance(max_notches, bool) or max_notches < 0:
         return error_response("INVALID_PARAMETERS", "max_notches 必须是 >=0 的整数")
-    _est = _load_scipy_estimator("filter_order_estimator_bandstop", "estimate_bandstop_filter_order")
-    if _est is None:
-        return error_response("DEPENDENCY_MISSING", "阶数评估需要 scipy 依赖，当前环境未安装")
+    # 先做参数解析/校验，再加载 scipy —— 否则 scipy 不可用时参数错误会被盖成依赖缺失
     try:
         if isinstance(stopband_specs, (int, float)) and not isinstance(stopband_specs, bool):
             specs = float(stopband_specs)
@@ -252,6 +263,19 @@ def filter_order_bandstop(
         else:
             specs = _stopband_hz(stopband_specs)
         passband_hz = _passband_hz(passband_specs)
+    except ValueError as exc:
+        return error_response("INVALID_PARAMETERS", str(exc))
+    # 通带位置校验也放封装层（算法层同样会查，但 scipy 不可用时算法层跑不到）
+    if isinstance(passband_hz, tuple):
+        _fp1, _fp2 = passband_hz[0], passband_hz[2]
+    else:
+        _fp1, _fp2 = passband_hz[0][0], passband_hz[1][0]
+    if not (_fp1 < f_s1_ghz * _GHZ < f_s2_ghz * _GHZ < _fp2):
+        return error_response("INVALID_PARAMETERS", "要求 f_p1 < f_s1 < f_s2 < f_p2")
+    _est, _why = _load_scipy_estimator("filter_order_estimator_bandstop", "estimate_bandstop_filter_order")
+    if _est is None:
+        return error_response("DEPENDENCY_MISSING", f"阶数评估需要 scipy 依赖，当前环境不可用（{_why}）")
+    try:
         result = _est(f_s1_ghz * _GHZ, f_s2_ghz * _GHZ, specs, passband_hz,
                       RL_dB=rl_db, Q_unloaded=q_unloaded, max_notches=max_notches)
     except ValueError as exc:

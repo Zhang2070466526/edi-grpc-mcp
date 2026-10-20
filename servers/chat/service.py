@@ -101,13 +101,6 @@ _CHAT_EXCLUDED_TOOLS = {
     "get_hfss_project_info",
     "start_hfss_analysis_async",
     "get_hfss_analysis_status",
-    # TR 后台工具：内部轮询到终态，同步阻塞，不适合 Chat
-    "tr_restore_schematic",
-    "tr_execute_simulation_plan",
-    "tr_run_simulation",
-    "tr_parse_raw",
-    "tr_sync_project_components",
-    "tr_generate_document",
     # 直接调 TR_Simulator.exe 跑 ADS 链路仿真：同步阻塞，不适合 Chat
     "run_tr_simulation",
 }
@@ -330,6 +323,8 @@ ERROR_CODES = {
     "NO_LINKS": "至少需要一条链路",
     "LINK_JSON_INVALID": "链路 JSON 不合法",
     "SIMULATION_EXECUTION_FAILED": "TR 仿真执行失败",
+    # 微波阶数评估：目标环境 scipy 不可用（Win7 精简环境 / 打包包内 import 或 DLL 加载失败）
+    "DEPENDENCY_MISSING": "缺少可选依赖（阶数评估需要 scipy，可用源码态运行）",
 }
 
 

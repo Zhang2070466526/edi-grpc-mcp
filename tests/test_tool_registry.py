@@ -103,17 +103,7 @@ def test_mcp_only_tools_are_expected():
         "get_hfss_project_info",
         "start_hfss_analysis_async",
         "get_hfss_analysis_status",
-        "tr_restore_schematic",       # TR 后台工具，同步阻塞
-        "tr_execute_simulation_plan",
-        "tr_run_simulation",
-        "tr_parse_raw",
-        "tr_sync_project_components",
-        "tr_generate_document",
         "run_tr_simulation",          # 直接调 TR_Simulator.exe，同步阻塞 ADS 仿真
-        "filter_order_lowpass",       # 本地纯计算，阶数评估（scipy）
-        "filter_order_highpass",
-        "filter_order_bandstop",
-        "wilkinson_marchand_order",
     }
     unexpected = mcp_only - expected
     assert not unexpected, (
