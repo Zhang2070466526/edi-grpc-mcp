@@ -1,8 +1,8 @@
 # EDI gRPC MCP 实现原理与机制
 
-> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 79 个工具的逐类实现，再到 7 个 Resource 与 8 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
+> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 83 个工具的逐类实现，再到 7 个 Resource 与 8 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
 
-> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（79 个工具接口参数/返回）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由请求/响应体）。
+> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（83 个工具接口参数/返回）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由请求/响应体）。
 
 ---
 
@@ -44,7 +44,7 @@
   - `3.6` 日志系统
   - `3.7` Chat 会话与破坏性确认
 
-- **[四、工具实现](#四工具实现)** —— 79 个工具按通信类型分组 + 设计动机
+- **[四、工具实现](#四工具实现)** —— 83 个工具按通信类型分组 + 设计动机
   - `4.1` 工程管理
   - `4.2` 仿真器件
   - `4.3` 仿真
@@ -81,7 +81,7 @@
 
 ### 1.1 通信类型总览
 
-每个 MCP 工具按底层通信方式分为 6 种实现类型：
+每个 MCP 工具按底层通信方式分为 7 种实现类型：
 
 | 类型 | 工具数 | 核心实现 | 说明 |
 |---|---|---|---|
@@ -91,6 +91,7 @@
 | subprocess 命令行 | 4 | `turbocharts/config.py` 等 | 调 `turbocharts_app.exe`、启动 EDI |
 | COM / CST 接口 | 19 | `ansys/config.py` / `cst/cst_api.py` | ANSYS 6 个走 COM，CST 13 个走官方 API |
 | 图片 / 文档 / 报告 | 4 | `multimodal_vision/` / `report/` | 视觉分析、文档预览、报告渲染 |
+| 本地纯计算 | 6 | `microwave/` | 传输线阻抗/线宽、功分器设计、滤波器阶数评估（高通/低通/带阻）、功分器/巴伦节数，纯数值解算无外部依赖 |
 
 ### 1.2 gRPC 异步调用模型
 
@@ -871,7 +872,20 @@ else:                                 # 两者都没有
 | `export_simulation_report` | `simulation_report/Report_Exporter.exe` | 子进程 | 报告 JSON → `document.pdf` / `document.docx` / `report.json`；图片路径转绝对后再交给 exe（见 `report_export.py:_absolutize_images`） |
 | `run_tr_simulation` | `tr_simulation/TR_Simulator.exe` | 子进程 + gRPC | 网表 → 路径分析 → 开关状态/参数注入 → ADS 仿真 → 结果提取，返回各链路 `electrical_parameters`（可直接喂给上表报告工具） |
 
-### 4.11 工具设计动机与数据依赖
+### 4.11 微波计算（本地纯计算，无外部依赖）
+
+微波工具不走 gRPC / COM / subprocess，是进程内纯数值解算（numpy + scipy），返回数据在顶层（无任务信封，`details` 为 `null`）。算法脚本与 MCP 封装同包（`servers/microwave/`，阶数评估在 `filter_order/` 子包），频率参数对外统一 GHz、内部转 Hz。
+
+| 工具 | 通信 | 关键实现 |
+|---|---|---|
+| `calculate_transline` | 本地 | KiCad 传输线闭式（微带/带状/GCPW/同轴），阻抗 ↔ 线宽互算 |
+| `design_wilkinson` | 本地 | Chebyshev 变阻综合，微带尺寸委托 `calculate_transline` |
+| `filter_order_lowpass` | 本地 | 广义切比雪夫综合（Cameron N+2）+ SLSQP 零点优化 |
+| `filter_order_highpass` | 本地 | 同低通，Ω=f_p/f 映射（阻带在下侧） |
+| `filter_order_bandstop` | 本地 | 倒数变换法复用低通核心（物理阶数 = 2N） |
+| `wilkinson_marchand_order` | 本地 | Chebyshev 变阻公式 + 单节三端口精确校验 |
+
+### 4.12 工具设计动机与数据依赖
 
 从「为什么需要这个工具」的视角说明每个工具的设计动机、解决的问题、与其它工具的数据依赖（谁提供输入、输出供谁）。
 

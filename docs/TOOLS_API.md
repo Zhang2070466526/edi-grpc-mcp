@@ -21,7 +21,7 @@ from servers.eda.project_manage import list_epp_projects
 - **[导出与分析（4 个）](#导出与分析4个)**：导出网表、截图原理图、器件 CSV、信号链路追踪
 - **[模型库 / 原理图库（6 个）](#模型库--原理图库6个)**：模型替换、模型分类/查询/搜索、性能器件放置、拓扑设计
 - **[软 IP（1 个）](#软ip1个)**：按设计描述下载芯片模型
-- **[微波计算（2 个）](#微波计算2个)**：传输线特性阻抗 / 线宽计算、多级威尔金森功分器设计（本地计算，无任务信封）
+- **[微波计算（6 个）](#微波计算6个)**：传输线特性阻抗 / 线宽计算、多级威尔金森功分器设计、滤波器阶数评估（高通/低通/带阻）、功分器/巴伦节数（本地纯计算，无任务信封）
 - **[工作区（3 个）](#工作区3个)**：创建 / 切换 / 查询当前工作区
 - **[原理图扩展（4 个）](#原理图扩展4个)**：内置器件、清空原理图、连线
 - **[启动 / 诊断（3 个）](#启动--诊断3个)**：启动 EDI、服务诊断、日志读取
@@ -1186,14 +1186,14 @@ cst_export_farfield_query(task_id: str) -> dict
 
 ---
 
-## 微波计算（2 个）
+## 微波计算（6 个）
 
 > 本地纯计算（不产生 task 信封，`details` 为 `null`，数据在顶层）。数值解算独立复核过（见 `审查报告.md` §十四）。
 
 ### `calculate_transline`
 
 ```python
-from servers.microwave.transline import calculate_transline
+from servers.microwave.tools import calculate_transline
 
 calculate_transline(transline_type: str, er: float, freq: float, width=None, z0=None, h=None,
                     t: float = 0.035, gap=None, d_in=None, d_out=None, tand: float = 0.0) -> dict
@@ -1220,7 +1220,7 @@ calculate_transline(transline_type: str, er: float, freq: float, width=None, z0=
 ### `design_wilkinson`
 
 ```python
-from servers.microwave.wilkinson_designer import design_wilkinson
+from servers.microwave.tools import design_wilkinson
 
 design_wilkinson(h_mm: float, er: float, f0_ghz: float, n_sections: int,
                  z0: float = 50.0, fbw=None, ripple_db=None) -> dict
@@ -1242,6 +1242,90 @@ design_wilkinson(h_mm: float, er: float, f0_ghz: float, n_sections: int,
 ⚠️ **两个已知缺陷（未修，详见 `审查报告.md` §十四）**：
 1. **`MW-1` 隔离电阻方向错**：`n ≥ 2` 用启发式拟合，取值**朝输出端单调递减**（正确倾向应递增）。实测 `n=2` 带内最差隔离 **−13.30 dB**（数值最优 ≈ −20.97 dB）；`n=4/5/6/10` 一律同向递减 ⇒ 系统性偏差，n≥2 的隔离电阻值**不可直接采用**。
 2. **`MW-3` 波纹钳位静默失真**：`ripple_db ≤ 9.2` 时 `fbw` 被静默钳到 **1.8（=180% 带宽）**、臂阻抗退化成 `[72.4, 70.7, 69.1]`，而返回仍 `success: true` ⇒ 设计输出不可用但不报错。
+
+---
+
+### `filter_order_lowpass`
+
+```python
+from servers.microwave.filter_order.tools import filter_order_lowpass
+
+filter_order_lowpass(f_p_ghz: float, stopband_specs: list, rl_db: float = -20.0,
+                     q_unloaded=None, max_notches: int = 4) -> dict
+```
+
+估计广义切比雪夫低通滤波器的**阶数与有限传输零点**（Cameron N+2 综合 + SLSQP 零点优化）。`stopband_specs` 每项 `[f, A]`（抑制点）或 `[f_lo, f_hi, A]`（抑制频段），频率 GHz、抑制 dB。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `f_p_ghz` | float | 是 | — | 通带截止频率（GHz） |
+| `stopband_specs` | list | 是 | — | 阻带规范，每项 `[f, A]` 或 `[f_lo, f_hi, A]` |
+| `rl_db` | float | 否 | -20.0 | 通带回波损耗（dB，负值） |
+| `q_unloaded` | float | 否 | None | 谐振器无载 Q（None=无损） |
+| `max_notches` | int | 否 | 4 | 最大有限传输零点对数 |
+
+返回：`{"success": true, "N": 阶数, "notches": 零点对数, "notches_ghz": [...], "verify_rows": [...], "solutions": [...]}`。
+
+实测锚点：`f_p_ghz=1`、`stopband_specs=[[2, 3, 40]]` → **N=5、1 对零点 @2GHz**。
+
+---
+
+### `filter_order_highpass`
+
+```python
+from servers.microwave.filter_order.tools import filter_order_highpass
+
+filter_order_highpass(f_p_ghz: float, stopband_specs: list, rl_db: float = -20.0,
+                      q_unloaded=None, max_notches: int = 4) -> dict
+```
+
+估计广义切比雪夫高通滤波器的阶数与有限传输零点。阻带位于 `f < f_p_ghz` 一侧，`stopband_specs` 各频率须 `< f_p_ghz`。参数与返回同 `filter_order_lowpass`。
+
+实测锚点：`f_p_ghz=1`、`stopband_specs=[[1/3, 0.5, 40]]` → **N=5、零点 @0.5GHz**（与低通 `[2, 3]` 原型互为镜像，零点互为倒数）。
+
+---
+
+### `filter_order_bandstop`
+
+```python
+from servers.microwave.filter_order.tools import filter_order_bandstop
+
+filter_order_bandstop(f_s1_ghz: float, f_s2_ghz: float, stopband_specs: float | list,
+                      passband_specs: list, rl_db: float = -20.0,
+                      q_unloaded=None, max_notches: int = 4) -> dict
+```
+
+估计广义切比雪夫带阻滤波器的**原型阶数 N 与陷波零点对**（物理阶数 = 2N，倒数变换法复用低通核心）。`stopband_specs` 可为浮点（整个阻带抑制 dB）或列表 `[[f, A]]` / `[[f_lo, f_hi, A]]`；`passband_specs` 为 `[f_p1, A_p1, f_p2, A_p2]` 或 `[[f_p1, A_p1], [f_p2, A_p2]]`。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `f_s1_ghz` / `f_s2_ghz` | float | 是 | — | 阻带下/上边（GHz），`f_s2 > f_s1` |
+| `stopband_specs` | float \| list | 是 | — | 阻带抑制要求 |
+| `passband_specs` | list | 是 | — | 两侧通带要求（`f_p1 < f_s1`、`f_p2 > f_s2`） |
+| `rl_db` / `q_unloaded` / `max_notches` | — | 否 | — | 同低通 |
+
+返回：`{"success": true, "N": 原型阶数, "order_bandstop": 2N, "notches": 零点对数, "notch_freq_pairs_ghz": [[下,上],...], "f0_ghz": 阻带中心, "fbw": 相对带宽, ...}`。
+
+实测锚点：`f_s1=2.1, f_s2=2.2`、陷波≥20dB、两侧通带≤1dB、Q=500 → **N=3（物理阶数 6）、1 对陷波 @[2.100, 2.200]GHz**。
+
+---
+
+### `wilkinson_marchand_order`
+
+```python
+from servers.microwave.filter_order.tools import wilkinson_marchand_order
+
+wilkinson_marchand_order(ratio: float, rl_db: float = 15.0) -> dict
+```
+
+估计 Wilkinson 功分器 / Marchand 巴伦的**节数**。切比雪夫变阻综合公式对 N≥2 有效；公式给出 N=1 时用单节三端口精确响应校验带边隔离度，达标则 N=1，否则升 N=2。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `ratio` | float | 是 | — | 频率比（高/低），>1 |
+| `rl_db` | float | 否 | 15.0 | 带边隔离度指标（dB） |
+
+返回：`{"success": true, "order": N}`。实测：频率比 6:1 → **3 节**。
 
 ---
 
@@ -1580,7 +1664,7 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 
 ## Resources & Prompts
 
-除了 Tool（启动时动态统计，当前 79 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
+除了 Tool（启动时动态统计，当前 83 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
 
 ### Resources（7 个）
 

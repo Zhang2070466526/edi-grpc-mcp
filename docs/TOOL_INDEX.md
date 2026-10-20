@@ -2,7 +2,7 @@
 
 > 自动生成，勿手改。权威数量见 /ready 的 tool_count。
 
-共 79 个工具：
+共 83 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
 - `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
@@ -41,6 +41,9 @@
 - `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV。
 - `export_simulation_report` — 将提取的各链路参数数据（JSON）导出成正式报告(PDF/DOCX/report.json)
 - `fetch_artifact` — 把本机产物文件注册成可下载 URL（仿真结果 / SNP / RAW / 图 / 报告 / 任意文件）。
+- `filter_order_bandstop` — 估计广义切比雪夫带阻滤波器的阶数与陷波零点。
+- `filter_order_highpass` — 估计广义切比雪夫高通滤波器的阶数与有限传输零点。
+- `filter_order_lowpass` — 估计广义切比雪夫低通滤波器的阶数与有限传输零点。
 - `generate_schematic_from_netlist` — 将网表文件导入工程生成 main 原理图。
 - `generate_simulation_report` — 生成本地仿真报告（PDF/DOCX），需要本地渲染服务在线；渲染服务不可用时改用 export_simulation_report。
 - `get_components_static_params` — 查询器件的固有参数（重量、尺寸、封装、所属厂商、成本等）。
@@ -83,3 +86,4 @@
 - `switch_workspace` — 设置下次启动程序时使用的工作区，当前工作区保持不变。
 - `turbocharts_convert` — ADS RAW 转曲线图+CSV（SP/HB/XDB）；linename 为「单位_线段名」，多条用 & 分隔。返回含引擎原始输出（stderr/command_runs/engine_report）与 log_path（原文已落盘）；**回复时必须把引擎原文与 warnings 原样转述给用户，不得只回一句 message**。
 - `update_simulation_component` — 按实例名更新器件参数。
+- `wilkinson_marchand_order` — 估计 Wilkinson 功分器 / Marchand 巴伦的节数（阶数）。

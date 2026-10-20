@@ -105,6 +105,10 @@ a = Analysis(
         'uvicorn.loops',
         'uvicorn.protocols',
 
+        # 滤波器阶数评估（scipy.optimize SLSQP）
+        'scipy',
+        'scipy.optimize',
+
         # Windows COM（ANSYS 依赖）
         'pythoncom',
         'pywintypes',
