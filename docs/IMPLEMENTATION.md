@@ -54,7 +54,9 @@
   - `4.7` ANSYS HFSS 与 CST
   - `4.8` 启动 / 诊断
   - `4.9` 图片 / 文档 / 报告
-  - `4.11` 工具设计动机与数据依赖
+  - `4.10` 独立仿真工具（固定目录 exe）
+  - `4.11` 微波计算（本地纯计算）
+  - `4.12` 工具设计动机与数据依赖
 
 - **[五、Resources（7 个）](#五resources7-个)** —— 只读上下文/参考资料逐条详解
   - `edi://service/overview` — 服务概览
@@ -872,7 +874,7 @@ else:                                 # 两者都没有
 | `export_simulation_report` | `simulation_report/Report_Exporter.exe` | 子进程 | 报告 JSON → `document.pdf` / `document.docx` / `report.json`；图片路径转绝对后再交给 exe（见 `report_export.py:_absolutize_images`） |
 | `run_tr_simulation` | `tr_simulation/TR_Simulator.exe` | 子进程 + gRPC | 网表 → 路径分析 → 开关状态/参数注入 → ADS 仿真 → 结果提取，返回各链路 `electrical_parameters`（可直接喂给上表报告工具） |
 
-### 4.11 微波计算（本地纯计算，无外部依赖）
+### 4.11 微波计算（本地纯计算，不走 gRPC/COM）
 
 微波工具不走 gRPC / COM / subprocess，是进程内纯数值解算（numpy + scipy），返回数据在顶层（无任务信封，`details` 为 `null`）。算法脚本与 MCP 封装同包（`servers/microwave/`，阶数评估在 `filter_order/` 子包），频率参数对外统一 GHz、内部转 Hz。
 

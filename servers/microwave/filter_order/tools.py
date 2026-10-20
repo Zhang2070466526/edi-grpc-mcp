@@ -14,12 +14,25 @@ from typing import Any
 from servers import mcp
 from servers.utils import error_response
 
-from .filter_order_estimator_lowpass import estimate_lowpass_filter_order as _lowpass
-from .filter_order_estimator_highpass import estimate_highpass_filter_order as _highpass
-from .filter_order_estimator_bandstop import estimate_bandstop_filter_order as _bandstop
+import importlib
+
 from .wilkinson_marchand_order import order_final as _wilkinson_order
 
 _GHZ = 1e9
+
+
+def _load_scipy_estimator(module_name: str, func_name: str):
+    """惰性加载依赖 scipy 的阶数评估函数；scipy 缺失时返回 None（不抛 ImportError）。
+
+    阶数评估算法脚本顶层 import scipy，而 Win7 现场可能不装 scipy（requirements-win7.txt
+    无此项）。顶层 import 会让 registry_server 整包 import 失败、全部工具不可用；改为
+    调用时才加载，scipy 缺失时只有这 3 个工具返回依赖缺失，其余照常。
+    """
+    try:
+        mod = importlib.import_module(f"servers.microwave.filter_order.{module_name}")
+        return getattr(mod, func_name)
+    except ImportError:
+        return None
 
 
 def _require_positive(value, name: str):
@@ -41,10 +54,13 @@ def _stopband_hz(specs):
     for s in specs:
         if not isinstance(s, (list, tuple)) or len(s) not in (2, 3):
             raise ValueError("阻带规范每项必须是 [f, A]（抑制点）或 [f_lo, f_hi, A]（抑制频段）")
+        A = float(s[-1])
+        if not math.isfinite(A) or A <= 0:
+            raise ValueError("阻带抑制 A 必须是大于 0 的 dB 值")
         if len(s) == 2:
-            out.append((float(s[0]) * _GHZ, float(s[1])))
+            out.append((float(s[0]) * _GHZ, A))
         else:
-            out.append((float(s[0]) * _GHZ, float(s[1]) * _GHZ, float(s[2])))
+            out.append((float(s[0]) * _GHZ, float(s[1]) * _GHZ, A))
     return out
 
 
@@ -109,6 +125,7 @@ def filter_order_lowpass(
     Args:
         f_p_ghz: 通带截止频率 GHz（>0）。
         stopband_specs: 阻带规范列表，每项 [f, A] 或 [f_lo, f_hi, A]（频率 GHz，抑制 dB）。
+            频段形式 [f_lo, f_hi, A] 在 verify_rows 里只回该频段内最差点（衰减最小处）1 行，非两端点。
         rl_db: 通带回波损耗 dB（负值），默认 -20。
         q_unloaded: 谐振器无载 Q 值（None=无损），默认 None。
         max_notches: 最大有限传输零点对数，默认 4。
@@ -121,8 +138,18 @@ def filter_order_lowpass(
         return err
     try:
         specs_hz = _stopband_hz(stopband_specs)
-        result = _lowpass(f_p_ghz * _GHZ, specs_hz, RL_dB=rl_db, Q_unloaded=q_unloaded,
-                          max_notches=max_notches, verbose=False)
+    except ValueError as exc:
+        return error_response("INVALID_PARAMETERS", str(exc))
+    for spec in specs_hz:
+        if spec[0] <= f_p_ghz * _GHZ:
+            return error_response("INVALID_PARAMETERS",
+                                  f"低通阻带频率 {spec[0] / _GHZ:g} GHz 必须高于通带截止 {f_p_ghz:g} GHz")
+    _est = _load_scipy_estimator("filter_order_estimator_lowpass", "estimate_lowpass_filter_order")
+    if _est is None:
+        return error_response("DEPENDENCY_MISSING", "阶数评估需要 scipy 依赖，当前环境未安装")
+    try:
+        result = _est(f_p_ghz * _GHZ, specs_hz, RL_dB=rl_db, Q_unloaded=q_unloaded,
+                      max_notches=max_notches, verbose=False)
     except ValueError as exc:
         return error_response("INVALID_PARAMETERS", str(exc))
     if not result.get("success"):
@@ -147,6 +174,7 @@ def filter_order_highpass(
     Args:
         f_p_ghz: 通带截止频率 GHz（阻带位于其下侧，>0）。
         stopband_specs: 阻带规范列表，每项 [f, A] 或 [f_lo, f_hi, A]（频率 GHz，抑制 dB，均 < f_p_ghz）。
+            频段形式 [f_lo, f_hi, A] 在 verify_rows 里只回该频段内最差点（衰减最小处）1 行，非两端点。
         rl_db: 通带回波损耗 dB（负值），默认 -20。
         q_unloaded: 谐振器无载 Q 值（None=无损），默认 None。
         max_notches: 最大有限传输零点对数，默认 4。
@@ -157,10 +185,13 @@ def filter_order_highpass(
     """
     if (err := _check_common(f_p_ghz, rl_db, q_unloaded, max_notches)) is not None:
         return err
+    _est = _load_scipy_estimator("filter_order_estimator_highpass", "estimate_highpass_filter_order")
+    if _est is None:
+        return error_response("DEPENDENCY_MISSING", "阶数评估需要 scipy 依赖，当前环境未安装")
     try:
         specs_hz = _stopband_hz(stopband_specs)
-        result = _highpass(f_p_ghz * _GHZ, specs_hz, RL_dB=rl_db, Q_unloaded=q_unloaded,
-                           max_notches=max_notches, verbose=False)
+        result = _est(f_p_ghz * _GHZ, specs_hz, RL_dB=rl_db, Q_unloaded=q_unloaded,
+                      max_notches=max_notches, verbose=False)
     except ValueError as exc:
         return error_response("INVALID_PARAMETERS", str(exc))
     if not result.get("success"):
@@ -210,14 +241,19 @@ def filter_order_bandstop(
         return err
     if not isinstance(max_notches, int) or isinstance(max_notches, bool) or max_notches < 0:
         return error_response("INVALID_PARAMETERS", "max_notches 必须是 >=0 的整数")
+    _est = _load_scipy_estimator("filter_order_estimator_bandstop", "estimate_bandstop_filter_order")
+    if _est is None:
+        return error_response("DEPENDENCY_MISSING", "阶数评估需要 scipy 依赖，当前环境未安装")
     try:
         if isinstance(stopband_specs, (int, float)) and not isinstance(stopband_specs, bool):
             specs = float(stopband_specs)
+            if not math.isfinite(specs) or specs <= 0:
+                raise ValueError("阻带抑制 A 必须是大于 0 的 dB 值")
         else:
             specs = _stopband_hz(stopband_specs)
         passband_hz = _passband_hz(passband_specs)
-        result = _bandstop(f_s1_ghz * _GHZ, f_s2_ghz * _GHZ, specs, passband_hz,
-                           RL_dB=rl_db, Q_unloaded=q_unloaded, max_notches=max_notches)
+        result = _est(f_s1_ghz * _GHZ, f_s2_ghz * _GHZ, specs, passband_hz,
+                      RL_dB=rl_db, Q_unloaded=q_unloaded, max_notches=max_notches)
     except ValueError as exc:
         return error_response("INVALID_PARAMETERS", str(exc))
     if not result.get("success"):

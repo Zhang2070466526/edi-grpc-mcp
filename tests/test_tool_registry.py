@@ -48,6 +48,8 @@ def test_all_tools_registered():
         "cst_task_list", "cst_task_cancel",
         "fetch_artifact",
         "calculate_transline", "design_wilkinson",
+        "filter_order_lowpass", "filter_order_highpass", "filter_order_bandstop",
+        "wilkinson_marchand_order",
         "export_simulation_report", "run_tr_simulation",
     ]
     assert len(tools) == len(required), f"expected {len(required)} tools, got {len(tools)} ({sorted(tools)})"
@@ -108,6 +110,10 @@ def test_mcp_only_tools_are_expected():
         "tr_sync_project_components",
         "tr_generate_document",
         "run_tr_simulation",          # 直接调 TR_Simulator.exe，同步阻塞 ADS 仿真
+        "filter_order_lowpass",       # 本地纯计算，阶数评估（scipy）
+        "filter_order_highpass",
+        "filter_order_bandstop",
+        "wilkinson_marchand_order",
     }
     unexpected = mcp_only - expected
     assert not unexpected, (

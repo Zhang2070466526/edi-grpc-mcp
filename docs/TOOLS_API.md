@@ -1281,7 +1281,7 @@ filter_order_highpass(f_p_ghz: float, stopband_specs: list, rl_db: float = -20.0
 
 估计广义切比雪夫高通滤波器的阶数与有限传输零点。阻带位于 `f < f_p_ghz` 一侧，`stopband_specs` 各频率须 `< f_p_ghz`。参数与返回同 `filter_order_lowpass`。
 
-实测锚点：`f_p_ghz=1`、`stopband_specs=[[1/3, 0.5, 40]]` → **N=5、零点 @0.5GHz**（与低通 `[2, 3]` 原型互为镜像，零点互为倒数）。
+实测锚点：`f_p_ghz=1`、`stopband_specs=[[0.3333, 0.5, 40]]` → **N=5、零点 @0.5GHz**（与低通 `[2, 3]` 原型互为镜像，零点互为倒数）。
 
 ---
 
