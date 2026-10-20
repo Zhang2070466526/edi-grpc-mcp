@@ -41,6 +41,12 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["proto", "servers", "start_servers.py"]
 
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "scripts/win7/依赖补丁/**",
+    "scripts/架构说明*.png",
+]
+
 [tool.uv]
 package = true
 
