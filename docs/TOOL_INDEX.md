@@ -2,7 +2,7 @@
 
 > 自动生成，勿手改。权威数量见 /ready 的 tool_count。
 
-共 83 个工具：
+共 85 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
 - `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
@@ -14,7 +14,7 @@
 - `calculate_transline` — 计算传输线的特性阻抗或线宽（微带 / 带状 / 接地共面波导 / 同轴）。
 - `capture_schematic` — 截取 EDA 工程原理图为图片。
 - `clear_schematic` — 清空工程原理图中的全部器件和网段并保存（破坏性操作）。
-- `close_edi_project` — 关闭一个.epp 工程。
+- `close_edi_project` — ⚠️ 关闭当前 .epp 工程（未保存改动会丢）。打开用 open_edi_project；只是想看状态用 get_edi_project_info。
 - `close_hfss_project` — 关闭 AEDT 项目（COM 优先，force 仅结束 MCP 最后启动的 PID）。
 - `compare_simulation_results` — 比较多个 RAW 仿真结果文件中的同一条曲线并生成对比图。
 - `create_project` — 创建新的 EDI 工程（不显示创建向导，也不自动打开）。
@@ -22,18 +22,19 @@
 - `create_workspace` — 创建一个新的工作区，不自动切换。
 - `cst_export_farfield` — 导出 CST 模型的远场方向图为 ASCII .txt（自动判断是否已求解）。
 - `cst_export_farfield_query` — 查询远场导出任务：返回进度，完成时附带 farfield_txts。
-- `cst_export_snp` — 导出 CST 模型的 S 参数为 Touchstone .sNp 文件（需先求解）。
-- `cst_export_snp_async` — 异步导出 CST 模型的 S 参数为 Touchstone .sNp 文件（需先求解），立即返回 task_id。
-- `cst_export_snp_query` — 查询 S 参数导出任务：返回进度，完成时附带 snp_path。
+- `cst_export_snp` — 同步导出 CST 的 S 参数为 .sNp（阻塞等完成后返回文件路径，适合小模型）。长任务请用 cst_export_snp_async。
+- `cst_export_snp_async` — 异步提交 CST 的 S 参数导出，立即返回 task_id，用 cst_export_snp_query 取结果。想一步到位用同步版 cst_export_snp。
+- `cst_export_snp_query` — 查询 CST 的 S 参数导出任务进度（配合 cst_export_snp_async 的 task_id）。求解任务用 cst_solve_query。
 - `cst_get_model_info` — 只读查看 CST 模型状态：是否已解、是否解包、端口数、远场监视器有无。
 - `cst_list_results` — 列出 CST 模型结果树里的全部条目（S 参数 / 远场等）与监视器。
 - `cst_open_project` — 打开并保存 CST 模型（= 解包归档文件），不求解。
 - `cst_plot_farfield` — 把 CST 远场 ASCII .txt 画成方向图（极坐标切面 + 直角曲线各一张 PNG）。
 - `cst_solve_async` — 异步求解 CST 模型（.cst），立即返回 task_id。
-- `cst_solve_query` — 查询 CST 求解任务：返回进度，完成时附带 model_path。
+- `cst_solve_query` — 查询 CST 求解任务进度（配合 cst_solve_async 拿到的 task_id）。S 参数导出任务用 cst_export_snp_query。
 - `cst_task_cancel` — 取消一个 CST 异步任务（排队中的直接取消，运行中的尝试终止其子进程）。
 - `cst_task_list` — 列出当前所有 CST 异步任务（求解 / 导出）及状态。
 - `delete_simulation_component` — 按实例名删除原理图器件及其连接线。
+- `describe_tool` — 查看某个工具要哪些参数、怎么填、最小可运行示例 —— 参数拿不准时先调它，别猜也别读源码。
 - `design_chip` — 用户输入指标来设计cst天线模型（中心频率），hfss带通滤波器（中心频率，相对带宽）、低通滤波器（截止频率）负载（中心频率）等电路指标，获取相应的模型文件。
 - `design_schematic_topology` — 用户输入指标来设计电路拓扑（收发组件、滤波器、天线等），自动创建并打开新工程。
 - `design_wilkinson` — 设计多级威尔金森功分器，输出各级微带线宽、线长和隔离电阻。
@@ -41,9 +42,9 @@
 - `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV。
 - `export_simulation_report` — 将提取的各链路参数数据（JSON）导出成正式报告(PDF/DOCX/report.json)
 - `fetch_artifact` — 把本机产物文件注册成可下载 URL（仿真结果 / SNP / RAW / 图 / 报告 / 任意文件）。
-- `filter_order_bandstop` — 估计广义切比雪夫带阻滤波器的阶数与陷波零点。
-- `filter_order_highpass` — 估计广义切比雪夫高通滤波器的阶数与有限传输零点。
-- `filter_order_lowpass` — 估计广义切比雪夫低通滤波器的阶数与有限传输零点。
+- `filter_order_bandstop` — 带阻阶数估算：阻带是 f_s1~f_s2 这一段，返回阶数与陷波零点。低通用 filter_order_lowpass、高通用 filter_order_highpass。
+- `filter_order_highpass` — 高通阶数估算：通带自 f_p 向上、阻带在 f_p 之下，返回阶数与传输零点。低通用 filter_order_lowpass、带阻用 filter_order_bandstop。
+- `filter_order_lowpass` — 低通阶数估算：通带到 f_p、阻带在 f_p 之上，返回阶数与传输零点。高通用 filter_order_highpass、带阻用 filter_order_bandstop。
 - `generate_schematic_from_netlist` — 将网表文件导入工程生成 main 原理图。
 - `generate_simulation_report` — 生成本地仿真报告（PDF/DOCX），需要本地渲染服务在线；渲染服务不可用时改用 export_simulation_report。
 - `get_components_static_params` — 查询器件的固有参数（重量、尺寸、封装、所属厂商、成本等）。
@@ -68,14 +69,15 @@
 - `list_schematic_components` — 通过 gRPC 查询原理图全部器件（含完整参数），比本地文件读取更实时。
 - `list_simulation_components` — 列出已保存工程中的全部器件及参数（含 wire→public 参数名映射）。
 - `open_document` — 打开本地文档：link 模式生成 10 分钟 HTTP 链接，local 模式用系统默认程序打开。
-- `open_edi_project` — 打开一个 .epp 工程。
+- `open_edi_project` — 打开 .epp 工程（会切换 EDI 当前工程；同目录需有 schematics/main/schematic.ep）。关闭用 close_edi_project。
 - `open_hfss_project` — 启动 AEDT 并打开 .aedt 项目（COM 附着优先，subprocess 单次启动兜底）。
 - `replace_models_from_csv` — 按 CSV 文件批量替换工程中的元件模型。
 - `replace_port_component` — 将原理图中的端口器件替换为另一种类型。
 - `replace_schematic_from_file` — 从 .ep 文件整体替换原理图（对应 gRPC LOAD_SCHEMATIC_FROM_FILE）。
-- `run_tr_simulation` — 跑 TR 链路仿真并提取各链路电参数（结果可直接交给 export_simulation_report 出报告）。
-- `search_personal_models` — 按子类查询个人模型库。
-- `search_public_models` — 按子类查询公共模型库。
+- `run_mixer_simulation` — 跑混频链路仿真（含混频器、LO 本振、上下变频、镜像抑制/本振泄漏）。不含变频的纯链路请用 run_tr_simulation。
+- `run_tr_simulation` — 跑 TR 收发链路仿真（纯链路：增益/噪声/P−1dB，不含混频器与变频）。有混频/本振/镜像指标请用 run_mixer_simulation。
+- `search_personal_models` — 个人模型库检索（自己导入的件）：按子类列出型号与参数。官方件在公共库，用 search_public_models。
+- `search_public_models` — 公共模型库检索（官方件）：按子类列出型号与参数。自己导入的件在个人库，用 search_personal_models。
 - `set_component_active_state` — 确定性设置器件状态为 NORMAL、DISABLED 或 SHORTED。
 - `show_image` — 读取本地图片，返回标准 MCP ImageContent 和本地路径。
 - `simulate_anti_burnout` — 对工程原理图中具备抗烧毁数据的器件执行输入功率仿真和抗烧毁风险评估。

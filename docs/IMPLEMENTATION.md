@@ -1,8 +1,8 @@
 # EDI gRPC MCP 实现原理与机制
 
-> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 83 个工具的逐类实现，再到 7 个 Resource 与 8 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
+> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 85 个工具的逐类实现，再到 7 个 Resource 与 8 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
 
-> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（83 个工具接口参数/返回）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由请求/响应体）。
+> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（85 个工具接口参数/返回）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由请求/响应体）。
 
 ---
 
@@ -44,7 +44,7 @@
   - `3.6` 日志系统
   - `3.7` Chat 会话与破坏性确认
 
-- **[四、工具实现](#四工具实现)** —— 83 个工具按通信类型分组 + 设计动机
+- **[四、工具实现](#四工具实现)** —— 85 个工具按通信类型分组 + 设计动机
   - `4.1` 工程管理
   - `4.2` 仿真器件
   - `4.3` 仿真
@@ -865,14 +865,15 @@ else:                                 # 两者都没有
 
 ### 4.10 独立仿真工具（固定目录 exe，不走 gRPC/HTTP）
 
-直接调用 EDI 安装目录 `simulation_tool/` 下的两个独立 exe（`settings.simulation_tool_dir`，
-默认 `C:\Program Files (x86)\EDI\simulation_tool`）；两个 exe 的 stdout 都是**单行 UTF-8 JSON**、
+直接调用 EDI 安装目录 `simulation_tool/` 下的三个独立 exe（`settings.simulation_tool_dir`，
+默认 `C:\Program Files (x86)\EDI\simulation_tool`）；三个 exe 的 stdout 都是**单行 UTF-8 JSON**、
 退出码 0/1 ⇒ 判成败看退出码 + JSON 里的 `success`/`errors`（与 turbocharts 的 rc 恒 0 不同）。
 
 | 工具 | exe | 通信 | 说明 |
 |---|---|---|---|
 | `export_simulation_report` | `simulation_report/Report_Exporter.exe` | 子进程 | 报告 JSON → `document.pdf` / `document.docx` / `report.json`；图片路径转绝对后再交给 exe（见 `report_export.py:_absolutize_images`） |
 | `run_tr_simulation` | `tr_simulation/TR_Simulator.exe` | 子进程 + gRPC | 网表 → 路径分析 → 开关状态/参数注入 → ADS 仿真 → 结果提取，返回各链路 `electrical_parameters`（可直接喂给上表报告工具） |
+| `run_mixer_simulation` | `mixer_simulation/mixer_simulation.exe` | 子进程 + gRPC | 混频链路仿真（上下变频/多通道/任意级变频）：频率规划 → 工况构建 → 改网表 → ADS → 提取 9 个混频指标，出 PDF/DOCX 报告 |
 
 ### 4.11 微波计算（本地纯计算，不走 gRPC/COM）
 

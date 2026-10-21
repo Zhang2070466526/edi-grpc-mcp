@@ -33,7 +33,7 @@ from servers.eda.project_manage import list_epp_projects
 - **[Resources & Prompts](#resources--prompts)**：只读资源 + 可复用工作流
 - **[文档（2 个）](#文档2个)**：打开本地文档、下载任意产物
 - **[报告（1 个）](#报告1个)**：生成仿真报告
-- **[独立仿真工具（2 个）](#独立仿真工具2个)**：报告导出 exe、TR 链路仿真 exe（固定目录直接调 exe）
+- **[独立仿真工具（3 个）](#独立仿真工具3个)**：报告导出 exe、TR 链路仿真 exe、混频链路仿真 exe（固定目录直接调 exe）
 - **[辅助](#辅助)**：Chat 上下文
 - **[gRPC 工具统一返回格式](#gRPC工具统一返回格式)**：gRPC 工具的返回结构 + status 语义
 
@@ -1664,7 +1664,7 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 
 ## Resources & Prompts
 
-除了 Tool（启动时动态统计，当前 83 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
+除了 Tool（启动时动态统计，当前 85 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
 
 ### Resources（7 个）
 
@@ -1787,10 +1787,10 @@ generate_simulation_report(
 
 ---
 
-## 独立仿真工具（2 个）
+## 独立仿真工具（3 个）
 
-> 直接调用 EDI 安装目录固定子目录下的两个 exe（`settings.simulation_tool_dir`，默认
-> `C:\Program Files (x86)\EDI\simulation_tool`），**不走 gRPC/HTTP**。两个 exe 的 stdout
+> 直接调用 EDI 安装目录固定子目录下的三个 exe（`settings.simulation_tool_dir`，默认
+> `C:\Program Files (x86)\EDI\simulation_tool`），**不走 gRPC/HTTP**。三个 exe 的 stdout
 > 都是单行 UTF-8 JSON、退出码 0/1，判成败直接看退出码 + JSON 的 success/errors。
 
 ### `export_simulation_report`
@@ -1856,6 +1856,47 @@ run_tr_simulation(epp_path: str, links: list, indicators: str = "工作频率,�
 
 `results` 每项 `{link, electrical_parameters:[{indicator,minimum,typical,maximum,unit}]}`。
 **部分指标失败时 `success` 仍为 True 但 `errors` 非空**，必须检查。
+
+---
+
+### `run_mixer_simulation`
+
+```python
+from servers.simulation_tool import run_mixer_simulation
+
+run_mixer_simulation(epp_path: str, links: list, indicators: str = "变频增益",
+                     threads: int = 5, components: list = None, edi_path: str = "",
+                     ads_path: str = "", timeout_seconds: int = 1800) -> dict
+```
+
+跑混频链路仿真并提取各链路电参数（上下变频/多通道/任意级变频；前置：EDI 已启动、ADS 许可可用）。**每次运行自带 PDF/DOCX 报告**（见 `report_artifacts`），无需再调 `export_simulation_report` 重生成 —— 后者（`Report_Exporter`）的指标目录不含混频指标，喂给它会被拒。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `epp_path` | str | 是 | — | .epp 工程绝对路径（同目录需有 schematics/main/schematic.ep） |
+| `links` | list | 是 | — | 混频链路数组（至少一条），每项 `{name, direction, f_rf, f_if, bw, pin, p_lo, ...}`，详见 exe 说明文档 |
+| `indicators` | str | 否 | 变频增益 | 逗号分隔指标（变频增益/增益平坦度/带内杂散/本振泄漏/镜像抑制/输入P−1dB/输出P−1dB/Psat/变频噪声系数） |
+| `threads` | int | 否 | 5 | 指标并发线程数（正整数） |
+| `components` | list | 否 | None | 器件选型 JSON 数组（可选） |
+| `edi_path` | str | 否 | "" | EDI 安装目录，默认用固定目录 |
+| `ads_path` | str | 否 | "" | ADS 安装目录，为空自动探测 `C:/Program Files/Keysight/ADS*` |
+| `timeout_seconds` | int | 否 | 1800 | 最长等待秒数（上限 3600） |
+
+返回结构同 `run_tr_simulation`（`simulation_path` / `results` / `errors` / `artifacts`）。
+
+---
+
+### `describe_tool`
+
+```python
+from servers.describe_tool import describe_tool
+
+describe_tool(name: str = "") -> dict
+```
+
+查看某个工具要哪些参数、怎么填、最小可运行示例 —— 参数拿不准时先调它，别猜也别读源码。`name` 留空返回全部工具名 + 一句话说明；工具不存在返回 `TOOL_NOT_FOUND` + 相似名建议。
+
+返回：`{"success": True, "name": ..., "summary": 首行, "doc": 完整 docstring, "parameters": [...], "example": {...}, "example_source": "handwritten|skeleton", "notes": [...]}`。
 
 ---
 

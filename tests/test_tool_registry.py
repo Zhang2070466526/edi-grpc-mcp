@@ -51,6 +51,8 @@ def test_all_tools_registered():
         "filter_order_lowpass", "filter_order_highpass", "filter_order_bandstop",
         "wilkinson_marchand_order",
         "export_simulation_report", "run_tr_simulation",
+        "run_mixer_simulation",
+        "describe_tool",
     ]
     assert len(tools) == len(required), f"expected {len(required)} tools, got {len(tools)} ({sorted(tools)})"
     for name in required:
