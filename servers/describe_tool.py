@@ -182,7 +182,7 @@ def _skeleton(schema: dict | None) -> dict[str, Any]:
 
 @mcp.tool()
 def describe_tool(name: str = "") -> dict:
-    """查看某个工具要哪些参数、怎么填、最小可运行示例 —— 参数拿不准时先调它，别猜也别读源码。
+    """查任一工具的完整参数与可抄示例（留空 name = 列出全部工具名）；参数拿不准时先调它，别猜也别读源码。
 
     用法：`describe_tool("run_mixer_simulation")` → 拿到完整 docstring、参数表（含数组元素
     结构提示）、可直接照抄的 example；`name` 留空返回全部工具名+一句话说明。
