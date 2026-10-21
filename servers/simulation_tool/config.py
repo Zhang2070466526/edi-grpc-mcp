@@ -22,6 +22,7 @@ _settings = get_settings()
 _SIM_TOOL_DIR = Path(_settings.simulation_tool_dir)
 REPORT_EXPORTER_PATH = str(_SIM_TOOL_DIR / "simulation_report" / "Report_Exporter.exe")
 TR_SIMULATOR_PATH = str(_SIM_TOOL_DIR / "tr_simulation" / "TR_Simulator.exe")
+MIXER_SIMULATION_PATH = str(_SIM_TOOL_DIR / "mixer_simulation" / "mixer_simulation.exe")
 # --edi 传 EDI 安装目录（simulation_tool 的上一级）
 EDI_INSTALL_DIR = str(_SIM_TOOL_DIR.parent)
 
@@ -44,14 +45,41 @@ def _decode_text(raw: bytes) -> str:
     return text
 
 
+def normalize_dir(path: str) -> str:
+    """把目录路径规范化成 exe 认的形式（Windows 混合斜杠 → 统一分隔符）。
+
+    ⚠️ 不只是自动探测结果需要规范化 —— **显式传参同样会踩坑**：
+    agent 很容易拼出 `C:/Program Files\\Keysight/ADS2020_update2` 这种混合斜杠，
+    mixer_simulation.exe / TR_Simulator.exe 解析失败后会**回退到硬编码
+    `C:/Program Files/Keysight/ADS2020`**，于是报「Can not find ...ADS2020」
+    （实际装的是 ADS2020_update2）。空串原样返回，交给调用方决定回退策略。
+    """
+    from pathlib import Path
+
+    raw = (path or "").strip()
+    if not raw:
+        return ""
+    try:
+        return str(Path(raw))
+    except (OSError, ValueError):
+        return raw
+
+
 def detect_ads_path() -> str:
-    """探测 ADS 安装目录，找不到返回空串。"""
+    """探测 ADS 安装目录，找不到返回空串。
+
+    ⚠️ 必须规范化：Windows 上 glob 返回的路径是混合斜杠
+    （实测 'C:/Program Files/Keysight\\ADS2020_update2'，首个分隔符保留 '/'、
+    其余变 '\\'），直接传给 mixer_simulation.exe 会让它解析失败并回退到硬编码的
+    'C:/Program Files/Keysight/ADS2020'，于是报「Can not find ...ADS2020」
+    （实际装的是 ADS2020_update2）。
+    """
     import glob
 
     for pattern in _ADS_GLOB_CANDIDATES:
         hits = sorted(glob.glob(pattern))
         if hits:
-            return hits[0]
+            return normalize_dir(hits[0])
     return ""
 
 

@@ -147,12 +147,42 @@ def decode_local_text(raw: bytes | None) -> str:
 
 # ── 统一响应构建 ──
 
+#: 按 error_code 的默认 hint —— 284 处 error_response 调用里只有 6% 显式写了 hint，
+#: 其余只回 do_not_retry（对 agent 等于「不许重试」但不说下一步），是「走弯路」的直接原因。
+#: 这张表让默认 hint 变成可执行动作；显式传 hint= 时仍以显式值为准。
+_DEFAULT_HINTS: dict[str, str] = {
+    "MISSING_REQUIRED_ARGUMENT": "按 missing 字段补齐参数；字段含义与可抄示例见 describe_tool(<工具名>)",
+    "INVALID_PARAMETERS": "按 message 逐项修正参数；不确定字段含义时先 describe_tool(<工具名>)",
+    "PATH_NOT_FOUND": "传绝对路径；工程/模型路径可先用 list_epp_projects、search_public_models 等确认",
+    "FILE_NOT_FOUND": "确认文件存在且用绝对路径（Windows 推荐正斜杠，如 C:/data/x.raw）",
+    "PROJECT_NOT_FOUND": "先用 list_epp_projects 列出可用工程，再取其中的 .epp 路径",
+    "PROJECT_NOT_OPEN": "先 open_edi_project 打开目标工程（同目录需有 schematics/main/schematic.ep）",
+    "NO_CURRENT_PROJECT": "先用 open_edi_project 打开工程；只是想看状态可用 get_edi_project_info",
+    "EDA_GRPC_OFFLINE": "先用 launch_edi 启动 EDI，确认 /ready 的 grpc 为 online 后重试",
+    "COMPONENT_NOT_FOUND": "先用 list_schematic_components 查实例名，注意大小写与工程一致",
+    "NETLIST_NOT_FOUND": "先用 export_project_netlist 生成网表，再把返回的路径传进来",
+    "CURVE_NOT_FOUND": "先用 list_result_curves 查可用曲线名（形如 DB_S[2,1]）再重试",
+    "NO_SOLUTION": "指标不可达：放宽抑制/回波损耗，或调大 max_notches / 增加阶数后重试",
+    "TOOL_NOT_FOUND": '工具名拼写检查：describe_tool("") 可列出全部可用工具名',
+    "DEPENDENCY_MISSING": "该功能需要可选依赖（如 scipy）；可改用源码态运行，或换不依赖它的工具",
+    "SIMULATION_EXECUTION_FAILED": "看 details 里的原始错误/日志；确认 EDI 已打开目标工程、ADS 许可可用",
+    "TOOL_TIMEOUT": "调大 timeout_seconds（上限见工具说明）后重试；或减少链路/指标数量",
+    "UNSUPPORTED_COMPONENT_TYPE": "先用 list_ideal_components 或 get_model_category_params 查可用类型",
+    "OUTPUT_ALREADY_EXISTS": "换一个 output_path，或先删除同名产物",
+    "PERMISSION_DENIED": "换可写目录（如 %TEMP% 或工作区内），避开 Program Files 等受保护路径",
+    "AEDT_NOT_RUNNING": "先 launch_aedt 启动 AEDT（或 open_hfss_project 会自动拉起）",
+    "AEDT_NOT_FOUND": "用 aedt_path 显式指定 AEDT 安装目录",
+}
+
+
 def error_response(code: str, message: str, retryable: bool = False,
                    hint: str | None = None, **extra) -> dict[str, Any]:
     """构建工具统一错误响应。hint 为显式形参，避免被 **extra 吞进 details。"""
+    if hint is None:
+        hint = _DEFAULT_HINTS.get(code) or ("retry_safe" if retryable else "do_not_retry")
     result: dict[str, Any] = {
         "success": False, "error_code": code, "message": message,
-        "hint": hint if hint is not None else ("retry_safe" if retryable else "do_not_retry"),
+        "hint": hint,
     }
     if retryable:
         result["retryable"] = True
@@ -323,6 +353,68 @@ def build_artifact(type_: str, path: str, generated_by: str) -> dict[str, Any]:
     """构建统一产物条目（用于 artifacts 数组）。"""
     return {"type": type_, "path": path, "name": Path(path).name,
             "generated_by": generated_by}
+
+
+#: 仿真工具每次运行都会产出的报告类文件后缀（必须优先暴露，不能被明细文件挤掉）
+SIM_REPORT_SUFFIXES = (".pdf", ".docx")
+
+#: 截断时的扩展名价值权重（越小越先保留）：报告 > 图表/CSV > RAW > 日志。
+#: 没有这层权重时，层级浅的 netlist.log 会先把名额占满，把 result.raw 这类成果挤掉。
+_SIM_EXT_WEIGHT = {".pdf": 0, ".docx": 1, ".png": 2, ".jpg": 2, ".csv": 3, ".raw": 4, ".log": 5}
+
+
+def collect_simulation_artifacts(sim_path: str, tool_name: str,
+                                 key_ext: dict[str, str],
+                                 max_artifacts: int = 40,
+                                 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], bool]:
+    """把仿真结果目录整理成 artifacts 列表。
+
+    返回 ``(artifacts, report_artifacts, truncated)``。
+
+    背景（2026-10-21 实测，用户反馈）：Mixer_Simulator 每次跑完都会在结果目录**顶层**
+    生成 ``<工程名>_仿真报告.pdf`` / ``.docx``（含指标判定表、曲线、拓扑图）；
+    TR_Simulator 本身不生成报告，但目录里若已有 PDF/DOCX（独立报告工具产物）也应
+    同样优先暴露。明细文件在 ``<链路名>/conditions/<工况>/…`` 子目录里。原先 artifacts
+    按路径字符串排序后截断到 40 条 —— 子目录里的 raw/log/csv/png 会先把名额吃满，
+    报告被**静默截断**，调用方（模型与人都一样）根本不知道报告已经生成，只能自己去
+    翻磁盘目录。
+
+    现在的排序优先级：
+        1. 报告类文件（.pdf/.docx）永远在前；
+        2. 层级浅的在前（顶层判定表/结果主表/schematic.png 先于 conditions 明细）；
+        3. 同层再按路径字典序，保证输出稳定可复现。
+
+    同时把报告单独返回一份 ``report_artifacts``，供工具在响应字段与 message 里
+    显式告知调用方「这次跑出了报告」，而不是指望对方去数 artifacts。
+    """
+    artifacts: list[dict[str, Any]] = []
+    if not sim_path or not Path(sim_path).is_dir():
+        return artifacts, [], False
+
+    root = Path(sim_path)
+    # 目录本身拿不到 token 下载链接 ⇒ 关键文件也要单列，远程客户端才能下载产物。
+    artifacts.append(build_artifact("directory", sim_path, tool_name))
+
+    key_files = sorted(
+        (p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in key_ext),
+        key=lambda p: (
+            0 if p.suffix.lower() in SIM_REPORT_SUFFIXES else 1,
+            # 报告内部再按 SIM_REPORT_SUFFIXES 的顺序排（PDF 在 DOCX 之前，交付时优先给 PDF）
+            SIM_REPORT_SUFFIXES.index(p.suffix.lower())
+            if p.suffix.lower() in SIM_REPORT_SUFFIXES else 0,
+            # 截断前先按「产物价值」分层：图表/CSV > RAW > 日志，避免浅层 log 挤掉成果
+            _SIM_EXT_WEIGHT.get(p.suffix.lower(), 9),
+            len(p.relative_to(root).parts),
+            str(p),
+        ),
+    )
+    report_files = [p for p in key_files if p.suffix.lower() in SIM_REPORT_SUFFIXES]
+    report_artifacts = [
+        build_artifact(key_ext[p.suffix.lower()], str(p), tool_name) for p in report_files
+    ]
+    for f in key_files[:max_artifacts]:
+        artifacts.append(build_artifact(key_ext[f.suffix.lower()], str(f), tool_name))
+    return artifacts, report_artifacts, len(key_files) > max_artifacts
 
 
 def build_file_link(path: str, label: str = "打开文件", *,

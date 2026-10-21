@@ -3,7 +3,8 @@ r"""TR_Simulator.exe 包装 — TR 纯硬编码仿真（网表→路径分析→
 命令（见 exe 同目录 Report_Exporter使用说明.md）：
     TR_Simulator.exe --epp <epp> --edi <edi> --ads <ads> [--indicators <csv>] [--threads <n>] --json <links>
 stdout 单行 UTF-8 JSON：{"simulation_path","errors":[],"results":[...]}
-退出码 0/1。results 的 electrical_parameters 结构可直接喂给 export_simulation_report。
+退出码 0/1。results 的 electrical_parameters 可喂给 export_simulation_report
+（TR_Simulator 本身不生成 PDF/DOCX 报告，需要正式报告时走那条路）。
 """
 
 from __future__ import annotations
@@ -19,11 +20,12 @@ from servers.simulation_tool.config import (
     TR_SIMULATOR_PATH,
     detect_ads_path,
     fmt_errors,
+    normalize_dir,
     run_exe,
 )
 from servers.eda.config import EDA_GRPC_SERVER
 from servers.utils import (
-    build_artifact,
+    collect_simulation_artifacts,
     error_response,
     per_tool_mutex,
     require_file,
@@ -35,7 +37,9 @@ _logger = logging.getLogger("simulation_tool.tr_simulation")
 _DEFAULT_INDICATORS = "工作频率,输出增益,噪声系数"
 
 # 结果目录里「值得单独给出下载链接」的文件后缀 → build_artifact 的 type
-_KEY_EXT = {".csv": "csv", ".png": "image", ".jpg": "image", ".raw": "raw", ".log": "log"}
+# .pdf/.docx 是 exe 每次运行都会产出的仿真报告，必须收进来（原来漏了，报告永远不出现在 artifacts）。
+_KEY_EXT = {".csv": "csv", ".png": "image", ".jpg": "image", ".raw": "raw", ".log": "log",
+            ".pdf": "pdf", ".docx": "docx"}
 _MAX_ARTIFACTS = 40
 
 
@@ -50,13 +54,14 @@ def run_tr_simulation(
     ads_path: str = "",
     timeout_seconds: int = 1800,
 ) -> dict[str, Any]:
-    """跑 TR 链路仿真并提取各链路电参数（结果可直接交给 export_simulation_report 出报告）。
+    """跑 TR 收发链路仿真（纯链路：增益/噪声/P−1dB，不含混频器与变频）。有混频/本振/镜像指标请用 run_mixer_simulation。
 
     用法："仿真这个 TR 工程的两条链路"、"提取输出增益和噪声系数"
 
     前提：Windows + EDI 已运行（gRPC 127.0.0.1:50055 可用）+ ADS 许可可用。
-    结果 results[].electrical_parameters 可直接作为 export_simulation_report 的
-    report.links[].electrical_parameters 生成报告。
+    TR_Simulator 本身不生成报告；需要正式报告时，把 results[].electrical_parameters
+    作为 export_simulation_report 的 report.links[].electrical_parameters 传入即可
+    （TR 指标在其 indicator_catalog 内；混频指标不在，走 mixer 自带报告）。
 
     Args:
         epp_path: .epp 工程文件绝对路径（必填，同目录需存在 schematics/main/schematic.ep）。
@@ -69,9 +74,15 @@ def run_tr_simulation(
 
     Returns:
         {"success": True, "simulation_path": "...", "results": [...], "errors": [],
-         "artifacts": [...]}
+         "artifacts": [...], "report_artifacts": [{"type": "pdf"|"docx", "path": "...", "name": "..."}]}
         results 每项 {link, electrical_parameters:[{indicator,minimum,typical,maximum,unit}]}。
         部分指标失败时 success 仍为 True 但 errors 非空，必须检查。
+
+        ⚠️ 若结果目录里存在 PDF/DOCX，它们会排在 artifacts 最前，并单独列在
+        ``report_artifacts``，message 会写明「已生成仿真报告：…」。
+        注意：**TR_Simulator 本身不生成报告**（只出 PNG/CSV/RAW 供独立报告工具用），
+        所以正常情况下 report_artifacts 为空；需要正式报告请再调 export_simulation_report。
+        混频链路不同 —— run_mixer_simulation 每次必生成 PDF/DOCX，直接交付即可。
     """
     # 1. epp 存在
     resolved_epp, err = require_file(epp_path, (".epp",))
@@ -88,11 +99,11 @@ def run_tr_simulation(
     if isinstance(threads, bool) or not isinstance(threads, int) or threads < 1:
         return error_response("INVALID_PARAMETERS", "threads 必须是正整数")
 
-    # 4. edi / ads 路径
-    edi = (edi_path or "").strip() or EDI_INSTALL_DIR
+    # 4. edi / ads 路径（显式传参也要规范化：混合斜杠会让 exe 回退硬编码 ADS2020）
+    edi = normalize_dir(edi_path) or normalize_dir(EDI_INSTALL_DIR)
     if not Path(edi).is_dir():
         return error_response("PATH_NOT_FOUND", f"EDI 安装目录不存在: {edi}（可传 edi_path 覆盖）")
-    ads = (ads_path or "").strip() or detect_ads_path()
+    ads = normalize_dir(ads_path) or detect_ads_path()
     if not ads or not Path(ads).is_dir():
         return error_response("PATH_NOT_FOUND", f"未找到 ADS 安装目录（已探测：{ads or '无'}），请显式传 ads_path")
 
@@ -157,7 +168,10 @@ def run_tr_simulation(
         return error_response("SIMULATION_EXECUTION_FAILED", "exe 返回格式异常", stdout=run["stdout"])
 
     errors = data.get("errors") or []
-    if run["returncode"] != 0:
+    partial = [r for r in (data.get("results") or []) if r]
+    # returncode != 0 但 exe 已给出部分 results ⇒ 降级为「部分成功」，别把已有结果吞掉。
+    partial_failure = run["returncode"] != 0 and bool(partial)
+    if run["returncode"] != 0 and not partial:
         return error_response(
             "SIMULATION_EXECUTION_FAILED",
             fmt_errors(errors) or "TR 仿真失败",
@@ -168,25 +182,26 @@ def run_tr_simulation(
     # 8. 成功（部分指标失败时 errors 非空，须提示调用方检查）
     sim_path = data.get("simulation_path", "")
     results = data.get("results", [])
-    artifacts: list[dict] = []
-    truncated = False
-    if sim_path and Path(sim_path).is_dir():
-        artifacts.append(build_artifact("directory", sim_path, "run_tr_simulation"))
-        # 目录本身拿不到 token 下载链接（build_file_link 只认文件）⇒ 把关键文件也列出来，
-        # 远程客户端才能下载仿真产物（CSV/PNG/RAW/日志）。
-        key_files = sorted(
-            (p for p in Path(sim_path).rglob("*") if p.is_file() and p.suffix.lower() in _KEY_EXT),
-            key=lambda p: str(p),
-        )
-        for f in key_files[:_MAX_ARTIFACTS]:
-            artifacts.append(build_artifact(_KEY_EXT[f.suffix.lower()], str(f), "run_tr_simulation"))
-        truncated = len(key_files) > _MAX_ARTIFACTS
+    artifacts, report_artifacts, truncated = collect_simulation_artifacts(
+        sim_path, "run_tr_simulation", _KEY_EXT, _MAX_ARTIFACTS)
 
     warnings: list[str] = []
     if errors:
         warnings.append(f"有 {len(errors)} 项指标失败，仿真数据可能不完整，详见 errors 字段。")
+    if partial_failure:
+        warnings.append(f"exe 退出码 {run['returncode']}：有指标失败，已按「部分成功」返回 "
+                        f"{len(results)} 条可用结果，失败工况诊断见 errors。")
     if truncated:
         warnings.append(f"结果目录文件较多，artifacts 只列了前 {_MAX_ARTIFACTS} 个关键文件（完整清单见 simulation_path）。")
+
+    # 混频仿真每次都会在 simulation_path 顶层生成 <工程名>_仿真报告.pdf/.docx；
+    # TR 本身不生成报告（目录里若有 PDF/DOCX 同样在这里暴露）。必须主动告知调用方。
+    report_note = ""
+    if report_artifacts:
+        names = "、".join(a["name"] for a in report_artifacts)
+        report_note = f"；已生成仿真报告：{names}"
+        warnings.insert(0, f"本次运行已生成仿真报告（{names}），路径见 report_artifacts；"
+                           f"可直接交付或存档，无需再调报告工具重跑。")
 
     resp: dict[str, Any] = {
         "success": True,
@@ -194,8 +209,12 @@ def run_tr_simulation(
         "results": results,
         "errors": errors,
         "artifacts": artifacts,
-        "message": f"TR 仿真完成：{len(results)} 条链路结果"
-                   + ("（部分指标失败，详见 errors）" if errors else ""),
+        "report_artifacts": report_artifacts,
+        "message": (f"TR 仿真部分完成：{len(results)} 条链路结果（exe 退出码 {run['returncode']}，"
+                    f"有指标失败但已返回可用结果）"
+                    if partial_failure else f"TR 仿真完成：{len(results)} 条链路结果")
+                   + ("（部分指标失败，详见 errors）" if errors else "")
+                   + report_note,
     }
     if warnings:
         resp["warnings"] = warnings
