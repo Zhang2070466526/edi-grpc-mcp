@@ -57,7 +57,7 @@ def cst_solve_async(model_path: str) -> dict[str, Any]:
 
 @mcp.tool()
 def cst_solve_query(task_id: str) -> dict[str, Any]:
-    """查询 CST 求解任务：返回进度，完成时附带 model_path。
+    """查询 CST 求解任务进度（配合 cst_solve_async 拿到的 task_id）。S 参数导出任务用 cst_export_snp_query。
 
     一次调用同时拿到进度和结果，无需先查 status 再取 result。
 

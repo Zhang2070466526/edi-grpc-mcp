@@ -1,0 +1,19 @@
+# 行尾归一（2026-10-21）
+#
+# 背景：servers/ 内长期 CRLF/LF 混用（utils.py、__init__.py、model_library.py、task_runner.py
+# 为 CRLF；report/generator.py、multimodal_vision/document.py、token_registry.py、
+# turbocharts/convert_raw.py 为 LF）。不加这条时，git 下次 checkout 会把 LF 那批整篇重写：
+# 无意义的全文件 diff、blame 全变，且每次 git diff 都警告 "LF will be replaced by CRLF"。
+#
+# 策略：仓库内统一存 LF，Windows 工作区 checkout 成 CRLF；脚本类按各自运行环境给 eol。
+* text=auto
+*.py   text eol=crlf
+*.md   text eol=crlf
+*.ps1  text eol=crlf
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.sh   text eol=lf
+*.proto text eol=crlf
+*.json text eol=crlf
+*.yaml text eol=crlf
+*.yml  text eol=crlf

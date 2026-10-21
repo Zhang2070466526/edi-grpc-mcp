@@ -82,24 +82,31 @@ class TaskRunner:
             "started_at": None,
             "finished_at": None,
         }
+        meta = dict(metadata or {})
+        op = meta.get("operation", meta.get("project_name", ""))
         with self._lock:
             self._prune_locked()
             if require_idle and self._pending_locked() > 0:
+                # 任务没起来必须有痕：原来这两条提前返回完全无日志，查不到原因
+                _log.warning("task=%s status=REJECTED op=%s reason=busy", task_id, op)
                 return None
             active = sum(1 for t in self._tasks.values() if t.get("finished_at") is None)
             if active >= self._max_tasks:
+                _log.warning("task=%s status=REJECTED op=%s reason=max_tasks active=%d limit=%d",
+                             task_id, op, active, self._max_tasks)
                 return None
             self._tasks[task_id] = task
+        # 先记 QUEUED 再 submit：submit 后工作线程可能立刻开跑，否则日志会出现
+        # RUNNING 先于 QUEUED 的错序（2026-09-21 实测，快任务必现）。
+        _log.info("task=%s status=QUEUED op=%s", task_id, op)
         try:
             self._executor.submit(self._run, task_id, func, args, kwargs)
         except Exception:
             # executor 已关闭（进程退出中）时提交失败，回滚任务避免永久 QUEUED
             with self._lock:
                 self._tasks.pop(task_id, None)
+            _log.warning("task=%s status=REJECTED op=%s reason=executor_closed", task_id, op)
             raise
-        meta = dict(metadata or {})
-        op = meta.get("operation", meta.get("project_name", ""))
-        _log.info("task=%s status=QUEUED op=%s", task_id, op)
         return task_id
 
     # ── 查询 ──
@@ -237,7 +244,9 @@ class TaskRunner:
                     task["status"] = "FAILED"
                     task["error"] = str(exc)
                     task["finished_at"] = time.time()
-            _log.info("task=%s status=FAILED duration=%.1fs error=%s", task_id, time.time() - started, str(exc))
+            # FAILED 是异常路径：用 WARNING 并带 traceback，否则排障时只剩一行无栈的 error=
+            _log.warning("task=%s status=FAILED duration=%.1fs error=%s",
+                         task_id, time.time() - started, exc, exc_info=True)
 
     def _prune_locked(self) -> None:
         """（需持锁）清理超过 TTL 的已完成/失败任务；RUNNING 超时兜底标记 FAILED。"""

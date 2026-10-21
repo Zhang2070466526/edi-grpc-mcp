@@ -185,6 +185,5 @@ class ProcessWhitelistMiddleware(BaseHTTPMiddleware):
                             "cmdline": cmd,
                             "hint": "来源进程不在白名单，拒绝访问",
                         }, status_code=403)
-                    # _log.info("放行白名单进程 pattern=%r exe=%s cmd=%s path=%s", matched, exe, cmd, path)
-                    # print("放行白名单进程 pattern={!r} exe={} cmd={} path={}".format(matched, exe, cmd, path))
+                    pass
         return await call_next(request)

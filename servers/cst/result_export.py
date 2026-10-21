@@ -60,7 +60,7 @@ def cst_export_snp(
     output_dir: str = "",
     port_count: int | None = None,
 ) -> dict[str, Any]:
-    """导出 CST 模型的 S 参数为 Touchstone .sNp 文件（需先求解）。
+    """同步导出 CST 的 S 参数为 .sNp（阻塞等完成后返回文件路径，适合小模型）。长任务请用 cst_export_snp_async。
 
     用法："把这个 CST 模型的 S 参数导出来"
 
@@ -163,7 +163,7 @@ def cst_export_snp_async(
     output_dir: str = "",
     port_count: int | None = None,
 ) -> dict[str, Any]:
-    """异步导出 CST 模型的 S 参数为 Touchstone .sNp 文件（需先求解），立即返回 task_id。
+    """异步提交 CST 的 S 参数导出，立即返回 task_id，用 cst_export_snp_query 取结果。想一步到位用同步版 cst_export_snp。
 
     用法："把这个 CST 模型的 S 参数导出来（后台跑）"
 
@@ -192,7 +192,7 @@ def cst_export_snp_async(
 
 @mcp.tool()
 def cst_export_snp_query(task_id: str) -> dict[str, Any]:
-    """查询 S 参数导出任务：返回进度，完成时附带 snp_path。
+    """查询 CST 的 S 参数导出任务进度（配合 cst_export_snp_async 的 task_id）。求解任务用 cst_solve_query。
 
     一次调用同时拿到进度和结果，无需先查 status 再取 result。
 

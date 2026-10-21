@@ -103,7 +103,7 @@ def search_public_models(
         timeout_seconds: int = 60,
         limit: int = 0,
 ) -> dict[str, Any]:
-    """按子类查询公共模型库。
+    """公共模型库检索（官方件）：按子类列出型号与参数。自己导入的件在个人库，用 search_personal_models。
 
     用法："查一下子类 61 的公共模型"、"搜索公共模型库"
 
@@ -115,7 +115,8 @@ def search_public_models(
          示例：筛选增益≥20dB → [{"key": "gain", "min": 20}]；
               叠加频段 → [{"key": "gain", "min": 20}, {"key": "min_freq", "min": 27000}]
         timeout_seconds: 最长等待秒数，默认 60。
-        limit: 只返回前 N 条结果（0 表示服务端默认，通常 10 条）。
+        limit: 只返回前 N 条结果；**0（默认）= 不限制，返回全部命中** —— 实测大子类可达数百条、
+          响应体上 MB，建议显式传 limit。返回体里的 count 是命中总数，可能大于本次返回条数。
 
     Returns:
         gRPC 统一返回结构，业务字段（code/message/data）在 details 中。
@@ -130,7 +131,7 @@ def search_personal_models(
         timeout_seconds: int = 60,
         limit: int = 0,
 ) -> dict[str, Any]:
-    """按子类查询个人模型库。
+    """个人模型库检索（自己导入的件）：按子类列出型号与参数。官方件在公共库，用 search_public_models。
 
     用法："查一下子类 61 的个人模型"、"搜索我的模型库"
 
@@ -142,7 +143,8 @@ def search_personal_models(
          示例：筛选增益≥20dB → [{"key": "gain", "min": 20}]；
               叠加频段 → [{"key": "gain", "min": 20}, {"key": "min_freq", "min": 27000}]
         timeout_seconds: 最长等待秒数，默认 60。
-        limit: 只返回前 N 条结果（0 表示服务端默认，通常 10 条）。
+        limit: 只返回前 N 条结果；**0（默认）= 不限制，返回全部命中** —— 实测大子类可达数百条、
+          响应体上 MB，建议显式传 limit。返回体里的 count 是命中总数，可能大于本次返回条数。
 
     Returns:
         gRPC 统一返回结构，业务字段（code/message/data）在 details 中。

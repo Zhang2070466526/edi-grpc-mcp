@@ -147,7 +147,7 @@ def open_edi_project(
         project_path: str,
         timeout_seconds: int = 60,
 ) -> dict[str, Any]:
-    """打开一个 .epp 工程。
+    """打开 .epp 工程（会切换 EDI 当前工程；同目录需有 schematics/main/schematic.ep）。关闭用 close_edi_project。
 
     Args:
         project_path: EDA 服务所在机器上的 .epp 工程文件绝对路径。
@@ -162,7 +162,7 @@ def close_edi_project(
         need_save: bool = False,
         timeout_seconds: int = 60,
 ) -> dict[str, Any]:
-    """关闭一个.epp 工程。
+    """⚠️ 关闭当前 .epp 工程（未保存改动会丢）。打开用 open_edi_project；只是想看状态用 get_edi_project_info。
 
     Args:
         project_path: EDA 服务所在机器上的 .epp 工程文件绝对路径。

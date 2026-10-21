@@ -325,6 +325,15 @@ ERROR_CODES = {
     "SIMULATION_EXECUTION_FAILED": "TR 仿真执行失败",
     # 微波阶数评估：目标环境 scipy 不可用（Win7 精简环境 / 打包包内 import 或 DLL 加载失败）
     "DEPENDENCY_MISSING": "缺少可选依赖（阶数评估需要 scipy，可用源码态运行）",
+    # 高频通用码（2026-10-21 补：此前只在 MCP 侧返回，chat 里会显示裸英文码）
+    "INVALID_PARAMETERS": "参数不合法",
+    "PATH_NOT_FOUND": "路径不存在",
+    "PROJECT_NOT_FOUND": "工程不存在",
+    "PROJECT_NOT_OPEN": "工程未打开",
+    "NO_SOLUTION": "指标不可达（需放宽要求或增加阶数）",
+    "CURVE_NOT_FOUND": "曲线不存在（先用 list_result_curves 查）",
+    "TOOL_NOT_FOUND": '工具不存在（用 describe_tool("") 查名字）',
+    "COMPONENT_NOT_FOUND": "器件/实例不存在（先用 list_schematic_components 查）",
 }
 
 

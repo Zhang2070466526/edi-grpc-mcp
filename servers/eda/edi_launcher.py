@@ -229,17 +229,35 @@ def get_service_status() -> dict[str, Any]:
     """
     target = EDA_GRPC_SERVER
     ch = get_cached_channel(target)
+    cached = ch is not None
     state = "unknown"
-    if ch is not None:
+
+
+    # 懒连接：进程内还没建过通道时（首次调用前）也主动探一次，否则这里恒返回 unknown，
+    # 与 /ready 的 grpc=online 自相矛盾（2026-10-21 实测：服务健康 + EDI 在跑，本工具报 unknown）。
+    probe = ch
+    if probe is None:
         try:
-            grpc.channel_ready_future(ch).result(timeout=1)
+            probe = grpc.insecure_channel(target)
+        except Exception:
+            probe = None
+    if probe is not None:
+        try:
+            grpc.channel_ready_future(probe).result(timeout=1)
             state = "ready"
         except (grpc.FutureTimeoutError, grpc.RpcError):
             state = "unhealthy"
+        finally:
+            if not cached:
+                # 临时探测通道用完即关，不能污染 get_cached_channel 的复用池
+                try:
+                    probe.close()
+                except Exception:
+                    pass
     return {
         "grpc_target": target,
         "channel_state": state,
-        "channel_cached": ch is not None,
+        "channel_cached": cached,
         "queue_locked": is_queue_busy(),
         "max_receive_mb": MAX_RECEIVE_MB,
     }

@@ -132,7 +132,10 @@ def _startup_self_check() -> None:
         orphans = []
         for proc in psutil.process_iter(["name", "pid"]):
             name = (proc.info.get("name") or "").lower()
-            if name in ("ansysedt.exe", "cst design environment_amd64.exe"):
+            # 实测本机常驻的 CST 进程名有 cstd.exe / CSTDCMainController_AMD64.exe /
+            # CSTDCSolverServer_AMD64.exe，旧的精确匹配只认 "cst design environment_amd64.exe"
+            # ⇒ 三个 CST 常驻却零 WARN（2026-10-21 复核）。改前缀匹配覆盖整个 CST 家族。
+            if name == "ansysedt.exe" or name.startswith("cst"):
                 orphans.append(f"{name}(pid={proc.info['pid']})")
         if orphans:
             _log.warning("启动自检：发现可能残留的软件进程 %s（占着软件与锁，可能是上次异常退出遗留）",

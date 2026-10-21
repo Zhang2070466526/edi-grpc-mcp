@@ -119,7 +119,7 @@ def filter_order_lowpass(
         q_unloaded: float | None = None,
         max_notches: int = 4,
 ) -> dict[str, Any]:
-    """估计广义切比雪夫低通滤波器的阶数与有限传输零点。
+    """低通阶数估算：通带到 f_p、阻带在 f_p 之上，返回阶数与传输零点。高通用 filter_order_highpass、带阻用 filter_order_bandstop。
 
     用法："评估一个通带截止 1GHz、2~3GHz 处抑制 ≥40dB 的低通滤波器需要几阶"
 
@@ -168,7 +168,7 @@ def filter_order_highpass(
         q_unloaded: float | None = None,
         max_notches: int = 4,
 ) -> dict[str, Any]:
-    """估计广义切比雪夫高通滤波器的阶数与有限传输零点。
+    """高通阶数估算：通带自 f_p 向上、阻带在 f_p 之下，返回阶数与传输零点。低通用 filter_order_lowpass、带阻用 filter_order_bandstop。
 
     用法："评估一个通带 1GHz 起、0.3~0.5GHz 处抑制 ≥40dB 的高通滤波器需要几阶"
 
@@ -222,7 +222,7 @@ def filter_order_bandstop(
         q_unloaded: float | None = None,
         max_notches: int = 4,
 ) -> dict[str, Any]:
-    """估计广义切比雪夫带阻滤波器的阶数与陷波零点。
+    """带阻阶数估算：阻带是 f_s1~f_s2 这一段，返回阶数与陷波零点。低通用 filter_order_lowpass、高通用 filter_order_highpass。
 
     用法："评估一个阻带 2.1~2.2GHz 陷波 ≥20dB、两侧通带 ≤1dB 的带阻滤波器需要几阶"
 
@@ -296,9 +296,13 @@ def filter_order_bandstop(
         "fbw": result["FBW"],
         "passband_ripple_db": result["passband_ripple_dB"],
         "solutions": [
-            {"N": s["N"], "order_bandstop": s["order_bandstop"], "notches": s["notches"],
-             "notch_freq_pairs_ghz": _pairs_ghz(s["notch_freq_pairs_Hz"]),
-             "min_margin_db": s["min_margin_dB"]}
+            {
+                "N": s["N"],
+                "order_bandstop": s["order_bandstop"],
+                "notches": s["notches"],
+                "notch_freq_pairs_ghz": _pairs_ghz(s["notch_freq_pairs_Hz"]),
+                "min_margin_db": s["min_margin_dB"]
+            }
             for s in result["solutions"]
         ],
     }
