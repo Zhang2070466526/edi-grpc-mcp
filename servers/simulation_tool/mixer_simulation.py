@@ -18,6 +18,7 @@ from servers import mcp
 from servers.simulation_tool.config import (
     EDI_INSTALL_DIR,
     MIXER_SIMULATION_PATH,
+    convert_ep_numeric,
     detect_ads_path,
     fmt_errors,
     normalize_dir,
@@ -278,7 +279,7 @@ def run_mixer_simulation(
 
     # 8. 成功（部分指标失败时 errors 非空，须提示调用方检查）
     sim_path = data.get("simulation_path", "")
-    results = data.get("results", [])
+    results = convert_ep_numeric(data.get("results", []))
     artifacts, report_artifacts, truncated = collect_simulation_artifacts(
         sim_path, "run_mixer_simulation", _KEY_EXT, _MAX_ARTIFACTS)
 

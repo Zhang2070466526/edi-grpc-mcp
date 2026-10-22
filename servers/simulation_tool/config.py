@@ -97,6 +97,39 @@ def fmt_errors(errors: list[Any]) -> str:
     return "；".join(parts)
 
 
+def convert_ep_numeric(results: list) -> list:
+    """把 exe 透传的数值字符串（electrical_parameters 的 minimum/typical/maximum）转 float。
+
+    exe 返回的数值是字符串（实测 `"typical": "26.44..."`），agent 拿来做数值比较会
+    TypeError。空串（无值）保留；非数值串（如 `"±0.6"`）保留原样。
+    """
+    out: list = []
+    for r in results:
+        if not isinstance(r, dict):
+            out.append(r)
+            continue
+        eps = r.get("electrical_parameters")
+        if not isinstance(eps, list):
+            out.append(r)
+            continue
+        new_eps = []
+        for ep in eps:
+            if not isinstance(ep, dict):
+                new_eps.append(ep)
+                continue
+            new_ep = dict(ep)
+            for key in ("minimum", "typical", "maximum"):
+                v = new_ep.get(key)
+                if isinstance(v, str) and v.strip():
+                    try:
+                        new_ep[key] = float(v)
+                    except ValueError:
+                        pass  # 非数值（如 "±0.6"）保留字符串
+            new_eps.append(new_ep)
+        out.append({**r, "electrical_parameters": new_eps})
+    return out
+
+
 def run_exe(exe_path: str, args: list[str], timeout_seconds: int) -> dict[str, Any]:
     """运行 exe，返回统一执行记录 {returncode, stdout, stderr, json, json_error}。
 
