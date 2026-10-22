@@ -51,3 +51,23 @@ def test_tr_is_not_described_as_self_reporting():
     # 反面：不能出现“TR（纯链路）自带报告 / 直接交付 report_artifacts”的表述
     assert "run_tr_simulation(纯链路) → 结果里的 report_artifacts" not in ins
     assert "run_tr_simulation → 自带" not in ins
+
+
+def test_instructions_forbid_reimplementation():
+    """必须明确禁止「自己写脚本重实现」——这是 agent 跑偏的主要形式。"""
+    ins = _ins()
+    assert "不要写脚本重实现" in ins or "别自己实现" in ins
+    assert "不要凭经验套公式" in ins
+
+
+def test_instructions_mention_keyword_search():
+    """要告诉 agent 可以用能力关键词问 describe_tool（否则它只会按工具名找）。"""
+    ins = _ins()
+    assert "能力关键词" in ins
+    assert "微带线宽" in ins
+
+
+def test_instructions_list_script_escape_hatches():
+    """允许写脚本的两种情形要写清，否则模型会自己放宽边界。"""
+    ins = _ins()
+    assert "两种情况" in ins and "批量编排" in ins

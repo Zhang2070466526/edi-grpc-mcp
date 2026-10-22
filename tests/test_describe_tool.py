@@ -10,13 +10,15 @@
 
 from __future__ import annotations
 
+import json
+
 import servers.registry_server  # noqa: F401  触发全部工具注册
+from servers import mcp
 from servers.describe_tool import _EXAMPLES, _param_rows, describe_tool
+from servers.utils import registered_tools
 
 
 def _tool_names() -> set[str]:
-    from servers import mcp
-    from servers.utils import registered_tools
 
     return {t.name for t in registered_tools(mcp)}
 
@@ -60,16 +62,14 @@ def test_empty_name_lists_all_tools():
 
 
 def test_unknown_tool_gives_similar_names():
-    r = describe_tool("filter_order_lowpas")     # 少一个 s
+    # 名字像但**不是任何工具名的子串** → 走 difflib 相似名建议
+    r = describe_tool("filter_order_lowpazz")
     assert r["success"] is False
-    assert r["error_code"] == "TOOL_NOT_FOUND"
-    assert r["similar"] and "filter_order_lowpass" in r["similar"]
+    assert r["similar"] and r["similar"][0] == "filter_order_lowpass"
 
 
 def test_every_handwritten_example_is_callable_shape():
     """手写示例必须只用真实参数名（防文档漂移），且覆盖到的工具都存在。"""
-    from servers import mcp
-    from servers.utils import registered_tools
 
     tools = {t.name: t for t in registered_tools(mcp)}
     for name, ex in _EXAMPLES.items():
@@ -86,3 +86,78 @@ def test_param_rows_marks_untyped_items():
               "required": ["links"]}
     rows = _param_rows(schema)
     assert rows[0]["items_hint"]
+
+
+# ── 能力关键词检索（"我想算微带线宽" → 具体工具，而不是自己写脚本）────────────
+
+def test_keyword_single_answer_returns_detail():
+    r = describe_tool("微带线宽")
+    assert r["success"] is True and r["matched_by"] == "keyword"
+    assert r["detail"]["name"] == "calculate_transline"
+    assert r["detail"]["parameters"], "命中后要能直接看到参数表"
+
+
+def test_keyword_ambiguous_lists_candidates_without_picking():
+    """滤波器阶数有低通/高通/带阻三个工具 → 不替调用方拍板，只给候选。"""
+    r = describe_tool("滤波器阶数")
+    assert r["matched_by"] == "keyword"
+    names = [c["name"] for c in r["candidates"]]
+    assert {"filter_order_lowpass", "filter_order_highpass", "filter_order_bandstop"} <= set(names)
+    assert "detail" not in r, "分差不大时不应替调用方选定一个"
+    assert "candidates" in r["hint"] or "summary" in r["hint"]
+
+
+def test_keyword_never_returns_itself():
+    for q in ("微带线宽", "滤波器阶数", "混频", "报告"):
+        r = describe_tool(q)
+        names = [c["name"] for c in (r.get("candidates") or [])]
+        assert "describe_tool" not in names, f"{q}: 查询者不该出现在结果里"
+
+
+def test_keyword_mixer_maps_to_mixer_tool():
+    r = describe_tool("混频")
+    assert r["detail"]["name"] == "run_mixer_simulation"
+
+
+def test_prefix_typo_resolves_to_real_tool():
+    """工具名前缀/少字母 → 直接给出正确工具的完整说明，而不是让调用方去翻源码。"""
+    r = describe_tool("filter_order_lowpas")
+    assert r["matched_by"] == "name_fuzzy"
+    assert r["resolved_to"] == "filter_order_lowpass"
+    assert r["detail"]["name"] == "filter_order_lowpass"
+
+
+def test_keyword_without_match_is_tool_not_found():
+    r = describe_tool("zzz_完全没有的能力_zzz")
+    assert r["success"] is False and r["error_code"] == "TOOL_NOT_FOUND"
+
+
+#: 已废弃的链路字段 —— 示例里绝不能再出现（新增废弃字段时加到这里）
+_DEPRECATED_FIELDS = ("requirements",)
+
+
+def test_examples_do_not_carry_deprecated_fields():
+    """链路级 `requirements` 已于 2026-10-22 废弃（由 indicators + 报告判定取代）。
+
+    示例是 agent 唯一会照抄的东西：留着废弃字段，agent 就会一直传它，
+    而参数校验会静默忽略 —— 表现为"我传了却完全没生效"。
+    """
+
+    offenders = []
+    for name, example in _EXAMPLES.items():
+        body = json.dumps(example, ensure_ascii=False)
+        for field in _DEPRECATED_FIELDS:
+            if field in body:
+                offenders.append(f"{name}: {field}")
+    assert not offenders, "这些示例仍含已废弃字段: " + ", ".join(offenders)
+
+
+def test_mixer_example_matches_current_signature():
+    """示例里的顶层字段必须都是 run_mixer_simulation 的真实参数。"""
+
+    tool = {t.name: t for t in registered_tools(mcp)}["run_mixer_simulation"]
+    params = set(tool.fn_metadata.arg_model.model_fields)
+    assert "requirements" not in params, "requirements 已从签名移除"
+    assert set(_EXAMPLES["run_mixer_simulation"]) <= params, (
+        f"示例含签名外字段: {set(_EXAMPLES['run_mixer_simulation']) - params}"
+    )
