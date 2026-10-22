@@ -42,7 +42,7 @@ def cst_task_list() -> dict[str, Any]:
 
 @mcp.tool()
 def cst_task_cancel(task_id: str) -> dict[str, Any]:
-    """取消一个 CST 异步任务（排队中的直接取消，运行中的尝试终止其子进程）。
+    """⚠️ 取消一个 CST 异步任务（会终止运行中的求解）。
 
     用法："把那个求解任务停掉"
 

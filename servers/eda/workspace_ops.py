@@ -52,7 +52,7 @@ def create_workspace(path: str, timeout_seconds: int = 60) -> dict[str, Any]:
 
 @mcp.tool()
 def switch_workspace(path: str, timeout_seconds: int = 60) -> dict[str, Any]:
-    """设置下次启动程序时使用的工作区，当前工作区保持不变。
+    """⚠️ 设置下次启动时的工作区（不是立即切换，当前保持不变）。
 
     用法："把工作区切换到 D:/EDI-Workspace-New"
 

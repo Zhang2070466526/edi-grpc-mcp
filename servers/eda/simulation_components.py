@@ -757,7 +757,7 @@ def replace_port_component(
         parameters: dict | None = None,
         timeout_seconds: int = 300,
 ) -> dict[str, Any]:
-    """将原理图中的端口器件替换为另一种类型。
+    """⚠️ 将原理图中的端口器件替换为另一种类型（会改变端口）。
 
     目前仅支持 TermG ↔ P_nToneG 之间的替换。
     服务端保留位置、状态和外部连线，生成新实例名。
@@ -811,7 +811,7 @@ def delete_simulation_component(
         instance_name: str,
         timeout_seconds: int = 120,
 ) -> dict[str, Any]:
-    """按实例名删除原理图器件及其连接线。
+    """⚠️ 按实例名删除原理图器件及其连接线（不可恢复）。
 
     这是通用删除工具，不限于仿真器件。删除直接由 EDI 按实例名执行，
     不做本地磁盘预检查，因此即使 EDI 中有未保存的更改也能正常工作。
@@ -937,7 +937,7 @@ def replace_schematic_from_file(
         schematic_path: str,
         timeout_seconds: int = 300,
 ) -> dict[str, Any]:
-    """从 .ep 文件整体替换原理图（对应 gRPC LOAD_SCHEMATIC_FROM_FILE）。
+    """⚠️ 从 .ep 文件整体替换原理图（整图覆盖，原内容丢失）。
 
     用指定的 schematic.ep 文件（完整 edi-schematic S-Expression）整体替换工程唯一原理图，
     不追加、不合并。成功后立即保存，失败恢复原原理图状态。

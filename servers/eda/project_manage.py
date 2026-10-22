@@ -362,7 +362,7 @@ def list_schematic_components(
         project_path: str,
         timeout_seconds: int = 60,
         summary_only: bool = False,
-        limit: int = 0,
+        limit: int = 50,
 ) -> dict[str, Any]:
     """通过 gRPC 查询原理图全部器件（含完整参数），比本地文件读取更实时。
 
@@ -377,7 +377,7 @@ def list_schematic_components(
         timeout_seconds: 最长等待秒数，默认 60。
         summary_only: True 时每项只保留标量字段（instance_name/component_type/active_state/state），
             裁掉 parameters 大头，省上下文。
-        limit: 只返回前 N 个器件（0 表示全部）。
+        limit: 只返回前 N 个器件，默认 50；0 = 全部。截断时 details.truncated=true。
 
     Returns:
         gRPC 统一返回结构（业务字段在 details 中）：
@@ -396,6 +396,7 @@ def list_schematic_components(
             if limit and limit > 0 and len(comps) > limit:
                 comps = comps[:limit]
                 result["details"]["returned"] = limit
+                result["details"]["truncated"] = True
             result["details"]["components"] = comps
         result["message"] = "原理图器件查询成功"
     return result

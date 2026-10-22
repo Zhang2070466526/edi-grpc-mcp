@@ -92,7 +92,13 @@ def _search_models(
         bucket = data.get("results") if isinstance(data, dict) else data
         if isinstance(bucket, list) and len(bucket) > limit:
             bucket[:] = bucket[:limit]  # 原地截断，dict 形状时 count 保留
-            result.setdefault("details", {})["returned"] = limit
+            details = result.setdefault("details", {})
+            details["returned"] = limit
+            details["truncated"] = True
+            # 把命中总数提到 details 顶层：与 returned/truncated 平级，
+            # docstring 承诺的 details.count 才成立（原始 gRPC 只在 details.data.count）。
+            if isinstance(data, dict) and "count" in data:
+                details["count"] = data["count"]
     return result
 
 
@@ -101,7 +107,7 @@ def search_public_models(
         sub_type: str,
         filters: list | None = None,
         timeout_seconds: int = 60,
-        limit: int = 0,
+        limit: int = 50,
 ) -> dict[str, Any]:
     """公共模型库检索（官方件）：按子类列出型号与参数。自己导入的件在个人库，用 search_personal_models。
 
@@ -115,8 +121,8 @@ def search_public_models(
          示例：筛选增益≥20dB → [{"key": "gain", "min": 20}]；
               叠加频段 → [{"key": "gain", "min": 20}, {"key": "min_freq", "min": 27000}]
         timeout_seconds: 最长等待秒数，默认 60。
-        limit: 只返回前 N 条结果；**0（默认）= 不限制，返回全部命中** —— 实测大子类可达数百条、
-          响应体上 MB，建议显式传 limit。返回体里的 count 是命中总数，可能大于本次返回条数。
+        limit: 只返回前 N 条结果，默认 50；0 = 不限制（可能数百条 / MB 级响应）。截断时
+          details.truncated=true，details.count 为命中总数。
 
     Returns:
         gRPC 统一返回结构，业务字段（code/message/data）在 details 中。
@@ -129,7 +135,7 @@ def search_personal_models(
         sub_type: str,
         filters: list | None = None,
         timeout_seconds: int = 60,
-        limit: int = 0,
+        limit: int = 50,
 ) -> dict[str, Any]:
     """个人模型库检索（自己导入的件）：按子类列出型号与参数。官方件在公共库，用 search_public_models。
 
@@ -143,8 +149,8 @@ def search_personal_models(
          示例：筛选增益≥20dB → [{"key": "gain", "min": 20}]；
               叠加频段 → [{"key": "gain", "min": 20}, {"key": "min_freq", "min": 27000}]
         timeout_seconds: 最长等待秒数，默认 60。
-        limit: 只返回前 N 条结果；**0（默认）= 不限制，返回全部命中** —— 实测大子类可达数百条、
-          响应体上 MB，建议显式传 limit。返回体里的 count 是命中总数，可能大于本次返回条数。
+        limit: 只返回前 N 条结果，默认 50；0 = 不限制（可能数百条 / MB 级响应）。截断时
+          details.truncated=true，details.count 为命中总数。
 
     Returns:
         gRPC 统一返回结构，业务字段（code/message/data）在 details 中。

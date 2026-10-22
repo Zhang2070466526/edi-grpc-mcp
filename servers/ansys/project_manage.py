@@ -8,6 +8,7 @@ get_hfss_project_info: 只读查询，不启动 AEDT
 
 from __future__ import annotations
 
+import atexit
 import psutil
 import subprocess
 import time
@@ -25,6 +26,38 @@ from servers import mcp
 
 _LAST_PID: int | None = None  # MCP 最后一次启动的 AEDT 进程 PID
 _OPEN_PROJECT_PATHS: dict[str, str] = {}  # project_name -> project_path
+
+#: 本进程 Popen 起来、尚未回收的 AEDT 句柄（持有对象才能 terminate；只存 PID 不够）
+_LAUNCHED: list[Any] = []
+
+
+def _register_launched(proc: Any) -> None:
+    """登记自启动进程；顺手剔除已退出的，避免长期运行列表只增不减。"""
+    _LAUNCHED[:] = [p for p in _LAUNCHED if p.poll() is None]
+    _LAUNCHED.append(proc)
+
+
+def _terminate_launched() -> None:
+    """退出时回收自己拉起的 AEDT：先 terminate，5 s 未退再 kill。
+
+    只处理 `_LAUNCHED` 里的（= MCP 自己 Popen 的），用户手动启动的实例不受影响。
+    进程被强杀（taskkill /F）时 atexit 不触发 —— 那种情况仍只能靠 close_hfss_project。
+    """
+    for proc in list(_LAUNCHED):
+        if proc.poll() is not None:
+            continue
+        try:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            logger.info("回收自启动 AEDT：PID=%s", proc.pid)
+        except Exception:  # noqa: BLE001 — 退出路径不能反过来抛
+            logger.debug("回收 AEDT 失败：PID=%s", getattr(proc, "pid", "?"), exc_info=True)
+
+
+atexit.register(_terminate_launched)
 
 
 def _com_open_project(project_path: str) -> dict[str, Any]:
@@ -153,6 +186,7 @@ def open_hfss_project(
         try:
             proc = subprocess.Popen([str(exe_path), resolved], cwd=str(exe_path.parent))
             _LAST_PID = proc.pid
+            _register_launched(proc)
             logger.info("Launched AEDT PID=%d for %s", proc.pid, project_name)
         except Exception as exc:
             logger.exception("AEDT launch failed")
@@ -194,7 +228,7 @@ def close_hfss_project(
     save_before_close: bool = False,
     force: bool = False,
 ) -> dict[str, Any]:
-    """关闭 AEDT 项目（COM 优先，force 仅结束 MCP 最后启动的 PID）。
+    """⚠️ 关闭 AEDT 项目（未保存改动会丢；force 会强杀进程）。
 
     Args:
         project_name: 项目名，为空关闭活动项目。
@@ -348,6 +382,7 @@ def launch_aedt(
         try:
             proc = subprocess.Popen([str(exe_path)], cwd=str(exe_path.parent))
             _LAST_PID = proc.pid
+            _register_launched(proc)
         except Exception as exc:
             return error_response("LAUNCH_FAILED", str(exc))
 

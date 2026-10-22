@@ -19,7 +19,7 @@ def replace_models_from_csv(
     input_csv_path: str,
     timeout_seconds: int = 60,
 ) -> dict[str, Any]:
-    """按 CSV 文件批量替换工程中的元件模型。
+    """⚠️ 按 CSV 批量替换工程元件模型（影响面大，建议先 get_project_summary 核对）。
 
     用法："用这个 CSV 替换工程里的模型"、"批量更新器件型号"
     CSV 列：original_model_type, original_model_name, original_model_id,
