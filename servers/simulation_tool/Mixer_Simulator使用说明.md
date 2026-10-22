@@ -106,10 +106,6 @@ print(r.returncode, json.loads(r.stdout.decode("utf-8")))
 | `agc_attenuator` | 是 | 数控衰减器实例名 |
 | `steps` | 否 | 档位数组，每项 `gain_db`/`front`/`agc_db` |
 
-### 指标判定 requirements（选填）
-
-键 = 指标名，值 = 判定串，支持 `≥ ≤ > <` 或 `±`，如 `"变频增益": "≥ 20"`、`"变频增益": "25±1"`。不给则判定列全为"待确认"。
-
 ## 指标
 
 9 个可请求指标：变频增益、增益平坦度、带内杂散、本振泄漏、镜像抑制、输入P−1dB、输出P−1dB、Psat、变频噪声系数。

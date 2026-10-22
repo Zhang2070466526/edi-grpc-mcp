@@ -144,7 +144,7 @@ def run_mixer_simulation(
 
     前提：Windows + EDI 已运行（gRPC 127.0.0.1:50055 可用）+ ADS 许可可用。
     links 为混频链路数组，每项含 name/direction/f_rf/f_if/bw/pin/p_lo 及可选的
-    channels/stages/simulation/control/requirements（详见 exe 说明文档）。
+    channels/stages/simulation/control（详见 exe 说明文档）。
     结果 results[].electrical_parameters 供程序消费；**本次运行已自带报告**（见 Returns 的
     report_artifacts），不要再调 export_simulation_report 重生成 —— 它的指标目录
     （indicator_catalog）不含混频指标，变频增益/镜像抑制/本振泄漏等会被拒。
