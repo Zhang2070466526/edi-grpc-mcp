@@ -59,7 +59,6 @@ from servers.eda.edi_launcher import launch_edi  # noqa: E402
 from servers.turbocharts.compare_results import compare_simulation_results  # noqa: E402
 from servers.turbocharts.convert_raw import turbocharts_convert, list_result_curves  # noqa: E402
 from servers.multimodal_vision import show_image, analyze_image, open_document, register_image_url  # noqa: E402
-from servers.report import generate_simulation_report  # noqa: E402
 from servers.settings import get_settings  # noqa: E402
 from servers.metrics import record_tool_call  # noqa: E402
 
@@ -85,7 +84,6 @@ _DESTRUCTIVE_CHAT_TOOLS = {
     "replace_schematic_from_file",   # 整体替换原理图，无条件确认
     "clear_schematic",               # 清空原理图，无条件确认
     "close_edi_project",          # 确认时需要 need_save=true
-    "generate_simulation_report",  # 确认时需要 overwrite=true
 }
 
 # ---------------------------------------------------------------------------
@@ -117,10 +115,6 @@ _CHAT_TOOL_DESCRIPTIONS: dict[str, str] = {
         "调用视觉模型分析图片内容（会上传到第三方）。"
         "仅用户明确要求分析时调用，显示用 show_image。"
         "prompt 参数尽量具体，如'详细描述图中的曲线数据、文字标注、数值范围'"
-    ),
-    "generate_simulation_report": (
-        "生成本地仿真报告（PDF/DOCX）。"
-        "只负责校验数据并调用渲染服务，不会自动仿真或编造数据"
     ),
     "open_document": (
         "打开本地文档：link 模式生成临时 HTTP 链接，local 模式系统默认程序打开。"
@@ -568,8 +562,6 @@ class ChatService:
                             # 参数感知确认：仅在实际会造成破坏时才拦截
                             if name == "close_edi_project" and not args.get("need_save"):
                                 continue
-                            if name == "generate_simulation_report" and not args.get("overwrite"):
-                                continue
                             destructive.append(tc)
                         elif name == "generate_schematic_from_netlist":
                             if args.get("clear_before_import"):
@@ -921,7 +913,6 @@ _TOOL_LABELS: dict[str, str] = {
     "turbocharts_convert": "RAW 转图",
     "show_image": "显示图片",
     "analyze_image": "分析图片",
-    "generate_simulation_report": "生成报告",
     "open_document": "打开文档",
     "get_simulation_component_schema": "控件参数",
     "list_simulation_components": "查询器件",
@@ -984,8 +975,6 @@ def _create_pending(tool_name: str, args: dict) -> PendingAction:
             f"使用 {args.get('csv_path', '?')} 批量替换工程模型",
         "close_edi_project":
             f"关闭工程 {args.get('project_path', '?')} 并保存修改",
-        "generate_simulation_report":
-            f"覆盖已有报告文件 {args.get('output_path', '?')}",
         "replace_port_component":
             f"替换端口器件 {args.get('target_instance_name', '?')} 为 {args.get('replacement_component_type', '?')}",
         "replace_schematic_from_file":
@@ -1005,7 +994,6 @@ def _confirmation_text(pending: PendingAction) -> str:
         "delete_simulation_component": f"{pending.summary}。此操作无法由 MCP 自动恢复。",
         "replace_models_from_csv": f"{pending.summary}。此操作将修改工程中的模型。",
         "close_edi_project": f"{pending.summary}。保存后无法撤销。",
-        "generate_simulation_report": f"{pending.summary}。原文件将被覆盖。",
         "replace_port_component": f"{pending.summary}。此操作将替换器件并重新连线。",
         "replace_schematic_from_file": f"{pending.summary}。当前原理图将被整体替换，原内容丢失。",
     }.get(pending.tool_name, pending.summary)

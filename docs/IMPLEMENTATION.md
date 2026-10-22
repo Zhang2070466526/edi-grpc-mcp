@@ -424,7 +424,6 @@ CST 工具不走 ANSYS COM，用 CST 官方接口（`servers/cst/cst_api.py`，�
 | `edi_log_dir` | `C:\Program Files (x86)\EDI\logs` | EDI 日志目录 |
 | `llm_api_key` / `llm_base_url` / `llm_model` | 空 | Chat 的 LLM 配置 |
 | `vision_*` | 空 | 视觉分析（独立于 Chat） |
-| `report_render_url` | `http://127.0.0.1:17867/api/v1/reports/render` | 报告渲染服务 |
 
 ### 2.2 公有方法（utils.py）
 
@@ -505,7 +504,7 @@ hint            由 status 派生的动作指令
 }
 ```
 
-适用工具：`turbocharts_convert`、`capture_schematic`、`compare_simulation_results`、`generate_simulation_report`。`message` 用「已生成」不用「已显示」——MCP 不保证客户端渲染成功。
+适用工具：`turbocharts_convert`、`capture_schematic`、`compare_simulation_results`。`message` 用「已生成」不用「已显示」——MCP 不保证客户端渲染成功。
 
 ### 2.6 参数校验分层与参数目录
 
@@ -681,7 +680,7 @@ def fetch_artifact(file_path: str, ttl_seconds: int = 600) -> dict:
 | ANSYS COM 操作 | `threading.RLock` | 保护 AEDT COM 对象 |
 | Chat 会话 | `threading.Lock` / `asyncio.Lock` | 保护 `_sessions` 字典、同会话串行 |
 | 图片 token | `threading.RLock` | 保护 `_IMAGE_TOKENS` 字典 |
-| 慢同步工具（`turbocharts_convert` / `compare_simulation_results` / `generate_simulation_report`） | `per_tool_mutex`（各一把 `threading.Lock`） | offload 后同类工具串行，防并发争用共享资源 |
+| 慢同步工具（`turbocharts_convert` / `compare_simulation_results`） | `per_tool_mutex`（各一把 `threading.Lock`） | offload 后同类工具串行，防并发争用共享资源 |
 
 #### 同步工具统一 offload（已实现）
 
@@ -689,7 +688,7 @@ FastMCP 对**同步工具**是直接调用（无 `to_thread`）→ 工具跑在*
 
 **实现**：在 `servers/__init__.py` monkeypatch `Tool.run`，所有同步工具在 MCP 调用时整段丢到工作线程（`anyio.to_thread.run_sync` + 子线程 `asyncio.run` 驱动），事件循环立即回来接单；工具函数本身保持 sync（直接调用仍返回 dict，Python API 不变）。异步任务不受影响（worker 在 `ThreadPoolExecutor` 里）。
 
-**配套加锁**：offload 后同类工具并发会争用共享资源（turbocharts 子进程、Matplotlib 全局状态、报告渲染服务）。`servers/utils.py` 的 `per_tool_mutex` 装饰器给 `turbocharts_convert` / `compare_simulation_results` / `generate_simulation_report` 各加一把独立锁，同类工具互斥、不同工具互不阻塞（实测不锁时并发 2 个 turbocharts 耗时 3.7×）。
+**配套加锁**：offload 后同类工具并发会争用共享资源（turbocharts 子进程、Matplotlib 全局状态）。`servers/utils.py` 的 `per_tool_mutex` 装饰器给 `turbocharts_convert` / `compare_simulation_results` 各加一把独立锁，同类工具互斥、不同工具互不阻塞（实测不锁时并发 2 个 turbocharts 耗时 3.7×）。
 
 ### 3.5 重启恢复与生命周期
 
@@ -711,7 +710,6 @@ FastMCP 对**同步工具**是直接调用（无 `to_thread`）→ 工具跑在*
 | `simulation` | `eda.simulation` | 任务创建 + 完成/异常 + outcome_known |
 | `turbocharts` | `turbocharts` | 命令行执行 + return_code + 耗时 |
 | `vision` | `multimodal.analyze` | API 状态码 + 模型名 + 图片大小 + 耗时 |
-| `report` | `report.generator` | 文件类型 + 模型名 + 图表数 + 器件数 |
 | `chat_service` | `chat_service` | request_id + 工具名 + 脱敏参数 + 耗时 |
 
 Chat 工具调用日志对路径做脱敏（只记文件名），不暴露用户目录结构。
@@ -730,7 +728,6 @@ Chat 工具调用日志对路径做脱敏（只记文件名），不暴露用户
 |---|---|
 | `delete_simulation_component` / `replace_models_from_csv` / `replace_port_component` | 无条件确认 |
 | `close_edi_project` | `need_save=true` 时确认 |
-| `generate_simulation_report` | `overwrite=true` 时确认 |
 | `generate_schematic_from_netlist` | `clear_before_import=true` 时确认 |
 
 Chat 层拦截 → 保存 `PendingAction` → 展示操作摘要 → 用户明确回复「确认」才执行 → 一次确认执行一次，5 分钟过期 → 执行时用原始保存参数（防模型篡改）。
@@ -861,7 +858,6 @@ else:                                 # 两者都没有
 - **`show_image`**：`_validate_image_path`（resolve 防 `..` 遍历、拒网络路径、扩展名白名单）→ ≤10MB 内嵌 `ImageContent`，>10MB 只返回本地路径。
 - **`analyze_image`**：调第三方视觉模型。三项配置全非空即开启；`BoundedSemaphore(2)` 并发控制；system prompt 防图片提示注入；日志不记 Base64/API Key/分析内容；返回 `content_is_untrusted: true`。
 - **`open_document`**：`mode="link"` 生成 10 分钟 HTTP 链接（`/documents/{token}`），`mode="local"` 用 `os.startfile()` 打开；10 种办公格式白名单；UNC 拒绝、nosniff 头。
-- **`generate_simulation_report`**：16 步校验（输出路径/模型名/spec_table/charts/components/schematic）→ POST 渲染服务 → 状态码映射错误码（400→`REPORT_VALIDATION_FAILED`、409→`OUTPUT_FILE_BUSY`、500→`REPORT_RENDER_FAILED`）。只校验数据调 API，不自动仿真、不编造指标、默认禁止覆盖。
 
 ### 4.10 独立仿真工具（固定目录 exe，不走 gRPC/HTTP）
 
@@ -1011,7 +1007,6 @@ else:                                 # 两者都没有
 | `show_image` | 把本地图片返回客户端渲染 | — | 查看截图 |
 | `analyze_image` | 让视觉模型理解图片 | —（图片路径） | 分析截图 |
 | `open_document` | PDF/DOCX 需要预览/系统打开 | 报告 | LLM 查看报告 |
-| `generate_simulation_report` | 整理成正式 PDF/DOCX 报告 | summary + 曲线图 + 截图 + 结果 | open_document 查看 |
 
 ---
 
@@ -1081,7 +1076,7 @@ create/update 两条分支：先查 Schema → 映射需求为合法参数 → �
 
 ### 4. `create_simulation_report` — 生成仿真报告
 
-固定 10 步模板：确认输出路径 → 查工程 → 查已有结果（不自动重跑）→ 列曲线 → 转图 → 截原理图 → 整理 spec_table/components → 调 `generate_simulation_report`。
+固定 10 步模板：确认输出目录 → 查工程 → 查已有结果（不自动重跑）→ 列曲线 → 转图 → 截原理图 → 整理 spec_table/components → 调 `export_simulation_report`。
 
 ### 5. `troubleshoot_edi_error` — 诊断调用错误
 

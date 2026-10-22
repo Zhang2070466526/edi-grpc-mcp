@@ -167,7 +167,7 @@ MCP 工具层（`run_mixer_simulation`）把产物显式暴露出来，避免调
 - `artifacts`：报告固定在**最前**（旧实现按路径字符串排序再截断 40 条，`conditions/` 明细会先把名额吃满，报告被静默挤掉 —— 2026-10-21 已修）
 - `message`：追加"已生成仿真报告：…"；`warnings[0]` 也有同样提示
 
-⚠️ 拿到成功结果后应**先看 `report_artifacts` 并直接交付报告**，不要再跑 `export_simulation_report` / `generate_simulation_report` 重生成一遍 —— `Report_Exporter` 的 `indicator_catalog` 不含混频指标（变频增益/镜像抑制/本振泄漏等会被拒），`generate_simulation_report` 还依赖本地渲染服务。
+⚠️ 拿到成功结果后应**先看 `report_artifacts` 并直接交付报告**，不要再跑 `export_simulation_report` 重生成一遍 —— `Report_Exporter` 的 `indicator_catalog` 不含混频指标（变频增益/镜像抑制/本振泄漏等会被拒）。
 
 常见错误码（按类别）：
 

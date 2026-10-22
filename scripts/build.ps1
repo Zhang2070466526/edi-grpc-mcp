@@ -78,8 +78,6 @@ VISION_MODEL=
 LLM_API_KEY=
 LLM_BASE_URL=
 LLM_MODEL=
-# Optional: simulation report rendering
-REPORT_RENDER_URL=http://127.0.0.1:17867/api/v1/reports/render
 "@
 $envPath = Join-Path $distDir ".env"
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)

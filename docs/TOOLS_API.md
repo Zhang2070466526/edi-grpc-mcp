@@ -32,7 +32,6 @@ from servers.eda.project_manage import list_epp_projects
 - **[仿真器件管理（10 个）](#仿真器件管理10个协议-v3)**：器件 Schema、增删改、状态、网表导入、原理图加载
 - **[Resources & Prompts](#resources--prompts)**：只读资源 + 可复用工作流
 - **[文档（2 个）](#文档2个)**：打开本地文档、下载任意产物
-- **[报告（1 个）](#报告1个)**：生成仿真报告
 - **[独立仿真工具（3 个）](#独立仿真工具3个)**：报告导出 exe、TR 链路仿真 exe、混频链路仿真 exe（固定目录直接调 exe）
 - **[辅助](#辅助)**：Chat 上下文
 - **[gRPC 工具统一返回格式](#gRPC工具统一返回格式)**：gRPC 工具的返回结构 + status 语义
@@ -1737,53 +1736,6 @@ fetch_artifact(file_path: str, ttl_seconds: int = 600) -> dict
 | `ttl_seconds` | int | 否 | 600 | 链接有效秒数（钳制到 30-3600） |
 
 返回：`{"success": True, "url": "http://...", "file_name": "...", "size_bytes": N, "sha256": "...", "expires_in": 600}`
-
----
-
-## 报告（1 个）
-
-### `generate_simulation_report`
-
-```python
-from servers.report import generate_simulation_report
-
-generate_simulation_report(
-    output_path: str,
-    model_name: str,
-    description: str = "",
-    conclusion: str = "",
-    spec_table: list | None = None,
-    charts: list | None = None,
-    components: list | None = None,
-    schematic: str = "",
-    overwrite: bool = False,
-    timeout_seconds: int = 45,
-) -> dict
-```
-
-生成本地仿真报告（PDF/DOCX），调用本地报告渲染服务 `POST /api/v1/reports/render`。只负责数据校验和渲染，不会自动执行仿真或编造数据。
-
-| 参数 | 类型 | 必填 | 默认 | 说明 |
-|---|---|---|---|---|
-| `output_path` | str | 是 | — | 输出文件绝对路径，后缀决定格式（.pdf/.docx） |
-| `model_name` | str | 是 | — | 封面标题/型号名（最长 200 字符） |
-| `description` | str | 否 | "" | 产品简介（多行文本） |
-| `conclusion` | str | 否 | "" | 结论文字 |
-| `spec_table` | list | 否 | None | 电参数表二维数组（7 列，第一行表头） |
-| `charts` | list | 否 | None | 曲线图片 `[{"path":..., "title":...}]`，最多 50 张 |
-| `components` | list | 否 | None | 器件选型 `[{"type","model","manufacturer","specs"}]`，最多 500 条 |
-| `schematic` | str | 否 | "" | 原理图图片绝对路径 |
-| `overwrite` | bool | 否 | False | 输出文件已存在时是否覆盖 |
-| `timeout_seconds` | int | 否 | 45 | 请求超时秒数（5-120） |
-
-**重要规则**：
-- 默认禁止覆盖已存在文件（`overwrite=false`）
-- 器件厂家和规格不得根据型号名称猜测
-- 没有要求值时结果填"未判定"
-- 图片缺失不阻塞生成，返回中记录 warning
-- 报告服务不可用时返回 `REPORT_SERVICE_UNAVAILABLE`
-
-配置：`REPORT_RENDER_URL`（默认 `http://127.0.0.1:17867/api/v1/reports/render`）、`REPORT_RENDER_TIMEOUT_SECONDS`（默认 45）。
 
 ---
 

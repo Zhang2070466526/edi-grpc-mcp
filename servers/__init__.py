@@ -9,7 +9,6 @@
   - servers.ansys : ANSYS HFSS 工具（COM 附着）
   - servers.cst : CST 电磁仿真（求解 / S 参数 / 远场方向图导出）
   - servers.multimodal_vision : 图片显示 / 视觉分析 / 文档访问
-  - servers.report : 仿真报告生成
   - servers.resources_prompts : MCP Resources & Prompts（6 Resource + 8 Prompt）
   - 另有 1 个 Resource 随业务包走：turbocharts（RAW 转图说明）
   - servers.chat : 聊天模块（会话管理、LLM 工具闭环）
@@ -59,7 +58,7 @@ mcp = FastMCP(
         "- TR 仿真：run_tr_simulation → 不自带报告，结果喂给 export_simulation_report可以产出报告\n"
         "- 模型库：get_model_category_params(查分类) / search_public_models / search_personal_models\n"
         "- 图表：list_result_curves(查可用曲线) / turbocharts_convert(RAW 转曲线图) / compare_simulation_results(多结果对比)\n"
-        "- 报告：export_simulation_report(链路 JSON→PDF/DOCX) / generate_simulation_report(需本地渲染服务)\n"
+        "- 报告：export_simulation_report(链路 JSON→PDF/DOCX)\n"
         "- 微波计算：filter_order_lowpass|highpass|bandstop(阶数评估) / wilkinson_marchand_order / design_wilkinson / calculate_transline\n"
         "- 电磁仿真：ANSYS HFSS（open_hfss_project 等） / CST（cst_solve_async 等）\n"
         "\n"

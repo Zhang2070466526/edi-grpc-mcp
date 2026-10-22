@@ -80,10 +80,6 @@ class Settings(BaseSettings):
     vision_timeout: int = Field(default=45, ge=5, le=120)
     vision_max_mb: int = Field(default=10, ge=1, le=100)
 
-    # ── 报告渲染 ──
-    report_render_url: str = "http://127.0.0.1:17867/api/v1/reports/render"
-    report_timeout: int = Field(default=45, ge=5, le=120)
-
     def validate(self) -> list[str]:
         """业务级格式校验，返回问题列表。致命格式错误（EDA_GRPC_SERVER 缺 :）直接 raise ValueError，其余仅打印警告。"""
         issues: list[str] = []

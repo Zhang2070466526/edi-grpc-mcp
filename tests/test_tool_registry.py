@@ -21,7 +21,6 @@ def test_all_tools_registered():
         "get_service_logs",
         "list_result_curves", "turbocharts_convert",
         "show_image", "analyze_image", "analyze_variables",
-        "generate_simulation_report",
         "open_document",
         "get_simulation_component_schema",
         "list_simulation_components", "create_simulation_component",

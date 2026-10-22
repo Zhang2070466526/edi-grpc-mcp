@@ -52,8 +52,6 @@ EDI gRPC MCP 服务 (FastMCP, 85 工具, 7 Resource, 8 Prompt)
    │
    ├── 视觉分析 ──→ Vision API (可选, OpenAI 兼容)
    │
-   ├── 报告渲染 ──→ Report Render Service (可选, POST /api/v1/reports/render)
-   │
    └── Chat ──→ LLM API (可选, OpenAI 兼容)
          会话管理，多轮工具闭环，破坏性操作确认门
 ```
@@ -273,10 +271,6 @@ edi-grpc-mcp/
 │   │   ├── report_export.py            #     export_simulation_report（报告 exe → PDF/DOCX/report.json）
 │   │   ├── tr_simulation.py            #     run_tr_simulation（TR exe：网表→路径分析→ADS→结果）
 │   │   └── mixer_simulation.py         #     run_mixer_simulation（混频 exe：上下变频/多通道/任意级变频）
-│   │
-│   ├── report/                         #   仿真报告渲染 (1 个工具)
-│   │   ├── __init__.py                 #     公共 API re-export
-│   │   └── generator.py               #     16 步校验 → POST 渲染服务 → 返回 preview_url
 │   │
 │   └── chat/                           #   Chat 聊天模块
 │       ├── __init__.py                 #     包标识

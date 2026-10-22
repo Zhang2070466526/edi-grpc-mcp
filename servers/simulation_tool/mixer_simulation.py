@@ -168,7 +168,7 @@ def run_mixer_simulation(
         ``<工程名>_仿真报告.pdf`` 与 ``.docx``（含指标判定表、曲线、拓扑图）。
         报告条目固定放在 report_artifacts，artifacts 里也排在最前，message 会写明
         「已生成仿真报告：…」，warnings 里同样有一条提示 —— 跑完直接把报告交付给用户，
-        不需要再调 export_simulation_report / generate_simulation_report 重跑一遍。
+        不需要再调 export_simulation_report 重跑一遍。
     """
     # 1. epp 存在
     resolved_epp, err = require_file(epp_path, (".epp",))

@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path as _Path
 from typing import Any
 
 from servers import mcp
@@ -29,11 +28,8 @@ def prompt_create_simulation_report(
         output_path: 输出文件绝对路径（.pdf 或 .docx）。
         overwrite: 输出文件已存在时是否覆盖。
     """
-    ext = _Path(output_path).suffix.lower() if output_path else ".pdf"
-    file_type = ext.lstrip(".")
-
     steps = [
-        f"1. 确认输出路径：`{output_path or '（请提供）'}`（{file_type.upper()} 格式）。",
+        f"1. 确认输出目录：`{output_path or '（请提供）'}`（将生成 document.pdf / document.docx / report.json）。",
         "2. 调用 `get_project_summary` 获取工程基本信息作为报告封面和简介素材。",
         "3. 查询已有仿真结果（`get_simulation_async_result` 或 `list_eda_tasks`），不自动重新仿真。",
         "   没有结果时询问用户是否执行仿真。",
@@ -43,7 +39,7 @@ def prompt_create_simulation_report(
         "7. 整理电参数表（spec_table）：只填入有真实测量值的指标，无要求值时结果列填'未判定'。",
         "8. 整理器件选型表（components）：type/model/manufacturer/specs 四项均为字符串，不得猜测。",
         "9. 收集 description（产品简介）和 conclusion（结论文字）。",
-        f"10. 调用 `generate_simulation_report` 渲染报告：output_path=\"{output_path or '（请提供）'}\"，overwrite={'true' if overwrite else 'false'}",
+        f"10. 把前面整理的电参数表/器件表/曲线/简介/结论组装成 report JSON，调用 `export_simulation_report` 渲染报告（report=上述 JSON，output_dir=\"{output_path or '（请提供）'}\"）；目标文件已存在会被拒，需换新目录。",
         "",
         "重要约束：",
         "- 不要自动启动新的仿真，除非用户明确要求。",

@@ -424,7 +424,7 @@
 
 ## 8. GET /documents/{token} — 文档访问
 
-**用途**：通过临时 Token 访问本地文档（由 `open_document` / `generate_simulation_report` 注册）。
+**用途**：通过临时 Token 访问本地文档（由 `open_document` 注册）。
 
 **请求**：路径参数 `token`（10 分钟有效）。
 

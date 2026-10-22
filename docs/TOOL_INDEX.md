@@ -2,7 +2,7 @@
 
 > 自动生成，勿手改。权威数量见 /ready 的 tool_count。
 
-共 85 个工具：
+共 84 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
 - `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
@@ -46,7 +46,6 @@
 - `filter_order_highpass` — 高通阶数估算：通带自 f_p 向上、阻带在 f_p 之下，返回阶数与传输零点。低通用 filter_order_lowpass、带阻用 filter_order_bandstop。
 - `filter_order_lowpass` — 低通阶数估算：通带到 f_p、阻带在 f_p 之上，返回阶数与传输零点。高通用 filter_order_highpass、带阻用 filter_order_bandstop。
 - `generate_schematic_from_netlist` — 将网表文件导入工程生成 main 原理图。
-- `generate_simulation_report` — 生成本地仿真报告（PDF/DOCX），需要本地渲染服务在线；渲染服务不可用时改用 export_simulation_report。
 - `get_components_static_params` — 查询器件的固有参数（重量、尺寸、封装、所属厂商、成本等）。
 - `get_current_workspace` — 查询程序当前实际加载的工作区目录。
 - `get_hfss_analysis_status` — 查询 HFSS 异步仿真状态（默认只读本地，不访问 AEDT）。

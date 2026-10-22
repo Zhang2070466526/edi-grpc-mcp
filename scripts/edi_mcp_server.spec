@@ -83,10 +83,6 @@ a = Analysis(
         'servers.multimodal_vision.document',
         'servers.multimodal_vision.validators',
 
-        # 报告渲染
-        'servers.report',
-        'servers.report.generator',
-
         # 运行时配置
         'servers.utils',
         'servers.settings',

@@ -30,7 +30,6 @@ import servers.turbocharts.resource      # noqa: F401 — edi://reference/turboc
 import servers.ansys.project_manage       # noqa: F401
 import servers.ansys.run_analysis         # noqa: F401
 import servers.multimodal_vision          # noqa: F401 — show_image + analyze + open_document
-import servers.report                     # noqa: F401 — generate_simulation_report
 import servers.mcp_arg_guard            # noqa: F401 — 缺参/参数名拼错回统一信封（包装 ToolManager.call_tool）
 import servers.cst                        # noqa: F401 — cst_solve + cst_export_snp
 import servers.microwave                # noqa: F401 — calculate_transline + design_wilkinson + filter_order_* + wilkinson_marchand_order
