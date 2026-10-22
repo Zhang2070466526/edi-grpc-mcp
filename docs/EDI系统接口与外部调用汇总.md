@@ -658,7 +658,7 @@ python run-simulate.py `
   --edi "D:\EDI" `
   --indicators "工作频率,输出增益,噪声系数" `
   --components '[{"type":"低噪声放大器","model":"NC10149C_812","manufacturer":"电科13所","specs":"8-12GHz, G>26dB, NF<1.8dB"}]' `
-  --json '[{"name":"发射链路1","min_freq":6,"max_freq":12,"input_port":1,"output_port":2,"phase_step":5.5,"atten_step":0.5,"phase_devices":["NC12104C_810SD1"],"atten_devices":["NC1342C_8121"],"freq_rx":9,"pwr_rx":-20,"requirements":{"反向增益":"≥20dB","噪声系数":"≤3dB"}}]'
+  --json '[{"name":"发射链路1","min_freq":6,"max_freq":12,"input_port":1,"output_port":2,"phase_step":5.5,"atten_step":0.5,"phase_devices":["NC12104C_810SD1"],"atten_devices":["NC1342C_8121"],"freq_rx":9,"pwr_rx":-20}]'
 ```
 
 该示例表示：对指定 `.epp` 工程的“发射链路1”执行6至12GHz范围的工作频率、输出增益和噪声系数仿真，并把器件选型、仿真结果及指标判断写入数据手册。
@@ -674,7 +674,7 @@ TR_Simulator.exe `
   --threads 5 `
   --mode simulate `
   --components '[{"type":"低噪声放大器","model":"NC10149C_812","manufacturer":"电科13所","specs":"8-12GHz, G>26dB, NF<1.8dB"}]' `
-  --json '[{"name":"发射链路1","min_freq":6,"max_freq":12,"input_port":1,"output_port":2,"requirements":{"输出增益":"≥20dB","噪声系数":"≤3dB"}}]'
+  --json '[{"name":"发射链路1","min_freq":6,"max_freq":12,"input_port":1,"output_port":2}]'
 ```
 
 注意：`TR_Simulator.exe`的`validate`模式以及`--epp/--edi/--mode/--json`参数已实测通过；完整`simulate`报告生成流程仍未验证。
