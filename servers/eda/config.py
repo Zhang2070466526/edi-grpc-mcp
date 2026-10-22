@@ -26,15 +26,13 @@ EDA_GRPC_SERVER = _settings.eda_grpc_server
 # 仿真器件目录类型（SP/HB/XDB），供 simulation_components 与 project_manage 共用
 SIM_COMPONENT_TYPES = {"SParameter", "HarmonicBalance", "XDB"}
 
-# ── 应用根目录检测 ──
-
-if getattr(_sys, "frozen", False):
-    _APP_ROOT = Path(_sys.executable).parent.resolve()
-else:
-    _APP_ROOT = Path(__file__).resolve().parent.parent.parent  # servers/eda/ → servers/ → 项目根
-
 # ── EDI / TurboCharts 路径：优先 .env，否则自动检测 ──
-_PARENT = _APP_ROOT.parent
+# 探测基目录 = EDI 安装根（simulation_tool 的上一级）。旧实现用「应用根目录的上一级」：
+# frozen 下 = dist、源码态 = 仓库上一级，都不含 EDI.exe / turbocharts_app.exe ⇒
+# 自动探测恒失效、一直靠 .env 兜（2026-10-21 实测 DEP-1：exe 形态 .env 一空就暴露）。
+from servers.simulation_tool.config import EDI_INSTALL_DIR as _EDI_INSTALL_DIR
+
+_PARENT = Path(_EDI_INSTALL_DIR)
 
 _EDI_CANDIDATES = ["EDI.exe", "EDA-PMDS.exe", "CAIS.exe"]
 _TC_CANDIDATES = ["turbocharts_app.exe", "turbocharts.exe", "TurboCharts.exe"]
