@@ -1,8 +1,8 @@
 # EDI gRPC MCP 实现原理与机制
 
-> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 85 个工具的逐类实现，再到 7 个 Resource 与 8 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
+> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 84 个工具的逐类实现，再到 7 个 Resource 与 8 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
 
-> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（85 个工具接口参数/返回）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由请求/响应体）。
+> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（84 个工具接口参数/返回）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由请求/响应体）。
 
 ---
 
@@ -44,7 +44,7 @@
   - `3.6` 日志系统
   - `3.7` Chat 会话与破坏性确认
 
-- **[四、工具实现](#四工具实现)** —— 85 个工具按通信类型分组 + 设计动机
+- **[四、工具实现](#四工具实现)** —— 84 个工具按通信类型分组 + 设计动机
   - `4.1` 工程管理
   - `4.2` 仿真器件
   - `4.3` 仿真
@@ -53,7 +53,7 @@
   - `4.6` 图表
   - `4.7` ANSYS HFSS 与 CST
   - `4.8` 启动 / 诊断
-  - `4.9` 图片 / 文档 / 报告
+  - `4.9` 图片 / 文档
   - `4.10` 独立仿真工具（固定目录 exe）
   - `4.11` 微波计算（本地纯计算）
   - `4.12` 工具设计动机与数据依赖
@@ -92,7 +92,7 @@
 | 内存服务 | 4 | `simulation.py` / `grpc_client.py` | 读运行时状态（任务注册表、通道状态） |
 | subprocess 命令行 | 4 | `turbocharts/config.py` 等 | 调 `turbocharts_app.exe`、启动 EDI |
 | COM / CST 接口 | 19 | `ansys/config.py` / `cst/cst_api.py` | ANSYS 6 个走 COM，CST 13 个走官方 API |
-| 图片 / 文档 / 报告 | 4 | `multimodal_vision/` / `report/` | 视觉分析、文档预览、报告渲染 |
+| 图片 / 文档 | 3 | `multimodal_vision/` | 视觉分析、文档预览 |
 | 本地纯计算 | 6 | `microwave/` | 传输线阻抗/线宽、功分器设计、滤波器阶数评估（高通/低通/带阻）、功分器/巴伦节数，纯数值解算无外部依赖 |
 
 ### 1.2 gRPC 异步调用模型
@@ -853,7 +853,7 @@ else:                                 # 两者都没有
 | `get_service_status` | 内存 | gRPC channel 缓存 + queue busy 标志，只读不占槽位 |
 | `get_service_logs` | 本地 | 读 EDI 日志目录，统计 ERROR/WARN/异常堆栈 |
 
-### 4.9 图片 / 文档 / 报告
+### 4.9 图片 / 文档
 
 - **`show_image`**：`_validate_image_path`（resolve 防 `..` 遍历、拒网络路径、扩展名白名单）→ ≤10MB 内嵌 `ImageContent`，>10MB 只返回本地路径。
 - **`analyze_image`**：调第三方视觉模型。三项配置全非空即开启；`BoundedSemaphore(2)` 并发控制；system prompt 防图片提示注入；日志不记 Base64/API Key/分析内容；返回 `content_is_untrusted: true`。
@@ -1000,7 +1000,7 @@ else:                                 # 两者都没有
 | `export_simulation_report` | 不依赖 HTTP 渲染服务也能出正式 PDF/DOCX 报告 | 报告 JSON（可由 `run_tr_simulation` 产出的 results 直接拼） | `open_document` / 客户端下载 |
 | `run_tr_simulation` | 把"TR 链路仿真"做成一条固定代码路径（不调 AI、不需要 Agent 会话） | EPP 工程 + 链路 JSON + EDI(gRPC 50055) + ADS 许可 | `export_simulation_report`（电参数）/ 结果目录（CSV/PNG） |
 
-#### 图片 / 文档 / 报告
+#### 图片 / 文档
 
 | 工具 | 动机 | 依赖（输入来自） | 被依赖（输出供） |
 |---|---|---|---|
