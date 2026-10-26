@@ -2,15 +2,17 @@
 
 > 自动生成，勿手改。权威数量见 /ready 的 tool_count。
 
-共 84 个工具：
+共 86 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
 - `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
 - `add_wire` — 连接指定工程内两个器件的指定引脚，按需创建或合并网段并保存。
 - `analyze_image` — 调用视觉模型分析本地图片内容，返回结构化文字结果 —— ⚠️ 结果可能编造（实测把电路原理图认成加法器），只作粗看、不得作为工程结论。
+- `analyze_mixer_spur` — 混频杂散分析：枚举 m×源频 ± n×LO 的杂散组合，判断是否落入目标输出频带。
 - `analyze_variables` — 分析工程中的变量定义和引用关系。
 - `attach_out_component` — 为目标器件引脚挂载一个 Out 器件，并自动连线。
 - `batch_query_component` — 按器件型号字符串列表批量查询模型信息，返回对齐到输入顺序的结果。
+- `calculate_rf_dynamic_range` — 计算射频链路的噪声底、最低输入灵敏度与压缩受限动态范围。
 - `calculate_transline` — 计算传输线的特性阻抗或线宽（微带 / 带状 / 接地共面波导 / 同轴）。
 - `capture_schematic` — 截取 EDA 工程原理图为图片。
 - `clear_schematic` — 清空工程原理图中的全部器件和网段并保存（破坏性操作）。
@@ -73,7 +75,7 @@
 - `replace_models_from_csv` — ⚠️ 按 CSV 批量替换工程元件模型（影响面大，建议先 get_project_summary 核对）。
 - `replace_port_component` — ⚠️ 将原理图中的端口器件替换为另一种类型（会改变端口）。
 - `replace_schematic_from_file` — ⚠️ 从 .ep 文件整体替换原理图（整图覆盖，原内容丢失）。
-- `run_mixer_simulation` — 跑混频链路仿真（含混频器、LO 本振、上下变频、镜像抑制/本振泄漏）。不含变频的纯链路请用 run_tr_simulation。
+- `run_mixer_simulation` — 执行混频链路仿真（含混频器、LO 本振、上下变频、镜像抑制/本振泄漏）。不含变频的纯链路请用 run_tr_simulation。
 - `run_tr_simulation` — 跑 TR 收发链路仿真（纯链路：增益/噪声/P−1dB，不含混频器与变频）。有混频/本振/镜像指标请用 run_mixer_simulation。
 - `search_personal_models` — 个人模型库检索（自己导入的件）：按子类列出型号与参数。官方件在公共库，用 search_public_models。
 - `search_public_models` — 公共模型库检索（官方件）：按子类列出型号与参数。自己导入的件在个人库，用 search_personal_models。

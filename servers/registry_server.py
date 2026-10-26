@@ -33,6 +33,7 @@ import servers.multimodal_vision          # noqa: F401 — show_image + analyze 
 import servers.mcp_arg_guard            # noqa: F401 — 缺参/参数名拼错回统一信封（包装 ToolManager.call_tool）
 import servers.cst                        # noqa: F401 — cst_solve + cst_export_snp
 import servers.microwave                # noqa: F401 — calculate_transline + design_wilkinson + filter_order_* + wilkinson_marchand_order
+import servers.rf_analysis                        # noqa: F401 — analyze_mixer_spur + calculate_rf_dynamic_range
 import servers.simulation_tool           # noqa: F401 — export_simulation_report + run_tr_simulation + run_mixer_simulation
 import servers.describe_tool             # noqa: F401 — describe_tool（工具自描述：完整参数 + 可抄示例）
 

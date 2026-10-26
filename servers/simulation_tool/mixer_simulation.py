@@ -138,7 +138,7 @@ def run_mixer_simulation(
     ads_path: str = "",
     timeout_seconds: int = 1800,
 ) -> dict[str, Any]:
-    """跑混频链路仿真（含混频器、LO 本振、上下变频、镜像抑制/本振泄漏）。不含变频的纯链路请用 run_tr_simulation。
+    """执行混频链路仿真（含混频器、LO 本振、上下变频、镜像抑制/本振泄漏）。不含变频的纯链路请用 run_tr_simulation。
 
     用法："仿真这个混频工程的下变频链路，提取变频增益和本振泄漏"
 
