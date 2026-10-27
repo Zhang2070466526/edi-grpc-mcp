@@ -229,6 +229,26 @@ def _normalize_mixers(mixers: list[dict], direction: str) -> tuple[list[dict] | 
     return normalized, notes, ""
 
 
+def _mixer_error_warnings(mixers: list[dict], if_candidates: list[float],
+                          max_order: int, direction: str) -> list[str]:
+    """`require_all_mixers=False` 的坑：`any_of(passed)` 会把「算不出来」的 Mixer 当成没通过。
+
+    C++ 语义如此（判定不改），但这种 Mixer 根本没参与碰撞计算，必须显式喊出来，
+    免得调用方把"某路参数错/负 LO"误读成"该路无杂散"。
+    """
+    warnings: list[str] = []
+    for index, mixer in enumerate(mixers):
+        errors = sorted({r["error"] for r in
+                         (_analyze_mixer(mixer, c, max_order, direction) for c in if_candidates)
+                         if r["error"]})
+        if errors:
+            warnings.append(
+                f"mixers[{index}]（{mixer.get('name') or '未命名'}）在部分候选点计算失败："
+                f"{'；'.join(errors)}——require_all_mixers=false 时按「不通过」计入判断，"
+                f"别误当它通过了")
+    return warnings
+
+
 # ── 批量分析（对应 analyze）───────────────────────────────────────
 
 def _analyze(input_data: dict) -> dict:
@@ -346,7 +366,13 @@ def analyze_mixer_spur(
         {"valid": true, "enabled_mixer_count": N, "passed_if_candidates_mhz": [...],
          "passed_if_ranges_mhz": [[起,止],...], "candidate_results": [...],
          "chart_passed_if_candidates_mhz": [...], "chart_passed_if_ranges_mhz": [...],
-         ["warnings": ["mixers[0] 未提供 rf_bandwidth_mhz，按说明文档默认值 0.0 计算"]]}
+         "detail_truncated": false, ["warnings": [...]]}
+        `detail_truncated=true` 只在 `maximum_detail_count > 0` 且明细没放全时出现（同时给一条 warning）；
+        `0` 是「按请求不保存明细」（C++ 口径），不算截断、不报警；`<0` 全留。
+        明细不全时 passed_if_candidates_mhz 仍然完整；要全明细传 maximum_detail_count=-1。
+        另有两类诊断提示（只写 warnings，不改判定）：require_all_mixers=false 时点名哪几路 Mixer
+        计算失败（负 LO / 频率范围无效，它们按"不通过"计入，别误当该路无杂散）；
+        扫描步长小于候选点最小间隔时提示「不会合并成连续区间」。
         candidate_results 每项 {if_center_mhz, passed, mixer_results}，
         mixer_results 每项 {lo_center_mhz, passed, error, collisions[{m,n,sign,min_mhz,max_mhz}]}。
     """
@@ -358,6 +384,7 @@ def analyze_mixer_spur(
         return error_response("INVALID_PARAMETERS", "if_candidates_mhz 必须是非空数组")
     if not all(isinstance(x, (int, float)) for x in if_candidates_mhz):
         return error_response("INVALID_PARAMETERS", "if_candidates_mhz 每项必须是数值")
+    if_candidates = list(if_candidates_mhz)
     chart_candidates = list(chart_if_candidates_mhz or [])
     if not all(isinstance(x, (int, float)) for x in chart_candidates):
         return error_response("INVALID_PARAMETERS", "chart_if_candidates_mhz 每项必须是数值")
@@ -366,13 +393,13 @@ def analyze_mixer_spur(
         return error_response("INVALID_PARAMETERS",
                               f"direction 必须是 {', '.join(_DIRECTIONS)} 之一")
     # merge_ranges 不排序不去重，乱序输入会静默算出错误范围，这里直接拦
-    for label, values in (("if_candidates_mhz", list(if_candidates_mhz)),
+    for label, values in (("if_candidates_mhz", if_candidates),
                           ("chart_if_candidates_mhz", chart_candidates)):
         if any(b <= a for a, b in zip(values, values[1:])):
             return error_response(
                 "INVALID_PARAMETERS",
                 f"{label} 必须严格升序且不含重复点（范围合并不排序不去重），"
-                f"当前前几个值为 {list(values)[:5]}")
+                f"当前前几个值为 {values[:5]}")
 
     normalized_mixers, notes, mixer_error = _normalize_mixers(mixers, direction)
     if normalized_mixers is None:
@@ -380,7 +407,7 @@ def analyze_mixer_spur(
 
     result = _analyze({
         "mixers": normalized_mixers,
-        "if_candidates_mhz": list(if_candidates_mhz),
+        "if_candidates_mhz": if_candidates,
         "chart_if_candidates_mhz": chart_candidates,
         "if_candidate_step_mhz": if_candidate_step_mhz,
         "chart_candidate_step_mhz": chart_candidate_step_mhz,
@@ -391,6 +418,26 @@ def analyze_mixer_spur(
     })
     if not result["valid"]:
         return error_response("INVALID_PARAMETERS", result["error"])
+    # 以下两条只是诊断提示，判定仍按 C++ 语义（any_of / mergeRanges 不改）
+    if not require_all_mixers:
+        notes.extend(_mixer_error_warnings(normalized_mixers, if_candidates, max_order, direction))
+    for label, values, step in (("if_candidates_mhz", if_candidates, if_candidate_step_mhz),
+                                ("chart_if_candidates_mhz", chart_candidates, chart_candidate_step_mhz)):
+        # 只在「像在做扫描」（≥5 个点）且步长够不到下一点时提示；手挑 2~3 个稀疏点不啰嗦
+        if len(values) >= 5:
+            gap = min(b - a for a, b in zip(values, values[1:]))
+            if step * 1.01 < gap:
+                notes.append(f"{label} 的扫描步长 {step} 小于候选点最小间隔 {gap}："
+                             f"merge_ranges 容差为 step×1.01，不会合并成连续区间（会按点各成一段）")
+    # 明细截断要喊出来：candidate_results 受 maximum_detail_count 限制，别让调用方以为拿全了。
+    # C++ 口径（混频杂散计算.txt 115-123 行）：<0=全留、0=按请求不保存、>0=最多保存 N 条；
+    # 因此只有「给了正的上限但没放全」才算截断，0 是调用方显式要求，不报警。
+    total = len(result["if_candidates_mhz"])
+    retained = len(result["candidate_results"])
+    result["detail_truncated"] = maximum_detail_count > 0 and retained < total
+    if result["detail_truncated"]:
+        notes.append(f"明细被截断：{total} 个候选点只回前 {retained} 个的 collisions 明细"
+                     f"（maximum_detail_count={maximum_detail_count}）；要全部明细传 -1")
     if notes:
         result["warnings"] = notes
     result["success"] = True

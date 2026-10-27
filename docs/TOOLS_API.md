@@ -22,6 +22,7 @@ from servers.eda.project_manage import list_epp_projects
 - **[模型库 / 原理图库（6 个）](#模型库--原理图库6个)**：模型替换、模型分类/查询/搜索、性能器件放置、拓扑设计
 - **[软 IP（1 个）](#软ip1个)**：按设计描述下载芯片模型
 - **[微波计算（6 个）](#微波计算6个)**：传输线特性阻抗 / 线宽计算、多级威尔金森功分器设计、滤波器阶数评估（高通/低通/带阻）、功分器/巴伦节数（本地纯计算，无任务信封）
+- **[射频链路计算（2 个）](#射频链路计算2个)**：混频杂散枚举、噪声底 / 灵敏度 / 压缩受限动态范围（本地纯计算，无任务信封）
 - **[工作区（3 个）](#工作区3个)**：创建 / 切换 / 查询当前工作区
 - **[原理图扩展（4 个）](#原理图扩展4个)**：内置器件、清空原理图、连线
 - **[启动 / 诊断（3 个）](#启动--诊断3个)**：启动 EDI、服务诊断、日志读取
@@ -1325,6 +1326,104 @@ wilkinson_marchand_order(ratio: float, rl_db: float = 15.0) -> dict
 | `rl_db` | float | 否 | 15.0 | 带边隔离度指标（dB） |
 
 返回：`{"success": true, "order": N}`。实测：频率比 6:1 → **3 节**。
+
+---
+
+## 射频链路计算（2 个）
+
+纯本地计算：不走 gRPC(50055) / ADS / SimulationAgent(17866)，**EDI.exe 没起也能用**，返回里没有任务信封。
+算法层是 `servers/c++demo/` 下 C++ 原版（`mixerspuranalyzer.cpp`、`rfdynamicrangecalculator.cpp`）的逐行 Python 移植，**语义以 C++ 为准**。
+
+### `analyze_mixer_spur`
+
+```python
+from servers.rf_analysis.mixer_spur import analyze_mixer_spur
+
+analyze_mixer_spur(mixers: list, if_candidates_mhz: list, max_order: int = 1,
+                   direction: str = "receive", require_all_mixers: bool = True,
+                   chart_if_candidates_mhz: list | None = None,
+                   if_candidate_step_mhz: float = 1.0,
+                   chart_candidate_step_mhz: float = 1.0,
+                   maximum_detail_count: int = 12) -> dict
+```
+
+枚举 `m×源频 ± n×LO`（`m,n≥0`、`m+n≤max_order`、排除目标混频产物本身），判断杂散频率范围是否与目标输出频带（接收=IF、发射=RF）重叠。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `mixers` | list[dict] | 是 | — | 至少一个 `enabled`，字段见下表 |
+| `if_candidates_mhz` | list[float] | 是 | — | 主 IF 候选点（MHz），**严格升序**且不含重复（乱序/重复直接 `INVALID_PARAMETERS`） |
+| `max_order` | int | 否 | 1 | 最大阶次（`m+n≤max_order`） |
+| `direction` | str | 否 | receive | `receive`（杂散源=RF、输出=IF）/ `transmit` |
+| `require_all_mixers` | bool | 否 | true | 多 Mixer 判定：全部通过 / 任一通过 |
+| `chart_if_candidates_mhz` | list[float] | 否 | null | 图表扫描点（同样严格升序） |
+| `if_candidate_step_mhz` / `chart_candidate_step_mhz` | float | 否 | 1.0 | 合并连续通过点成范围用的步长 |
+| `maximum_detail_count` | int | 否 | 12 | 保留明细的候选点数（`<0` 全留、`0` 不留） |
+
+`mixers[]` 字段（缺省按默认值补全，补了哪些会写进返回的 `warnings`）：
+
+| 字段 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `name` | str | `""` | 标识，不参与计算 |
+| `enabled` | bool | true | 必须是**真布尔**（`"false"` 字符串报错） |
+| `relation` | str | 随 `direction`：receive=`low_side`、transmit=`sum` | 接收 `low_side/high_side`、发射 `sum/diff_lo/diff_if`；**显式传错才报错**（对齐 C++ GUI 切方向后的默认项） |
+| `rf_center_mhz` | float | 1000.0 | 必须 **> 0** |
+| `rf_bandwidth_mhz` / `if_bandwidth_mhz` | float | 0.0 / 1.0 | 允许 0（单频点） |
+| `rf_power_dbm` / `lo_power_dbm` | float | −10 / 7 | 仅界面展示，**不参与**碰撞计算 |
+
+返回：
+```python
+{
+    "valid": True,                        # 只代表流程跑完，有没有通过点看下面那个列表
+    "enabled_mixer_count": 1,
+    "passed_if_candidates_mhz": [1000.0],
+    "passed_if_ranges_mhz": [[1000.0, 1000.0]],
+    "candidate_results": [                # 受 maximum_detail_count 限制
+        {"if_center_mhz": 1000.0, "passed": True,
+         "mixer_results": [{"mixer": {...}, "lo_center_mhz": 29000.0, "passed": True,
+                            "error": "", "collisions": [{"m":0,"n":1,"sign":-1,
+                                                         "min_mhz":500.0,"max_mhz":500.0}]}]},
+    ],
+    "chart_passed_if_candidates_mhz": [], "chart_passed_if_ranges_mhz": [],
+    "detail_truncated": False,           # True = 明细被 maximum_detail_count 截断（另给一条 warning）
+    "warnings": ["mixers[0] 未提供 relation，按 direction=receive 的缺省关系 low_side 计算"],
+}
+```
+
+⚠️ 单 Mixer 的错误（负 LO、频率范围无效）落在该 Mixer 的 `error` 里，**不把 `valid` 拉成 false**。
+⚠️ **明细截断会明确告知**：`candidate_results` 受 `maximum_detail_count` 限制，C++ 口径是 `<0`=全留、`0`=**按请求不保存（不算截断、不报警）**、`>0`=最多 N 条；
+只有 `>0` 且没放全时返回 `detail_truncated: true` + 一条 warning。`passed_if_candidates_mhz` 永远完整，不会因截断而少点。
+⚠️ **C++ 口径**：`absoluteRange` 把 `±X` 折成同一区间，所以 `m=0,n=1`（LO 自身泄漏）会出 `sign=±1` 两条 `min/max` 完全相同的明细——原版行为，**勿去重**（`tests/test_rf_tools.py::test_spur_lo_leakage_reported_for_both_signs_like_cpp` 锁着）。
+⚠️ **两类诊断 warning（不改判定）**：① `require_all_mixers=false` 时，算不出来的 Mixer（负 LO / 频率范围无效）会点名——它按"不通过"计入"任一通过"，别误当该路无杂散；② 扫描步长小于候选点最小间隔时范围不会合并（容差 `step×1.01`），会按点各成一段。
+
+实测锚点：RF 30 GHz / 带宽 200 MHz、`low_side`、order=3、IF 0.5~3 GHz → 6 点全通过（低边下 3 阶内只有 IF 谐波可能落带内，全通过是正常结果）；order=5、IF=15 GHz → 命中 `(0,1,±1)`、`(1,3,−1)`、`(2,3,−1)`。
+
+---
+
+### `calculate_rf_dynamic_range`
+
+```python
+from servers.rf_analysis.rf_dynamic_range import calculate_rf_dynamic_range
+
+calculate_rf_dynamic_range(noise_figure_db: float, input_p1dbm: float, bandwidth: float,
+                           bandwidth_unit: str = "mhz", required_snr_db: float = 0.0,
+                           target_dynamic_range_db: float | None = None) -> dict
+```
+
+`噪声底 = −174 + 10·log10(BW_Hz) + NF`；`灵敏度 = 噪声底 + 所需 SNR`；`动态范围 = P1dB − 灵敏度`。给 `target_dynamic_range_db` 时顺带做达标评价。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `noise_figure_db` | float | 是 | — | 链路等效总 NF（dB，**≥0**） |
+| `input_p1dbm` | float | 是 | — | 输入 1 dB 压缩点（dBm，可负） |
+| `bandwidth` | float | 是 | — | 等效噪声带宽数值（**> 0**） |
+| `bandwidth_unit` | str | 否 | mhz | `hz/khz/mhz/ghz`（只做换算系数） |
+| `required_snr_db` | float | 否 | 0.0 | 最低所需信噪比（dB，可为负） |
+| `target_dynamic_range_db` | float | 否 | null | 目标动态范围（dB） |
+
+返回：`{"success": true, "noise_floor_dbm", "sensitivity_dbm", "dynamic_range_db"}`；给了 target 再加 `meets_target / margin_db / required_sensitivity_dbm`（`required_sensitivity = P1dB − target`，`meets_target = margin ≥ 0`）。
+
+实测锚点：NF=2 dB、P1dB=−20 dBm、BW=100 MHz、SNR=10 dB、target=60 dB → **−92 / −82 / 62 dB，margin 2 dB，达标**。
 
 ---
 

@@ -177,3 +177,62 @@ def test_spur_lo_leakage_reported_for_both_signs_like_cpp():
     got = {(c["m"], c["n"], c["sign"], c["min_mhz"], c["max_mhz"]) for c in mr["collisions"]}
     assert got == {(0, 1, -1, 500.0, 500.0), (0, 1, 1, 500.0, 500.0)}, got
     assert mr["passed"] is False
+
+
+def test_spur_detail_truncation_is_flagged():
+    """明细被 maximum_detail_count 截断时必须显式喊出来（detail_truncated + warning）。"""
+    # 3 个候选点，只留 2 条明细
+    res = analyze_mixer_spur([_mixer(30000.0)], [1000.0, 2000.0, 3000.0],
+                             max_order=1, maximum_detail_count=2)
+    assert res["detail_truncated"] is True, res
+    assert len(res["candidate_results"]) == 2, res["candidate_results"]
+    assert len(res["passed_if_candidates_mhz"]) == 3, "通过点列表不应受截断影响"
+    assert any("截断" in w for w in res["warnings"]), res["warnings"]
+
+    # 全留：不截断、也不该凭空多出 warnings
+    full = analyze_mixer_spur([_mixer(30000.0)], [1000.0, 2000.0],
+                              max_order=1, maximum_detail_count=-1)
+    assert full["detail_truncated"] is False
+    assert len(full["candidate_results"]) == 2
+    assert "warnings" not in full, full.get("warnings")
+
+    # 0 = 按请求不保存明细（C++ 口径），不算截断、也不报警
+    zero = analyze_mixer_spur([_mixer(30000.0)], [1000.0], max_order=1, maximum_detail_count=0)
+    assert zero["detail_truncated"] is False and zero["candidate_results"] == [], zero
+    assert "warnings" not in zero, zero.get("warnings")
+
+    # 明细够用时不能误报
+    enough = analyze_mixer_spur([_mixer(30000.0)], [1000.0, 2000.0], max_order=1)
+    assert enough["detail_truncated"] is False
+
+
+def test_spur_warns_when_require_any_hides_mixer_error():
+    """require_all_mixers=false 时，算不出来的 Mixer 会按"不通过"计入 any_of —— 必须点名。"""
+    bad = {"name": "BAD_IF_GT_RF", "relation": "low_side", "rf_center_mhz": 500.0,
+           "rf_bandwidth_mhz": 200.0, "if_bandwidth_mhz": 200.0}
+
+    res = analyze_mixer_spur([bad, _mixer(30000.0)], [1000.0], max_order=1,
+                             require_all_mixers=False)
+    assert res["passed_if_candidates_mhz"] == [1000.0], res      # C++ any_of 语义不变
+    assert any("mixers[0]" in w and "负 LO" in w for w in res["warnings"]), res["warnings"]
+
+    # 全通过模式不加这条：错误本身已让候选点不通过，不重复喊
+    strict = analyze_mixer_spur([bad, _mixer(30000.0)], [1000.0], max_order=1)
+    assert strict["passed_if_candidates_mhz"] == []
+    assert not any("计算失败" in w for w in strict.get("warnings", [])), strict.get("warnings")
+
+
+def test_spur_warns_when_step_too_small_to_merge():
+    """扫描点较多、步长 < 候选点间隔时 merge_ranges 合不上，必须提示（判定/输出不变）。"""
+    scan = [1000.0, 1100.0, 1200.0, 1300.0, 1400.0, 1500.0]
+    res = analyze_mixer_spur([_mixer(30000.0)], scan, max_order=1, if_candidate_step_mhz=1.0)
+    assert res["passed_if_ranges_mhz"] == [(f, f) for f in scan], res
+    assert any("不会合并" in w for w in res["warnings"]), res["warnings"]
+
+    ok = analyze_mixer_spur([_mixer(30000.0)], scan, max_order=1, if_candidate_step_mhz=100.0)
+    assert ok["passed_if_ranges_mhz"] == [(1000.0, 1500.0)], ok
+    assert "warnings" not in ok, ok.get("warnings")
+
+    # 少数手挑的稀疏点（2~3 个）不该被这条提示打扰
+    sparse = analyze_mixer_spur([_mixer(30000.0)], [1000.0, 2000.0, 3000.0], max_order=1)
+    assert not any("不会合并" in w for w in sparse.get("warnings", [])), sparse.get("warnings")
