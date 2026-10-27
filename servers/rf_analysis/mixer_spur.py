@@ -327,12 +327,12 @@ def _analyze(input_data: dict) -> dict:
 
 @mcp.tool()
 def analyze_mixer_spur(
-    mixers: list,
-    if_candidates_mhz: list,
+    mixers: list[dict],
+    if_candidates_mhz: list[float],
     max_order: int = 1,
     direction: str = "receive",
     require_all_mixers: bool = True,
-    chart_if_candidates_mhz: list | None = None,
+    chart_if_candidates_mhz: list[float] | None = None,
     if_candidate_step_mhz: float = 1.0,
     chart_candidate_step_mhz: float = 1.0,
     maximum_detail_count: int = 12,
@@ -374,8 +374,10 @@ def analyze_mixer_spur(
         计算失败（负 LO / 频率范围无效，它们按"不通过"计入，别误当该路无杂散）；
         扫描步长小于候选点最小间隔时提示「不会合并成连续区间」。
         candidate_results 每项 {if_center_mhz, passed, mixer_results}，
-        mixer_results 每项 {lo_center_mhz, passed, error, collisions[{m,n,sign,min_mhz,max_mhz}]}。
-    """
+        mixer_results 每项 {mixer, lo_center_mhz, passed, error, collisions[{m,n,sign,min_mhz,max_mhz}]}；
+        其中 mixer 是该路「归一化后的入参回显」（对应 C++ MixerSpurResult.mixer），多路 Mixer 时用来
+        把结果对回输入；数组顺序与 mixers 里的 enabled 项一致。
+        """
     if not isinstance(mixers, list) or not mixers:
         return error_response("INVALID_PARAMETERS", "mixers 必须是非空数组")
     if not all(isinstance(m, dict) for m in mixers):
