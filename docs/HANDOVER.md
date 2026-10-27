@@ -43,7 +43,6 @@ servers/
   task_runner.py          # 通用异步任务队列（EDA/HFSS/CST 复用）
   resources_prompts/       # 7 个 Resource + 8 个 Prompt
   multimodal_vision/      # 图片 + 视觉分析 + 文档工具
-  report/                 # 仿真报告生成
   eda/                   # EDI 工程工具（49 个）
     __init__.py           # 公共 API + 工具清单
     config.py             # 配置 / 路径检测
@@ -79,11 +78,15 @@ servers/
     transline.py          # 4 线型特性阻抗/线宽
     wilkinson_designer.py # 多级威尔金森功分器
     filter_order/         # 阶数评估（高通/低通/带阻滤波器 + 功分器/巴伦节数）
-  simulation_tool/        # 独立仿真 exe 包装（3 个，固定目录直接调 exe）
+  rf_analysis/            # 射频链路计算（2 个，本地纯计算）
+    mixer_spur.py         # analyze_mixer_spur（混频杂散枚举）
+    rf_dynamic_range.py   # calculate_rf_dynamic_range（噪声底/灵敏度/动态范围）
+  simulation_tool/        # 独立仿真 exe 包装（4 个，固定目录直接调 exe）
     config.py             # exe 路径 / 子进程执行器 / ADS 探测
     report_export.py      # export_simulation_report（报告 exe）
     tr_simulation.py      # run_tr_simulation（TR 仿真 exe）
     mixer_simulation.py   # run_mixer_simulation（混频链路仿真 exe）
+    xy_chart.py       # draw_chart（XY 数据绘图）
   chat/                   # 聊天模块
     service.py            # 聊天服务（会话/LLM/工具闭环）
     routes.py             # Web 路由（/health /chat /ui /tools/list）
@@ -109,7 +112,7 @@ PyPI: https://pypi.org/project/edi-grpc-mcp/  |  当前版本：0.1.11
 
 ## MCP 工具清单
 
-工具总数随版本变化（当前 84 个，以运行时 `/ready` 的 `tool_count` 为准），按功能分 15 类：
+工具总数随版本变化（当前 87 个，以运行时 `/ready` 的 `tool_count` 为准），按功能分 16 类：
 
 | 分类 | 数量 | 说明 |
 |---|---|---|
@@ -127,7 +130,8 @@ PyPI: https://pypi.org/project/edi-grpc-mcp/  |  当前版本：0.1.11
 | 图表与图片 | 5 | RAW 曲线、转图、结果对比、显示、视觉分析 |
 | 报告与文档 | 2 | 打开本地文档、下载任意产物（fetch_artifact） |
 | 微波工具 | 6 | 传输线计算、威尔金森功分器设计、滤波器阶数评估（高通/低通/带阻）、功分器/巴伦节数（本地纯计算，无任务信封） |
-| 独立仿真 | 3 | 独立报告导出（Report_Exporter.exe → PDF/DOCX）、TR 纯硬编码仿真（TR_Simulator.exe，网表→路径分析→ADS→结果提取）、混频链路仿真（mixer_simulation.exe，上下变频/多通道/任意级变频） |
+| 射频链路计算 | 2 | 混频杂散分析（analyze_mixer_spur）、噪声底/灵敏度/压缩受限动态范围（calculate_rf_dynamic_range）（本地纯计算，无任务信封） |
+| 独立仿真 | 4 | 独立报告导出（Report_Exporter.exe → PDF/DOCX）、TR 纯硬编码仿真（TR_Simulator.exe）、混频链路仿真（mixer_simulation.exe）、XY 数据绘图（drawtool.exe） |
 
 > 完整工具签名、参数、返回格式见 [TOOLS_API.md](./TOOLS_API.md)，工具一览表见 [README.md](../README.md)。
 

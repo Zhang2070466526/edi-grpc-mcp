@@ -2,7 +2,7 @@
 
 > 自动生成，勿手改。权威数量见 /ready 的 tool_count。
 
-共 86 个工具：
+共 87 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
 - `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
@@ -40,6 +40,7 @@
 - `design_chip` — 用户输入指标来设计cst天线模型（中心频率），hfss带通滤波器（中心频率，相对带宽）、低通滤波器（截止频率）负载（中心频率）等电路指标，获取相应的模型文件。
 - `design_schematic_topology` — 用户输入指标来设计电路拓扑（收发组件、滤波器、天线等），自动创建并打开新工程。
 - `design_wilkinson` — 设计多级威尔金森功分器，输出各级微带线宽、线长和隔离电阻。
+- `draw_chart` — 把一组或多组 XY 数据绘制为曲线图并保存为图片（PNG/JPG，固定 1600×1000）。
 - `export_project_netlist` — 查看 EDA .epp 工程的网表，返回网表文件路径。
 - `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV。
 - `export_simulation_report` — 将提取的各链路参数数据（JSON）导出成正式报告(PDF/DOCX/report.json)

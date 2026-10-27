@@ -33,7 +33,7 @@ from servers.eda.project_manage import list_epp_projects
 - **[仿真器件管理（10 个）](#仿真器件管理10个协议-v3)**：器件 Schema、增删改、状态、网表导入、原理图加载
 - **[Resources & Prompts](#resources--prompts)**：只读资源 + 可复用工作流
 - **[文档（2 个）](#文档2个)**：打开本地文档、下载任意产物
-- **[独立仿真工具（3 个）](#独立仿真工具3个)**：报告导出 exe、TR 链路仿真 exe、混频链路仿真 exe（固定目录直接调 exe）
+- **[独立仿真工具（4 个）](#独立仿真工具4个)**：报告导出 exe、TR 链路仿真 exe、混频链路仿真 exe、XY 绘图 exe（固定目录直接调 exe）
 - **[辅助](#辅助)**：Chat 上下文
 - **[gRPC 工具统一返回格式](#gRPC工具统一返回格式)**：gRPC 工具的返回结构 + status 语义
 
@@ -1762,7 +1762,7 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 
 ## Resources & Prompts
 
-除了 Tool（启动时动态统计，当前 84 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
+除了 Tool（启动时动态统计，当前 87 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
 
 ### Resources（7 个）
 
@@ -1838,11 +1838,11 @@ fetch_artifact(file_path: str, ttl_seconds: int = 600) -> dict
 
 ---
 
-## 独立仿真工具（3 个）
+## 独立仿真工具（4 个）
 
-> 直接调用 EDI 安装目录固定子目录下的三个 exe（`settings.simulation_tool_dir`，默认
-> `C:\Program Files (x86)\EDI\simulation_tool`），**不走 gRPC/HTTP**。三个 exe 的 stdout
-> 都是单行 UTF-8 JSON、退出码 0/1，判成败直接看退出码 + JSON 的 success/errors。
+> 直接调用 EDI 安装目录固定子目录下的四个 exe（`settings.simulation_tool_dir`，默认
+> `C:\Program Files (x86)\EDI\simulation_tool`），**不走 gRPC/HTTP**。四个 exe 的 stdout
+> 都是单行 UTF-8 JSON、退出码 0/1，判成败直接看退出码 + JSON 的 success/errors（drawtool 是 status/error_code）。
 
 ### `export_simulation_report`
 
@@ -1934,6 +1934,35 @@ run_mixer_simulation(epp_path: str, links: list, indicators: str = "变频增益
 | `timeout_seconds` | int | 否 | 1800 | 最长等待秒数（上限 3600） |
 
 返回结构同 `run_tr_simulation`（`simulation_path` / `results` / `errors` / `artifacts`）。
+
+---
+
+### `draw_chart`
+
+```python
+from servers.simulation_tool import draw_chart
+
+draw_chart(series: list, image_path: str, chart_title: str = "", x_axis_title: str = "",
+           y_axis_title: str = "", marks: list = None, file_stem: str = "chart",
+           image_format: str = "png", show_window: bool = False, timeout_seconds: int = 120) -> dict
+```
+
+把一组或多组 XY 数据绘制为曲线图并保存为 PNG/JPG（固定 1600×1000）。输入透传 `drawtool.exe` 的 JSON 配置（写临时配置文件 → 位置参数传给 exe → 解析 stdout）。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `series` | list | 是 | — | 数据组数组，每项 `{name, points: [[x,y],...]}`；name 缺失/空则不显示图例，已提供的 name 必须唯一 |
+| `image_path` | str | 是 | — | 输出目录绝对路径（不存在时自动创建） |
+| `chart_title` / `x_axis_title` / `y_axis_title` | str | 否 | "" | 标题（空串=不显示） |
+| `marks` | list | 否 | None | 标记数组，每项 `{series, point: [x,y], label}` |
+| `file_stem` | str | 否 | "chart" | 输出文件名（不含扩展名） |
+| `image_format` | str | 否 | png | png/jpg/jpeg |
+| `show_window` | bool | 否 | False | 是否弹窗显示（自动化保持 False） |
+| `timeout_seconds` | int | 否 | 120 | 最长等待秒数 |
+
+返回：`{"success": True, "image_path": "...", "message": "...", "artifacts": [...], "links": {"image": {...}}}`。
+
+⚠️ `drawtool.exe` 带管理员权限清单，启动会请求 UAC（服务以管理员运行时不会弹，否则会卡在 UAC）。
 
 ---
 

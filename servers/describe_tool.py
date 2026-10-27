@@ -120,6 +120,41 @@ _EXAMPLES: dict[str, Any] = {
     # ── CST / HFSS ────────────────────────────────────────────
     "cst_solve_async": {"model_path": "C:/Users/<user>/Desktop/CST/demo_horn_24GHz.cst"},
     "open_hfss_project": {"project_path": "C:/Users/<user>/Desktop/demo.aedt"},
+    # ── 图表 / 纯算法（纯 JSON，无 exe、无 EDI 依赖）─────────────────
+    "draw_chart": {
+        "series": [
+            {"name": "增益-25C", "points": [[1.0, 10.2], [2.0, 12.8], [3.0, 15.4], [4.0, 13.1]]},
+            {"name": "增益-85C", "points": [[1.0, 9.5], [2.0, 12.1], [3.0, 14.7], [4.0, 12.5]]},
+        ],
+        "image_path": "C:/Users/<user>/edi_tmp/plots",
+        "chart_title": "三温度放大器增益曲线",
+        "x_axis_title": "频率 (GHz)",
+        "y_axis_title": "增益 (dB)",
+        "marks": [{"series": "增益-25C", "point": [3.0, 15.4], "label": "峰值"}],
+        "file_stem": "gain_vs_freq",
+        "image_format": "png",
+    },
+    "analyze_mixer_spur": {
+        "mixers": [{"name": "MIX1", "enabled": True, "relation": "low_side",
+                    "rf_center_mhz": 5000.0, "rf_bandwidth_mhz": 200.0,
+                    "if_bandwidth_mhz": 2.0, "rf_power_dbm": -10.0, "lo_power_dbm": 7.0}],
+        "if_candidates_mhz": [100.0, 150.0, 200.0],
+        "max_order": 3,
+        "direction": "receive",
+        "require_all_mixers": True,
+        "chart_if_candidates_mhz": [100.0, 110.0, 120.0, 130.0, 140.0],
+        "if_candidate_step_mhz": 1.0,
+        "chart_candidate_step_mhz": 10.0,
+        "maximum_detail_count": 12,
+    },
+    "calculate_rf_dynamic_range": {
+        "noise_figure_db": 3.0,
+        "input_p1dbm": -10.0,
+        "bandwidth": 1.0,
+        "bandwidth_unit": "mhz",
+        "required_snr_db": 10.0,
+        "target_dynamic_range_db": 60.0,
+    },
 }
 
 
@@ -150,6 +185,13 @@ def _param_rows(schema: dict | None) -> list[dict[str, Any]]:
         if "default" in spec:
             row["default"] = spec["default"]
         items = spec.get("items")
+        if items is None:
+            # `list[dict] | None` 这类 Optional 参数：pydantic 把元素结构放进 anyOf 分支，
+            # 只看 spec["items"] 会误判成「元素结构未声明」。
+            for alt in (spec.get("anyOf") or []):
+                if isinstance(alt, dict) and "items" in alt:
+                    items = alt["items"]
+                    break
         if isinstance(items, dict):
             if not items:  # {"items": {}} —— agent 拿不到元素结构，这是最常踩的坑
                 row["items_hint"] = ("数组元素结构未在 schema 中声明；"

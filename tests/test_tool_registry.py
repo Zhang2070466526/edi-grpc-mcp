@@ -52,6 +52,7 @@ def test_all_tools_registered():
         "export_simulation_report", "run_tr_simulation",
         "run_mixer_simulation",
         "analyze_mixer_spur", "calculate_rf_dynamic_range",
+        "draw_chart",
         "describe_tool",
     ]
     assert len(tools) == len(required), f"expected {len(required)} tools, got {len(tools)} ({sorted(tools)})"

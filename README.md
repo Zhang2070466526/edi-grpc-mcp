@@ -8,7 +8,7 @@
 
 ## ✨ 亮点
 
-- 🛠️ **84 个 MCP 工具，全链路闭环** — 工程管理 → 器件配置 → 模型选型 → 信号链分析 → 仿真 → 出图 → 出报告，一个服务走到底
+- 🛠️ **87 个 MCP 工具，全链路闭环** — 工程管理 → 器件配置 → 模型选型 → 信号链分析 → 仿真 → 出图 → 出报告，一个服务走到底
 - ⚡ **三大仿真引擎统一封装** — EDI gRPC（ADS）· ANSYS HFSS · CST，同一套工具、同一种返回结构
 - 🌐 **本机 / 远程一键切换** — 双击 `start_local.bat`（本机）或 `start_remote.bat`（远程）；`--host 0.0.0.0` 即远程，**地址零配置、机器不固定、主机端零安装**（详见 [`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md)「三、特殊机制」）
 - 🧠 **自然语言驱动** — 接入 Claude Code / Hermes / OpenClaw，一句「帮我看看工程、跑个仿真」即可
@@ -39,7 +39,7 @@ AI 客户端 (Claude Code / OpenClaw)
    │  Streamable HTTP (stateless) 或 stdio
    │  POST /mcp  │  initialize → tools/list → tools/call
    ▼
-EDI gRPC MCP 服务 (FastMCP, 84 工具, 7 Resource, 8 Prompt)
+EDI gRPC MCP 服务 (FastMCP, 87 工具, 7 Resource, 8 Prompt)
    │
    ├── EDA gRPC 工具 (49) ──→ EDI 客户端 (127.0.0.1:50055)
    │     FetchEvent ← PerformAction 异步模型，增量 ads_output
@@ -99,7 +99,7 @@ curl http://127.0.0.1:50026/health     # 进程 + gRPC 状态
 → {"status":"ok","mcp_ready":true,"eda_grpc_ready":true}
 
 curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
-→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":84}
+→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":87}
 ```
 
 ### 客户端接入
@@ -129,7 +129,7 @@ curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
 
 | 方式 | 说明 |
 |---|---|
-| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 84 个工具 |
+| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 87 个工具 |
 | **聊天界面** | 浏览器访问 `http://127.0.0.1:50026/ui`，内置 LLM 多轮工具闭环 |
 | **Python 调用** | `from servers.eda import list_epp_projects` 直接调用 |
 
@@ -145,9 +145,9 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 
 ---
 
-## 工具一览（84 个）
+## 工具一览（87 个）
 
-84 个工具按领域分组：工程管理 / 仿真器件 / 仿真 / 导出与分析 / 模型库·原理图库 / 软 IP / 启动·诊断 / 工作区 / 原理图扩展 / 微波计算 / ANSYS HFSS / CST / 图表与图片 / 独立仿真 / 报告与文档。
+87 个工具按领域分组：工程管理 / 仿真器件 / 仿真 / 导出与分析 / 模型库·原理图库 / 软 IP / 启动·诊断 / 工作区 / 原理图扩展 / 微波计算 / ANSYS HFSS / CST / 图表与图片 / 独立仿真 / 报告与文档。
 
 > 每个工具的**详细参数、返回、示例** → **[`docs/TOOLS_API.md`](docs/TOOLS_API.md)**；工具清单由 `scripts/gen_tool_index.py` 自动生成 → [`docs/TOOL_INDEX.md`](docs/TOOL_INDEX.md)。
 
@@ -265,12 +265,18 @@ edi-grpc-mcp/
 │   │   ├── wilkinson_designer.py       #     多级威尔金森功分器（微带尺寸委托 transline）
 │   │   └── filter_order/               #     阶数评估（高通/低通/带阻滤波器 + 功分器/巴伦节数）
 │   │
-│   ├── simulation_tool/                #   独立仿真 exe 包装 (3 个)
+│   ├── rf_analysis/                    #   射频链路计算 (2 个，本地纯计算)
+│   │   ├── __init__.py                 #     公共 API re-export
+│   │   ├── mixer_spur.py               #     analyze_mixer_spur（混频杂散枚举）
+│   │   └── rf_dynamic_range.py         #     calculate_rf_dynamic_range（噪声底/灵敏度/动态范围）
+│   │
+│   ├── simulation_tool/                #   独立仿真 exe 包装 (4 个)
 │   │   ├── __init__.py                 #     公共 API re-export
 │   │   ├── config.py                   #     固定目录 exe 路径 / 子进程执行器 / ADS 探测
 │   │   ├── report_export.py            #     export_simulation_report（报告 exe → PDF/DOCX/report.json）
 │   │   ├── tr_simulation.py            #     run_tr_simulation（TR exe：网表→路径分析→ADS→结果）
-│   │   └── mixer_simulation.py         #     run_mixer_simulation（混频 exe：上下变频/多通道/任意级变频）
+│   │   ├── mixer_simulation.py         #     run_mixer_simulation（混频 exe：上下变频/多通道/任意级变频）
+│   │   └── xy_chart.py             #     draw_chart（XY 数据绘图：JSON 配置 → 曲线图 PNG/JPG）
 │   │
 │   └── chat/                           #   Chat 聊天模块
 │       ├── __init__.py                 #     包标识
@@ -281,7 +287,7 @@ edi-grpc-mcp/
 │
 ├── docs/                               # 项目文档
 │   ├── WIN7部署与启动手册.md           #   部署指南（打包产物、客户端配置）
-│   ├── TOOLS_API.md                    #   工具 API（84 个工具完整签名+返回值示例）
+│   ├── TOOLS_API.md                    #   工具 API（87 个工具完整签名+返回值示例）
 │   ├── HTTP_API.md                     #   HTTP 接口（请求体、响应体、成功/失败情况）
 │   ├── IMPLEMENTATION.md               #   实现原理与机制（通信原理、公有方法、特殊机制、工具、Resource/Prompt）
 │   ├── HANDOVER.md                     #   交接文档（架构设计、技术栈、47 条注意事项）
@@ -397,7 +403,7 @@ powershell -File scripts/build.ps1  # PyInstaller
 | 文档 | 说明 |
 |---|---|
 | [部署指南](./docs/WIN7部署与启动手册.md) | 打包产物使用、客户端配置 |
-| [工具 API](./docs/TOOLS_API.md) | 全部 84 个工具参数、返回值、示例 |
+| [工具 API](./docs/TOOLS_API.md) | 全部 87 个工具参数、返回值、示例 |
 | [HTTP 接口](./docs/HTTP_API.md) | 全部 HTTP 路由的请求体、响应体、成功/失败情况 |
 | [实现原理与机制](./docs/IMPLEMENTATION.md) | 通信原理、公有方法、特殊机制、工具、7 Resource + 8 Prompt |
 | [交接文档](./docs/HANDOVER.md) | 架构设计、技术栈、扩展开发、47 条注意事项 |
