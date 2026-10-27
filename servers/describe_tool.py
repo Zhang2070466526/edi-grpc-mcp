@@ -65,8 +65,12 @@ _EXAMPLES: dict[str, Any] = {
     "run_tr_simulation": {
         "epp_path": "C:/Users/<user>/EDA-PMDS-Workspace/projects/11/11.epp",
         "links": [{"name": "接收链路", "min_freq": 29, "max_freq": 31,
-                   "input_port": 1, "output_port": 2}],
-        "indicators": "输出增益,噪声系数",
+                   "input_port": 1, "output_port": 2,
+                   "phase_step": 5.625, "atten_step": 0.5,
+                   "phase_devices": ["<移相器实例名>"], "atten_devices": ["<衰减器实例名>"],
+                   "freq_rx": 30, "pwr_rx": -20,
+                   "freq_pout": 30, "pwr_pout": -20}],
+        "indicators": "输出增益,噪声系数,IP1dB,移相误差RMS,衰减误差RMS",
     },
     # ── 微波本地计算 ────────────────────────────────────────────
     "filter_order_lowpass": {
@@ -200,6 +204,8 @@ def _param_rows(schema: dict | None) -> list[dict[str, Any]]:
                 row["items_type"] = _type_of(items)
                 if items.get("properties"):
                     row["items_fields"] = list(items["properties"].keys())
+                    if items.get("required"):
+                        row["items_required"] = list(items["required"])
         rows.append(row)
     return rows
 

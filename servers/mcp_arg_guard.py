@@ -36,6 +36,31 @@ from servers.utils import error_response
 _ToolManager = type(mcp._tool_manager)
 _ORIG_CALL_TOOL = _ToolManager.call_tool
 
+#: pydantic 会给自定义 ValueError 加上英文前缀，信封里去掉，只留中文提示
+_MSG_PREFIXES = ("Value error, ", "Assertion failed, ")
+
+
+def _loc_path(loc: tuple) -> str:
+    """把 pydantic 的 loc 转成可读路径：``links[0].phase_step``。
+
+    嵌套错误（如 links 元素的字段类型错）只取 loc[0] 的话，调用方只知道 links 有问题、
+    不知道是第几条链路的哪个字段 —— 这正是「改了还是错」的来源。
+    """
+    out = ""
+    for part in loc:
+        if isinstance(part, int):
+            out += f"[{part}]"
+        else:
+            out = f"{out}.{part}" if out else str(part)
+    return out
+
+
+def _clean_msg(msg: str) -> str:
+    for prefix in _MSG_PREFIXES:
+        if msg.startswith(prefix):
+            return msg[len(prefix):]
+    return msg
+
 
 def _build_envelope(tool_name: str, arguments: dict, model: Any,
                     exc: ValidationError) -> dict[str, Any]:
@@ -45,12 +70,12 @@ def _build_envelope(tool_name: str, arguments: dict, model: Any,
     invalid: list[dict[str, str]] = []
     for err in exc.errors():
         loc = tuple(err.get("loc") or ())
-        field = str(loc[0]) if loc else ""
+        field = _loc_path(loc)
         if err.get("type") == "missing":
             if field and field not in missing:
                 missing.append(field)
         else:
-            invalid.append({"field": field, "reason": str(err.get("msg", ""))})
+            invalid.append({"field": field, "reason": _clean_msg(str(err.get("msg", "")))})
 
     unexpected: dict[str, str | None] = {}
     for key in arguments:

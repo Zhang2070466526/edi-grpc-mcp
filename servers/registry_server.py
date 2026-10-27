@@ -42,9 +42,16 @@ import servers.resources_prompts      # noqa: F401 — @mcp.resource() / @mcp.pr
 
 # 工具全部注册完成后，把各工具 docstring 的 Args: 段注入 inputSchema 参数 description
 # （FastMCP 默认不解析 docstring，此处统一补上，见 servers/schema_descriptions.py）
-from servers.schema_descriptions import inject_tool_descriptions, trim_tool_descriptions  # noqa: E402
+from servers.schema_descriptions import (
+    inject_tool_descriptions,
+    trim_tool_descriptions,
+    inline_tool_schemas,
+)  # noqa: E402
 inject_tool_descriptions(mcp)
 trim_tool_descriptions(mcp)
+# 嵌套模型（如 run_tr_simulation.links 的 TrLink）会被 pydantic 生成成 $ref + $defs；
+# 扁平成自包含 schema，客户端/模型不必跟 $ref 就能看到元素字段。
+inline_tool_schemas(mcp)
 
 # Web 路由
 from servers.chat.routes import ui_page, health_check, chat_endpoint, tool_list, upload_file  # noqa: E402

@@ -117,3 +117,59 @@ def trim_tool_descriptions(mcp) -> int:
             trimmed += 1
     _logger.info("tool descriptions trimmed=%d", trimmed)
     return trimmed
+
+
+# ── $ref 内联 ────────────────────────────────────────────────────────────────
+# FastMCP 用 pydantic 生成 schema，嵌套模型（如 run_tr_simulation 的 links 元素）会变成
+# {"items": {"$ref": "#/$defs/TrLink"}} + 顶层 $defs。这是合法 JSON Schema，但多数客户端/
+# 模型不会去跟 $ref：只看到 links 是「数组」，不知道元素里能写什么 ⇒ 又开始猜参数。
+# 这里把本地 $defs 就地展开，让每个工具的 inputSchema 自包含。
+
+_MAX_REF_DEPTH = 8
+
+
+def inline_local_refs(schema: dict, *, max_depth: int = _MAX_REF_DEPTH) -> dict:
+    """把 ``#/$defs/X`` 形式的本地引用就地展开，返回自包含的 schema（不改原对象）。"""
+    if not isinstance(schema, dict):
+        return schema
+    defs = schema.get("$defs") or {}
+
+    def resolve(node, depth: int = 0):
+        if depth > max_depth:
+            return node
+        if isinstance(node, dict):
+            ref = node.get("$ref")
+            if isinstance(ref, str) and ref.startswith("#/$defs/"):
+                target = defs.get(ref.split("/")[-1])
+                if isinstance(target, dict):
+                    merged = resolve(target, depth + 1)
+                    if isinstance(merged, dict):
+                        merged = dict(merged)
+                        # 引用处的兄弟键（description/title 等）覆盖定义里的同名字段
+                        merged.update({k: v for k, v in node.items() if k != "$ref"})
+                    return merged
+            return {k: resolve(v, depth + 1) for k, v in node.items()}
+        if isinstance(node, list):
+            return [resolve(v, depth + 1) for v in node]
+        return node
+
+    out = resolve(schema)
+    if isinstance(out, dict):
+        out.pop("$defs", None)
+    return out
+
+
+def inline_tool_schemas(mcp) -> int:
+    """把所有工具 inputSchema 里嵌套模型的 $ref 展开。返回改动过的工具数。"""
+    changed = 0
+    for tool in registered_tools(mcp):
+        params = getattr(tool, "parameters", None)
+        if not isinstance(params, dict) or "$defs" not in params:
+            continue
+        try:
+            tool.parameters = inline_local_refs(params)
+            changed += 1
+        except Exception as exc:  # noqa: BLE001 — schema 后处理失败不该拖垮服务
+            _logger.warning("inline schema refs failed for %s: %s", getattr(tool, "name", "?"), exc)
+    _logger.info("tool schemas inlined=%d", changed)
+    return changed
