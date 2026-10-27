@@ -166,6 +166,7 @@ class TrLink(BaseModel):
     @field_validator("input_port", "output_port", mode="before")
     @classmethod
     def _require_json_int(cls, value: Any, info) -> Any:
+        """校验端口字段是 JSON 整数。"""
         if isinstance(value, bool) or not isinstance(value, int):
             raise ValueError(f"{info.field_name} 必须是 JSON 整数（字符串或小数不接受）")
         return value
@@ -173,6 +174,7 @@ class TrLink(BaseModel):
     @field_validator("phase_devices", "atten_devices", mode="before")
     @classmethod
     def _require_instance_names(cls, value: Any, info) -> Any:
+        """校验器件数组是非空字符串 list。"""
         if value is None:
             return []
         if not isinstance(value, list) or not all(isinstance(x, str) and x.strip() for x in value):
@@ -183,6 +185,7 @@ class TrLink(BaseModel):
     @field_validator("name")
     @classmethod
     def _name_not_blank(cls, value: str) -> str:
+        """校验 name 非空。"""
         if not value or not value.strip():
             raise ValueError("name 不能为空")
         return value

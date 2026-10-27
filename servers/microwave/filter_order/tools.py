@@ -284,6 +284,7 @@ def filter_order_bandstop(
         return error_response("NO_SOLUTION", result.get("reason") or "未找到可行解（指标可能过紧）")
 
     def _pairs_ghz(pairs_hz):
+        """把陷波频率对 [[f_下,f_上],...] (Hz) 转成 GHz。"""
         return [[_hz_to_ghz(lo), _hz_to_ghz(hi)] for lo, hi in pairs_hz]
 
     return {

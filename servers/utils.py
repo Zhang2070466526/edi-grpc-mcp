@@ -37,6 +37,7 @@ def per_tool_mutex(fn):
 
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
+        """持锁串行执行同一工具，防止并发争用共享资源。"""
         with lock:
             return fn(*args, **kwargs)
 

@@ -56,6 +56,7 @@ def _loc_path(loc: tuple) -> str:
 
 
 def _clean_msg(msg: str) -> str:
+    """去掉 pydantic 加的英文前缀，只留中文提示。"""
     for prefix in _MSG_PREFIXES:
         if msg.startswith(prefix):
             return msg[len(prefix):]
@@ -110,6 +111,7 @@ def _build_envelope(tool_name: str, arguments: dict, model: Any,
 
 async def _guarded_call_tool(self, name: str, arguments: dict[str, Any],
                              context: Any = None, convert_result: bool = False) -> Any:
+    """包装 ToolManager.call_tool：校验失败回统一信封，否则转原调用。"""
     tool = None
     getter = getattr(self, "get_tool", None)
     if callable(getter):

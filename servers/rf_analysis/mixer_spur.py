@@ -45,10 +45,12 @@ _MIXER_FREQ_STRICT_POSITIVE = ("rf_center_mhz",)
 # ── 辅助函数（对应 .cpp 的匿名 namespace）──────────────────────────
 
 def _ranges_overlap(a_min: float, a_max: float, b_min: float, b_max: float) -> bool:
+    """判断两个闭区间是否重叠。"""
     return a_max >= b_min and a_min <= b_max
 
 
 def _absolute_range(values: list[float]) -> tuple[float, float]:
+    """求一组频率绝对值的范围（跨零点折叠）。"""
     src_min, src_max = min(values), max(values)
     if src_min <= 0.0 and src_max >= 0.0:
         return 0.0, max(abs(src_min), abs(src_max))
@@ -56,6 +58,7 @@ def _absolute_range(values: list[float]) -> tuple[float, float]:
 
 
 def _calculate_lo(rf_mhz: float, if_mhz: float, direction: str, relation: str) -> float:
+    """按 direction/relation 计算目标 LO 频率。"""
     if direction == "receive":
         if relation == "low_side":
             return rf_mhz - if_mhz
@@ -87,6 +90,7 @@ def _is_desired_product(m: int, n: int, sign: int, direction: str, relation: str
 
 def _analyze_mixer(mixer: dict, if_center_mhz: float, max_order: int,
                    direction: str) -> dict:
+    """单 Mixer 枚举 m×源频±n×LO 判是否落入目标输出频带。"""
     result: dict = {
         "mixer": dict(mixer),
         "passed": False,
@@ -295,6 +299,7 @@ def _analyze(input_data: dict) -> dict:
         return result
 
     def _analyze_candidate(if_center: float) -> dict:
+        """单候选点分析：对每个启用 Mixer 调 _analyze_mixer 并汇总判定。"""
         mixer_results = [
             _analyze_mixer(m, if_center, max_order, direction) for m in enabled_mixers
         ]

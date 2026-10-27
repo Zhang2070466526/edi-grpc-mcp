@@ -126,10 +126,12 @@ class ProcessProbeMiddleware(BaseHTTPMiddleware):
     """调试探针：打印每条 MCP 请求的来源进程 exe + 命令行（不拦截）。"""
 
     def __init__(self, app, server_port: int):
+        """记录服务端口，供探针反查来源进程用。"""
         super().__init__(app)
         self._server_port = server_port
 
     async def dispatch(self, request: Request, call_next):
+        """打印每条请求的来源进程信息后放行。"""
         client = request.client
         if client:
             exe, cmd = resolve_client_process(client.port, self._server_port)
@@ -152,12 +154,14 @@ class ProcessWhitelistMiddleware(BaseHTTPMiddleware):
 
     def __init__(self, app, server_port: int, allowed: Iterable[str],
                  fail_open: bool = False):
+        """记录服务端口、归一化白名单与 fail_open 开关。"""
         super().__init__(app)
         self._server_port = server_port
         self._allowed = [_norm(a) for a in allowed if a]
         self._fail_open = fail_open
 
     async def dispatch(self, request: Request, call_next):
+        """对受保护路径校验来源进程，未命中白名单回 403。"""
         path = request.url.path.rstrip("/")
         if any(path == p or path.startswith(p + "/") for p in _PROTECTED_PREFIXES):
             client = request.client

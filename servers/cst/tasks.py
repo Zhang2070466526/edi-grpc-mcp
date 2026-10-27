@@ -10,6 +10,7 @@ from servers.cst.cst_api import cst_cancel_active, cst_runner
 
 
 def _fmt_task(t: dict[str, Any]) -> dict[str, Any]:
+    """把任务快照格式化成列表项。"""
     meta = t.get("metadata") or {}
     now = time.time()
     started = t.get("started_at") or t.get("created_at")

@@ -68,6 +68,7 @@ def _parse_farfield(text: str) -> dict[str, Any]:
         col_names.append(name.lower())
 
     def _col(*keys: str) -> int | None:
+        """按子串在表头列里定位 theta/phi/gain 列的索引。"""
         for idx, name in enumerate(col_names):
             if any(k in name for k in keys):
                 return idx

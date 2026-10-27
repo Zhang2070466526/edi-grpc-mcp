@@ -491,6 +491,7 @@ def print_results(result):
 # ============================================================================
 
 def main():
+    """argparse 命令行入口: 解析基板/频率/级数等参数并调用 design_wilkinson 输出设计结果。"""
     parser = argparse.ArgumentParser(
         description='多级威尔金森功分器设计工具 (Multi-Section Wilkinson Power Divider Designer)',
         formatter_class=argparse.RawDescriptionHelpFormatter,

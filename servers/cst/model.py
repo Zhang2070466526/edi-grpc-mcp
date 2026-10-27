@@ -24,9 +24,11 @@ class CstModelOps:
     """CST 模型级操作 —— 体检与解包，均为同步串行作业。"""
 
     def info(self, model_path: str) -> dict[str, Any]:
+        """投递 info 体检作业，返回模型状态。"""
         return run_cst_job("info", model_path=os.path.abspath(str(model_path)))
 
     def open_project(self, model_path: str) -> dict[str, Any]:
+        """投递 open 作业，解包归档模型。"""
         return run_cst_job("open", model_path=os.path.abspath(str(model_path)))
 
 

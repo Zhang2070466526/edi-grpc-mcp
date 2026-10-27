@@ -104,6 +104,7 @@ _orig_run = _tb.Tool.run
 
 
 async def _offloading_run(self, arguments, context=None, convert_result=False):
+    """monkeypatch Tool.run：同步工具整段丢 anyio.to_thread，防冻结事件循环。"""
     if self.is_async:
         return await _orig_run(self, arguments, context, convert_result)
     return await anyio.to_thread.run_sync(

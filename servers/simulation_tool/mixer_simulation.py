@@ -64,6 +64,7 @@ _FAIL_KEYWORDS = ("error", "incorrect", "fail", "invalid", "not found",
 
 
 def _looks_failed(text: str) -> bool:
+    """大小写不敏感判断文本是否命中失败关键字。"""
     low = text.lower()
     return any(k in low for k in _FAIL_KEYWORDS)
 

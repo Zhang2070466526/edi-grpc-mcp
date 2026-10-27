@@ -352,6 +352,7 @@ def _call_grpc_unlocked(
 
         # ── 4. 回显校验 ──
         def _mismatch(msg: str) -> dict[str, Any]:
+            """回显校验失败时构造 PROTOCOL_MISMATCH 结果。"""
             _logger.error("task=%s %s", task_id[:12], msg)
             return finish(False, "PROTOCOL_MISMATCH", msg,
                           project_path=payload.get("project_path", ""))

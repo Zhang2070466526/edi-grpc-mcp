@@ -99,6 +99,7 @@ def engine_failures(runs: Sequence[dict]) -> list[str]:
 
 
 def _is_engine_key_line(line: str) -> bool:
+    """判断一行是否命中成功/失败信号。"""
     return (any(p.search(line) for p in _ENGINE_FAIL_PATTERNS)
             or _ENGINE_OK_PATTERN.search(line) is not None)
 

@@ -40,6 +40,7 @@ class TaskRunner:
         max_run_seconds: float | None = None,
         name_prefix: str = "task",
     ) -> None:
+        """建单 worker 线程池、任务表与锁，并注册 atexit 关闭。"""
         # 单 worker 线程池：重量级操作串行执行，避免并发抢占外部软件
         self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix=name_prefix)
         # 任务注册表 + 锁

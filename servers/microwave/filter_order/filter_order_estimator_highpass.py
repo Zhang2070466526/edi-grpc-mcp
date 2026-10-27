@@ -50,11 +50,13 @@ def omega_to_freq(Omega, f_p):
 
 
 def return_loss_to_epsilon_sq(RL_dB):
+    """回波损耗 RL(dB) → ε² = 10^(RL/10)/(1-10^(RL/10))。"""
     s11_sq = 10.0 ** (RL_dB / 10.0)
     return s11_sq / (1.0 - s11_sq)
 
 
 def epsilon_sq_to_ripple_dB(epsilon_sq):
+    """ε² → 通带纹波(dB) = 10·log10(1+ε²)。"""
     return 10.0 * np.log10(1.0 + epsilon_sq)
 
 
@@ -85,6 +87,7 @@ def expand_stopband_specs(stopband_specs, f_p, n_per_band=41):
 
 
 def chebyshev_order_lower_bound(Omega_s_list, A_s_list, epsilon_sq):
+    """无零点切比雪夫阶数下界: N ≥ acosh(√((10^(A/10)-1)/ε²))/acosh(|Ω_s|)。"""
     orders = []
     for Om, As in zip(Omega_s_list, A_s_list):
         if abs(Om) <= 1.0 + 1e-9:
@@ -95,12 +98,14 @@ def chebyshev_order_lower_bound(Omega_s_list, A_s_list, epsilon_sq):
 
 
 def _poly_negate_s(poly):
+    """返回 P(-s) 系数(降幂): a_i → conj(a_i)·(-1)^(N-i)。"""
     N = len(poly) - 1
     signs = (-1.0) ** (N - np.arange(len(poly)))
     return np.conj(poly) * signs
 
 
 def _poly_add(p1, p2):
+    """多项式加法(降幂表示, 常数项对齐, 前端补零)。"""
     n1, n2 = len(p1), len(p2)
     if n1 == n2:
         return p1 + p2
@@ -110,6 +115,7 @@ def _poly_add(p1, p2):
 
 
 def _solve_reflection_zeros(N, finite_zeros, epsilon_sq, P):
+    """Remez 迭代求 N 个反射零点(实数, |r|<1)。"""
     if N <= 0:
         return np.array([])
     if N == 1:
@@ -117,6 +123,7 @@ def _solve_reflection_zeros(N, finite_zeros, epsilon_sq, P):
     from numpy.polynomial.polynomial import polymul, polyder, polyval
 
     def _pad_add(p1, p2):
+        """多项式加法(升幂表示, 常数项对齐, 末端补零)。"""
         p1 = np.asarray(p1, dtype=float); p2 = np.asarray(p2, dtype=float)
         n1, n2 = len(p1), len(p2)
         if n1 >= n2:
@@ -187,6 +194,7 @@ def _solve_reflection_zeros(N, finite_zeros, epsilon_sq, P):
 
 
 def synthesize_polys(N, finite_zeros, epsilon_sq):
+    """综合广义切比雪夫 P/F/E 三多项式, E 由 E(s)E(-s)=F(s)F(-s)+(1/ε²)P(s)P(-s) 取左半平面根。"""
     k = len(finite_zeros)
     finite_zeros = np.asarray(finite_zeros, dtype=float)
     if k > 0:
@@ -230,6 +238,7 @@ def synthesize_polys(N, finite_zeros, epsilon_sq):
 
 
 def evaluate_attenuation(Omega_array, P, F, E, epsilon_sq):
+    """计算无损衰减 -10·log10|S21|², 其中 |S21|²=|P|²/(ε²|E|²)。"""
     eps = np.sqrt(epsilon_sq)
     s = 1j * np.asarray(Omega_array, dtype=float)
     S21_sq = np.abs(np.polyval(P, s) / (eps * np.polyval(E, s))) ** 2
@@ -237,9 +246,11 @@ def evaluate_attenuation(Omega_array, P, F, E, epsilon_sq):
 
 
 def evaluate_attenuation_with_Q(Omega_array, P, F, E, epsilon_sq, Q_unloaded):
+    """含有限 Q 的衰减: 多项式根整体左移 d=1/Q 后复用无损评估。"""
     d_loss = 1.0 / Q_unloaded
 
     def shift_poly(poly, d):
+        """多项式根整体左移 d(损耗系数), 返回平移后的多项式。"""
         if len(poly) <= 1:
             return poly.copy()
         return np.poly(np.roots(poly) - d) * poly[0]
@@ -252,6 +263,7 @@ def evaluate_attenuation_with_Q(Omega_array, P, F, E, epsilon_sq, Q_unloaded):
 
 
 def build_symmetric_zeros(notches):
+    """正零点幅度 → 对称零点对 [n1,-n1,n2,-n2,...] (对应 s=±jΩ_z)。"""
     notches = np.asarray(notches, dtype=float)
     z = np.empty(2 * len(notches))
     z[0::2] = notches; z[1::2] = -notches
@@ -259,12 +271,14 @@ def build_symmetric_zeros(notches):
 
 
 def optimize_notches(N, Omega_s_list, A_s_list, notches_init, epsilon_sq, Q_unloaded):
+    """SLSQP 优化零点对位置, 目标=阻带违约+通带超标惩罚。"""
     notches_init = np.asarray(notches_init, dtype=float)
     A_s_arr = np.asarray(A_s_list, dtype=float)
     ripple_dB = 10 * np.log10(1 + epsilon_sq)
     Om_pass = np.linspace(0.0, 0.99, 41)
 
     def objective(nz):
+        """目标函数: 阻带违约(取最大+平方和)与通带超标惩罚, 异常返回 1e6。"""
         try:
             P, F, E = synthesize_polys(N, build_symmetric_zeros(nz), epsilon_sq)
             if Q_unloaded > 0:
@@ -301,6 +315,7 @@ def _ceil_odd(x):
 def estimate_highpass_filter_order(f_p, stopband_specs, RL_dB=-20.0,
                                    Q_unloaded=None, max_notches=4, verbose=True,
                                    odd_only=True):
+    """主入口: 枚举零点对数 m × 阶数 N, 返回最小可行阶数与传输零点。"""
     Omega_s, A_s_arr = expand_stopband_specs(stopband_specs, f_p)
     epsilon_sq = return_loss_to_epsilon_sq(RL_dB)
     N_lower = chebyshev_order_lower_bound(Omega_s, A_s_arr, epsilon_sq)
@@ -321,6 +336,7 @@ def estimate_highpass_filter_order(f_p, stopband_specs, RL_dB=-20.0,
     max_passband_dB = max(ripple_dB * 20.0, 1.0)
 
     def check_feasibility(N, zeros):
+        """检查 (N, zeros) 可行性: 阻带各点达标且通带纹波不超标。"""
         try:
             P, F, E = synthesize_polys(N, zeros, epsilon_sq)
             Om_pass = np.linspace(0.0, 0.99, 41)
@@ -393,12 +409,14 @@ def estimate_highpass_filter_order(f_p, stopband_specs, RL_dB=-20.0,
     best = min(solutions, key=lambda s: s['N'])
 
     def notch_row(sol):
+        """把原型零点 Ω_z 映射回高通阻带频率 f_z = f_p/Ω_z (Hz)。"""
         # 原型域零点 Ω_z (>1) 映射回高通阻带频率 f_z = f_p / Ω_z (< f_p)
         return [float(f_p / z) for z in sol['notches_omega']]
 
     P, F, E = synthesize_polys(best['N'], best['zeros_omega'], epsilon_sq)
 
     def atten_at(freqs):
+        """在给定真实频率处计算衰减(给定 Q 时含损耗)。"""
         Om_v = highpass_normalize(f_p, np.asarray(freqs, dtype=float))
         return evaluate_attenuation_with_Q(Om_v, P, F, E, epsilon_sq, Q_unloaded) if Q_unloaded \
             else evaluate_attenuation(Om_v, P, F, E, epsilon_sq)

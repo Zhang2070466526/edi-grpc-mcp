@@ -18,6 +18,7 @@ class TokenStore:
     """临时文件访问 Token 存储：注册 → 查询（查询时顺带过期清理）。"""
 
     def __init__(self, ttl: int = 600, route: str = "/files") -> None:
+        """初始化 ttl、route、token 表与锁。"""
         self._ttl = ttl
         self._route = route
         self._tokens: dict[str, dict[str, Any]] = {}

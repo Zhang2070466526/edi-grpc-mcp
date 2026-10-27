@@ -173,6 +173,7 @@ def _atanh(x):
 
 
 def _cosh(x):
+    """IEEE 语义的 cosh 包装（溢出返回 inf）。"""
     try:
         return math.cosh(x)
     except OverflowError:
@@ -180,10 +181,12 @@ def _cosh(x):
 
 
 def _coth(x):
+    """IEEE 语义的 coth 包装（cosh/sinh，经 _div 得 0/0→NaN）。"""
     return _div(math.cosh(x), math.sinh(x))
 
 
 def _sech(x):
+    """IEEE 语义的 sech 包装（1/cosh，经 _div）。"""
     return _div(1.0, math.cosh(x))
 
 
@@ -273,6 +276,7 @@ class _DjordjevicSarkar:
     """
 
     def __init__(self, eps_r_spec, tan_d_spec, f_spec, f1=1.0e3, f2=1.0e12):
+        """由单点 (er, tand, f_spec) 拟合 (eps_inf, m)。"""
         if f1 <= 0.0:
             raise ValueError("DIELECTRIC_DJORDJEVIC_SARKAR: f1 must be positive")
         if f2 <= f1:
@@ -295,14 +299,17 @@ class _DjordjevicSarkar:
         self.lossless = False
 
     def complex_eps_at(self, f):
+        """复介电常数 ε(f) = ε_∞ + m·ln((f2+jf)/(f1+jf))。"""
         if self.lossless:
             return complex(self.eps_inf, 0.0)
         return self.eps_inf + self.m * cmath.log((self.f2 + 1j * f) / (self.f1 + 1j * f))
 
     def eps_real_at(self, f):
+        """实介电常数 ε'(f)。"""
         return self.complex_eps_at(f).real
 
     def tan_delta_at(self, f):
+        """损耗角正切 tanδ(f)。"""
         if self.lossless:
             return 0.0
         e = self.complex_eps_at(f)
@@ -320,6 +327,7 @@ class TranslineBase:
     _MAX_ERROR = 1e-6       # Z0 优化的最大误差（绝对，ohm）
 
     def __init__(self):
+        """初始化空参数表与分析/综合结果字典。"""
         self._p = {k: 0.0 for k in self._PARAMS}
         self._analysis = {}
         self._synthesis = {}
@@ -351,9 +359,11 @@ class TranslineBase:
         raise NotImplementedError
 
     def _set_analysis_results(self):
+        """子类实现：填充分析结果表。"""
         raise NotImplementedError
 
     def _set_synthesis_results(self):
+        """子类实现：填充综合结果表。"""
         raise NotImplementedError
 
     # -- 结果 -------------------------------------------------------------
@@ -370,9 +380,11 @@ class TranslineBase:
         return dict(self._synthesis)
 
     def _set_analysis_result(self, param, value, status=STATUS.OK):
+        """写入一条分析结果 (value, status)。"""
         self._analysis[param] = (value, status)
 
     def _set_synthesis_result(self, param, value, status=STATUS.OK):
+        """写入一条综合结果 (value, status)。"""
         self._synthesis[param] = (value, status)
 
     # -- 通用物理量 -------------------------------------------------------
@@ -448,6 +460,7 @@ class TranslineBase:
 
     # -- 介质模型 ---------------------------------------------------------
     def _update_dielectric_model(self):
+        """按 DIELECTRIC_MODEL_SEL 构建/清除 Djordjevic-Sarkar 介质模型。"""
         if int(self._p[P.DIELECTRIC_MODEL_SEL]) != 1:
             self._ds = None
             return
@@ -463,9 +476,11 @@ class TranslineBase:
             self._ds = None
 
     def _dispersed_epsilon_r(self, f):
+        """色散后的实介电常数（无模型时退化为标称 er）。"""
         return self._ds.eps_real_at(f) if self._ds else self._p[P.EPSILONR]
 
     def _dispersed_tan_delta(self, f):
+        """色散后的损耗角正切（无模型时退化为标称 tand）。"""
         return self._ds.tan_delta_at(f) if self._ds else self._p[P.TAND]
 
     # -- 阻焊层（仅微带类需要，默认关闭） ---------------------------------
@@ -555,6 +570,7 @@ class TranslineBase:
 
     # -- 一维牛顿迭代（对应 MinimiseZ0Error1D） ---------------------------
     def _minimise_z0_error_1d(self, optimise, measure, recalculate_length=False):
+        """一维牛顿迭代：调 optimise 参数使 measure 逼近目标值。"""
         p = self._p
 
         if not math.isfinite(p[measure]):
@@ -639,6 +655,7 @@ class Microstrip(TranslineBase):
     )
 
     def __init__(self):
+        """初始化准静态状态量。"""
         super().__init__()
         # 准静态状态量
         self._z0_0 = 0.0        # 静态特性阻抗
@@ -650,34 +667,42 @@ class Microstrip(TranslineBase):
     # -- 输出便捷属性 -----------------------------------------------------
     @property
     def z0(self):
+        """特性阻抗 Z0。"""
         return self._p[P.Z0]
 
     @property
     def eps_eff(self):
+        """有效介电常数。"""
         return self._p[P.EPSILON_EFF]
 
     @property
     def angle(self):
+        """电长度（rad）。"""
         return self._p[P.ANG_L]
 
     @property
     def width(self):
+        """线宽。"""
         return self._p[P.PHYS_WIDTH]
 
     @property
     def length(self):
+        """线长。"""
         return self._p[P.PHYS_LEN]
 
     @property
     def attenuation_conductor_db(self):
+        """导体衰减（dB）。"""
         return self._p[P.ATTEN_COND]
 
     @property
     def attenuation_dielectric_db(self):
+        """介质衰减（dB）。"""
         return self._p[P.ATTEN_DILECTRIC]
 
     # -- 主流程 -----------------------------------------------------------
     def analyse(self):
+        """由几何参数计算阻抗、有效介电常数、电长度与损耗。"""
         self._update_dielectric_model()
 
         f = self._p[P.FREQUENCY]
@@ -715,6 +740,7 @@ class Microstrip(TranslineBase):
         self._p[P.TAND] = raw_tan_d
 
     def synthesize(self, recalculate_length=False):
+        """由目标 Z0 反解线宽并重算线长。返回是否收敛。"""
         p = self._p
         z0_dest = p[P.Z0]
         angl_dest = p[P.ANG_L]
@@ -738,6 +764,7 @@ class Microstrip(TranslineBase):
         return True
 
     def _set_analysis_results(self):
+        """填充分析结果表，并对阻抗/电长度/几何标状态。"""
         p = self._p
         self._set_analysis_result(P.EPSILON_EFF, p[P.EPSILON_EFF])
         self._set_analysis_result(P.UNIT_PROP_DELAY, p[P.UNIT_PROP_DELAY])
@@ -758,6 +785,7 @@ class Microstrip(TranslineBase):
                                   STATUS.WARNING if (not math.isfinite(width) or width <= 0) else STATUS.OK)
 
     def _set_synthesis_results(self):
+        """填充综合结果表（几何非法为硬错误）。"""
         p = self._p
         self._set_synthesis_result(P.EPSILON_EFF, p[P.EPSILON_EFF])
         self._set_synthesis_result(P.UNIT_PROP_DELAY, p[P.UNIT_PROP_DELAY])
@@ -778,6 +806,7 @@ class Microstrip(TranslineBase):
                                    STATUS.ERROR if (not math.isfinite(width) or width <= 0) else STATUS.OK)
 
     def _get_soldermask_delta_q(self, w_over_h, c_over_h):
+        """Wan-Hoorfar 增量填充因子（微带专用）。"""
         if w_over_h <= 0.0 or c_over_h <= 0.0:
             return 0.0
         q2_coated = self._wan_hoorfar_q2(w_over_h, 1.0 + c_over_h)
@@ -806,6 +835,7 @@ class Microstrip(TranslineBase):
 
     # -- 静态阻抗 ---------------------------------------------------------
     def _microstrip_z0(self):
+        """Hammerstad-Jensen 静态微带阻抗 + 厚度/覆盖层修正。"""
         e_r = self._p[P.EPSILONR]
         h = self._p[P.H]
         h2h = self._p[P.H_T] / h
@@ -873,10 +903,12 @@ class Microstrip(TranslineBase):
 
     @staticmethod
     def _delta_q_thickness(u, t_h):
+        """导体厚度对填充因子的修正。"""
         return (2.0 * math.log(2.0) / math.pi) * (t_h / math.sqrt(u))
 
     @staticmethod
     def _e_r_effective(e_r, q):
+        """由填充因子算有效介电常数。"""
         return 0.5 * (e_r + 1.0) + 0.5 * q * (e_r - 1.0)
 
     @staticmethod
@@ -890,6 +922,7 @@ class Microstrip(TranslineBase):
 
     # -- 色散 -------------------------------------------------------------
     def _dispersion(self):
+        """Getsinger/Kirschning 色散：修正 eps_eff 与 Z0 并写单位延时。"""
         e_r = self._p[P.EPSILONR]
         e_r_eff_0 = self._er_eff_0
         u = self._p[P.PHYS_WIDTH] / self._p[P.H]
@@ -981,6 +1014,7 @@ class Microstrip(TranslineBase):
                 * ((e_r_eff_0 - 1.0) / (e_r - 1.0)) * self._p[P.TAND])
 
     def _attenuation(self):
+        """汇总趋肤深度与整段导体/介质衰减。"""
         self._p[P.SKIN_DEPTH] = self._skin_depth()
         self._p[P.ATTEN_COND] = self._conductor_losses() * self._p[P.PHYS_LEN]
         self._p[P.ATTEN_DILECTRIC] = self._dielectric_losses() * self._p[P.PHYS_LEN]
@@ -1023,40 +1057,49 @@ class Stripline(TranslineBase):
     )
 
     def __init__(self):
+        """初始化单位传播延时状态量。"""
         super().__init__()
         self._unit_prop_delay = 0.0
 
     # -- 输出便捷属性 -----------------------------------------------------
     @property
     def z0(self):
+        """特性阻抗 Z0。"""
         return self._p[P.Z0]
 
     @property
     def eps_eff(self):
+        """有效介电常数。"""
         return self._p[P.EPSILON_EFF]
 
     @property
     def angle(self):
+        """电长度（rad）。"""
         return self._p[P.ANG_L]
 
     @property
     def width(self):
+        """线宽。"""
         return self._p[P.PHYS_WIDTH]
 
     @property
     def length(self):
+        """线长。"""
         return self._p[P.PHYS_LEN]
 
     @property
     def loss_conductor_db(self):
+        """导体损耗（dB）。"""
         return self._p[P.LOSS_CONDUCTOR]
 
     @property
     def loss_dielectric_db(self):
+        """介质损耗（dB）。"""
         return self._p[P.LOSS_DIELECTRIC]
 
     # -- 主流程 -----------------------------------------------------------
     def analyse(self):
+        """由几何参数计算阻抗、损耗与电长度（TEM 无色散）。"""
         self._update_dielectric_model()
 
         f = self._p[P.FREQUENCY]
@@ -1091,9 +1134,11 @@ class Stripline(TranslineBase):
         self._p[P.TAND] = raw_tan_d
 
     def synthesize(self, recalculate_length=False):
+        """由目标 Z0 反解线宽。返回是否收敛。"""
         return self._minimise_z0_error_1d(P.PHYS_WIDTH, P.Z0)
 
     def _set_analysis_results(self):
+        """填充分析结果表，并对几何合法性标状态。"""
         p = self._p
         self._set_analysis_result(P.EPSILON_EFF, p[P.EPSILON_EFF])
         self._set_analysis_result(P.UNIT_PROP_DELAY, self._unit_prop_delay)
@@ -1120,6 +1165,7 @@ class Stripline(TranslineBase):
         self._set_analysis_result(P.H, p[P.H], STATUS.WARNING if invalid else STATUS.OK)
 
     def _set_synthesis_results(self):
+        """填充综合结果表（几何非法为硬错误）。"""
         p = self._p
         self._set_synthesis_result(P.EPSILON_EFF, p[P.EPSILON_EFF])
         self._set_synthesis_result(P.UNIT_PROP_DELAY, self._unit_prop_delay)
@@ -1248,40 +1294,49 @@ class GCPW(TranslineBase):
     )
 
     def __init__(self):
+        """初始化综合目标为线宽。"""
         super().__init__()
         self._synthesize_target = P.PHYS_WIDTH
 
     # -- 输出便捷属性 -----------------------------------------------------
     @property
     def z0(self):
+        """特性阻抗 Z0。"""
         return self._p[P.Z0]
 
     @property
     def eps_eff(self):
+        """有效介电常数。"""
         return self._p[P.EPSILON_EFF]
 
     @property
     def angle(self):
+        """电长度（rad）。"""
         return self._p[P.ANG_L]
 
     @property
     def width(self):
+        """中心导体宽。"""
         return self._p[P.PHYS_WIDTH]
 
     @property
     def gap(self):
+        """槽宽。"""
         return self._p[P.PHYS_S]
 
     @property
     def length(self):
+        """线长。"""
         return self._p[P.PHYS_LEN]
 
     @property
     def loss_conductor_db(self):
+        """导体损耗（dB）。"""
         return self._p[P.LOSS_CONDUCTOR]
 
     @property
     def loss_dielectric_db(self):
+        """介质损耗（dB）。"""
         return self._p[P.LOSS_DIELECTRIC]
 
     def set_synthesize_target(self, target):
@@ -1316,6 +1371,7 @@ class GCPW(TranslineBase):
 
     # -- 主流程 -----------------------------------------------------------
     def analyse(self):
+        """保角变换计算 GCPW 阻抗、有效介电常数、损耗与电长度。"""
         self._update_dielectric_model()
 
         p = self._p
@@ -1410,10 +1466,12 @@ class GCPW(TranslineBase):
         p[P.TAND] = raw_tan_d
 
     def synthesize(self, recalculate_length=False):
+        """由目标 Z0 反解线宽或槽宽。返回是否收敛。"""
         target = P.PHYS_S if self._synthesize_target == P.PHYS_S else P.PHYS_WIDTH
         return self._minimise_z0_error_1d(target, P.Z0, True)
 
     def _set_analysis_results(self):
+        """填充分析结果表，并对阻抗/几何标状态。"""
         p = self._p
         self._set_analysis_result(P.EPSILON_EFF, p[P.EPSILON_EFF])
         self._set_analysis_result(P.UNIT_PROP_DELAY, p[P.UNIT_PROP_DELAY])
@@ -1436,6 +1494,7 @@ class GCPW(TranslineBase):
             P.PHYS_S, s, STATUS.WARNING if (not math.isfinite(s) or s <= 0.0) else STATUS.OK)
 
     def _set_synthesis_results(self):
+        """填充综合结果表（综合目标几何非法为硬错误）。"""
         p = self._p
         self._set_synthesis_result(P.EPSILON_EFF, p[P.EPSILON_EFF])
         self._set_synthesis_result(P.UNIT_PROP_DELAY, p[P.UNIT_PROP_DELAY])
@@ -1489,6 +1548,7 @@ class Coax(TranslineBase):
     )
 
     def __init__(self):
+        """初始化综合目标与高阶模列表。"""
         super().__init__()
         self._synthesize_target = P.PHYS_DIAM_IN
         self._te_modes = []
@@ -1497,34 +1557,42 @@ class Coax(TranslineBase):
     # -- 输出便捷属性 -----------------------------------------------------
     @property
     def z0(self):
+        """特性阻抗 Z0。"""
         return self._p[P.Z0]
 
     @property
     def angle(self):
+        """电长度（rad）。"""
         return self._p[P.ANG_L]
 
     @property
     def length(self):
+        """线长。"""
         return self._p[P.PHYS_LEN]
 
     @property
     def d_in(self):
+        """内导体直径。"""
         return self._p[P.PHYS_DIAM_IN]
 
     @property
     def d_out(self):
+        """外导体内径。"""
         return self._p[P.PHYS_DIAM_OUT]
 
     @property
     def cutoff_frequency(self):
+        """TE11 截止频率。"""
         return self._p[P.CUTOFF_FREQUENCY]
 
     @property
     def loss_conductor_db(self):
+        """导体损耗（dB）。"""
         return self._p[P.LOSS_CONDUCTOR]
 
     @property
     def loss_dielectric_db(self):
+        """介质损耗（dB）。"""
         return self._p[P.LOSS_DIELECTRIC]
 
     @property
@@ -1567,6 +1635,7 @@ class Coax(TranslineBase):
 
     # -- 高阶模截止（对应 COAX::UpdateModeCutoffs） ------------------------
     def _update_mode_cutoffs(self):
+        """计算 TE11 截止频率并枚举当前频率下已传播的高阶模。"""
         p = self._p
         epsr = p[P.EPSILONR]
         mur = p[P.MUR]
@@ -1597,6 +1666,7 @@ class Coax(TranslineBase):
 
     # -- 主流程 -----------------------------------------------------------
     def analyse(self):
+        """计算同轴线阻抗、电长度与损耗（TEM 精确解）。"""
         self._update_dielectric_model()
 
         p = self._p
@@ -1630,6 +1700,7 @@ class Coax(TranslineBase):
         p[P.TAND] = raw_tan_d
 
     def synthesize(self, recalculate_length=False):
+        """由目标 Z0 反解内/外直径并重算线长。返回 True。"""
         self._update_dielectric_model()
 
         p = self._p
@@ -1656,6 +1727,7 @@ class Coax(TranslineBase):
         return True
 
     def _set_analysis_results(self):
+        """填充分析结果表，并对直径合法性标状态。"""
         p = self._p
         self._set_analysis_result(P.LOSS_CONDUCTOR, p[P.LOSS_CONDUCTOR])
         self._set_analysis_result(P.LOSS_DIELECTRIC, p[P.LOSS_DIELECTRIC])
@@ -1683,6 +1755,7 @@ class Coax(TranslineBase):
             STATUS.WARNING if (not math.isfinite(d_out) or d_out <= 0.0 or geometry_invalid) else STATUS.OK)
 
     def _set_synthesis_results(self):
+        """填充综合结果表（综合目标直径非法为硬错误）。"""
         p = self._p
         self._set_synthesis_result(P.LOSS_CONDUCTOR, p[P.LOSS_CONDUCTOR])
         self._set_synthesis_result(P.LOSS_DIELECTRIC, p[P.LOSS_DIELECTRIC])
@@ -1699,6 +1772,7 @@ class Coax(TranslineBase):
         geometry_invalid = d_in >= d_out
 
         def _status(invalid, target):
+            """按几何/数值非法性给综合目标定状态。"""
             if geometry_invalid:
                 return STATUS.ERROR if self._synthesize_target == target else STATUS.WARNING
             return STATUS.ERROR if invalid else STATUS.OK
@@ -1775,6 +1849,7 @@ class CoupledMicrostrip(TranslineBase):
     )
 
     def __init__(self):
+        """初始化单线辅助计算器与奇偶模状态量。"""
         super().__init__()
         # 单线辅助计算器（对应 KiCad 的 m_aux_microstrip）
         self._aux = Microstrip()
@@ -1798,50 +1873,62 @@ class CoupledMicrostrip(TranslineBase):
     # -- 输出便捷属性 -----------------------------------------------------
     @property
     def z0_even(self):
+        """偶模特性阻抗 Z0_E。"""
         return self._p[P.Z0_E]
 
     @property
     def z0_odd(self):
+        """奇模特性阻抗 Z0_O。"""
         return self._p[P.Z0_O]
 
     @property
     def z_diff(self):
+        """差分阻抗 = 2·Z0_O。"""
         return self._p[P.Z_DIFF]
 
     @property
     def z_comm(self):
+        """共模阻抗 = Z0_E/2。"""
         return self._p[P.Z_COMM]
 
     @property
     def coupling_k(self):
+        """耦合系数 (Z0e-Z0o)/(Z0e+Z0o)。"""
         return self._p[P.COUPLING_K]
 
     @property
     def eps_eff_even(self):
+        """偶模有效介电常数。"""
         return self._p[P.EPSILON_EFF_EVEN]
 
     @property
     def eps_eff_odd(self):
+        """奇模有效介电常数。"""
         return self._p[P.EPSILON_EFF_ODD]
 
     @property
     def width(self):
+        """线宽。"""
         return self._p[P.PHYS_WIDTH]
 
     @property
     def spacing(self):
+        """线间距（边到边）。"""
         return self._p[P.PHYS_S]
 
     @property
     def length(self):
+        """线长。"""
         return self._p[P.PHYS_LEN]
 
     @property
     def angle(self):
+        """电长度（rad）。"""
         return self._p[P.ANG_L]
 
     # -- 主流程 -----------------------------------------------------------
     def analyse(self):
+        """计算耦合微带奇偶模阻抗、色散与损耗。"""
         self._update_dielectric_model()
 
         p = self._p
@@ -1996,10 +2083,12 @@ class CoupledMicrostrip(TranslineBase):
 
     # -- 结果表 -----------------------------------------------------------
     def _publish_results(self, sink, impedance_failure, geometry_failure):
+        """把全部结果经 sink 写出，阻抗/几何非法分别标失败状态。"""
         p = self._p
         write = sink
 
         def checked(param, value, positive, failure):
+            """数值非法时写失败状态，否则写 OK。"""
             invalid = (not math.isfinite(value)) or (value <= 0.0 if positive else value < 0.0)
             write(param, value, failure if invalid else STATUS.OK)
 
@@ -2023,10 +2112,12 @@ class CoupledMicrostrip(TranslineBase):
         checked(P.PHYS_S, p[P.PHYS_S], True, geometry_failure)
 
     def _set_analysis_results(self):
+        """分析结果表：阻抗非法为硬错误、几何非法为警告。"""
         # 分析：模式阻抗非法是硬错误，几何非法只是警告（几何是用户给的）
         self._publish_results(self._set_analysis_result, STATUS.ERROR, STATUS.WARNING)
 
     def _set_synthesis_results(self):
+        """综合结果表：几何非法为硬错误、阻抗降级为警告。"""
         # 综合：几何是求解器输出，非法为硬错误；目标阻抗降级为警告
         self._publish_results(self._set_synthesis_result, STATUS.WARNING, STATUS.ERROR)
 
@@ -2040,6 +2131,7 @@ class CoupledMicrostrip(TranslineBase):
 
     # -- 退化几何 ---------------------------------------------------------
     def _geometry_is_usable(self):
+        """判断几何参数是否可计算。"""
         p = self._p
         for key in (P.H, P.PHYS_WIDTH, P.PHYS_S, P.H_T, P.EPSILONR):
             value = p[key]
@@ -2048,6 +2140,7 @@ class CoupledMicrostrip(TranslineBase):
         return True
 
     def _mark_degenerate(self):
+        """退化几何下把全部结果置 NaN/0 并返回。"""
         p = self._p
         p[P.Z0_E] = p[P.Z0_O] = p[P.Z_DIFF] = math.nan
         p[P.Z_COMM] = 0.0
@@ -2076,6 +2169,7 @@ class CoupledMicrostrip(TranslineBase):
             1.0 + math.log((2.0 + (4.0 * math.pi * u - 2.0) / denom) / t_h))
 
     def _delta_u_thickness(self):
+        """Jansen 1978 增量线宽修正，算奇偶模等效线宽。"""
         p = self._p
         e_r = p[P.EPSILONR]
         h = p[P.H]
@@ -2111,6 +2205,7 @@ class CoupledMicrostrip(TranslineBase):
     # -- 静态填充因子（Kirschning-Jansen 1984） ---------------------------
     @staticmethod
     def _filling_factor_even(u, g, e_r):
+        """Kirschning-Jansen 1984 偶模填充因子。"""
         v = u * (20.0 + g * g) / (10.0 + g * g) + g * math.exp(-g)
         if v <= 0.0:
             return math.nan
@@ -2123,6 +2218,7 @@ class CoupledMicrostrip(TranslineBase):
 
     @staticmethod
     def _filling_factor_odd(u, g, e_r):
+        """Kirschning-Jansen 1984 奇模填充因子。"""
         b_odd = 0.747 * e_r / (0.15 + e_r)
         c_odd = b_odd - (b_odd - 0.207) * math.exp(-0.414 * u)
         d_odd = 0.593 + 0.694 * math.exp(-0.562 * u)
@@ -2130,6 +2226,7 @@ class CoupledMicrostrip(TranslineBase):
 
     @staticmethod
     def _delta_q_cover_even(h2h):
+        """覆盖层对偶模填充因子的修正（March 1981）。"""
         if h2h <= 0.0:
             return -1.0                 # h2h → 0⁺ 的 IEEE 极限：tanh(-∞)
         if h2h <= 39.0:
@@ -2138,11 +2235,13 @@ class CoupledMicrostrip(TranslineBase):
 
     @staticmethod
     def _delta_q_cover_odd(h2h):
+        """覆盖层对奇模填充因子的修正（March 1981）。"""
         if 0.0 <= h2h < 7.0:
             return math.tanh(9.575 / (7.0 - h2h) - 2.965 + 1.68 * h2h - 0.311 * h2h * h2h)
         return 1.0                      # h2h = 7 处 9.575/(7-h2h) → +∞，tanh → 1
 
     def _er_eff_static(self):
+        """静态奇偶模有效介电常数。"""
         p = self._p
         er = p[P.EPSILONR]
         h = p[P.H]
@@ -2186,6 +2285,7 @@ class CoupledMicrostrip(TranslineBase):
 
     @staticmethod
     def _delta_Z0_even_cover(g, u, h2h):
+        """覆盖层对偶模阻抗的修正（March 1981）。"""
         if h2h <= 0.0 or h2h > CoupledMicrostrip._COVER_H2H_MAX:
             return 0.0
 
@@ -2208,6 +2308,7 @@ class CoupledMicrostrip(TranslineBase):
 
     @staticmethod
     def _delta_Z0_odd_cover(g, u, h2h):
+        """覆盖层对奇模阻抗的修正（March 1981）。"""
         # 原式（KiCad / QUCS 同源）在 g 大时无界增长，见类内注释；上界由调用方施加。
         if h2h <= 0.0 or h2h > CoupledMicrostrip._COVER_H2H_MAX:
             return 0.0
@@ -2225,6 +2326,7 @@ class CoupledMicrostrip(TranslineBase):
 
     # -- 静态奇偶模阻抗 ---------------------------------------------------
     def _z0_even_odd(self):
+        """Kirschning-Jansen 1984 静态奇偶模阻抗（含覆盖层修正）。"""
         p = self._p
         h = p[P.H]
         u_t_e = self._w_t_e / h
@@ -2279,6 +2381,7 @@ class CoupledMicrostrip(TranslineBase):
 
     # -- 色散（Kirschning-Jansen 1984） ----------------------------------
     def _er_eff_freq(self):
+        """Kirschning-Jansen 1984 色散：奇偶模有效介电常数。"""
         p = self._p
         er = p[P.EPSILONR]
         u = p[P.PHYS_WIDTH] / p[P.H]
@@ -2316,6 +2419,7 @@ class CoupledMicrostrip(TranslineBase):
         self._prop_delay_o = self._unit_propagation_delay(self._er_eff_o)
 
     def _z0_dispersion(self):
+        """Kirschning-Jansen 1984 色散：奇偶模阻抗。"""
         p = self._p
         er = p[P.EPSILONR]
         u = p[P.PHYS_WIDTH] / p[P.H]
@@ -2401,6 +2505,7 @@ class CoupledMicrostrip(TranslineBase):
 
     # -- 损耗 -------------------------------------------------------------
     def _conductor_losses(self):
+        """奇偶模导体损耗（dB），Wheeler 增量电感律。"""
         p = self._p
         e_r_eff_e_0 = self._er_eff_e_0
         e_r_eff_o_0 = self._er_eff_o_0
@@ -2431,6 +2536,7 @@ class CoupledMicrostrip(TranslineBase):
         self._atten_cond_o = alpha_c_o * p[P.PHYS_LEN]
 
     def _dielectric_losses(self):
+        """奇偶模介质损耗（dB），Pozar 形式。"""
         p = self._p
         er = p[P.EPSILONR]
         e_r_eff_e_0 = self._er_eff_e_0
@@ -2452,11 +2558,13 @@ class CoupledMicrostrip(TranslineBase):
         self._atten_dielectric_o = alpha_d_o * p[P.PHYS_LEN]
 
     def _attenuation(self):
+        """汇总趋肤深度与奇偶模导体/介质衰减。"""
         self._p[P.SKIN_DEPTH] = self._skin_depth()
         self._conductor_losses()
         self._dielectric_losses()
 
     def _line_angle(self):
+        """奇偶模电长度（rad）。"""
         p = self._p
         if p[P.FREQUENCY] <= 0.0:
             self._ang_l_e = self._ang_l_o = 0.0
@@ -2467,11 +2575,13 @@ class CoupledMicrostrip(TranslineBase):
         self._ang_l_o = 2.0 * math.pi * p[P.PHYS_LEN] / _div(v_o, p[P.FREQUENCY])
 
     def _diff_impedance(self):
+        """差分阻抗 Z_DIFF = 2·Z0_O。"""
         # 差分阻抗 = 2·Z0_O（Pozar 4th ed. §7.6）。用色散后的 Z0_O，
         # 这样几 GHz 以上 Zdiff 会跟着频率走。
         self._p[P.Z_DIFF] = 2.0 * self._p[P.Z0_O]
 
     def _common_mode_impedance(self):
+        """共模阻抗 Z_COMM = Z0_E/2 与耦合系数。"""
         # Z_comm = Z0_E/2（两条 Z0_E 线同压并联，Pozar Eq. 7.68-7.69）；
         # k = (Z0e-Z0o)/(Z0e+Z0o)（Pozar Eq. 7.81）。
         p = self._p
@@ -2482,6 +2592,7 @@ class CoupledMicrostrip(TranslineBase):
     # -- 综合辅助 ---------------------------------------------------------
     @staticmethod
     def _syn_err_fun(s_h, w_h, e_r, w_h_se, w_h_so):
+        """综合残差函数：返回与目标归一化线宽 w_h_se/w_h_so 的偏差。"""
         g = _cosh(0.5 * math.pi * s_h)
         he = _cosh(math.pi * w_h + 0.5 * math.pi * s_h)
 
@@ -2502,6 +2613,7 @@ class CoupledMicrostrip(TranslineBase):
         h = p[P.H]
 
         def wheeler(z0):
+            """Wheeler 单线阻抗反解归一化线宽。"""
             a = math.exp(z0 * math.sqrt(e_r + 1.0) / 42.4) - 1.0
             return _div(8.0 * math.sqrt(a * ((7.0 + 4.0 / e_r) / 11.0)
                                             + ((1.0 + 1.0 / e_r) / 0.81)), a)
@@ -2545,6 +2657,7 @@ class CoupledMicrostrip(TranslineBase):
         p[P.PHYS_WIDTH] = w_h * h
 
     def _syn_fun(self, s_h, w_h, z0_e, z0_o):
+        """综合残差：设置几何并跑 analyse 后返回奇偶模阻抗偏差。"""
         p = self._p
         p[P.PHYS_S] = s_h * p[P.H]
         p[P.PHYS_WIDTH] = w_h * p[P.H]
@@ -2603,6 +2716,7 @@ class CoupledStripline(TranslineBase):
     )
 
     def __init__(self):
+        """初始化单条带状线辅助计算器与中间状态量。"""
         super().__init__()
         # 单根带状线辅助计算器（对应 KiCad 的 m_striplineCalc）
         self._stripline = Stripline()
@@ -2621,50 +2735,62 @@ class CoupledStripline(TranslineBase):
     # -- 输出便捷属性 -----------------------------------------------------
     @property
     def z0_even(self):
+        """偶模特性阻抗 Z0_E。"""
         return self._p[P.Z0_E]
 
     @property
     def z0_odd(self):
+        """奇模特性阻抗 Z0_O。"""
         return self._p[P.Z0_O]
 
     @property
     def z_diff(self):
+        """差分阻抗 = 2·Z0_O。"""
         return self._p[P.Z_DIFF]
 
     @property
     def z_comm(self):
+        """共模阻抗 = Z0_E/2。"""
         return self._p[P.Z_COMM]
 
     @property
     def coupling_k(self):
+        """耦合系数 (Z0e-Z0o)/(Z0e+Z0o)。"""
         return self._p[P.COUPLING_K]
 
     @property
     def eps_eff_even(self):
+        """偶模有效介电常数。"""
         return self._p[P.EPSILON_EFF_EVEN]
 
     @property
     def eps_eff_odd(self):
+        """奇模有效介电常数。"""
         return self._p[P.EPSILON_EFF_ODD]
 
     @property
     def width(self):
+        """线宽。"""
         return self._p[P.PHYS_WIDTH]
 
     @property
     def spacing(self):
+        """线间距（边到边）。"""
         return self._p[P.PHYS_S]
 
     @property
     def length(self):
+        """线长。"""
         return self._p[P.PHYS_LEN]
 
     @property
     def angle(self):
+        """电长度（rad）。"""
         return self._p[P.ANG_L]
 
     # -- 主流程 -----------------------------------------------------------
     def analyse(self):
+        """计算耦合带状线奇偶模阻抗、损耗与传播量。"""
         self._update_dielectric_model()
 
         p = self._p
@@ -2864,9 +2990,11 @@ class CoupledStripline(TranslineBase):
 
     # -- 结果表 -----------------------------------------------------------
     def _publish_results(self, sink, impedance_failure, geometry_failure):
+        """把全部结果经 sink 写出，阻抗/几何非法分别标失败状态。"""
         p = self._p
 
         def checked(param, value, positive, failure):
+            """数值非法时写失败状态，否则写 OK。"""
             invalid = (not math.isfinite(value)) or (value <= 0.0 if positive else value < 0.0)
             sink(param, value, failure if invalid else STATUS.OK)
 
@@ -2891,13 +3019,16 @@ class CoupledStripline(TranslineBase):
         checked(P.PHYS_S, p[P.PHYS_S], True, geometry_failure)
 
     def _set_analysis_results(self):
+        """分析结果表：阻抗非法为硬错误、几何非法为警告。"""
         self._publish_results(self._set_analysis_result, STATUS.ERROR, STATUS.WARNING)
 
     def _set_synthesis_results(self):
+        """综合结果表：几何非法为硬错误、阻抗降级为警告。"""
         self._publish_results(self._set_synthesis_result, STATUS.WARNING, STATUS.ERROR)
 
     # -- 退化几何 ---------------------------------------------------------
     def _geometry_is_usable(self):
+        """判断几何参数是否可计算。"""
         p = self._p
         for key in (P.H, P.PHYS_WIDTH, P.PHYS_S, P.EPSILONR):
             value = p[key]
@@ -2906,6 +3037,7 @@ class CoupledStripline(TranslineBase):
         return True
 
     def _mark_degenerate(self):
+        """退化几何下把全部结果置 NaN/0 并返回。"""
         p = self._p
         p[P.Z0_E] = p[P.Z0_O] = p[P.Z_DIFF] = math.nan
         p[P.Z_COMM] = 0.0
@@ -2923,10 +3055,12 @@ class CoupledStripline(TranslineBase):
     # -- 几何判据 ---------------------------------------------------------
     @staticmethod
     def _is_centered_offset(a, h):
+        """判断导体是否居中（a ≈ h/2）。"""
         return abs(a - h / 2.0) <= h * 1e-9
 
     @staticmethod
     def _is_offset_within_finite_thickness_limits(a, h, t):
+        """判断偏置是否落在有限厚度安全区间 t/2 < a < h-t/2。"""
         return (a > 0.5 * t) and (a < h - 0.5 * t)
 
     # -- Cohn 1955 闭式 ---------------------------------------------------
@@ -2970,6 +3104,7 @@ class CoupledStripline(TranslineBase):
             self._elliptic_integral(k)[0], self._elliptic_integral(k_p)[0])
 
     def _calc_z0_even_mode(self):
+        """Cohn 1955 式 (18) 有限厚度偶模阻抗。"""
         # Cohn 1955 式 (18)
         z_e = _div(1.0, (_div(1.0, self._z0_w_h_t_h)
                          - _div(self._c_f_t_h, self._c_f_0)
@@ -2977,6 +3112,7 @@ class CoupledStripline(TranslineBase):
         self._p[P.Z0_E] = z_e
 
     def _calc_z0_odd_mode(self, t, s):
+        """Cohn 1955 式 (20)/(22) 有限厚度奇模阻抗（按 s/t=5 硬切换）。"""
         # Cohn 1955 式 (20)
         z_o_1 = _div(1.0, (_div(1.0, self._z0_w_h_t_h)
                            + _div(self._c_f_t_h, self._c_f_0)
@@ -2999,6 +3135,7 @@ class CoupledStripline(TranslineBase):
         self._p[P.Z_DIFF] = 2.0 * z_o
 
     def _calc_z0_symmetric_stripline(self):
+        """用单条带状线辅助器算有限厚度单导体阻抗。"""
         p = self._p
         sl = self._stripline
         sl.set(P.EPSILONR, p[P.EPSILONR])
@@ -3070,6 +3207,7 @@ class CoupledStripline(TranslineBase):
 
     # -- 损耗与传播 -------------------------------------------------------
     def _calc_losses(self):
+        """奇偶模导体/介质损耗（dB）。"""
         p = self._p
         length = p[P.PHYS_LEN]
         freq = p[P.FREQUENCY]
@@ -3093,6 +3231,7 @@ class CoupledStripline(TranslineBase):
                                if (z0_o > 0.0 and math.isfinite(z0_o)) else 0.0)
 
     def _single_stripline_conductor_loss(self):
+        """单条带状线导体损耗，供耦合线按阻抗比缩放。"""
         p = self._p
         sl = self._stripline
         sl.set(P.EPSILONR, p[P.EPSILONR])
@@ -3110,6 +3249,7 @@ class CoupledStripline(TranslineBase):
         return sl._p[P.LOSS_CONDUCTOR]
 
     def _calc_dielectrics(self):
+        """均匀介质下奇偶模 eps_eff=er，并算传播延时与电长度。"""
         # 介质均匀包围导体，奇偶模的 eps_eff 都等于 er（无色散）
         p = self._p
         er = p[P.EPSILONR]

@@ -163,6 +163,7 @@ def get_service_logs(
     total = len(all_lines)
 
     def _line_level(line: str) -> str:
+        """用词边界正则把日志行分类为 ERROR/WARN/INFO/DEBUG。"""
         up = line.upper()
         # 词边界匹配，避免 "no_error"、"information" 等子串误判
         words = set(re.findall(r"\b(TRACEBACK|EXCEPTION|ERROR|FAIL|WARN|WARNING|INFO|DEBUG)\b", up))

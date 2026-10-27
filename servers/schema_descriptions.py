@@ -135,6 +135,7 @@ def inline_local_refs(schema: dict, *, max_depth: int = _MAX_REF_DEPTH) -> dict:
     defs = schema.get("$defs") or {}
 
     def resolve(node, depth: int = 0):
+        """就地展开 #/$defs 引用，返回自包含节点。"""
         if depth > max_depth:
             return node
         if isinstance(node, dict):

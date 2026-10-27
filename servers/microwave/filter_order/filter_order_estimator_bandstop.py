@@ -227,6 +227,7 @@ def _solve_reflection_zeros(N: int, finite_zeros: np.ndarray,
     from numpy.polynomial.polynomial import polymul, polyder, polyval
 
     def _pad_add(p1, p2):
+        """多项式加法(升幂表示, 常数项对齐, 末端补零)。"""
         p1 = np.asarray(p1, dtype=float)
         p2 = np.asarray(p2, dtype=float)
         n1, n2 = len(p1), len(p2)
@@ -416,6 +417,7 @@ def evaluate_attenuation_with_d(Omega_array: np.ndarray, P: np.ndarray, F: np.nd
     (FBW 为带阻阻带相对带宽; 工程近似, 与带通版一致)
     """
     def shift_poly(poly, d):
+        """多项式根整体左移 d(损耗系数 d=1/(Q·FBW)), 返回平移后的多项式。"""
         if len(poly) <= 1:
             return poly.copy()
         roots = np.roots(poly)
@@ -468,11 +470,13 @@ def optimize_notches(N: int, Om_s_pts: np.ndarray, A_s_pts: np.ndarray,
     Om_grid = np.linspace(0.0, 0.999, 41)   # 原型通带网格
 
     def atten(Om_arr, P, F, E):
+        """衰减评估: d_loss>0 时含损耗, 否则无损。"""
         if d_loss > 0:
             return evaluate_attenuation_with_d(Om_arr, P, F, E, epsilon_sq, d_loss)
         return evaluate_attenuation(Om_arr, P, F, E, epsilon_sq)
 
     def objective(nz):
+        """目标函数: 阻带违约+通带点超标+通带纹波超标惩罚, 异常返回 1e6。"""
         try:
             zeros = build_symmetric_zeros(nz)
             P, F, E = synthesize_polys(N, zeros, epsilon_sq)
@@ -599,6 +603,7 @@ def estimate_bandstop_filter_order(f_s1: float, f_s2: float,
     Om_grid = np.linspace(0.0, 0.999, 41)
 
     def atten_eval(Om_arr, P, F, E):
+        """按 d_loss 有无选择含损耗/无损的衰减评估, 供可行性检查与最终复核复用。"""
         if d_loss > 0:
             return evaluate_attenuation_with_d(Om_arr, P, F, E, epsilon_sq, d_loss)
         return evaluate_attenuation(Om_arr, P, F, E, epsilon_sq)
@@ -692,6 +697,7 @@ def estimate_bandstop_filter_order(f_s1: float, f_s2: float,
     P, F, E = synthesize_polys(best['N'], best['zeros_proto'], epsilon_sq)
 
     def atten_at_freq(freqs):
+        """在真实频率处把 f 映射到原型域 Ω~ 后计算衰减。"""
         freqs = np.asarray(freqs, dtype=float)
         Om_bs = (freqs / f0 - f0 / freqs) / FBW
         with np.errstate(divide='ignore'):

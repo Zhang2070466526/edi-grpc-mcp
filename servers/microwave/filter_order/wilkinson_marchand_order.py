@@ -15,6 +15,7 @@ RL_DEFAULT = 15.0
 
 
 def order_formula(ratio, rl_db, R=2.0):
+    """切比雪夫变阻综合公式: 由频率比 ratio 与带边隔离度 rl_db 求所需节数(N≥2 有效)。"""
     theta_m = math.pi / (1.0 + ratio)
     gamma0 = (R - 1.0) / (R + 1.0)
     gamma_m = 10.0 ** (-rl_db / 20.0)
@@ -43,6 +44,7 @@ def single_section_bandedge(ratio):
 
 
 def order_final(ratio, rl_db):
+    """综合阶数并用单节带边隔离度校验: 公式 N=1 时达标则 N=1, 否则升为 N=2。"""
     n = order_formula(ratio, rl_db)
     if n > 1:
         return n
@@ -52,6 +54,7 @@ def order_final(ratio, rl_db):
 
 
 def main():
+    """argparse 命令行入口: 解析频率比/频段与 --rl 指标并打印阶数。"""
     ap = argparse.ArgumentParser()
     ap.add_argument("spec", nargs="+", help="频率比 或 低频 高频 (GHz)")
     ap.add_argument("--rl", type=float, default=None, help=f"指标 dB, 缺省 {RL_DEFAULT:g}")
