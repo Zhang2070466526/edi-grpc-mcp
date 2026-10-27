@@ -80,3 +80,75 @@ def resource_error_codes() -> str:
         "- 非幂等操作（create/delete/generate）禁止自动重试。\n"
         "- 查询类操作（list/get_status）可以安全重试一次。\n"
     )
+
+
+@mcp.resource(
+    "edi://reference/tr-simulation-guide",
+    name="TR Simulation Guide",
+    title="TR 仿真指标与链路字段",
+    description=("run_tr_simulation 的 23 个精确指标名（单位/实现方式/必需链路字段）与 13 个"
+                 "链路字段（类型/单位/默认值）。调用前读本资源，不要猜参数名。"),
+    mime_type="text/markdown",
+)
+def resource_tr_simulation_guide() -> str:
+    """由代码里的 _INDICATOR_CATALOG / _LINK_FIELDS 生成，和工具校验同源（不会文档漂移）。"""
+    from servers.simulation_tool.tr_simulation import (
+        TR_CONTRACT_VERSION,
+        _INDICATOR_CATALOG,
+        _INDICATOR_REQUIRES,
+        _LINK_FIELDS,
+    )
+
+    lines = [
+        f"# TR 仿真契约 {TR_CONTRACT_VERSION}",
+        "",
+        "工具：`run_tr_simulation`（TR_Simulator.exe，纯链路仿真）。以下名称/字段是**精确**写法，",
+        "不接受简称、别名或表外字段；写错会在 MCP 层直接报错并给出候选。",
+        "",
+        "## 指标（`indicators` 逗号分隔）",
+        "",
+        "| 指标名称 | 单位 | 实现方式 | 额外链路参数 | 数值输出 |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for name, meta in _INDICATOR_CATALOG.items():
+        lines.append(f"| {name} | {meta['unit']} | {meta['method']} | {meta['extra']} | {meta['output']} |")
+
+    lines += [
+        "",
+        "## 链路字段（`links[]`，共 13 个）",
+        "",
+        "| 字段 | 类型 | 必填 | 默认值 | 说明 |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for field, meta in _LINK_FIELDS.items():
+        default = "" if meta["default"] is None else meta["default"]
+        lines.append(f"| {field} | {meta['type']} | {'是' if meta['required'] else '否'} "
+                     f"| {default} | {meta['doc']} |")
+
+    lines += ["", "## 指标 → 必须提供的器件字段", ""]
+    lines.append("| 指标 | 必须给出 |")
+    lines.append("| --- | --- |")
+    for ind, field in _INDICATOR_REQUIRES.items():
+        lines.append(f"| {ind} | `{field}`（器件实例名数组，须在有效链路上且类型正确） |")
+
+    lines += [
+        "",
+        "## 常用名 → 接口名（程序不会自动转换）",
+        "",
+        "| 常用名 | 必须传入的名称 |",
+        "| --- | --- |",
+        "| 输入P-1 / 输入P1dB / 输入1dB压缩点 | IP1dB |",
+        "| 输出P1dB / 输出1dB压缩点 | OP1dB |",
+        "| 移相精度（RMS） | 移相误差RMS |",
+        "| 衰减精度（RMS） | 衰减误差RMS |",
+        "",
+        "## 输出约定",
+        "",
+        "- `工作频率` 自动加入每条链路结果，不必重复选择。",
+        "- `移相态` / `衰减态` 只生成曲线与 CSV，**不进入** `results[].electrical_parameters`。",
+        "- 其余指标进 `results[].electrical_parameters`，未使用的数值为空字符串 `\"\"`。",
+        "- 返回值带 `echo`（本次实际生效的 indicators/links/threads）；若请求的指标没出现在结果里，"
+        "`warnings` 会点名，别把「没跑」当成「已测」。",
+        "",
+    ]
+    return "\n".join(lines)

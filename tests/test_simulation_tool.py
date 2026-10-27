@@ -270,5 +270,16 @@ def test_new_error_codes_registered_in_chat_dictionary():
     """回归：新工具用到的错误码必须进 chat 的 ERROR_CODES 词典（否则界面显示英文裸码）。"""
     for code in ("INVALID_REPORT_JSON", "INVALID_OUTPUT_DIR", "EXE_NOT_FOUND", "REPORT_EXPORT_FAILED",
                  "OUTPUT_FILE_BUSY", "NO_LINKS", "LINK_JSON_INVALID", "SIMULATION_EXECUTION_FAILED",
-                 "EDA_GRPC_OFFLINE", "TOOL_TIMEOUT"):
+                 "EDA_GRPC_OFFLINE", "TOOL_TIMEOUT", "UNKNOWN_INDICATOR"):
         assert code in ERROR_CODES, f"{code} 未登记进 ERROR_CODES"
+
+
+def test_indicator_name_validation():
+    """指标名严格校验：表外名/别名在 MCP 层就拦，提示精确名称，不等 exe 的 UNKNOWN_INDICATOR。"""
+    from servers.simulation_tool.tr_simulation import _check_indicators
+
+    assert _check_indicators("输出增益,噪声系数,IP1dB,移相误差RMS") is None
+    r = _check_indicators("输入P1dB")   # 别名 → 提示精确名
+    assert r["error_code"] == "UNKNOWN_INDICATOR" and "IP1dB" in r["message"]
+    r = _check_indicators("增益")        # 表外名 → 相似名建议
+    assert r["error_code"] == "UNKNOWN_INDICATOR" and "输出增益" in r["message"]

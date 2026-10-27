@@ -328,6 +328,7 @@ ERROR_CODES = {
     "CURVE_NOT_FOUND": "曲线不存在（先用 list_result_curves 查）",
     "TOOL_NOT_FOUND": '工具不存在（用 describe_tool("") 查名字）',
     "COMPONENT_NOT_FOUND": "器件/实例不存在（先用 list_schematic_components 查）",
+    "UNKNOWN_INDICATOR": "指标名不存在（用 describe_tool 查合法指标名）",
 }
 
 
