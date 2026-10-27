@@ -21,6 +21,7 @@ _logger = logging.getLogger("simulation_tool")
 _settings = get_settings()
 _SIM_TOOL_DIR = Path(_settings.simulation_tool_dir)
 REPORT_EXPORTER_PATH = str(_SIM_TOOL_DIR / "simulation_report" / "Report_Exporter.exe")
+DRAWTOOL_PATH = str(_SIM_TOOL_DIR / "simulation_report" / "drawtool.exe")
 TR_SIMULATOR_PATH = str(_SIM_TOOL_DIR / "tr_simulation" / "TR_Simulator.exe")
 MIXER_SIMULATION_PATH = str(_SIM_TOOL_DIR / "mixer_simulation" / "mixer_simulation.exe")
 # --edi 传 EDI 安装目录（simulation_tool 的上一级）
