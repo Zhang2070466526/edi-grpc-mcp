@@ -310,6 +310,173 @@ def filter_order_bandstop(
 
 
 @mcp.tool()
+def filter_order_bandpass(
+        f_p1_ghz: float,
+        f_p2_ghz: float,
+        stopband_specs: list,
+        rl_db: float = -20.0,
+        q_unloaded: float | None = None,
+        max_zeros: int = 4,
+) -> dict[str, Any]:
+    """带通阶数估算：通带 f_p1~f_p2、阻带在两侧，返回阶数与传输零点。低通/高通/带阻分别用 filter_order_lowpass/highpass/bandstop。
+
+    用法："评估一个通带 1.95~2.05GHz、1.85GHz 处抑制 ≥35dB、2.2GHz 处抑制 ≥25dB 的带通滤波器需要几阶"
+
+    引入传输零点 k 可降低所需阶数 N，但受工程约束 k ≤ N/2；枚举在该约束被违反时停止，
+    停止原因写入返回的 stop_note（solutions 表按 k 递增列出每个可行 k 的最小 N 与最差阻带裕量）。
+
+    Args:
+        f_p1_ghz: 通带下边频率 GHz（>0）。
+        f_p2_ghz: 通带上边频率 GHz（> f_p1_ghz）。
+        stopband_specs: 阻带规范列表，每项 [f, A]（抑制点，GHz/dB）或 [f_lo, f_hi, A]（抑制频段）。
+            阻带频率须在通带之外（整体 < f_p1_ghz 或 > f_p2_ghz）。
+        rl_db: 通带回波损耗 dB（负值），默认 -20。
+        q_unloaded: 谐振器无载 Q 值（None=无损），默认 None。传值时按根左移模型计损耗
+            （d_loss=1/(q_unloaded*fbw)，通带中心插损约 4.343*N*d_loss），
+            pass_max_db 为通带内最大衰减（含该插损），阶数选择不受插损影响。
+        max_zeros: 最大有限传输零点数（**个数**，非对数）。注意别与低通/高通/带阻的 max_notches
+            （零点**对**数）混用。
+
+    Returns:
+        {"success": True, "N": 阶数, "k": 零点数, "zeros_ghz": [零点位置...],
+         "f0_ghz": 中心频率, "fbw": 相对带宽, "passband_ripple_db": 通带纹波,
+         "N_lower_bound_no_zeros": 无零点阶数下界, "stop_note": 枚举停止原因(None=枚举到 max_zeros 未停),
+         "warnings": [使用提示...]（零点远离规范 / 含 Q 损耗口径）,
+         "verify_rows": [{f_ghz, atten_db, required_db}]（每条阻带规范的 401 点网格最坏点，用于自证达标）,
+         "solutions": [{k, N, zeros_ghz, min_margin_db, min_atten_db, pass_max_db}, ...]}
+    """
+    if (err := _require_positive(f_p1_ghz, "f_p1_ghz")) is not None:
+        return err
+    if (err := _require_positive(f_p2_ghz, "f_p2_ghz")) is not None:
+        return err
+    if f_p2_ghz <= f_p1_ghz:
+        return error_response("INVALID_PARAMETERS", "要求 f_p2_ghz > f_p1_ghz")
+    if not isinstance(rl_db, (int, float)) or isinstance(rl_db, bool) or not math.isfinite(rl_db) or rl_db >= 0:
+        return error_response("INVALID_PARAMETERS", "rl_db 必须是负值（回波损耗 dB）")
+    if q_unloaded is not None and (err := _require_positive(q_unloaded, "q_unloaded")) is not None:
+        return err
+    if not isinstance(max_zeros, int) or isinstance(max_zeros, bool) or max_zeros < 0:
+        return error_response("INVALID_PARAMETERS", "max_zeros 必须是 >=0 的整数")
+    # 先解析/校验阻带规范再加载 scipy —— scipy 不可用时参数错误仍能给出，不被盖成依赖缺失
+    try:
+        specs_hz = _stopband_hz(stopband_specs)
+    except ValueError as exc:
+        return error_response("INVALID_PARAMETERS", str(exc))
+    # 空列表会一路走到算法层 np.min(空数组) 被吞成「无可行解」，误导成指标不可达
+    if not specs_hz:
+        return error_response("INVALID_PARAMETERS",
+                              "stopband_specs 不能为空，至少给一个抑制点 [f, A] 或抑制频段 [f_lo, f_hi, A]")
+    # 阻带端点恰好落在通带边：该点衰减只有纹波量级，物理上不可能满足抑制，
+    # 算法层会静默返回 NO_SOLUTION（"no feasible solution"），这里直接点明可改之处
+    f_p1_hz, f_p2_hz = f_p1_ghz * _GHZ, f_p2_ghz * _GHZ
+    for spec in specs_hz:
+        f_lo = spec[0]
+        f_hi = spec[1] if len(spec) == 3 else spec[0]
+        for f_edge, which, bound in ((f_hi, "左", f_p1_hz), (f_lo, "右", f_p2_hz)):
+            if abs(f_edge - bound) <= 1e-9 * max(bound, 1.0):
+                return error_response("INVALID_PARAMETERS",
+                                      f"阻带端点 {f_edge / _GHZ:g} GHz 与通带边重合："
+                                      f"通带边处衰减只有纹波量级，无法满足抑制要求，"
+                                      f"请把该端点改为{'严格小于' if which == '左' else '严格大于'} "
+                                      f"{bound / _GHZ:g} GHz")
+    # 带通阻带必须在通带两侧（与算法层 expand_stopband_specs 的左右侧判定一致）
+    for spec in specs_hz:
+        f_lo = spec[0]
+        f_hi = spec[1] if len(spec) == 3 else spec[0]
+        if len(spec) == 3 and f_lo >= f_hi:
+            return error_response("INVALID_PARAMETERS",
+                                  f"抑制频段 [{f_lo / _GHZ:g}, {f_hi / _GHZ:g}] 顺序反了："
+                                  f"要求 f_lo < f_hi（写成 [下边, 上边, 抑制dB]）")
+        if not (f_hi <= f_p1_ghz * _GHZ or f_lo >= f_p2_ghz * _GHZ):
+            return error_response("INVALID_PARAMETERS",
+                                  f"带通阻带 {f_lo / _GHZ:g}~{f_hi / _GHZ:g} GHz 与通带 "
+                                  f"{f_p1_ghz:g}~{f_p2_ghz:g} GHz 重叠，阻带须在通带两侧")
+    _est, _why = _load_scipy_estimator("filter_order_estimator_bandpass", "estimate_filter_order")
+    if _est is None:
+        return error_response("DEPENDENCY_MISSING", f"阶数评估需要 scipy 依赖，当前环境不可用（{_why}）")
+    try:
+        result = _est(f_p1_ghz * _GHZ, f_p2_ghz * _GHZ, specs_hz,
+                      RL_dB=rl_db, Q_unloaded=q_unloaded, max_zeros=max_zeros, verbose=False)
+    except ValueError as exc:
+        return error_response("INVALID_PARAMETERS", str(exc))
+    if not result.get("success"):
+        reason = result.get("reason") or "未找到可行解（指标可能过紧）"
+        # hint 按原因给方向：通带波纹超门限与 max_zeros 无关，别让调用方改错参数
+        if "通带波纹" in reason:
+            hint = "通带被 Q 损耗压扁：提高谐振器 Q 或放宽回波损耗后重试（增大 max_zeros 无效）"
+        elif "阻带" in reason:
+            hint = "阻带裕量不足：放宽抑制要求或增大 max_zeros 后重试"
+        else:
+            hint = "放宽抑制/回波损耗，或调大 max_zeros 后重试"
+        return error_response("NO_SOLUTION", reason, hint=hint)
+
+    def _zeros_ghz(zeros_hz):
+        return [_hz_to_ghz(z) for z in zeros_hz]
+
+    # ---- 使用提示（只做提示，不参与任何数值计算） ----
+    # 说明：算法（demo 口径）本身不限制零点位置，这里只把「落在规范范围之外」的零点如实列出。
+    # 判定容差是提示用的启发式规则（规范外扩 10% 带宽；单点规范外扩 5%），并在文案里写明，
+    # 便于自己复核；它不是算法结论。
+    def _spec_windows() -> list[tuple[float, float]]:
+        wins = []
+        for spec in specs_hz:
+            lo = spec[0]
+            hi = spec[1] if len(spec) == 3 else spec[0]
+            tol = 0.10 * (hi - lo) if hi > lo else 0.05 * hi
+            wins.append((lo - tol, hi + tol))
+        return wins
+
+    def _near_spec(f_hz: float) -> bool:
+        return any(lo <= f_hz <= hi for lo, hi in _spec_windows())
+
+    warnings: list[str] = []
+    far_zeros = [z for z in result["zeros_bandpass_Hz"] if not _near_spec(z)]
+    if far_zeros:
+        spec_txt = "；".join(
+            f"{spec[0] / _GHZ:g}~{(spec[1] if len(spec) == 3 else spec[0]) / _GHZ:g} GHz"
+            for spec in specs_hz)
+        warnings.append(
+            "零点 " + ", ".join(f"{z / _GHZ:.4f}" for z in far_zeros) + " GHz 不在任何阻带规范范围内"
+            f"（规范：{spec_txt}；判定容差为规范外扩 10% 带宽、单点规范外扩 5%）。"
+            "算法本身不限制零点位置，这些零点对抑制的作用需自行确认；"
+            "也可对比 solutions 表里更小 k 那行的零点分布")
+    if any(len(spec) == 3 for spec in specs_hz):
+        warnings.append("抑制频段的最坏点见 verify_rows（每条规范一行，401 点网格复核）；"
+                        "如需按某一具体频率校核，可直接传该频率的单点规范")
+    if q_unloaded is not None:
+        warnings.append("pass_max_db 是含 Q 损耗的通带最大衰减（根左移模型，d_loss=1/(q_unloaded*fbw)，"
+                        "中心插损约 4.343*N*d_loss）；插损由 Q 与相对带宽决定，与阶数选择无关")
+
+    return {
+        "success": True,
+        "N": result["N"],
+        "k": result["k"],
+        "zeros_ghz": _zeros_ghz(result["zeros_bandpass_Hz"]),
+        "f0_ghz": _hz_to_ghz(result["f0"]),
+        "fbw": result["FBW"],
+        "passband_ripple_db": result["passband_ripple_dB"],
+        "N_lower_bound_no_zeros": round(result["N_lower_bound_no_zeros"], 3),
+        "stop_note": result.get("stop_note"),
+        "warnings": warnings,
+        "verify_rows": [
+            {"f_ghz": _hz_to_ghz(v["f_Hz"]), "atten_db": v["atten_dB"], "required_db": v["required_dB"]}
+            for v in result.get("verify_rows", [])
+        ],
+        "solutions": [
+            {
+                "k": s["k"],
+                "N": s["N"],
+                "zeros_ghz": _zeros_ghz(s["zeros_bandpass_Hz"]),
+                "min_margin_db": s["min_margin_dB"],
+                "min_atten_db": s["min_atten_dB"],
+                "pass_max_db": s["pass_max_dB"],
+            }
+            for s in result["solutions"]
+        ],
+    }
+
+
+@mcp.tool()
 def wilkinson_marchand_order(
         ratio: float,
         rl_db: float = 15.0,

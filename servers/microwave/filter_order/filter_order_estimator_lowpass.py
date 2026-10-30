@@ -4,7 +4,7 @@
 输入: 通带截止频率 + 阻带抑制点(dB) + 回波损耗 + 谐振器无载Q值
 输出: 阶数 N + 有限传输零点(对称零点对)位置
 
-与带通版 (filter_order_estimator.py) 的差异:
+与带通版 (filter_order_estimator_bandpass.py) 的差异:
   * 频率归一化:  Ω = f / f_p   (通带边 |Ω|=1)
      取代带通的        Ω = (f/f0 - f0/f) / FBW
   * 阻带仅存在于上阻带 (f > f_p), 规范只描述 Ω > 1 一侧

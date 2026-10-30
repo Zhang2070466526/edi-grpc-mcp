@@ -48,6 +48,7 @@ def test_all_tools_registered():
         "fetch_artifact",
         "calculate_transline", "design_wilkinson",
         "filter_order_lowpass", "filter_order_highpass", "filter_order_bandstop",
+        "filter_order_bandpass",
         "wilkinson_marchand_order",
         "export_simulation_report", "run_tr_simulation",
         "run_mixer_simulation",

@@ -24,7 +24,7 @@ from typing import Any
 from servers import mcp
 from servers.utils import error_response, registered_tools
 
-#: 一次列出全部工具名时的上限（84 个工具全名 + 首行 ≈ 6 KB，对 agent 可接受）
+#: 一次列出全部工具名时的上限（88 个工具全名 + 首行 ≈ 6 KB，对 agent 可接受）
 _MAX_NAME_LIST = 120
 
 #: 手写示例：只覆盖「结构复杂 / 高频被问」的工具；其余走自动骨架。
@@ -89,6 +89,11 @@ _EXAMPLES: dict[str, Any] = {
         "f_s2_ghz": 2.2,
         "stopband_specs": 20,                        # 浮点=整段抑制；也可 [[2.1, 2.2, 20]]
         "passband_specs": [2.0, 1, 2.3, 1],          # [f_p1, A_p1, f_p2, A_p2]，须 f_p1<f_s1<f_s2<f_p2
+        "q_unloaded": 500,
+    },
+    "filter_order_bandpass": {
+        "f_p1_ghz": 1.95, "f_p2_ghz": 2.05,
+        "stopband_specs": [[1.85, 35], [2.20, 25]],  # 阻带须在通带两侧
         "q_unloaded": 500,
     },
     "wilkinson_marchand_order": {"ratio": 6, "rl_db": 15},   # rl_db 是正数（隔离度 dB）

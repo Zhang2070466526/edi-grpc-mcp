@@ -11,6 +11,7 @@ import sys
 from servers.microwave.filter_order.tools import (
     filter_order_lowpass,
     filter_order_highpass,
+    filter_order_bandpass,
     filter_order_bandstop,
     wilkinson_marchand_order,
 )
@@ -44,6 +45,81 @@ def test_bandstop_order_and_physical_order():
     # 陷波频率对落在阻带 [2.1, 2.2] 内
     lo, hi = r["notch_freq_pairs_ghz"][0]
     assert 2.1 <= lo <= hi <= 2.2, r
+
+
+def test_bandpass_order_anchor():
+    """通带 1.95~2.05GHz、左 1.85GHz@35dB、右 2.2GHz@25dB → N=4，无零点最优。"""
+    r = filter_order_bandpass(1.95, 2.05, [[1.85, 35.0], [2.20, 25.0]])
+    assert r["success"] is True
+    assert r["N"] == 4
+    assert r["k"] == 0
+    assert r["zeros_ghz"] == []
+    assert math.isclose(r["f0_ghz"], 2.0, rel_tol=1e-3), r
+    # solutions 按 k 递增枚举，k=0/1 均可行且同为 N=4
+    assert [s["k"] for s in r["solutions"]] == [0, 1]
+    # 枚举在 k=2 处因 k>N/2 停止，stop_note 点名原因
+    assert r["stop_note"] and "N/2" in r["stop_note"], r
+
+
+def test_bandpass_rejects_stopband_in_passband():
+    """阻带落在通带内 / f_p2<=f_p1 返回 INVALID_PARAMETERS。"""
+    r = filter_order_bandpass(1.95, 2.05, [[2.0, 35.0]])
+    assert r["error_code"] == "INVALID_PARAMETERS" and "重叠" in r["message"]
+    assert filter_order_bandpass(2.05, 1.95, [[1.85, 35.0]])["error_code"] == "INVALID_PARAMETERS"
+
+
+def test_bandpass_rejects_empty_and_edge_coincident_stopband():
+    """空规范 / 阻带端点恰好落在通带边 → 参数错（不能落到 NO_SOLUTION）。"""
+    r = filter_order_bandpass(1.95, 2.05, [])
+    assert r["error_code"] == "INVALID_PARAMETERS" and "不能为空" in r["message"]
+    for specs, word in (([[1.95, 40.0]], "严格小于"), ([[2.05, 40.0]], "严格大于"),
+                        ([[1.80, 1.95, 40.0]], "严格小于")):
+        r = filter_order_bandpass(1.95, 2.05, specs)
+        assert r["error_code"] == "INVALID_PARAMETERS" and word in r["message"], r
+
+
+def test_bandpass_warns_far_zeros_and_rejects_reversed_band():
+    """逆序抑制频段 → 参数错；零点漂到规范外 / 抑制频段 → warnings 提示；干净算例 warnings 为空。"""
+    r = filter_order_bandpass(1.95, 2.05, [[2.30, 2.10, 30.0]])
+    assert r["error_code"] == "INVALID_PARAMETERS" and "顺序反了" in r["message"], r
+
+    r = filter_order_bandpass(1.9, 2.1, [[1.80, 1.88, 60.0], [2.12, 2.20, 20.0]])
+    assert r["success"] is True, r
+    assert any("不在任何阻带规范范围内" in w for w in r["warnings"]), r["warnings"]
+
+    r = filter_order_bandpass(1.95, 2.05, [[1.85, 35.0], [2.20, 25.0]])
+    assert r["warnings"] == [], r["warnings"]
+
+
+def test_bandpass_with_q_insertion_loss_and_verify_rows():
+    """含 Q 插损应接近 4.343*N*d_loss（此前 s=0 重归一化把它抵消到≈0）；verify_rows 覆盖每条规范。"""
+    specs = [[26.0, 40.0], [27.0, 40.0]]
+    r = filter_order_bandpass(26.4, 26.5, specs, q_unloaded=1000)
+    assert r["success"] is True, r
+    d_loss = 1.0 / (1000.0 * r["fbw"])
+    expected = 4.343 * r["N"] * d_loss
+    got = r["solutions"][0]["pass_max_db"]
+    assert 0.7 * expected <= got <= 1.3 * expected, (got, expected)
+
+    # 无损时 pass_max 应回到纹波量级（不能凭空多出插损）
+    r0 = filter_order_bandpass(26.4, 26.5, specs)
+    assert abs(r0["solutions"][0]["pass_max_db"] - r0["passband_ripple_db"]) < 1e-3, r0["solutions"][0]
+
+    # verify_rows：每条阻带规范一行，且实测衰减 ≥ 要求
+    vr = r["verify_rows"]
+    assert len(vr) == len(specs), vr
+    assert all(v["atten_db"] >= v["required_db"] for v in vr), vr
+
+
+def test_bandpass_no_solution_hint_matches_reason():
+    """NO_SOLUTION 的 hint 必须与 message 同向：通带波纹超限不得再劝改 max_zeros。"""
+    r = filter_order_bandpass(26.4, 26.5, [[26.0, 40.0], [27.0, 40.0]], q_unloaded=500)
+    assert r["error_code"] == "NO_SOLUTION" and "通带波纹" in r["message"], r
+    assert "提高谐振器 Q" in r["hint"] and "增大 max_zeros 无效" in r["hint"], r["hint"]
+
+    r = filter_order_bandpass(1.95, 2.05, [[2.0501, 40.0]], max_zeros=0)
+    assert r["error_code"] == "NO_SOLUTION" and "阻带最紧处" in r["message"], r
+    assert "增大 max_zeros" in r["hint"], r["hint"]
 
 
 def test_wilkinson_marchand_order():

@@ -116,6 +116,7 @@ a = Analysis(
         'servers.microwave.filter_order.filter_order_estimator_lowpass',
         'servers.microwave.filter_order.filter_order_estimator_highpass',
         'servers.microwave.filter_order.filter_order_estimator_bandstop',
+        'servers.microwave.filter_order.filter_order_estimator_bandpass',
 
         # Windows COM（ANSYS 依赖）
         'pythoncom',
