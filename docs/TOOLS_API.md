@@ -1310,6 +1310,31 @@ filter_order_bandstop(f_s1_ghz: float, f_s2_ghz: float, stopband_specs: float | 
 
 ---
 
+### `filter_order_bandpass`
+
+```python
+from servers.microwave.filter_order.tools import filter_order_bandpass
+
+filter_order_bandpass(f_p1_ghz: float, f_p2_ghz: float, stopband_specs: list,
+                      rl_db: float = -20.0, q_unloaded=None, max_zeros: int = 4) -> dict
+```
+
+估计广义切比雪夫带通滤波器的**阶数 N 与有限传输零点**（Cameron N+2 综合 + SLSQP 零点优化）。引入传输零点 k 可降低所需阶数，但受工程约束 `k ≤ N/2`；枚举在该约束被违反时停止，原因写入返回的 `stop_note`。`stopband_specs` 每项 `[f, A]`（抑制点）或 `[f_lo, f_hi, A]`（抑制频段），须落在通带两侧。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `f_p1_ghz` / `f_p2_ghz` | float | 是 | — | 通带下/上边（GHz），`f_p2 > f_p1` |
+| `stopband_specs` | list | 是 | — | 阻带规范，每项 `[f, A]` 或 `[f_lo, f_hi, A]`（须在通带两侧） |
+| `rl_db` | float | 否 | -20.0 | 通带回波损耗（dB，负值） |
+| `q_unloaded` | float | 否 | None | 谐振器无载 Q（None=无损） |
+| `max_zeros` | int | 否 | 4 | 最大有限传输零点数（非对数） |
+
+返回：`{"success": true, "N": 阶数, "k": 零点数, "zeros_ghz": [...], "f0_ghz": 中心频率, "fbw": 相对带宽, "passband_ripple_db": 通带纹波, "N_lower_bound_no_zeros": 无零点阶数下界, "stop_note": 枚举停止原因, "solutions": [{k, N, zeros_ghz, min_margin_db, ...}]}`。
+
+实测锚点：`f_p1=1.95, f_p2=2.05`、阻带 `[[1.85, 35], [2.20, 25]]` → **N=4、k=0**（k=1 时同样 N=4 但阻带裕量更大；k=2 违反 `k ≤ N/2` 停止）。
+
+---
+
 ### `wilkinson_marchand_order`
 
 ```python
@@ -1762,7 +1787,7 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 
 ## Resources & Prompts
 
-除了 Tool（启动时动态统计，当前 87 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
+除了 Tool（启动时动态统计，当前 88 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
 
 ### Resources（7 个）
 

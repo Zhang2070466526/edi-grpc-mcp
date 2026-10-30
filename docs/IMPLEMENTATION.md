@@ -1,8 +1,8 @@
 # EDI gRPC MCP 实现原理与机制
 
-> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 87 个工具的逐类实现，再到 7 个 Resource 与 8 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
+> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 88 个工具的逐类实现，再到 7 个 Resource 与 8 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
 
-> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（87 个工具接口参数/返回）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由请求/响应体）。
+> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（88 个工具接口参数/返回）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由请求/响应体）。
 
 ---
 
@@ -44,7 +44,7 @@
   - `3.6` 日志系统
   - `3.7` Chat 会话与破坏性确认
 
-- **[四、工具实现](#四工具实现)** —— 87 个工具按通信类型分组 + 设计动机
+- **[四、工具实现](#四工具实现)** —— 88 个工具按通信类型分组 + 设计动机
   - `4.1` 工程管理
   - `4.2` 仿真器件
   - `4.3` 仿真
@@ -882,6 +882,7 @@ else:                                 # 两者都没有
 | `design_wilkinson` | 本地 | Chebyshev 变阻综合，微带尺寸委托 `calculate_transline` |
 | `filter_order_lowpass` | 本地 | 广义切比雪夫综合（Cameron N+2）+ SLSQP 零点优化 |
 | `filter_order_highpass` | 本地 | 同低通，Ω=f_p/f 映射（阻带在下侧） |
+| `filter_order_bandpass` | 本地 | 广义切比雪夫带通综合（Cameron N+2）+ SLSQP 零点优化（零点可在两侧） |
 | `filter_order_bandstop` | 本地 | 倒数变换法复用低通核心（物理阶数 = 2N） |
 | `wilkinson_marchand_order` | 本地 | Chebyshev 变阻公式 + 单节三端口精确校验 |
 

@@ -77,7 +77,7 @@ servers/
     tools.py              # 封装 calculate_transline / design_wilkinson
     transline.py          # 4 线型特性阻抗/线宽
     wilkinson_designer.py # 多级威尔金森功分器
-    filter_order/         # 阶数评估（高通/低通/带阻滤波器 + 功分器/巴伦节数）
+    filter_order/         # 阶数评估（高通/低通/带通/带阻滤波器 + 功分器/巴伦节数）
   rf_analysis/            # 射频链路计算（2 个，本地纯计算）
     mixer_spur.py         # analyze_mixer_spur（混频杂散枚举）
     rf_dynamic_range.py   # calculate_rf_dynamic_range（噪声底/灵敏度/动态范围）
@@ -112,7 +112,7 @@ PyPI: https://pypi.org/project/edi-grpc-mcp/  |  当前版本：0.1.11
 
 ## MCP 工具清单
 
-工具总数随版本变化（当前 87 个，以运行时 `/ready` 的 `tool_count` 为准），按功能分 16 类：
+工具总数随版本变化（当前 88 个，以运行时 `/ready` 的 `tool_count` 为准），按功能分 16 类：
 
 | 分类 | 数量 | 说明 |
 |---|---|---|
