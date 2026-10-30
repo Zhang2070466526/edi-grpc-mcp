@@ -35,7 +35,7 @@ def test_instructions_do_not_reference_client_only_tools():
 def test_instructions_cover_simulation_and_report_tools():
     ins = _ins()
     for name in ("run_mixer_simulation", "run_tr_simulation",
-                 "export_simulation_report", "report_artifacts"):
+                 "export_simulation_report", "indicators"):
         assert name in ins, f"instructions 导航缺少 {name}"
 
 

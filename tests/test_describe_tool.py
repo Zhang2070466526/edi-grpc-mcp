@@ -2,7 +2,7 @@
 
 覆盖（对应「参数凑不齐 → 反编译」问题的修复点）：
   ① 已知工具：返回完整 docstring（长度 > 首行）+ 参数表（含数组元素提示）
-  ② 复杂参数（run_mixer_simulation.links）：example 是「可直接照抄」的结构
+  ② 复杂参数（run_mixer_simulation.project）：example 是「可直接照抄」的结构
   ③ 空 name：返回全量工具清单，数量 = 注册表实际数量
   ④ 拼错工具名：TOOL_NOT_FOUND + similar 建议（agent 可自愈）
   ⑤ schema 有 items={} 的参数：必须有 items_hint（否则 agent 无法构造）
@@ -38,19 +38,16 @@ def test_known_tool_returns_full_doc_and_params():
     assert by_name["rl_db"]["default"] == -20.0
 
 
-def test_complex_array_param_has_items_hint_and_example():
-    """links 的 schema items 是 {} —— 必须给 items_hint + 手写示例。"""
+def test_mixer_project_param_has_handwritten_example():
+    """run_mixer_simulation 的 project 是复杂对象参数 —— 必须给手写示例（agent 照抄）。"""
     r = describe_tool("run_mixer_simulation")
     assert r["success"] is True and r["example_source"] == "handwritten"
-    links = next(p for p in r["parameters"] if p["name"] == "links")
-    assert links["type"] == "array"
-    assert "items_hint" in links            # schema 未声明元素结构时的兜底提示
-
     ex = r["example"]
-    assert isinstance(ex["links"], list) and ex["links"]
-    link = ex["links"][0]
-    assert {"name", "direction", "f_rf", "f_if", "bw", "pin", "p_lo", "stages"} <= set(link)
-    assert {"mixer", "lo_port"} <= set(link["stages"][0])
+    assert isinstance(ex["project"], dict) and ex["project"]
+    assert {"name", "epp", "links"} <= set(ex["project"])
+    link = ex["project"]["links"][0]
+    assert {"defaults", "indicators"} <= set(link)
+    assert {"in_port", "out_port", "input_freq_ghz", "input_power_dbm", "lo"} <= set(link["defaults"])
 
 
 def test_empty_name_lists_all_tools():

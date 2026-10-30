@@ -131,6 +131,14 @@ def convert_ep_numeric(results: list) -> list:
     return out
 
 
+class ExeNeedsElevation(Exception):
+    """子进程因清单要求管理员权限而被 Windows 拒绝启动（WinError 740）。"""
+
+    def __init__(self, exe_path: str):
+        super().__init__(f"{Path(exe_path).name} 的清单要求管理员权限，而当前进程不是以管理员身份运行的")
+        self.exe_path = exe_path
+
+
 def run_exe(exe_path: str, args: list[str], timeout_seconds: int) -> dict[str, Any]:
     """运行 exe，返回统一执行记录 {returncode, stdout, stderr, json, json_error}。
 
@@ -147,6 +155,12 @@ def run_exe(exe_path: str, args: list[str], timeout_seconds: int) -> dict[str, A
         result = subprocess.run([exe_path, *args], **kwargs)
     except subprocess.TimeoutExpired:
         raise RuntimeError(f"{Path(exe_path).name} 执行超时（{timeout_seconds} 秒）")
+    except OSError as exc:
+        # WinError 740 = ERROR_ELEVATION_REQUIRED：exe 清单要求管理员，Windows 直接拒绝，
+        # 不会弹 UAC。原样抛 OSError 会让上层只能回一句 "[WinError 740] 请求的操作需要提升"。
+        if getattr(exc, "winerror", None) == 740:
+            raise ExeNeedsElevation(exe_path) from exc
+        raise
 
     stdout = _decode_text(result.stdout).strip()
     stderr = _decode_text(result.stderr).strip()

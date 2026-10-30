@@ -77,7 +77,7 @@
 - `replace_models_from_csv` — ⚠️ 按 CSV 批量替换工程元件模型（影响面大，建议先 get_project_summary 核对）。
 - `replace_port_component` — ⚠️ 将原理图中的端口器件替换为另一种类型（会改变端口）。
 - `replace_schematic_from_file` — ⚠️ 从 .ep 文件整体替换原理图（整图覆盖，原内容丢失）。
-- `run_mixer_simulation` — 执行混频链路仿真（含混频器、LO 本振、上下变频、镜像抑制/本振泄漏）。不含变频的纯链路请用 run_tr_simulation。
+- `run_mixer_simulation` — 执行混频链路仿真（含混频器、LO 本振、上下变频，15 个指标）。不含变频的纯链路请用 run_tr_simulation。
 - `run_tr_simulation` — 跑 TR 收发链路仿真（纯链路：增益/噪声/P−1dB，不含混频器与变频）。有混频/本振/镜像指标请用 run_mixer_simulation。
 - `search_personal_models` — 个人模型库检索（自己导入的件）：按子类列出型号与参数。官方件在公共库，用 search_public_models。
 - `search_public_models` — 公共模型库检索（官方件）：按子类列出型号与参数。自己导入的件在个人库，用 search_personal_models。

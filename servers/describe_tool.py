@@ -32,25 +32,29 @@ _MAX_NAME_LIST = 120
 _EXAMPLES: dict[str, Any] = {
     # ── 独立仿真（三层 JSON，最容易卡住）────────────────────────────
     "run_mixer_simulation": {
-        "epp_path": "C:/Users/<user>/EDI-Workspace/projects/11/11.epp",
-        "links": [
-            {
-                "name": "下变频链路",
-                "direction": "down",
-                "f_rf": [33, 37],
-                "f_if": 3.9,
-                "bw": 0.4,
-                "pin": -30,
-                "p_lo": 4,
-                "channels": [{"name": "CH1", "rf_port": 1, "if_port": 2, "mixer": "MIX1"}],
-                "stages": [
-                    {"mixer": "MIX1", "lo_port": 5, "relation": "diff",
-                     "injection": "low", "f_if": 3.9}
-                ],
-                "simulation": {"max_order": 5, "step": 0.1},
-            }
-        ],
-        "indicators": "变频增益,本振泄漏",
+        "project": {
+            "name": "68",
+            "epp": "C:/Users/<user>/EDI-Workspace/projects/68/68.epp",
+            "links": [
+                {
+                    "switch_bits": [{"instance": "<开关实例名>", "bits": "1"}],
+                    "defaults": {
+                        "in_port": 1,
+                        "out_port": 2,
+                        "input_freq_ghz": [33, 37],
+                        "input_power_dbm": -30,
+                        "lo": [{"freq_ghz": [29.1, 33.1], "power_dbm": 4, "output_bw_ghz": 0.4}],
+                    },
+                    "indicators": [
+                        {"name": "变频增益", "orders": {"FREQ": 5, "LO": 5}},
+                        {"name": "镜像抑制", "frequency_sweep_ghz": {"start": 33, "stop": 37, "step": 0.04},
+                         "orders": {"FREQ": 5, "LO": 5}},
+                    ],
+                }
+            ],
+        },
+        "out_dir": "C:/Users/<user>/edi_tmp/mixer_out",
+        "workers": 10,
     },
     "export_simulation_report": {
         "report": {
