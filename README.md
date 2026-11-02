@@ -80,9 +80,9 @@ MCP_PORT=50026
 MCP_ALLOWED_PROCESSES=       # 可选：默认 hermes_cli.main,edi-agent-service.exe（写死在 settings.py），置空=关闭；配置后只放行「精确匹配」的进程访问 /mcp（整词 token / exe basename / 完整路径）
 ```
 
-自动检测规则：
-- `EDI_PATH`：项目同级找 `EDI.exe` → `EDA-PMDS.exe` → `CAIS.exe`
-- `TURBOCHARTS_PATH`：项目同级找 `turbocharts_app.exe` → `TurboCharts.exe`
+自动检测规则（从 exe/源码目录往上找含 `simulation_tool` 的 EDI 安装根，找不到回退 `C:\Program Files (x86)\EDI`）：
+- `EDI_PATH`：EDI 根下找 `EDI.exe` → `EDA-PMDS.exe` → `CAIS.exe`
+- `TURBOCHARTS_PATH`：EDI 根下找 `turbocharts_app.exe` → `TurboCharts.exe`
 
 ### 启动
 

@@ -141,8 +141,8 @@ PyPI: https://pypi.org/project/edi-grpc-mcp/  |  当前版本：0.1.11
 
 ```
 EDA_GRPC_SERVER=127.0.0.1:50055
-EDI_PATH=C:\Program Files (x86)\EDI\EDI.exe    # 留空自动检测
-TURBOCHARTS_PATH=C:\Program Files (x86)\EDI\turbocharts_app.exe  # 留空自动检测
+EDI_PATH=                                    # 留空自动检测（往上找 EDI 根）
+TURBOCHARTS_PATH=                            # 留空自动检测（往上找 EDI 根）
 MCP_TRANSPORT=streamable-http
 MCP_PORT=50026
 MCP_ALLOWED_PROCESSES=                    # 可选：默认 hermes_cli.main,edi-agent-service.exe（写死在 settings.py），置空=关闭；配置后只放行「精确匹配」白名单的来源进程访问 /mcp

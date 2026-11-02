@@ -976,7 +976,7 @@ get_service_logs(lines: int = 50, keyword: str = "", level: str = "") -> dict
 ```python
 {
     "success": True,
-    "log_file": "C:/Program Files (x86)/EDI/logs/eda_2026-09-03.log",
+    "log_file": "<EDI 根>/logs/eda_YYYY-MM-DD.log",
     "total_lines": 1280,
     "matched_lines": 42,
     "lines": ["...", "..."],
@@ -987,7 +987,7 @@ get_service_logs(lines: int = 50, keyword: str = "", level: str = "") -> dict
 }
 ```
 
-日志路径由 `.env` 的 `EDI_LOG_DIR` 配置，默认 `C:\Program Files (x86)\EDI\logs`。
+日志路径由 `.env` 的 `EDI_LOG_DIR` 配置，默认空 = 自动检测（EDI 根下 `logs`，往上找 EDI 根）。
 
 ---
 
@@ -1865,8 +1865,9 @@ fetch_artifact(file_path: str, ttl_seconds: int = 600) -> dict
 
 ## 独立仿真工具（4 个）
 
-> 直接调用 EDI 安装目录固定子目录下的四个 exe（`settings.simulation_tool_dir`，默认
-> `C:\Program Files (x86)\EDI\simulation_tool`），**不走 gRPC/HTTP**。四个 exe 的 stdout
+> 直接调用 EDI 安装目录固定子目录下的四个 exe（`settings.simulation_tool_dir`，空 = 从
+> exe/源码目录往上找 EDI 根再拼 `simulation_tool`，找不到回退 `C:\Program Files (x86)\EDI`），
+> **不走 gRPC/HTTP**。四个 exe 的 stdout
 > 都是单行 UTF-8 JSON、退出码 0/1，判成败直接看退出码 + JSON 的 success/errors（drawtool 是 status/error_code）。
 
 ### `export_simulation_report`
@@ -1920,7 +1921,7 @@ run_tr_simulation(epp_path: str, links: list, indicators: str = "工作频率,�
 | `links` | list | 是 | — | 链路数组（至少一条），每项 `{name, min_freq, max_freq, input_port, output_port, ...}` |
 | `indicators` | str | 否 | 工作频率,输出增益,噪声系数 | 逗号分隔指标 |
 | `threads` | int | 否 | 5 | 指标并发线程数（正整数） |
-| `edi_path` | str | 否 | "" | EDI 安装目录，默认用固定目录 |
+| `edi_path` | str | 否 | "" | EDI 安装目录，默认往上找 EDI 根 |
 | `ads_path` | str | 否 | "" | ADS 安装目录，为空自动探测 `C:/Program Files/Keysight/ADS*` |
 | `timeout_seconds` | int | 否 | 1800 | 最长等待秒数（多链路 × 多指标跑 ADS 可能超过 10 分钟；上限 3600） |
 
@@ -1940,25 +1941,23 @@ run_tr_simulation(epp_path: str, links: list, indicators: str = "工作频率,�
 ```python
 from servers.simulation_tool import run_mixer_simulation
 
-run_mixer_simulation(epp_path: str, links: list, indicators: str = "变频增益",
-                     threads: int = 5, components: list = None, edi_path: str = "",
-                     ads_path: str = "", timeout_seconds: int = 1800) -> dict
+run_mixer_simulation(project: dict, out_dir: str, workers: int = 10,
+                     turbocharts_exe: str = "", timeout_seconds: int = 1800) -> dict
 ```
 
-跑混频链路仿真并提取各链路电参数（上下变频/多通道/任意级变频；前置：EDI 已启动、ADS 许可可用）。**每次运行自带 PDF/DOCX 报告**（见 `report_artifacts`），无需再调 `export_simulation_report` 重生成 —— 后者（`Report_Exporter`）的指标目录不含混频指标，喂给它会被拒。
+执行混频链路仿真（上下变频/多通道/多级寻路，15 个指标）。前置：EDI 已启动（gRPC 127.0.0.1:50055）、网表 netlist.log 与器件库 component.json 在 epp 同目录。**新版不生成 PDF/DOCX 报告**，直接读返回的 indicators / artifacts。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
-| `epp_path` | str | 是 | — | .epp 工程绝对路径（同目录需有 schematics/main/schematic.ep） |
-| `links` | list | 是 | — | 混频链路数组（至少一条），每项 `{name, direction, f_rf, f_if, bw, pin, p_lo, ...}`，详见 exe 说明文档 |
-| `indicators` | str | 否 | 变频增益 | 逗号分隔指标（变频增益/增益平坦度/带内杂散/本振泄漏/镜像抑制/输入P−1dB/输出P−1dB/Psat/变频噪声系数） |
-| `threads` | int | 否 | 5 | 指标并发线程数（正整数） |
-| `components` | list | 否 | None | 器件选型 JSON 数组（可选） |
-| `edi_path` | str | 否 | "" | EDI 安装目录，默认用固定目录 |
-| `ads_path` | str | 否 | "" | ADS 安装目录，为空自动探测 `C:/Program Files/Keysight/ADS*` |
+| `project` | dict | 是 | — | 参数表 `{name, epp, links}`；links[i] = {switch_bits?, defaults, indicators} |
+| `out_dir` | str | 是 | — | 结果目录（response.json / indicator_results / runs / figs 落这里） |
+| `workers` | int | 否 | 10 | 并发进程数；EDI 不稳定时降 5 |
+| `turbocharts_exe` | str | 否 | "" | turbocharts 路径，默认用 MCP 自动探测（往上找 EDI 根） |
 | `timeout_seconds` | int | 否 | 1800 | 最长等待秒数（上限 3600） |
 
-返回结构同 `run_tr_simulation`（`simulation_path` / `results` / `errors` / `artifacts`）。
+`project.links[i].defaults` = `{in_port, out_port, input_freq_ghz, input_power_dbm, lo:[{freq_ghz, power_dbm, output_bw_ghz?}]}`；`indicators` 是 15 个指标之一带各自字段（详见 `servers/simulation_tool/Mixer_Simulator使用说明.md`）。
+
+返回：`{"success": True, "out_dir": "...", "status": "ok", "condition_count": N, "indicators": [...], "failures": [...], "artifacts": [...]}`。
 
 ---
 

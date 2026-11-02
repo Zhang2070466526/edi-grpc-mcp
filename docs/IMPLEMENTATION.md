@@ -421,7 +421,7 @@ CST 工具不走 ANSYS COM，用 CST 官方接口（`servers/cst/cst_api.py`，�
 | `mcp_extra_allowed_hosts` | 空 | 手工补 allowed_hosts（看到 421 才需配） |
 | `mcp_probe_enabled` | `True` | 进程探针中间件开关 |
 | `edi_path` / `turbocharts_path` / `aedt_path` | 空 | 空 = 自动检测 |
-| `edi_log_dir` | `C:\Program Files (x86)\EDI\logs` | EDI 日志目录 |
+| `edi_log_dir` | 空 | EDI 日志目录（空 = 自动检测，EDI 根下 logs） |
 | `llm_api_key` / `llm_base_url` / `llm_model` | 空 | Chat 的 LLM 配置 |
 | `vision_*` | 空 | 视觉分析（独立于 Chat） |
 
@@ -862,7 +862,8 @@ else:                                 # 两者都没有
 ### 4.10 独立仿真工具（固定目录 exe，不走 gRPC/HTTP）
 
 直接调用 EDI 安装目录 `simulation_tool/` 下的四个独立 exe（`settings.simulation_tool_dir`，
-默认 `C:\Program Files (x86)\EDI\simulation_tool`）；四个 exe 的 stdout 都是**单行 UTF-8 JSON**、
+空 = 从 exe/源码目录往上找 EDI 根再拼 `simulation_tool`，找不到回退 `C:\Program Files (x86)\EDI`）；
+四个 exe 的 stdout 都是**单行 UTF-8 JSON**、
 退出码 0/1 ⇒ 判成败看退出码 + JSON 里的 `success`/`errors`（与 turbocharts 的 rc 恒 0 不同）。
 
 | 工具 | exe | 通信 | 说明 |
