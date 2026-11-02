@@ -19,13 +19,41 @@ from servers.settings import get_settings
 _logger = logging.getLogger("simulation_tool")
 
 _settings = get_settings()
-_SIM_TOOL_DIR = Path(_settings.simulation_tool_dir)
+
+
+def _find_edi_root() -> str:
+    """打包（frozen）下从 exe 目录往上找 EDI 安装根（含 simulation_tool 子目录）。
+
+    打包后 exe 部署在 EDI 根的任意深度（如 EDI\\edi-agent\\service\\optional-mcps\\edi-mcp），
+    往上逐级找 simulation_tool 目录即可定位 EDI 根，不必硬编码 C:\\Program Files (x86)\\EDI。
+    只在 frozen 下启用：源码态仓库自身就有 servers/simulation_tool 目录会误判，
+    故源码态返回空串，交给调用方回退硬编码。
+    """
+    if not getattr(sys, "frozen", False):
+        return ""
+    start = Path(sys.executable).resolve().parent
+    for d in (start, *start.parents):
+        if (d / "simulation_tool").is_dir():
+            return str(d)
+    return ""
+
+
+_HARDCODED_EDI_ROOT = r"C:\Program Files (x86)\EDI"
+
+_configured = (_settings.simulation_tool_dir or "").strip()
+if _configured:
+    _SIM_TOOL_DIR = Path(_configured)
+    EDI_INSTALL_DIR = str(_SIM_TOOL_DIR.parent)
+else:
+    # 自动检测：往上找 EDI 根，找不到回退硬编码
+    _root = _find_edi_root() or _HARDCODED_EDI_ROOT
+    EDI_INSTALL_DIR = _root
+    _SIM_TOOL_DIR = Path(_root) / "simulation_tool"
+
 REPORT_EXPORTER_PATH = str(_SIM_TOOL_DIR / "simulation_report" / "Report_Exporter.exe")
 DRAWTOOL_PATH = str(_SIM_TOOL_DIR / "simulation_report" / "drawtool.exe")
 TR_SIMULATOR_PATH = str(_SIM_TOOL_DIR / "tr_simulation" / "TR_Simulator.exe")
 MIXER_SIMULATION_PATH = str(_SIM_TOOL_DIR / "mixer_simulation" / "mixer_simulation.exe")
-# --edi 传 EDI 安装目录（simulation_tool 的上一级）
-EDI_INSTALL_DIR = str(_SIM_TOOL_DIR.parent)
 
 # ADS 安装目录候选（--ads 为空时按此顺序探测）
 _ADS_GLOB_CANDIDATES = (
@@ -131,12 +159,18 @@ def convert_ep_numeric(results: list) -> list:
     return out
 
 
-class ExeNeedsElevation(Exception):
-    """子进程因清单要求管理员权限而被 Windows 拒绝启动（WinError 740）。"""
+class ExeNeedsElevation(OSError):
+    """子进程因清单要求管理员权限而被 Windows 拒绝启动（WinError 740）。
+
+    继承 OSError 并保留 winerror=740，让老的 `except OSError` + winerror 判断
+    （如 xy_chart 的 drawtool 提权分支）继续识别，同时 mixer 用更具体的
+    `except ExeNeedsElevation` 命中。
+    """
 
     def __init__(self, exe_path: str):
         super().__init__(f"{Path(exe_path).name} 的清单要求管理员权限，而当前进程不是以管理员身份运行的")
         self.exe_path = exe_path
+        self.winerror = 740
 
 
 def run_exe(exe_path: str, args: list[str], timeout_seconds: int) -> dict[str, Any]:

@@ -307,7 +307,7 @@ def run_mixer_simulation(
             详见 Mixer_Simulator使用说明.md 的参数表章节。
         out_dir: 结果目录（建议每次用新目录）；response.json / indicator_results / runs / figs 都落这里。
         workers: 并发进程数（正整数），默认 10；EDI 不稳定时降到 5。
-        turbocharts_exe: turbocharts_app.exe 路径，默认空 = 由 exe 自动探测（C:/Program Files (x86)/EDI）。
+        turbocharts_exe: turbocharts_app.exe 路径，默认空 = 用 MCP 自动探测的 turbocharts（从 exe 往上找 EDI 根）。
         timeout_seconds: 最长等待秒数，默认 1800（上限 3600）。
 
     Returns:
@@ -358,13 +358,15 @@ def run_mixer_simulation(
     if isinstance(workers, bool) or not isinstance(workers, int) or workers < 1:
         return error_response("INVALID_PARAMETERS", "workers 必须是正整数")
 
-    # 3. turbocharts 覆盖路径（显式给了就校验存在，没给交给 exe 自动探测）
+    # 3. turbocharts 覆盖路径：显式给了就校验存在；没给用 MCP 自动探测的 TURBOCHARTS_PATH
+    #    （走 _find_edi_root 往上找），别交给 exe 的硬编码 C:\Program Files (x86)\EDI 兜底。
     if turbocharts_exe:
         tcx = normalize_dir(turbocharts_exe)
         if not Path(tcx).is_file():
             return error_response("PATH_NOT_FOUND", f"turbocharts_exe 不存在: {tcx}")
     else:
-        tcx = ""
+        from servers.eda.config import TURBOCHARTS_PATH  # noqa: E402 惰性导入，避免 eda.config↔simulation_tool 循环
+        tcx = normalize_dir(TURBOCHARTS_PATH)
 
     # 4. 前置预检：EDI gRPC 必须就绪（exe 固定连 127.0.0.1:50055 取网表/跑仿真）
     host, sep, port = EDA_GRPC_SERVER.rpartition(":")

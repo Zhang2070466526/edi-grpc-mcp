@@ -15,6 +15,7 @@ from typing import Any
 import grpc
 
 from servers.eda.config import EDA_GRPC_SERVER, EDI_PATH
+from servers.simulation_tool.config import EDI_INSTALL_DIR
 from servers.settings import get_settings
 from servers.eda.grpc_client import get_cached_channel, is_queue_busy, MAX_RECEIVE_MB
 from servers.utils import error_response, tcp_port_open
@@ -136,7 +137,7 @@ def get_service_logs(
     level = (level or "").strip().upper()
     keyword = (keyword or "").strip()
 
-    log_dir = Path(get_settings().edi_log_dir).expanduser()
+    log_dir = Path(get_settings().edi_log_dir or f"{EDI_INSTALL_DIR}/logs").expanduser()
     today_log = log_dir / f"eda_{datetime.date.today():%Y-%m-%d}.log"
 
     # 每次调用都动态检测：优先读今天的日志；当天不存在则回退到最新的一份
