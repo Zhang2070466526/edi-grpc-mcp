@@ -4,8 +4,7 @@
 
 * MCP `tools/list` 只暴露 docstring **首行**（`Tool.description`，例：`filter_order_lowpass`
   只有 24 字），完整 docstring（603 字，含「用法」、Args、Returns）agent 看不到。
-* 参数级 description 已由 FastMCP 从 docstring 的 `Args:` 自动生成（81/84 个工具非空），
-  所以**简单参数能填对**。
+* 参数级 description 已由 FastMCP 从 docstring 的 `Args:` 自动生成，所以**简单参数能填对**。
 * 但 `list` 型参数的元素结构是 `{"items": {}}` —— `run_mixer_simulation.links` 要
   `name/direction/f_rf/f_if/bw/pin/p_lo` + `stages[]`，`filter_order_*` 的
   `stopband_specs` 要 `[f, A]` 或 `[f_lo, f_hi, A]`，schema 里一个字都没有 ⇒
@@ -24,7 +23,7 @@ from typing import Any
 from servers import mcp
 from servers.utils import error_response, registered_tools
 
-#: 一次列出全部工具名时的上限（88 个工具全名 + 首行 ≈ 6 KB，对 agent 可接受）
+#: 一次列出全部工具名时的上限（工具全名 + 首行 ≈ 6 KB，对 agent 可接受）
 _MAX_NAME_LIST = 120
 
 #: 手写示例：只覆盖「结构复杂 / 高频被问」的工具；其余走自动骨架。
@@ -369,7 +368,7 @@ def describe_tool(name: str = "") -> dict:
     """查工具参数/示例，或按能力关键词找工具（留空 name=列全部）；先查它，别猜也别读源码。
 
     用法：
-    - `describe_tool("run_mixer_simulation")` → 完整 docstring、参数表（含数组元素结构提示）、
+    - `describe_tool("calculate_transline")` → 完整 docstring、参数表（含数组元素结构提示）、
       可直接照抄的 example。
     - `describe_tool("微带线宽")` / `describe_tool("滤波器阶数")` → **按能力检索**：返回候选工具
       （带分数）与最匹配那个的完整说明。不知道工具名时用这条，别自己写脚本算。

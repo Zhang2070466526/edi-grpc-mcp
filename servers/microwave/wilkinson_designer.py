@@ -347,6 +347,8 @@ def design_wilkinson(h_mm, er, f0_GHz, n_sections, z0=50.0, fbw=None, ripple_db=
     返回：
         dict 包含所有设计结果
     """
+    if not isinstance(n_sections, int) or isinstance(n_sections, bool) or n_sections < 1:
+        raise ValueError(f"n_sections 必须是 >=1 的整数（当前 {n_sections!r}）")
     # ---- 1. 确定带宽 ----
     if fbw is None:
         if ripple_db is None:

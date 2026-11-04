@@ -184,6 +184,8 @@ def fetch_artifact(file_path: str, ttl_seconds: int = 600) -> dict[str, Any]:
         {"success": True, "url": "...", "file_name": "...",
          "size_bytes": N, "sha256": "...", "expires_in": N}
     """
+    if is_network_path(file_path):
+        return error_response("INVALID_PATH", "不支持网络路径（UNC/URL），请用本机文件")
     p = Path(file_path).expanduser().resolve()
     if not p.is_file():
         return error_response("FILE_NOT_FOUND", f"文件不存在: {p}")

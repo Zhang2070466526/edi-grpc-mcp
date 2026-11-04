@@ -852,7 +852,8 @@ def turbocharts_convert(
         warnings.append(f"引擎原文日志落盘失败：{exc}（原文仍见返回的 stderr / command_runs）")
 
     resp: dict[str, Any] = {
-        "success": result.returncode == 0,
+        # 引擎 rc 恒为 0（曲线不存在/无数据也 rc=0），判成败看 img_generated 而非 return_code
+        "success": img_generated,
         "return_code": result.returncode,
         "command": " ".join(cmd_img),
         "stdout": (result.stdout or "").strip(),

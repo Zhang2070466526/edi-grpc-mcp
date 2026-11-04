@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 import shutil
 import tempfile
@@ -67,8 +68,8 @@ _DEFAULTS_REQUIRED: tuple[str, ...] = ("in_port", "out_port", "input_freq_ghz", 
 
 
 def _is_num(v: Any) -> bool:
-    """有限数值（排除 bool）。"""
-    return isinstance(v, (int, float)) and not isinstance(v, bool)
+    """有限数值（排除 bool、NaN、Inf）。"""
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
 
 
 def _range_reason(value: Any) -> str:
@@ -167,7 +168,13 @@ def _check_project(project: dict) -> dict | None:
                     return _invalid(f"{loc}.bits", f"只能含 0/1 的 Bits 字符串（当前 {bits!r}）")
 
         # ---- indicators：名称 + 必填字段（指标内或 defaults 里给）+ peer_link 形状 ----
-        for ind in (link.get("indicators") or []):
+        indicators = link.get("indicators")
+        if indicators is None:
+            indicators = []
+        if not isinstance(indicators, list):
+            return _invalid(f"{label}.indicators",
+                            f"必须是数组（当前 {indicators!r}），受害链路可为空数组")
+        for ind in indicators:
             if not isinstance(ind, dict) or not ind.get("name"):
                 return error_response(
                     "LINK_JSON_INVALID",

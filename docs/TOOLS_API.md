@@ -1543,6 +1543,8 @@ CSV 行为：SP 多条曲线一次导出多列；**HB 多条曲线引擎只导�
 }
 ```
 
+`success` 等于 `img_generated`（引擎 rc 恒为 0，曲线不存在/无数据也 rc=0），判成败看 `success` / `img_generated`，不要看 `return_code`。
+
 ---
 
 ### `compare_simulation_results`
@@ -1672,7 +1674,7 @@ list_simulation_components(
 ```
 
 本地读取原理图，列出全部器件（SP/HB/XDB/Var/Sweep/P_nToneG/TermG 等）及其当前参数。
-已知类型做 wire→public 映射；其他类型返回原始 paramsinfo。支持按类型过滤、名称模糊匹配、原理图过滤和分页。
+已知类型做 wire→public 映射；其他类型返回原始 paramsinfo。支持按类型过滤、名称模糊匹配、原理图过滤和分页。`limit=0` 表示返回全部（与 `list_schematic_components` 一致），`limit>0` 时钳到最大 500。
 
 ### `create_simulation_component`
 
@@ -1918,7 +1920,7 @@ run_tr_simulation(epp_path: str, links: list, indicators: str = "工作频率,�
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `epp_path` | str | 是 | — | .epp 工程绝对路径（同目录需有 schematics/main/schematic.ep） |
-| `links` | list | 是 | — | 链路数组（至少一条），每项 `{name, min_freq, max_freq, input_port, output_port, ...}` |
+| `links` | list | 是 | — | 链路数组（至少一条），每项 `{name, min_freq, max_freq, input_port, output_port, ...}`；跨字段约束 `min_freq<max_freq`、`input_port≠output_port`、`phase_step/atten_step>0` 由 MCP 层前置校验 |
 | `indicators` | str | 否 | 工作频率,输出增益,噪声系数 | 逗号分隔指标 |
 | `threads` | int | 否 | 5 | 指标并发线程数（正整数） |
 | `edi_path` | str | 否 | "" | EDI 安装目录，默认往上找 EDI 根 |

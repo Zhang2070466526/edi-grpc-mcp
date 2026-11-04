@@ -389,12 +389,14 @@ def analyze_mixer_spur(
         return error_response("INVALID_PARAMETERS", "mixers 每项必须是对象")
     if not isinstance(if_candidates_mhz, list) or not if_candidates_mhz:
         return error_response("INVALID_PARAMETERS", "if_candidates_mhz 必须是非空数组")
-    if not all(isinstance(x, (int, float)) for x in if_candidates_mhz):
-        return error_response("INVALID_PARAMETERS", "if_candidates_mhz 每项必须是数值")
+    if not all(isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+               for x in if_candidates_mhz):
+        return error_response("INVALID_PARAMETERS", "if_candidates_mhz 每项必须是有限数值")
     if_candidates = list(if_candidates_mhz)
     chart_candidates = list(chart_if_candidates_mhz or [])
-    if not all(isinstance(x, (int, float)) for x in chart_candidates):
-        return error_response("INVALID_PARAMETERS", "chart_if_candidates_mhz 每项必须是数值")
+    if not all(isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+               for x in chart_candidates):
+        return error_response("INVALID_PARAMETERS", "chart_if_candidates_mhz 每项必须是有限数值")
     direction = (direction or "receive").lower()
     if direction not in _DIRECTIONS:
         return error_response("INVALID_PARAMETERS",

@@ -400,6 +400,8 @@ def do_export_farfield(job):
             if prj.modeler.run_solver() is False:
                 raise RuntimeError("run_solver returned False")
             prj.save()
+        if '"' in output_dir:
+            raise RuntimeError("output_dir 不能包含引号（会破坏 VBA 字符串）")
         vba = _FARFIELD_VBA.replace("OUTDIR", output_dir)
         if prj.schematic.execute_vba_code(vba) is False:
             raise RuntimeError("export_farfield: execute_vba_code returned False")

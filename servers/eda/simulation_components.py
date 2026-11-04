@@ -573,9 +573,7 @@ def list_simulation_components(
     可列出所有器件（SP/HB/XDB/Var/Sweep/P_nToneG/TermG 等）。
     已知类型做 wire→public 映射；其他类型返回原始 paramsinfo。
 
-    定位：本地磁盘读已保存工程，支持分页/过滤/summary_only。需要 gRPC 实时查全部器件
-    用 list_schematic_components；需要查网表看不到的实例名（如 Var）用
-    tr_query_schematic_components。
+    定位：本地磁盘读已保存工程，支持分页/过滤/summary_only。
     读取磁盘文件，EDI 未保存的修改不会反映到结果中。
     字段包含：component_type/instance_name/component_id/model_id/pin_count/parameter_count/schematic/parameters。
 
@@ -588,11 +586,10 @@ def list_simulation_components(
         name_contains: 按实例名模糊匹配（可选）。
         schematic_name: 只读指定原理图（可选，默认遍历全部原理图）。
         offset: 分页偏移（默认 0）。
-        limit: 每页数量（默认 100，最大 500）。
+        limit: 每页数量（默认 100，最大 500；0 = 全部）。
         include_hidden: 是否包含 Visible=false 的隐藏参数（默认 False）。
         summary_only: 为 True 时每个器件只保留 component_type/instance_name/model_id/pin_count，
-            裁掉 parameters 等大字段（用于选型/清单等只需器件标识的场景）；需要完整参数时不传此参数或用
-            get_schematic_component_info 单点查询。
+            裁掉 parameters 等大字段（用于选型/清单等只需器件标识的场景）；需要完整参数时不传此参数或单独查询该器件。
     """
     try:
         reader = ProjectReader(project_path)
@@ -612,8 +609,10 @@ def list_simulation_components(
 
     total = len(components)
     offset = max(0, offset)
-    limit = max(1, min(limit, 500))
-    paged = components[offset:offset + limit]
+    if limit > 0:
+        paged = components[offset:offset + min(limit, 500)]
+    else:
+        paged = components[offset:]  # limit=0 = 全部（与 list_schematic_components 一致）
 
     if summary_only:
         paged = [{

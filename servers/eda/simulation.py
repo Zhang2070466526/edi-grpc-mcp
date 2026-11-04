@@ -40,7 +40,7 @@ _logger = logging.getLogger("eda.simulation")
 from proto import ecserver_pb2
 from servers.eda.grpc_client import call_grpc, call_project_grpc
 from servers.eda.config import require_project_path
-from servers.utils import error_response, submitted_response, require_file
+from servers.utils import error_response, submitted_response, require_file, queue_full_response
 from servers import mcp
 
 # -- 异步仿真任务注册表 --
@@ -289,8 +289,8 @@ def start_simulation_async(
         pending = sum(1 for t in _sim_tasks.values()
                       if t.get("status") in ("QUEUED", "ACCEPTED", "RUNNING"))
         if pending >= 8:
-            return error_response("SIMULATION_QUEUE_FULL",
-                              f"当前已有 {pending} 个仿真任务在进行或排队，请稍后重试")
+            return queue_full_response("SIMULATION_QUEUE_FULL",
+                                       message=f"当前已有 {pending} 个仿真任务在进行或排队，请稍后重试")
 
         _sim_tasks[task_id] = {
             "task_id": task_id,
@@ -329,7 +329,7 @@ def get_simulation_async_status(task_id: str) -> dict[str, Any]:
     用法："查一下 task_id 为 xxx 的仿真进度"、"仿真跑完了吗"
 
     Args:
-        task_id: start_simulation_async 返回的 task_id。
+        task_id: 异步仿真任务 ID（由异步启动接口返回）。
 
     Returns:
         {"success": bool, "completed": bool, "task_success": bool|null,
@@ -388,7 +388,7 @@ def get_simulation_async_result(task_id: str) -> dict[str, Any]:
     用法："仿真结果出来了吗"、"把 task_id xxx 的完整日志给我"
 
     Args:
-        task_id: start_simulation_async 返回的 task_id。
+        task_id: 异步仿真任务 ID（由异步启动接口返回）。
 
     Returns:
         完成且成功：{"success": True, "completed": True, "outcome_known": True,

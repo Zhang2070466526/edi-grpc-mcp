@@ -119,7 +119,11 @@ def export_simulation_report(
         return error_response("INVALID_REPORT_JSON", f"report 含无法 JSON 序列化的值: {exc}")
     tmp_dir = Path(tempfile.mkdtemp(prefix="edi_report_"))
     tmp_json = tmp_dir / "report.json"
-    tmp_json.write_text(payload, encoding="utf-8")
+    try:
+        tmp_json.write_text(payload, encoding="utf-8")
+    except OSError as exc:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        return error_response("INVALID_REPORT_JSON", f"写临时 JSON 失败: {exc}")
 
     args = ["--json-file", str(tmp_json), "--output", str(out_dir)]
     if schematic:

@@ -389,9 +389,11 @@ class TranslineBase:
 
     # -- 通用物理量 -------------------------------------------------------
     def _skin_depth(self):
-        """趋肤深度 1/sqrt(pi*f*murc*mu0*sigma)。"""
-        return 1.0 / math.sqrt(math.pi * self._p[P.FREQUENCY] * self._p[P.MURC]
-                               * MU0 * self._p[P.SIGMA])
+        """趋肤深度 1/sqrt(pi*f*murc*mu0*sigma)；频率/磁导率/电导率为 0 时返回 inf（退化，交由状态层标错）。"""
+        denom = math.pi * self._p[P.FREQUENCY] * self._p[P.MURC] * MU0 * self._p[P.SIGMA]
+        if denom <= 0.0:
+            return math.inf
+        return 1.0 / math.sqrt(denom)
 
     @staticmethod
     def _unit_propagation_delay(eps_eff):

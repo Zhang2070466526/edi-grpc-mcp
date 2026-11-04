@@ -61,9 +61,17 @@ def _stopband_hz(specs):
         if not math.isfinite(A) or A <= 0:
             raise ValueError("阻带抑制 A 必须是大于 0 的 dB 值")
         if len(s) == 2:
-            out.append((float(s[0]) * _GHZ, A))
+            f = float(s[0])
+            if not math.isfinite(f) or f <= 0:
+                raise ValueError("阻带频率必须是大于 0 的有限数值")
+            out.append((f * _GHZ, A))
         else:
-            out.append((float(s[0]) * _GHZ, float(s[1]) * _GHZ, A))
+            f_lo, f_hi = float(s[0]), float(s[1])
+            if not math.isfinite(f_lo) or not math.isfinite(f_hi) or f_lo <= 0 or f_hi <= 0:
+                raise ValueError("阻带频率必须是大于 0 的有限数值")
+            if f_lo >= f_hi:
+                raise ValueError("阻带频段顺序反了：要求 f_lo < f_hi（写成 [下边, 上边, 抑制dB]）")
+            out.append((f_lo * _GHZ, f_hi * _GHZ, A))
     return out
 
 

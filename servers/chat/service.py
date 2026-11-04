@@ -663,7 +663,10 @@ class ChatService:
                         if tool_name == "show_image" and act.status == "success":
                             img_path = validation_result.get("image_path", "")
                             if img_path:
-                                image_url = register_image_url(img_path)
+                                try:
+                                    image_url = register_image_url(img_path)
+                                except (OSError, ValueError):
+                                    image_url = ""  # 注册失败不阻断对话，只少一张预览
                                 if image_url:
                                     media.append({"type": "image", "url": image_url, "name": Path(img_path).name})
 

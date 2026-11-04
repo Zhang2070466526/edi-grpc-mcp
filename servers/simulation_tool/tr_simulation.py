@@ -14,7 +14,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from servers import mcp
 from servers.simulation_tool.config import (
@@ -190,6 +190,19 @@ class TrLink(BaseModel):
             raise ValueError("name 不能为空")
         return value
 
+    @model_validator(mode="after")
+    def _check_cross_field_constraints(self):
+        """跨字段约束（文档承诺但 field_validator 覆盖不到的）：频段/端口/步进关系。"""
+        if self.min_freq >= self.max_freq:
+            raise ValueError(f"min_freq({self.min_freq}) 必须 < max_freq({self.max_freq})")
+        if self.input_port == self.output_port:
+            raise ValueError(f"input_port 与 output_port 不能相同（当前都是 {self.input_port}）")
+        if self.phase_step <= 0:
+            raise ValueError(f"phase_step 必须是正数（当前 {self.phase_step}）")
+        if self.atten_step <= 0:
+            raise ValueError(f"atten_step 必须是正数（当前 {self.atten_step}）")
+        return self
+
 
 def _parse_indicators(indicators: str) -> list[str]:
     """按逗号拆指标名（去空白、保序去重）。"""
@@ -336,7 +349,6 @@ def run_tr_simulation(
         ``report_artifacts``，message 会写明「已生成仿真报告：…」。
         注意：**TR_Simulator 本身不生成报告**（只出 PNG/CSV/RAW 供独立报告工具用），
         所以正常情况下 report_artifacts 为空；需要正式报告请再调 export_simulation_report。
-        混频链路不同 —— run_mixer_simulation 每次必生成 PDF/DOCX，直接交付即可。
     """
     # 1. epp 存在
     resolved_epp, err = require_file(epp_path, (".epp",))
