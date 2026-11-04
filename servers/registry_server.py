@@ -10,6 +10,7 @@ from starlette.responses import PlainTextResponse
 
 from servers import mcp  # noqa: E402 — 全局 MCP 实例
 from servers.metrics import get_tool_metrics
+from servers.settings import get_settings
 from servers.utils import server_uptime_seconds
 
 # 导入工具模块即可触发 @mcp.tool() 装饰器注册
@@ -52,6 +53,84 @@ trim_tool_descriptions(mcp)
 # 嵌套模型（如 run_tr_simulation.links 的 TrLink）会被 pydantic 生成成 $ref + $defs；
 # 扁平成自包含 schema，客户端/模型不必跟 $ref 就能看到元素字段。
 inline_tool_schemas(mcp)
+
+
+# ── 内部工具过滤（对智能体彻底不可见，代码保留、可逆）──────────────────────────
+# 这里列的是「依赖 EDI gRPC(127.0.0.1:50055)」的工具，即 grpc接口调用.md 里
+# ExternalCall 任务类型的 MCP 包装。开关 MCP_HIDE_INTERNAL_TOOLS=1 时下架，
+# 智能体在 tools/list、describe_tool（含相似名建议）、Chat、按名调用都感知不到。
+# 名单去掉名字（或开关回 0）重启即恢复，工具函数本体不删除。
+_INTERNAL_TOOLS: frozenset[str] = frozenset({
+    # 工程管理
+    "create_project", "open_edi_project", "close_edi_project",
+    "list_schematic_components", "get_schematic_component_info",
+    "get_components_static_params", "batch_query_component",
+    # 仿真
+    "simulate_netlist", "simulate_netlist_with_ads", "simulate_anti_burnout",
+    "start_simulation_async",
+    # 仿真器件
+    "create_simulation_component", "update_simulation_component",
+    "replace_port_component", "delete_simulation_component",
+    "set_component_active_state", "generate_schematic_from_netlist",
+    "replace_schematic_from_file", "attach_out_component",
+    # 网表/截图/CSV
+    "export_project_netlist", "capture_schematic", "export_schematic_components_to_csv",
+    # 信号链（本地网表优先，gRPC 兜底）
+    "get_signal_chain",
+    # 模型替换 / 模型库 / 软 IP
+    "replace_models_from_csv", "get_model_category_params",
+    "search_public_models", "search_personal_models",
+    "add_performance_component", "design_schematic_topology", "design_chip",
+    # 工作区 / 原理图扩展
+    "create_workspace", "switch_workspace", "get_current_workspace",
+    "list_ideal_components", "add_ideal_component", "clear_schematic", "add_wire",
+    # 独立仿真 exe（TR 收发链路 / 混频链路，需提权 + ADS）
+    "run_tr_simulation", "run_mixer_simulation",
+    # 其它 exe 工具 + EDI 启动/日志诊断
+    "draw_chart", "export_simulation_report", "turbocharts_convert",
+    "get_service_logs", "launch_edi",
+    # gRPC 通道状态 + 异步仿真查询（start_simulation_async 的查进度/取结果配套）
+    "get_service_status", "get_simulation_async_status", "get_simulation_async_result",
+    "list_eda_tasks",
+    # RAW 曲线查询/对比（turbocharts 相关）
+    "list_result_curves", "compare_simulation_results",
+})
+
+
+# 与 gRPC 通信相关的 prompt（引导调用上面这些 gRPC 工具的流程模板）
+_INTERNAL_PROMPTS: frozenset[str] = frozenset({
+    "configure_simulation_component", "select_component",
+    "analyze_signal_chain", "run_and_review_simulation", "assess_anti_burnout",
+    "create_simulation_report", "troubleshoot_edi_error",
+})
+
+# 与 gRPC 通信相关的 resource（错误码 / 仿真器件参数 / 操作规则 / 服务状态 / 工程目录）
+# 以及配套已下架工具的指南（TR 仿真 / RAW 转图）
+_INTERNAL_RESOURCES: frozenset[str] = frozenset({
+    "edi://reference/error-codes",
+    "edi://reference/simulation-components",
+    "edi://reference/operation-guide",
+    "edi://service/status",
+    "edi://service/overview",
+    "edi://projects",
+    "edi://reference/tr-simulation-guide",
+    "edi://reference/turbocharts-guide",
+})
+
+
+def _hide_internal_tools() -> None:
+    """按开关下架内部工具/prompt/resource（从注册表 pop，代码保留、可逆）。"""
+    if not get_settings().mcp_hide_internal_tools:
+        return
+    for name in _INTERNAL_TOOLS:
+        mcp._tool_manager._tools.pop(name, None)
+    for name in _INTERNAL_PROMPTS:
+        mcp._prompt_manager._prompts.pop(name, None)
+    for name in _INTERNAL_RESOURCES:
+        mcp._resource_manager._resources.pop(name, None)
+
+
+_hide_internal_tools()
 
 # Web 路由
 from servers.chat.routes import ui_page, health_check, chat_endpoint, tool_list, upload_file  # noqa: E402

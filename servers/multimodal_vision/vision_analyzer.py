@@ -196,8 +196,7 @@ def analyze_image(
 
     ⚠️ 结果来自第三方视觉模型，可能出错甚至编造（实测把 EDI 电路原理图识别成
     「16 位行波进位加法器」，并把 16 通道 TR 链路读错）。只作粗看/找线索用，
-    **不得作为工程结论**：拓扑、器件型号、数值读数一律以 EDI 工具
-    （list_schematic_components / get_schematic_component_info / list_result_curves）
+    **不得作为工程结论**：拓扑、器件型号、数值读数一律以 EDI 工程查询工具
     与 turbocharts 导出的 CSV 为准，不要采信本工具输出。
 
     Args:

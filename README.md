@@ -77,12 +77,15 @@ EDI_PATH=                    # 留空自动检测
 TURBOCHARTS_PATH=            # 留空自动检测
 MCP_TRANSPORT=streamable-http
 MCP_PORT=50026
+MCP_HIDE_INTERNAL_TOOLS=0    # 1 = 下架内部 gRPC/仿真工具（对智能体彻底不可见），0 = 全量暴露（默认）
 MCP_ALLOWED_PROCESSES=       # 可选：默认 hermes_cli.main,edi-agent-service.exe（写死在 settings.py），置空=关闭；配置后只放行「精确匹配」的进程访问 /mcp（整词 token / exe basename / 完整路径）
 ```
 
 自动检测规则（从 exe/源码目录往上找含 `simulation_tool` 的 EDI 安装根，找不到回退 `C:\Program Files (x86)\EDI`）：
 - `EDI_PATH`：EDI 根下找 `EDI.exe` → `EDA-PMDS.exe` → `CAIS.exe`
 - `TURBOCHARTS_PATH`：EDI 根下找 `turbocharts_app.exe` → `TurboCharts.exe`
+
+`MCP_HIDE_INTERNAL_TOOLS=1` 时，会把依赖 EDI gRPC(50055) 的工具（及配套的 prompt/resource）从智能体的可见面下架——`tools/list`、`describe_tool`、按名调用都感知不到，但工具代码保留、可逆（改回 0 重启即恢复）。名单见 `servers/registry_server.py` 的 `_INTERNAL_TOOLS` / `_INTERNAL_PROMPTS` / `_INTERNAL_RESOURCES`。
 
 ### 启动
 

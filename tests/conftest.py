@@ -13,6 +13,11 @@ import pytest
 # 让 `import servers` / `import proto` 可用（仓库根加入 sys.path）
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# 测试固定跑在「内部工具不过滤」的全量默认态：`.env` 里可能开了 MCP_HIDE_INTERNAL_TOOLS=1，
+# 而大多数测试假设 88 工具/8 prompt 全量；这里强制覆盖为 0（子进程测试会单独设 1 验证过滤）。
+# os.environ 优先级高于 .env 文件（pydantic-settings 约定），故在此赋值即可覆盖。
+os.environ["MCP_HIDE_INTERNAL_TOOLS"] = "0"
+
 # ── 环境探测（S4：测试可信度分类）──────────────────────────
 # 需要真实 .epp 工程的测试依赖本机参考工程；可用环境变量 EDI_TEST_PROJECT 覆盖。
 REFERENCE_PROJECT = Path(

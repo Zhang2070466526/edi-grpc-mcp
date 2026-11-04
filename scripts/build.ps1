@@ -61,6 +61,7 @@ EDI_PATH=
 TURBOCHARTS_PATH=
 MCP_TRANSPORT=streamable-http
 MCP_PORT=50026
+MCP_HIDE_INTERNAL_TOOLS=0
 # Listen address: 127.0.0.1 = this machine only; 0.0.0.0 = all interfaces (remote).
 # NOTE: the .bat launchers pass --host explicitly (start_local=127.0.0.1, start_remote=0.0.0.0), which overrides this.
 MCP_BIND_HOST=127.0.0.1

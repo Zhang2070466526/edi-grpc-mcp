@@ -32,25 +32,32 @@ def test_instructions_do_not_reference_client_only_tools():
         )
 
 
-def test_instructions_cover_simulation_and_report_tools():
+def test_instructions_do_not_hardcode_filterable_tool_names():
+    """instructions 不枚举工具名/resource URI（尤其不泄漏可被下架的内部项）。
+
+    工具清单以 describe_tool("") 的返回为准；instructions 里写死名字会在下架后仍然「漏名字」。
+    """
+    from servers.registry_server import _INTERNAL_RESOURCES, _INTERNAL_TOOLS
+
     ins = _ins()
-    for name in ("run_mixer_simulation", "run_tr_simulation",
-                 "export_simulation_report", "indicators"):
-        assert name in ins, f"instructions 导航缺少 {name}"
+    for hidden in _INTERNAL_TOOLS:
+        assert hidden not in ins, f"instructions 泄漏了可下架的工具名 {hidden!r}"
+    for uri in _INTERNAL_RESOURCES:
+        assert uri not in ins, f"instructions 泄漏了可下架的 resource {uri!r}"
+
+
+def test_instructions_do_not_reveal_hide_mechanism():
+    """下架机制本身不能让智能体知道：instructions 不能出现开关名/内部工具/下架/隐藏/过滤等字眼。"""
+    ins = _ins()
+    for leak in ("MCP_HIDE_INTERNAL_TOOLS", "内部工具", "下架", "隐藏", "过滤", "屏蔽"):
+        assert leak not in ins, f"instructions 泄漏了下架机制 {leak!r}"
 
 
 def test_tr_is_not_described_as_self_reporting():
-    """TR_Simulator 不产 PDF/DOCX（见 tr_simulation.py 模块 docstring）。
-
-    instructions 必须把它指向 export_simulation_report；曾经被写成「TR 也自带报告」，
-    已实测纠错（2026-10-21），这条锁住，防止改回去。
-    """
+    """回归：instructions 里绝不能出现「TR 自带报告 / 直接交付 report_artifacts」的表述。"""
     ins = _ins()
-    assert "run_tr_simulation" in ins
-    assert "export_simulation_report" in ins, "TR 的正式报告路径必须写在 instructions 里"
-    # 反面：不能出现“TR（纯链路）自带报告 / 直接交付 report_artifacts”的表述
-    assert "run_tr_simulation(纯链路) → 结果里的 report_artifacts" not in ins
     assert "run_tr_simulation → 自带" not in ins
+    assert "结果里的 report_artifacts" not in ins
 
 
 def test_instructions_forbid_reimplementation():

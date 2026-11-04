@@ -420,6 +420,7 @@ CST 工具不走 ANSYS COM，用 CST 官方接口（`servers/cst/cst_api.py`，�
 | `mcp_bind_host` | `127.0.0.1` | 监听地址（`0.0.0.0` = 远程） |
 | `mcp_extra_allowed_hosts` | 空 | 手工补 allowed_hosts（看到 421 才需配） |
 | `mcp_probe_enabled` | `True` | 进程探针中间件开关 |
+| `mcp_hide_internal_tools` | `False` | 1 = 下架内部 gRPC/仿真工具（`registry_server._INTERNAL_*`），对智能体彻底不可见 |
 | `edi_path` / `turbocharts_path` / `aedt_path` | 空 | 空 = 自动检测 |
 | `edi_log_dir` | 空 | EDI 日志目录（空 = 自动检测，EDI 根下 logs） |
 | `llm_api_key` / `llm_base_url` / `llm_model` | 空 | Chat 的 LLM 配置 |
@@ -735,6 +736,21 @@ Chat 层拦截 → 保存 `PendingAction` → 展示操作摘要 → 用户明�
 #### 默认值透明
 
 产生输出文件（截图/图表/报告）或采用默认值时，先告知用户输出位置/默认值并询问是否调整。内置 Chat system prompt 规则 11 强制执行；外部 agent 通过 FastMCP `instructions` 下发同一规则；`edi://reference/operation-guide` Resource 也列出该规则。
+
+### 3.8 内部工具过滤（MCP_HIDE_INTERNAL_TOOLS）
+
+按版本/部署「下架」一部分内部工具，对智能体**彻底不可见**（连名字都感知不到），代码保留、可逆。
+
+- 开关：`.env` 的 `MCP_HIDE_INTERNAL_TOOLS`（`0` = 全量暴露默认，`1` = 下架内部项）。
+- 名单：`servers/registry_server.py` 里的三个 `frozenset`：
+  - `_INTERNAL_TOOLS` —— 依赖 EDI gRPC(50055) 的工具 + 独立仿真 exe 工具 + 配套查询/诊断工具（约 50 个）。
+  - `_INTERNAL_PROMPTS` —— 引导调用这些工具的 7 个 prompt。
+  - `_INTERNAL_RESOURCES` —— 配套的 8 个 resource（错误码/仿真器件/操作规则/服务状态/工程目录/TR 指南/turbocharts 指南）。
+- 机制：`registry_server.py` 在全部工具注册 + schema 注入完成后，`_hide_internal_tools()` 按开关从 `_tool_manager._tools` / `_prompt_manager._prompts` / `_resource_manager._resources` 里 `pop` 掉名单项。
+
+**不可见覆盖的面**：`tools/list`、`describe_tool("")`（含「相似名建议」，`registered_tools` 已 pop 掉故不会漏名）、`describe_tool("名字")` 返回「不存在」、按名调用返回「不存在」、Chat 工具集、`instructions`（已改成不枚举工具名）。
+
+**不改代码就能换名单**：要加/减下架项，改 `registry_server.py` 三个 frozenset 后重启即可；`tests/test_internal_tools.py` 与 `tests/test_instructions.py` 有回归断言（名单有效、开关关保持全量、开关开全消失、instructions 不泄漏工具名/resource URI/过滤机制字眼、可见工具的错误 hint 不引用下架工具名）。
 
 ---
 

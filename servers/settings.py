@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     # 进程白名单：只放行精确匹配这些条目的进程访问 /mcp（逗号分隔，可填 exe 路径或命令行关键词）；留空禁用。
     # 默认写死 hermes_cli.main + edi-agent-service.exe；要关闭或放行其它进程用环境变量覆盖/置空。
     mcp_allowed_processes: str = "hermes_cli.main,edi-agent-service.exe"
+    # 隐藏内部工具开关：1 = 下架 registry_server._INTERNAL_TOOLS 里那批 gRPC(50055) 工具，
+    # 对智能体彻底不可见（列表/describe/按名调用都感知不到）；0 = 全量暴露（默认）。
+    mcp_hide_internal_tools: bool = False
 
     # ── 远程访问（默认值即现状：仅本机、行为与旧版完全一致）──
     # 监听地址：127.0.0.1 = 仅本机（默认）；0.0.0.0 = 接受局域网/远程访问
