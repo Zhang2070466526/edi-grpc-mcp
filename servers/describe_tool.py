@@ -48,6 +48,9 @@ _EXAMPLES: dict[str, Any] = {
                         {"name": "变频增益", "orders": {"FREQ": 5, "LO": 5}},
                         {"name": "镜像抑制", "frequency_sweep_ghz": {"start": 33, "stop": 37, "step": 0.04},
                          "orders": {"FREQ": 5, "LO": 5}},
+                        {"name": "带外杂散", "frequency_sweep_ghz": {"start": 33, "stop": 37, "step": 0.04},
+                         "orders": {"FREQ": 5, "LO": 5}},
+                        {"name": "噪声", "orders": {"FREQ": 5, "LO": 5}}
                     ],
                 }
             ],

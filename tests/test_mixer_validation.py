@@ -21,6 +21,7 @@ from servers.simulation_tool.mixer_simulation import (
     _imd_negative_warning,
     _noise_ssb_warning,
     _read_netlist_facts,
+    run_mixer_simulation,
 )
 
 
@@ -56,7 +57,7 @@ def test_unknown_indicator_suggests_correct_name():
 def test_missing_hard_field_is_pinpointed():
     r = _check_project(_project([{"name": "输入 P1dB", "orders": {"FREQ": 5, "LO": 5}}]))
     assert r["error_code"] == "LINK_MISSING_FIELD"
-    assert r["missing_field"] == "input_power_sweep_dbm"
+    assert r["missing_field"] == "input_freq_ghz"  # 第一条缺失（local-only 标量）
     assert "输入 P1dB" in r["message"]
 
     r = _check_project(_project([{"name": "通道间隔离度"}]))
@@ -65,9 +66,33 @@ def test_missing_hard_field_is_pinpointed():
 
 def test_valid_project_passes():
     assert _check_project(_project([{"name": "变频增益"}])) is None
-    assert _check_project(_project([{"name": "输入 P1dB", "input_power_sweep_dbm": [-40, -10]}])) is None
+    assert _check_project(_project([{"name": "输入 P1dB", "input_freq_ghz": 35.0,
+                                    "input_power_sweep_dbm": {"start": -40, "stop": -10, "step": 1}}])) is None
     # 受害链路 indicators 为空数组也是合法的
     assert _check_project(_project([])) is None
+
+
+def _two_links(ind0, ind1, defaults0=None):
+    proj = _project(ind0)
+    if defaults0:
+        proj["links"][0]["defaults"].update(defaults0)
+    l1 = {"defaults": dict(proj["links"][0]["defaults"], in_port=3, out_port=4), "indicators": ind1}
+    proj["links"].append(l1)
+    return proj
+
+
+def test_peer_link_must_be_local_and_not_self():
+    # ① peer_link 放 defaults 不顶用（各链路受害方不同）
+    r = _check_project(_two_links([{"name": "通道间隔离度"}], [],
+                                 defaults0={"peer_link": {"link_index": 1}}))
+    assert r["error_code"] == "LINK_MISSING_FIELD"
+    assert r["missing_field"] == "peer_link"
+    # ② 指向自己 → 拦
+    r = _check_project(_two_links([{"name": "通道间隔离度", "peer_link": {"link_index": 0}}], []))
+    assert r["error_code"] == "LINK_JSON_INVALID"
+    assert r["location"].endswith("peer_link.link_index")
+    # ③ 正常指向另一条 → 放行
+    assert _check_project(_two_links([{"name": "通道间隔离度", "peer_link": {"link_index": 1}}], [])) is None
 
 
 def test_non_dict_indicator_rejected():
@@ -201,6 +226,27 @@ def test_lo_count_exceeds_netlist_mixers(tmp_path):
 
 def test_valid_project_passes_netlist_check(tmp_path):
     assert _check_netlist_consistency(_project_with(), _netlist_file(tmp_path)) is None
+
+
+def test_empty_links_rejected(tmp_path):
+    """空 links 在入口就被拦（NO_LINKS），不用等 exe。"""
+    epp = tmp_path / "p.epp"
+    epp.write_text("<project/>", encoding="utf-8")
+    p = {"name": "t", "epp": str(epp), "links": []}
+    r = run_mixer_simulation(project=p, out_dir=str(tmp_path / "out"))
+    assert r["error_code"] == "NO_LINKS", r
+
+
+def test_netlist_check_collects_all_errors(tmp_path):
+    """网表预检也要一次报全：端口 / 开关 / LO 数量三类错同时给。"""
+    p = _project_with(in_port=9)
+    p["links"][0]["switch_bits"] = [{"instance": "NOPE", "bits": "1"}]
+    p["links"][0]["defaults"]["lo"] = [{"freq_ghz": [1, 1], "power_dbm": 0}] * 2
+    r = _check_netlist_consistency(p, _netlist_file(tmp_path))
+    assert r["error_code"] == "PORT_NOT_FOUND", r
+    assert r["error_count"] >= 3, r
+    codes = {e["error_code"] for e in r["all_errors"]}
+    assert {"PORT_NOT_FOUND", "SWITCH_NOT_FOUND", "LO_COUNT_MISMATCH"} <= codes, codes
 
 
 def test_in_port_equals_out_port_rejected():
