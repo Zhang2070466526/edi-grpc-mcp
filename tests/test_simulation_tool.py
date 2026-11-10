@@ -283,3 +283,40 @@ def test_indicator_name_validation():
     assert r["error_code"] == "UNKNOWN_INDICATOR" and "IP1dB" in r["message"]
     r = _check_indicators("增益")        # 表外名 → 相似名建议
     assert r["error_code"] == "UNKNOWN_INDICATOR" and "输出增益" in r["message"]
+
+
+# ── 实测路径回显（2026-11-10：ADS 版本选错时无从反推）──
+
+def test_tr_echo_reports_resolved_edi_and_ads(tmp_path, monkeypatch):
+    """成功路径的 echo 必须回显实际用的 edi/ads 目录，否则「传了哪个 ADS」只能事后猜。"""
+    epp = tmp_path / "x.epp"
+    epp.write_text("dummy")
+    (tmp_path / "turbocharts_app.exe").write_bytes(b"stub")
+    ads_dir = tmp_path / "ADS2026_Update1"
+    ads_dir.mkdir()
+    monkeypatch.setattr(tr_simulation, "tcp_port_open", lambda host, port, timeout=1.0: True)
+    monkeypatch.setattr(tr_simulation, "run_exe", _stub_run({
+        "simulation_path": str(tmp_path), "results": [], "errors": []}))
+    r = run_tr_simulation(str(epp), [{"name": "链路1"}],
+                          edi_path=str(tmp_path), ads_path=str(ads_dir))
+    assert r["success"] is True
+    assert Path(r["echo"]["ads"]) == ads_dir
+    assert Path(r["echo"]["edi"]) == tmp_path
+
+
+def test_tr_failure_details_report_resolved_ads(tmp_path, monkeypatch):
+    """失败路径（RAW_NOT_FOUND 这类）也要带 ads：现场第一句就能看出用的是哪个版本。"""
+    epp = tmp_path / "x.epp"
+    epp.write_text("dummy")
+    (tmp_path / "turbocharts_app.exe").write_bytes(b"stub")
+    ads_dir = tmp_path / "ADS2020_update2"
+    ads_dir.mkdir()
+    monkeypatch.setattr(tr_simulation, "tcp_port_open", lambda host, port, timeout=1.0: True)
+    monkeypatch.setattr(tr_simulation, "run_exe", lambda *a, **k: {
+        "returncode": 1, "stdout": "", "stderr": "", "json_error": "",
+        "json": {"simulation_path": str(tmp_path), "results": [],
+                 "errors": [{"code": "RAW_NOT_FOUND", "stage": "ads", "message": "未生成 RAW"}]}})
+    r = run_tr_simulation(str(epp), [{"name": "链路1"}],
+                          edi_path=str(tmp_path), ads_path=str(ads_dir))
+    assert r["error_code"] == "SIMULATION_EXECUTION_FAILED"
+    assert Path(r["details"]["ads"]) == ads_dir

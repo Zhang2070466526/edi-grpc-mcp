@@ -7,8 +7,12 @@ JSON 里的 success/errors，不需要靠 stderr 措辞反推。
 
 from __future__ import annotations
 
+import configparser
+import glob
 import json
 import logging
+import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -55,11 +59,14 @@ DRAWTOOL_PATH = str(_SIM_TOOL_DIR / "simulation_report" / "drawtool.exe")
 TR_SIMULATOR_PATH = str(_SIM_TOOL_DIR / "tr_simulation" / "TR_Simulator.exe")
 MIXER_SIMULATION_PATH = str(_SIM_TOOL_DIR / "mixer_simulation" / "mixer_simulation.exe")
 
-# ADS 安装目录候选（--ads 为空时按此顺序探测）
+# ADS 安装目录兜底候选（最后一级：显式 ads_path / EDI_ADS_PATH / config.ini 都拿不到时才用）
 _ADS_GLOB_CANDIDATES = (
     "C:/Program Files/Keysight/ADS*",
     "D:/Program Files/Keysight/ADS*",
 )
+
+# 运维级覆盖：环境变量优先于 config.ini 与 glob（显式 ads_path 工具参数仍最高）
+_ADS_ENV = "EDI_ADS_PATH"
 
 
 def _decode_text(raw: bytes) -> str:
@@ -94,8 +101,50 @@ def normalize_dir(path: str) -> str:
         return raw
 
 
+def _ads_version_key(path: str) -> tuple[int, int]:
+    """ADS 目录名 → 可比较的版本号（ADS2026_Update1 → (2026, 1)）。
+
+    多版本并存时用 max(key=...) 取最高版本。解析不出（如自建目录 ADS_custom）返回
+    (0, 0)：垫底但仍可能被选中，比返回空串让上层报错好。
+    """
+    m = re.match(r"ADS(\d{2,4})(?:_?update(\d+))?", Path(path).name, re.IGNORECASE)
+    if not m:
+        return (0, 0)
+    return (int(m.group(1)), int(m.group(2) or 0))
+
+
+def _ads_from_edi_config() -> str:
+    """读 EDI 安装目录 config/config.ini 的 [ads] hpeesof_dir（即 EDI GUI 里配的 ADS）。
+
+    2026-11-10 事故：config.ini 写 ADS2026、MCP 却一直传 ADS2020 —— 因为这里原本不读
+    config.ini，探测只看 glob 且取字典序最小。读同一份配置让 GUI 与 MCP 有单一事实源。
+
+    配置缺失 / 解析失败 / 指向不存在的目录一律返回空串（交给 glob 兜底），绝不抛错：
+    客户机上有人把 hpeesof_dir 改成装坏或被删的版本时，MCP 不该跟着一起坏。
+    """
+    try:
+        raw = (Path(EDI_INSTALL_DIR) / "config" / "config.ini").read_bytes()
+    except OSError:
+        return ""
+    parser = configparser.ConfigParser(interpolation=None)  # token 里有 % 也不能炸
+    try:
+        parser.read_string(_decode_text(raw))
+        value = normalize_dir(parser.get("ads", "hpeesof_dir", fallback=""))
+    except configparser.Error:
+        return ""
+    return value if value and Path(value).is_dir() else ""
+
+
 def detect_ads_path() -> str:
     """探测 ADS 安装目录，找不到返回空串。
+
+    取值优先级（自高到低；工具参数 ads_path 在调用侧比本函数更优先）：
+      1. 环境变量 EDI_ADS_PATH   —— 运维临时覆盖，不改文件；
+      2. EDI 的 config/config.ini `[ads] hpeesof_dir` —— 与 EDI GUI 同一事实源；
+      3. glob `C:/Program Files/Keysight/ADS*`、`D:/Program Files/Keysight/ADS*`，
+         多个命中取**版本号最高**的那个。
+    第 3 级原来写的是 `sorted(hits)[0]`（字典序最小）：机器上同时留着 ADS2020_update2
+    和 ADS2026_Update1 时永远选 2020，装了新版也不生效。
 
     ⚠️ 必须规范化：Windows 上 glob 返回的路径是混合斜杠
     （实测 'C:/Program Files/Keysight\\ADS2020_update2'，首个分隔符保留 '/'、
@@ -103,12 +152,19 @@ def detect_ads_path() -> str:
     'C:/Program Files/Keysight/ADS2020'，于是报「Can not find ...ADS2020」
     （实际装的是 ADS2020_update2）。
     """
-    import glob
+    # 1) 环境变量覆盖：空串 / 指向不存在的目录都当「未设置」，继续往下走
+    env_path = normalize_dir(os.environ.get(_ADS_ENV, ""))
+    if env_path and Path(env_path).is_dir():
+        return env_path
 
-    for pattern in _ADS_GLOB_CANDIDATES:
-        hits = sorted(glob.glob(pattern))
-        if hits:
-            return normalize_dir(hits[0])
+    # 2) EDI GUI 里配的那个 ADS（config/config.ini 的 [ads] hpeesof_dir）
+    if from_config := _ads_from_edi_config():
+        return from_config
+
+    # 3) 兜底：glob 探测，多版本取版本号最高的（原来 sorted()[0] 永远选中最老的 2020）
+    hits = [h for pattern in _ADS_GLOB_CANDIDATES for h in glob.glob(pattern)]
+    if hits:
+        return normalize_dir(max(hits, key=_ads_version_key))
     return ""
 
 

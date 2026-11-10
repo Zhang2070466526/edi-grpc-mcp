@@ -334,7 +334,7 @@ def run_tr_simulation(
         indicators: 逗号分隔的精确指标名，默认 "工作频率,输出增益,噪声系数"。23 个合法名：工作频率, 反向增益, 输出增益, 增益平坦度, 噪声系数, 输入回波损耗, 输出回波损耗, 输入驻波, 输出驻波, 移相步进, 衰减步进, 移相误差RMS, 衰减误差RMS, 衰减附加相移, 移相幅度波动, 移相态, 衰减态, 延时步进, 杂散抑制, 输出功率, OP1dB, IP1dB, Psat。单位与实现方式见 edi://reference/tr-simulation-guide。简称/别名不自动转换（"输入P1dB"要传"IP1dB"）；移相类指标必须在对应链路给 phase_devices，衰减类必须给 atten_devices。
         threads: 指标并发线程数（正整数），默认 5。
         edi_path: EDI 安装目录，默认用固定目录（simulation_tool 的上一级）。
-        ads_path: ADS 安装目录，为空时自动探测（C:/Program Files/Keysight/ADS*）。
+        ads_path: ADS 安装目录；为空时按「EDI_ADS_PATH 环境变量 → EDI config.ini [ads] hpeesof_dir → 自动探测（C:/Program Files/Keysight/ADS*，多版本取最高）」取值。
         timeout_seconds: 最长等待秒数，默认 1800（多链路 × 多指标跑 ADS 可能超过 10 分钟；上限 3600）。
 
     Returns:
@@ -342,7 +342,7 @@ def run_tr_simulation(
          "artifacts": [...], "report_artifacts": [{"type": "pdf"|"docx", "path": "...", "name": "..."}],
          "echo": {"indicators": [...], "links": [...]}}
         results 每项 {link, electrical_parameters:[{indicator,minimum,typical,maximum,unit}]}。
-        echo 回显本次实际生效的指标名与链路字段（防止「传了 5 个指标、只跑了 3 个」的假成功）。
+        echo 回显本次实际生效的指标名、链路字段、以及解析到的 edi/ads 目录（防止「传了 5 个指标、只跑了 3 个」的假成功，也免得事后反推用的是哪个 ADS）。
         部分指标失败时 success 仍为 True 但 errors 非空，必须检查。
 
         ⚠️ 若结果目录里存在 PDF/DOCX，它们会排在 artifacts 最前，并单独列在
@@ -452,6 +452,7 @@ def run_tr_simulation(
             fmt_errors(errors) or "TR 仿真失败",
             hint="先确认 EDI 已启动、目标工程已打开；单一指标失败时可减少 indicators 后重试（详见 details.tr_errors）",
             tr_errors=errors, simulation_path=data.get("simulation_path", ""),
+            edi=edi, ads=ads,
         )
 
     # 8. 成功（部分指标失败时 errors 非空，须提示调用方检查）
@@ -502,6 +503,8 @@ def run_tr_simulation(
             "indicators": requested,
             "links": link_dicts,
             "threads": threads,
+            "edi": edi,
+            "ads": ads,
         },
         "results": results,
         "errors": errors,
