@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     edi_path: str = ""
     turbocharts_path: str = ""
     aedt_path: str = ""
+    laspcem_path: str = ""
     # 空字符串 = 自动检测：打包态从 exe 目录往上找 EDI 安装根再拼 logs / simulation_tool
     edi_log_dir: str = ""
     # 独立仿真工具目录（Report_Exporter / TR_Simulator / Mixer_Simulator / drawtool 固定目录）

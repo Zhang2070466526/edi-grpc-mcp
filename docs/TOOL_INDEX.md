@@ -2,7 +2,7 @@
 
 > 自动生成，勿手改。权威数量见 /ready 的 tool_count。
 
-共 88 个工具：
+共 91 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
 - `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
@@ -54,6 +54,7 @@
 - `get_current_workspace` — 查询程序当前实际加载的工作区目录。
 - `get_hfss_analysis_status` — 查询 HFSS 异步仿真状态（默认只读本地，不访问 AEDT）。
 - `get_hfss_project_info` — 查询当前 AEDT 打开的项目和活动设计（纯查询，不启动 AEDT）。
+- `get_laspcem_setup` — 读取 .sem 工程当前配置的求解设置参数（cem.EditSolution 那套键，约 64 个）。
 - `get_model_category_params` — 获取模型管理模块的全部子类及对应参数列表。
 - `get_project_summary` — 获取 .epp 工程完整概览：元数据、原理图、元件统计、仿真配置、最近结果。
 - `get_schematic_component_info` — 通过 gRPC 按实例名查询单个器件的完整信息。
@@ -65,6 +66,7 @@
 - `get_simulation_component_schema` — 查询已建模器件类型的参数 Schema 和权限。
 - `launch_aedt` — 启动 AEDT（不打开项目）。已运行时仅返回状态。
 - `launch_edi` — 启动 EDI 客户端并等待 gRPC 就绪。已运行时跳过启动。
+- `launch_laspcem` — 启动 LASPCEM 电磁仿真软件。已运行时返回状态，不重复启动。
 - `list_eda_tasks` — 列出当前所有异步仿真任务，可选按状态过滤。不阻塞。
 - `list_epp_projects` — 扫描指定文件夹中的 .epp 工程文件。
 - `list_ideal_components` — 列出内置器件类型及其简要说明。
@@ -74,6 +76,7 @@
 - `open_document` — 打开本地文档：link 模式生成 10 分钟 HTTP 链接，local 模式用系统默认程序打开。
 - `open_edi_project` — 打开 .epp 工程（会切换 EDI 当前工程；同目录需有 schematics/main/schematic.ep）。关闭用 close_edi_project。
 - `open_hfss_project` — 启动 AEDT 并打开 .aedt 项目（COM 附着优先，subprocess 单次启动兜底）。
+- `open_laspcem_project` — 在 LASPCEM 中打开 .sem 工程文件。
 - `replace_models_from_csv` — ⚠️ 按 CSV 批量替换工程元件模型（影响面大，建议先 get_project_summary 核对）。
 - `replace_port_component` — ⚠️ 将原理图中的端口器件替换为另一种类型（会改变端口）。
 - `replace_schematic_from_file` — ⚠️ 从 .ep 文件整体替换原理图（整图覆盖，原内容丢失）。

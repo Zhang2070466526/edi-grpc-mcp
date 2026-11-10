@@ -28,6 +28,7 @@ from servers.eda.project_manage import list_epp_projects
 - **[启动 / 诊断（3 个）](#启动--诊断3个)**：启动 EDI、服务诊断、日志读取
 - **[ANSYS HFSS（6 个）](#ansys-hfss6个)**：AEDT 工程开关、HFSS 异步仿真
 - **[CST 电磁仿真（13 个）](#cst电磁仿真13个)**：异步求解 .cst、导出 S 参数 / 远场方向图
+- **[LASPCEM 电磁仿真（3 个）](#laspcem电磁仿真3个)**：启动 LASPCEM、打开 .sem 工程、读取求解设置
 - **[图表（3 个）](#图表3个)**：RAW 曲线解析、转图、结果对比
 - **[图片（2 个）](#图片2个)**：显示图片、视觉分析
 - **[仿真器件管理（10 个）](#仿真器件管理10个协议-v3)**：器件 Schema、增删改、状态、网表导入、原理图加载
@@ -1186,6 +1187,62 @@ cst_export_farfield_query(task_id: str) -> dict
 
 ---
 
+## LASPCEM 电磁仿真（3 个）
+
+> LASPCEM（西安电子科技大学的国产电磁仿真平台）无 COM/gRPC/headless 接口，其唯一程序化入口是 GUI 内嵌 Python 脚本（控制台 / Run Script）。本组工具只做「启动 / 打开工程 / 读求解设置」三件事，**不触发求解**（求解需 GUI 手动 Run Script，或后续拿到厂商批处理接口再补）。
+
+### `launch_laspcem`
+
+```python
+from servers.laspcem.launcher import launch_laspcem
+
+launch_laspcem(laspcem_path: str = "") -> dict
+```
+
+启动 LASPCEM 软件。已运行时返回状态，不重复启动。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `laspcem_path` | str | 否 | 自动检测 | laspcem.exe 路径（LASPCEM_PATH → 注册表卸载项 → 注册表 .sem 关联） |
+
+返回：`{"success": true, "started": bool, "already_running": bool, "exe": "...", "message": "..."}`；失败 `{"success": false, "error_code": "LASPCEM_NOT_FOUND"/"LAUNCH_FAILED"}`。
+
+### `open_laspcem_project`
+
+```python
+from servers.laspcem.launcher import open_laspcem_project
+
+open_laspcem_project(project_path: str, laspcem_path: str = "", force_new_instance: bool = False) -> dict
+```
+
+在 LASPCEM 中打开 .sem 工程（等价于双击 .sem）。⚠️ LASPCEM 无进程间投递，带文件启动一律新起 GUI 进程，故本工具做同工程去重：目标 .sem 已在某实例命令行里则复用、不再起新实例；要强制新开传 `force_new_instance=True`。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `project_path` | str | 是 | — | .sem 文件绝对路径 |
+| `laspcem_path` | str | 否 | 自动检测 | laspcem.exe 路径 |
+| `force_new_instance` | bool | 否 | False | 该工程已打开时也强制再起新实例 |
+
+返回：`{"success": true, "exe": "...", "project": "...", "reused_existing": bool, "new_instance": bool, "pid": int|null, "running_instances": [pid,...], "message": "..."}`；失败 `{"success": false, "error_code": "INVALID_PATH"/"LASPCEM_NOT_FOUND"/"LAUNCH_FAILED"}`。
+
+### `get_laspcem_setup`
+
+```python
+from servers.laspcem.launcher import get_laspcem_setup
+
+get_laspcem_setup(sem_path: str) -> dict
+```
+
+读取 .sem 工程当前配置的求解设置参数（cem.EditSolution 那套键，约 64 个），直接从二进制文件提取，无需打开 LASPCEM。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `sem_path` | str | 是 | — | .sem 文件绝对路径 |
+
+返回：`{"success": true, "sem_path": "...", "setup": {...}, "count": N, "resolved_count": M, "unresolved_double_keys": [...], "warning"?: "..."}`。double 型字段（扫频 RangeStart/RangeEnd/RangeStep、Frequency）在 .sem 记录里只有引用序号、无数值，故值为 `null` 并列入 `unresolved_double_keys`；真实扫频以 GUI 为准。
+
+---
+
 ## 微波计算（6 个）
 
 > 本地纯计算（不产生 task 信封，`details` 为 `null`，数据在顶层）。数值解算独立复核过（见 `审查报告.md` §十四）。
@@ -1924,7 +1981,7 @@ run_tr_simulation(epp_path: str, links: list, indicators: str = "工作频率,�
 | `indicators` | str | 否 | 工作频率,输出增益,噪声系数 | 逗号分隔指标 |
 | `threads` | int | 否 | 5 | 指标并发线程数（正整数） |
 | `edi_path` | str | 否 | "" | EDI 安装目录，默认往上找 EDI 根 |
-| `ads_path` | str | 否 | "" | ADS 安装目录，为空自动探测 `C:/Program Files/Keysight/ADS*` |
+| `ads_path` | str | 否 | "" | ADS 安装目录，为空时按 `EDI_ADS_PATH` 环境变量 → EDI `config/config.ini` 的 `[ads] hpeesof_dir` → 自动探测 `C:/Program Files/Keysight/ADS*`（多版本取最高）取值 |
 | `timeout_seconds` | int | 否 | 1800 | 最长等待秒数（多链路 × 多指标跑 ADS 可能超过 10 分钟；上限 3600） |
 
 返回：
