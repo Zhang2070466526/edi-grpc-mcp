@@ -2,7 +2,7 @@
 
 > 自动生成，勿手改。权威数量见 /ready 的 tool_count。
 
-共 98 个工具：
+共 100 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
 - `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
@@ -67,6 +67,7 @@
 - `get_simulation_async_status` — 查询异步仿真进度和实时日志（仿真日志在 ads_output 字段）。运行中即可调用，不阻塞。
 - `get_simulation_component_schema` — 查询已建模器件类型的参数 Schema 和权限。
 - `import_aedt_as_sem` — 把 ANSYS HFSS `.aedt` 导入 LASPCEM 并生成 `.sem` 工程（等价于 GUI 的 Import）。
+- `laspcem_cleanup_orphans` — 清理残留的 LASPCEM 进程（GUI / mpiexec / phofem / MPI 代理）。
 - `laspcem_solve_query` — 查询 LASPCEM 求解任务（配合 run_laspcem_solve_async 的 task_id）。
 - `laspcem_task_cancel` — 取消 LASPCEM 求解任务（求解/导出/建报告 任一阶段都能取消）。
 - `laspcem_task_list` — 列出 LASPCEM 后台任务（含 operation=solve、phase、steps、状态与耗时）。
@@ -100,5 +101,6 @@
 - `start_simulation_async` — 启动异步仿真，立即返回 task_id 供 get_simulation_async_status 查进度；仿真日志在结果查询的 ads_output 字段。
 - `switch_workspace` — ⚠️ 设置下次启动时的工作区（不是立即切换，当前保持不变）。
 - `turbocharts_convert` — ADS RAW 转曲线图+CSV（SP/HB/XDB）；linename 为「单位_线段名」，多条用 & 分隔。返回含引擎原始输出（stderr/command_runs/engine_report）与 log_path（原文已落盘）；**回复时必须把引擎原文与 warnings 原样转述给用户，不得只回一句 message**。
+- `update_schematic_components_transform` — 批量设置原理图器件的位置、旋转角度和镜像状态（对齐/挪位/批量旋转镜像；坐标为场景值，按 12.5 网格吸附）。
 - `update_simulation_component` — 按实例名更新器件参数。
 - `wilkinson_marchand_order` — 估计 Wilkinson 功分器 / Marchand 巴伦的节数（阶数）。

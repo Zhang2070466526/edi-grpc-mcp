@@ -1250,11 +1250,17 @@ open_laspcem_project(project_path: str, laspcem_path: str = "", force_new_instan
 > 求解对外**只提供异步工具** `run_laspcem_solve_async`（见下一节）。本函数是内部实现：
 > 异步队列、`export_laspcem_snp`、`build_laspcem_report` 都复用它，下列判据/返回字段同样适用于
 > 异步任务完成后的 `solve_result`。
+>
+> **`exit_code` 不是成败判据**：`export_laspcem_snp` / `build_laspcem_report` 返回的
+> `exit_code` 是 `laspcem.exe /session <脚本>` 这个进程的退出码 —— 脚本宿主在末尾执行
+> `app.Exit()` 后**恒为 1**（实测 CPWG-3 成功导出 91 行数据、报告 `verified=true` 时也都是
+> `exit_code=1`）。判断成败看 `success`、`verified`（报告是否真让工程被 SaveAs 改写）、
+> `output_path` 是否存在与 `data_rows`；`exit_code` 只在 `success=false` 时作为辅助线索。
 
 ```python
 from servers.laspcem.launcher import run_laspcem_solve
 
-run_laspcem_solve(sem_path: str, setup_name: str = "", timeout_seconds: int = 1800, close_gui: bool = True) -> dict
+run_laspcem_solve(sem_path: str, setup_name: str = "", timeout_seconds: int = 7200, close_gui: bool = True) -> dict
 ```
 
 对 .sem 工程跑 FEM 求解：非阻塞启动脚本（`app.Open` → `SetSelectionMode` → `cem.FEMAnalyze`），**轮询求解器进程**直到跑完，再按需关闭本次拉起的 GUI；结果自动写回 `.sem`。
@@ -1263,7 +1269,7 @@ run_laspcem_solve(sem_path: str, setup_name: str = "", timeout_seconds: int = 18
 |---|---|---|---|---|
 | `sem_path` | str | 是 | — | .sem 文件绝对路径 |
 | `setup_name` | str | 否 | 自动探测 | setup 名；探测到 `Setup1(FEM)` 会剥成显示名 `Setup1` 再传给 API |
-| `timeout_seconds` | int | 否 | 1800 | 最长等待秒数（本机一次求解约 220 s，大模型往上加） |
+| `timeout_seconds` | int | 否 | 7200 | 最长等待秒数（小件约 100–220 s，大件往上加；**无代码上限** —— LASPCEM 的 TaskRunner 没设 `max_run_seconds`，不像 HFSS/CST 有 7200 硬上限） |
 | `close_gui` | bool | 否 | True | 求解结束后是否关掉本次拉起的 GUI 实例 |
 
 返回：`{"success": true, "solved": true, "saw_solver": true, "solver_seconds": 216.9, "solver_processes": [...], "sem_size_before": 260979, "sem_size_after": 6169622, "orphan_solvers": [], "script_log": "...", "message": "..."}`
@@ -1281,7 +1287,7 @@ MCP 请求，容易客户端超时；异步组把它丢进后台**单 worker 串
 立即返回 `task_id`。
 
 ```python
-run_laspcem_solve_async(sem_path: str, setup_name: str = "", timeout_seconds: int = 1800,
+run_laspcem_solve_async(sem_path: str, setup_name: str = "", timeout_seconds: int = 7200,
                         stall_seconds: int = 900,
                         then_export: bool = False, then_report: bool = False,
                         export_path: str = "", report_name: str = "Sparameter_1",
@@ -1348,14 +1354,16 @@ export_laspcem_snp(sem_path: str, output_path: str = "", setup_name: str = "", s
 | `sweeping_parameters` | dict | 否 | 自动抽变量 | `{变量: ['nominal', ...]}` |
 | `timeout_seconds` | int | 否 | 600 | **导出阶段**最长等待秒数 |
 
-返回：`{"success": true, "output_path": "...s2p", "requested_output_path": "...sNp", "exported": true, "setup_name": "Setup1(FEM)", "solution_name": "FEM_Setup1", "solved_first": bool, "elapsed_seconds": 5.1, "script_log": "...", "message": "..."}`
+返回：`{"success": true, "output_path": "...s2p", "requested_output_path": "...sNp", "exported": true, "setup_name": "Setup1(FEM)", "solution_name": "FEM_Setup1", "solved_first": bool, "elapsed_seconds": 5.1, "exit_code": 1, "script_log": "...", "message": "..."}`
+
+> `exit_code` 是脚本宿主的进程返回码，`app.Exit()` 后**恒为 1**，不代表成败（见上文说明）。
 
 要点与失败码：
 - **产物按端口数命名**：请求 `x.sNp`，2 端口工程落地 `x.s2p`；`output_path` 给实际文件，`requested_output_path` 保留请求原样。
 - **旧文件不算数**：导出前给已有同名产物拍指纹，只认被本次改写过的文件（否则错解名也会"秒成功"）。
 - `SOLVE_REQUIRED`（工程未求解；返回体带 `suggested` = 建议的求解任务参数、`running_solve_task` = 该工程已在跑的任务 id）、`EXPORT_EMPTY`（产物只有表头、0 行数值）、`EXPORT_NO_OUTPUT`、`PROJECT_IN_USE`、`SETUP_NOT_FOUND`。
 - **结果目录审计**：成功/失败返回体都带 `results_dir_before` / `results_dir_after`（`{exists, files, bytes}`）与 `results_dir_changed`，可据此判断“这次调用有没有动结果目录”。
-- **结果失效快速失败**：`is_solved=True` 但结果目录为空时，等待窗口自动缩到 **30 s**（默认 600 s），返回 `EXPORT_NO_OUTPUT` 并指出"疑似结果已失效（GUI Message 面板常见 error 167）"，实测 32 s 返回（原 92 s）。
+- **结果失效快速失败**：`is_solved=True` 但结果目录为空时，等待窗口自动缩到 **30 s**（默认 600 s），返回 `EXPORT_NO_OUTPUT` 并指出"疑似结果已失效（GUI Message 面板实测 error 892，旧版报 167）"，实测 32 s 返回（原 92 s）。
 - **结果目录（`<工程名>/1_Result`）不是硬门槛**：实测 BGA 工程把结果目录删掉后仍能导出（`.sem` 自带结果数据，打开工程时目录会被重建，4.2 s 出 91 行）。所以只在返回里记 `results_present_before`，真正导不出来由 `EXPORT_NO_OUTPUT` 兜底。
 - 成功时带 `data_rows`（数出来的数据行数，本次实测 91 行）与 `sweeping_parameters_auto`；自动探测不到设计变量时返回 `warning`。
 
@@ -1384,8 +1392,13 @@ build_laspcem_report(sem_path: str, setup_name: str = "", report_name: str = "Sp
 | `timeout_seconds` | int | 否 | 600 | 建报告阶段最长等待秒数 |
 | `port_count` | int | 否 | 0（自动） | 端口数 → 决定画哪些 S(i,j)；自动时看同目录 Touchstone 后缀，兜底 2 |
 
-返回：`{"success": true, "report_name": "Sparameter_1", "verified": true, "elapsed_seconds": 3.1, "message": "..."}`
+返回：`{"success": true, "report_name": "Sparameter_1", "verified": true, "elapsed_seconds": 3.1, "exit_code": 1, "script_log": "...", "message": "..."}`
 `verified=true` 表示工程确实被 `SaveAs` 改写过（报告已落盘），不代表报告内容已校验。
+
+**`verified=false` 就是失败**（`exit_code` 恒为 1，不是判据）：脚本执行了但工程没被改写时返回
+`REPORT_NOT_VERIFIED`（`success=false`、`retryable=true`，`details` 带 `verified` / `exit_code` /
+`report_name` / `port_count` 与 `script_output`）。其余失败码：`REPORT_TIMEOUT`（等满 `timeout_seconds`
+仍未见改写）、`SOLVE_REQUIRED`（工程未求解）、`PROJECT_IN_USE`、`SETUP_NOT_FOUND`。
 
 ### `import_aedt_as_sem`
 

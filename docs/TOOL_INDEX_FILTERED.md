@@ -2,7 +2,7 @@
 
 > 自动生成，勿手改。MCP_HIDE_INTERNAL_TOOLS=1 时对外可见；权威数量见 /ready 的 tool_count。
 
-共 48 个工具：
+共 49 个工具：
 
 - `analyze_image` — 调用视觉模型分析本地图片内容，返回结构化文字结果 —— ⚠️ 结果可能编造（实测把电路原理图认成加法器），只作粗看、不得作为工程结论。
 - `analyze_mixer_spur` — 混频杂散分析：枚举 m×源频 ± n×LO 的杂散组合，判断是否落入目标输出频带。
@@ -38,6 +38,7 @@
 - `get_project_summary` — 获取 .epp 工程完整概览：元数据、原理图、元件统计、仿真配置、最近结果。
 - `get_simulation_component_schema` — 查询已建模器件类型的参数 Schema 和权限。
 - `import_aedt_as_sem` — 把 ANSYS HFSS `.aedt` 导入 LASPCEM 并生成 `.sem` 工程（等价于 GUI 的 Import）。
+- `laspcem_cleanup_orphans` — 清理残留的 LASPCEM 进程（GUI / mpiexec / phofem / MPI 代理）。
 - `laspcem_solve_query` — 查询 LASPCEM 求解任务（配合 run_laspcem_solve_async 的 task_id）。
 - `laspcem_task_cancel` — 取消 LASPCEM 求解任务（求解/导出/建报告 任一阶段都能取消）。
 - `laspcem_task_list` — 列出 LASPCEM 后台任务（含 operation=solve、phase、steps、状态与耗时）。
