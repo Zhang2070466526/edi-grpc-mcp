@@ -53,6 +53,13 @@ def capture_schematic(
 ) -> dict[str, Any]:
     """截取 EDA 工程原理图为图片。
 
+    产物路径看 details.img_path（同时给 artifacts[0].path、file_uri、download_url、
+    markdown_link）；统一信封里的 result_path 为空是常态，不代表没生成。
+
+    图片用于视觉核对布局，不要当回归基线做严格比对：同一状态重复截图字节稳定，但器件被
+    移动/旋转/镜像后重绘会带来图标边缘的像素级差异（实测差异 0.037%，集中在器件图标框内）。
+    校验改动是否生效以 get_schematic_component_info 的字段为准。
+
     Args:
         project_path: EDA 服务所在机器上的 .epp 工程文件绝对路径。
         output_path: 输出图片路径，支持 PNG/JPG 等。

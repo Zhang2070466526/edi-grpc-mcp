@@ -363,21 +363,30 @@ def list_schematic_components(
         timeout_seconds: int = 60,
         summary_only: bool = False,
         limit: int = 50,
+        include_transform: bool = False,
 ) -> dict[str, Any]:
     """通过 gRPC 查询原理图全部器件（含完整参数），比本地文件读取更实时。
 
-    用法："列出这个工程原理图上的所有器件"、"查看原理图器件"
+    用法："列出这个工程原理图上的所有器件"、"查看原理图器件"、"把每个器件的位置和旋转角都列出来"
 
     定位：gRPC 实时读取当前工程全部器件（含 Var/Sweep 等）。需要分页/过滤/只取器件标识
-    用 list_simulation_components（本地磁盘）；需要查网表看不到的实例名用
-    tr_query_schematic_components。
+    用 list_simulation_components（本地磁盘）。
+
+    几何字段不在本接口的默认返回里：position / rotation_deg / mirrored_horizontal /
+    mirrored_vertical / pins 只有 get_schematic_component_info 才给。要给
+    update_schematic_components_transform 准备输入（对齐、等间距、整组旋转）时，
+    传 include_transform=True 一次带出几何，避免逐器件再查一遍。
 
     Args:
         project_path: .epp 工程文件绝对路径。
-        timeout_seconds: 最长等待秒数，默认 60。
+        timeout_seconds: 单次调用的最长等待秒数，默认 60；include_transform=True 时是
+            每个器件补几何那一次调用的超时。
         summary_only: True 时每项只保留标量字段（instance_name/component_type/active_state/state），
-            裁掉 parameters 大头，省上下文。
+            裁掉 parameters 大头，省上下文；include_transform=True 时几何字段仍会保留。
         limit: 只返回前 N 个器件，默认 50；0 = 全部。截断时 details.truncated=true。
+        include_transform: True 时给返回的每个器件补 position / rotation_deg /
+            mirrored_horizontal / mirrored_vertical / pins（值来自 GET_SCHEMATIC_COMPONENT_INFO）。
+            代价：按器件数逐个发 gRPC（N 个器件 = N 次），器件多时明显变慢。默认 False。
 
     Returns:
         gRPC 统一返回结构（业务字段在 details 中）：
@@ -385,6 +394,8 @@ def list_schematic_components(
          "details": {"component_count": 5, "components": [
              {"instance_name": "R1", "component_type": "R",
               "active_state": 0, "state": "NORMAL", "parameters": {...}}, ...]}}
+        include_transform=True 时每项另有 position/rotation_deg/mirrored_*/pins；个别器件
+        取几何失败不影响整体，失败项进 details.transform_errors（[{instance_name, message}]）。
     """
     result = call_project_grpc(ecserver_pb2.LIST_SCHEMATIC_COMPONENTS, project_path, timeout_seconds)
     if result.get("success"):
@@ -397,6 +408,29 @@ def list_schematic_components(
                 comps = comps[:limit]
                 result["details"]["returned"] = limit
                 result["details"]["truncated"] = True
+            # 几何补齐放在截断之后：只给真正返回的这批器件发请求
+            if include_transform:
+                errors: list[dict[str, Any]] = []
+                for comp in comps:
+                    if not isinstance(comp, dict):
+                        continue
+                    name = comp.get("instance_name")
+                    if not name:
+                        continue
+                    info = call_project_grpc(ecserver_pb2.GET_SCHEMATIC_COMPONENT_INFO,
+                                             project_path, timeout_seconds,
+                                             instance_name=name)
+                    one = (info.get("details") or {}).get("component")
+                    if info.get("success") and isinstance(one, dict):
+                        for key in ("uuid", "position", "rotation_deg", "mirrored_horizontal",
+                                    "mirrored_vertical", "pins"):
+                            if key in one:
+                                comp[key] = one[key]
+                    else:
+                        errors.append({"instance_name": name,
+                                       "message": info.get("message") or "取器件几何失败"})
+                if errors:
+                    result["details"]["transform_errors"] = errors
             result["details"]["components"] = comps
         result["message"] = "原理图器件查询成功"
     return result
@@ -410,7 +444,10 @@ def get_schematic_component_info(
 ) -> dict[str, Any]:
     """通过 gRPC 按实例名查询单个器件的完整信息。
 
-    用法："查看 R1 这个器件的参数"、"U1 是什么类型的器件"
+    用法："查看 R1 这个器件的参数"、"U1 是什么类型的器件"、"这个器件现在的位置和旋转角是多少"
+
+    返回含几何：position / rotation_deg / mirrored_horizontal / mirrored_vertical / pins，可直接作为
+    update_schematic_components_transform 的输入；只要标识和参数用 list_schematic_components。
 
     Args:
         project_path: .epp 工程文件绝对路径。
