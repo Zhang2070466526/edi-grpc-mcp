@@ -80,13 +80,13 @@ enum EventType {
   SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY = 39;
   EXPORT_SCHEMATIC_COMPONENTS_TO_CSV = 40;
   BATCH_QUERY_COMPONENT = 41;
-  SEARCH_SOFT_IP_CATEGORIES = 42;
   SEARCH_PUBLIC_SOFT_IP_MODELS = 43;
   SEARCH_PERSONAL_SOFT_IP_MODELS = 44;
   DOWNLOAD_SOFT_IP_MODEL = 45;
   UPLOAD_AGENT = 46;
   DESIGN_SCHEMATIC_TOPOLOGY = 47;
   DESIGN_SOFT_IP = 48;
+  UPDATE_SCHEMATIC_COMPONENTS_TRANSFORM = 64;
 }
 ```
 
@@ -105,6 +105,7 @@ enum EventType {
 - `GENERATE_SCHEMATIC_FROM_NETLIST`：将指定网表导入工程的唯一原理图。
 - `SET_COMPONENT_ACTIVE_STATE`：按器件实例名确定性设置正常、禁用或短路状态。
 - `UPDATE_SIMULATION_COMPONENT`：按器件实例名更新任意普通器件的已有参数；指定器件类型额外支持动态参数或变量新增。
+- `UPDATE_SCHEMATIC_COMPONENTS_TRANSFORM`：按实例 UUID 或名称批量设置器件的位置、旋转角度和镜像状态，成功时返回更新后的器件及引脚信息。
 - `REPLACE_PORT_COMPONENT`：将原理图上的 `TermG` 与 `P_nToneG` 相互替换，并保留原有外部引脚连线。
 - `ATTACH_OUT_COMPONENT`：为指定器件的目标引脚新增并连接一个 `Out` 器件。
 - `LIST_SCHEMATIC_COMPONENTS`：查询指定工程唯一原理图上的全部器件信息。
@@ -131,7 +132,6 @@ enum EventType {
 - `SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY`：按拓扑描述查询当前用户的个人原理图库。
 - `EXPORT_SCHEMATIC_COMPONENTS_TO_CSV`：将指定工程原理图中的有效器件信息导出为 CSV。
 - `BATCH_QUERY_COMPONENT`：按器件类型列表批量查询模型信息，原样返回模型服务响应。
-- `SEARCH_SOFT_IP_CATEGORIES`：查询全部软 IP 分类，自动合并分页结果。
 - `SEARCH_PUBLIC_SOFT_IP_MODELS`：查询全部公共软 IP，自动合并分页结果。
 - `SEARCH_PERSONAL_SOFT_IP_MODELS`：查询当前用户的全部个人软 IP，自动合并分页结果。
 - `DOWNLOAD_SOFT_IP_MODEL`：按软 IP UUID 和频率下载 AEDT 模型文件到指定路径。
@@ -351,6 +351,71 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 - `SParameter` 的 `Start`、`Stop`、`Step`、`BandwidthForNoise`，`HarmonicBalance`/`XDB` 的 `Freq[x]`，以及 `XDB` 的 `GC_InputFreq`、`GC_OutputFreq` 等带单位参数，具体可用单位应以查询接口返回的 `Unit` 为准。
 - `Var` 不使用上述普通参数结构，其变量字段仍为 `value`、可选 `min`、`max`、`status`、`tunable`。
 
+### UPDATE_SCHEMATIC_COMPONENTS_TRANSFORM
+
+事件编号为 `64`，业务操作名为 `update_schematic_components_transform`；仍通过 `PerformAction` 提交，结果通过 `FetchEvent` 获取。
+
+```json
+{
+  "project_path": "C:/path/to/project.epp",
+  "components": [
+    {
+      "uuid": "11111111-1111-4111-8111-111111111111",
+      "instance_name": "R1",
+      "position": {"x": 100, "y": 200},
+      "rotation_deg": 90,
+      "mirrored_horizontal": true,
+      "mirrored_vertical": false
+    },
+    {
+      "instance_name": "R2",
+      "position": {"x": 300, "y": 200}
+    }
+  ]
+}
+```
+
+- `sub_type` 与 `filters` **不是必填项**（2026-11-13 实测）：payload 只给 `project_path` + `components` 即可成功；`sub_type` × `filters` 的 24 种组合（缺失 / 空串 / `null` / 数组 / 字符串）全部 `SUCCEEDED`，二者取值不参与业务逻辑，本操作不需要它们。
+- 历史坑（同日实测，勿重复踩）：EDI 某个实例（2026-11-13 15:09 启动的那次）对同一 payload 会 `REJECTED` 报 `sub_type must be a non-empty string`，补上顶层 `sub_type` 后又报 `filters must be an array`；**EDI 进程重启后该报错消失**，同一请求直接成功。遇到这类报错**先怀疑 EDI 进程/版本状态**，不要按字面去 `components` 每项里补 `sub_type`（实测项内补、改名 `subType`/`subtype`、改整数类型均无效）。
+
+旧 EDI 实例（15:09 那次，未带 `sub_type`）的实际返回——该报错在 EDI 重启后已不再出现，保留供排查对照（`project_path` 已脱敏为占位；payload 只含 `project_path` + 合法 `components`）：
+
+```json
+{
+  "success": false,
+  "completed": true,
+  "outcome_known": true,
+  "task_success": false,
+  "hint": "rejected",
+  "client_uuid": "5f1d6cb3-224e-4d6d-958d-e6bf1926ea5f",
+  "task_id": "e839b3ca-0916-4f4d-8d35-bb970d771ce0",
+  "task_type": "UPDATE_SCHEMATIC_COMPONENTS_TRANSFORM",
+  "status": "REJECTED",
+  "message": "sub_type must be a non-empty string",
+  "project_path": "C:/path/to/project.epp",
+  "result_path": "",
+  "ads_output": "",
+  "log_complete": true,
+  "details": {}
+}
+```
+
+- `status: "REJECTED"` 且 `details: {}`：请求在 `PerformAction` 阶段即被打回，未进入业务逻辑，**工程不会被修改**；
+- 当时补上 `sub_type` 后，下一条错误才是 `filters must be an array`；两者齐备才继续校验器件；
+- 若再次出现 `hint=rejected` 且 `message` 提到 `sub_type`/`filters`：先重启 EDI 再重试同一请求（本次即由重启消除），不要改器件字段、也不要在 `components` 里找。
+- `project_path` 必须指向已存在的 `.epp` 文件；服务端复用或打开对应工程，操作工程唯一原理图。
+- `components` 必须为非空数组，可以传入全部器件，也可以只更新其中一部分；未列出的器件不主动修改。
+- 每项至少提供 `uuid` 或 `instance_name`。这里的 `uuid` 是原理图器件实例 UUID，不是模型库的 `component_uuid`；同时提供两者时必须指向同一器件。
+- 每项至少提供一个变换字段：`position`、`rotation_deg`、`mirrored_horizontal`、`mirrored_vertical`。省略的变换字段保持原值。
+- `position` 为目标绝对位置，必须同时提供数字 `x` 和 `y`，每个数值必须有限且位于 `[-1e9, 1e9]`。坐标使用与查询接口相同的原理图场景坐标，不是截图像素或毫米；会按工程网格吸附，最终事件返回实际位置。
+- `rotation_deg` 为目标旋转角度，单位为度，必须为有限数字；负角度或超过一圈的角度会归一化到 `[0, 360)`，例如 `450` 等效于 `90`。
+- 两个镜像字段必须为 JSON 布尔值，表示目标镜像状态，不接受字符串 `"true"`/`"false"`。重复发送同一状态不会再次翻转。
+- 旋转和镜像设置的是每个器件自身的变换状态，不是围绕鼠标位置或整组中心执行一次交互式操作；引脚位置由现有器件变换逻辑更新，不接收独立引脚坐标修改。
+- 同一批次不能重复指定同一个器件，即使用 UUID 和名称分别指定也会被拒绝；器件不存在、标识不匹配、目标为 `InsertText` 或任一字段不合法时，整批不修改。
+- 原理图处于未结束的撤销命令组（如预放置）时返回失败。存在实际修改时整批形成一个撤销操作，连线按现有批处理机制刷新后保存工程；执行或保存失败时回滚本批修改。
+- 所有目标状态已经一致时仍返回成功，但不新增撤销记录，也不触发工程保存。
+- 最终事件的 `payload_json` 包含 `project_path`、`component_count`、`components`；成功时 `components` 按请求顺序返回本批器件的更新后完整信息，元素结构与 `GET_SCHEMATIC_COMPONENT_INFO.component` 一致，包含实际器件及引脚坐标。失败原因见最终事件的 `message`。
+
 ### DELETE_SIMULATION_COMPONENT
 
 ```json
@@ -423,7 +488,64 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 ```
 
 - `instance_name` 按原理图器件实例名精确匹配。
-- 返回的 `component` 对象与 `LIST_SCHEMATIC_COMPONENTS` 的数组元素结构完全一致。
+- 返回的 `component` 对象包含列表接口已有的 `instance_name`、`component_type`、`general_type`、`sub_type`、`active_state`、`state` 和完整 `parameters`，并额外返回以下几何信息；列表接口目前没有这些新增字段。
+
+| 字段 | 含义 |
+| --- | --- |
+| `uuid` | 原理图器件实例 UUID，可用于批量变换接口定位器件。 |
+| `component_uuid` | 模型库 Component UUID；内置器件可能为空，不可当作实例 UUID 使用。 |
+| `coordinate_system` | 固定为 `schematic_scene`，表示原理图场景坐标。 |
+| `position` | 器件放置位置 `{x, y}`，不是屏幕像素或毫米，也不是图形包围框中心。 |
+| `rotation_deg` | 器件旋转角度，单位为度，范围为 `[0, 360)`。 |
+| `mirrored_horizontal` | 水平镜像状态，JSON 布尔值。 |
+| `mirrored_vertical` | 垂直镜像状态，JSON 布尔值。 |
+| `pins` | 引脚数组，按引脚索引升序排列，无引脚时为空数组。 |
+
+每个 `pins` 元素包含：
+
+- `uuid`：当前器件实例的引脚 UUID。
+- `index`：软件实际使用的引脚索引，不重新编号；可对应连线接口的引脚索引。
+- `position`：引脚实际场景坐标 `{x, y}`，已包含器件平移、旋转、镜像和网格吸附，可直接用于定位；不要再次施加器件变换。
+- `local_position`：变换前的引脚局部坐标 `{x, y}`，不能直接当作原理图场景坐标。
+
+成功事件中 `payload_json` 解码后的结构示例（UUID 和参数仅作示意）：
+
+```json
+{
+  "project_path": "C:/test/project.epp",
+  "instance_name": "R1",
+  "component": {
+    "instance_name": "R1",
+    "component_type": "R",
+    "general_type": "",
+    "sub_type": "",
+    "active_state": 0,
+    "state": "NORMAL",
+    "parameters": {"R": {"Value": "50", "Unit": "Ohm"}},
+    "uuid": "11111111-1111-4111-8111-111111111111",
+    "component_uuid": "",
+    "coordinate_system": "schematic_scene",
+    "position": {"x": 100, "y": 200},
+    "rotation_deg": 0,
+    "mirrored_horizontal": false,
+    "mirrored_vertical": false,
+    "pins": [
+      {
+        "uuid": "22222222-2222-4222-8222-222222222222",
+        "index": 0,
+        "position": {"x": 80, "y": 200},
+        "local_position": {"x": -20, "y": 0}
+      },
+      {
+        "uuid": "33333333-3333-4333-8333-333333333333",
+        "index": 1,
+        "position": {"x": 120, "y": 200},
+        "local_position": {"x": 20, "y": 0}
+      }
+    ]
+  }
+}
+```
 - 指定器件不存在或名称对应 `InsertText` 文字图元时，最终事件返回失败及具体原因。
 
 ### LOAD_SCHEMATIC_FROM_FILE
@@ -549,17 +671,6 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 - 下游请求为 `POST /api/v1/models/manage/batch_query_component/`，请求体字段仍为 `originalid_list`。
 - 下游返回的完整 JSON 对象原样写入最终事件的 `payload_json`，不执行搜索接口的裁剪规则。
 
-### SEARCH_SOFT_IP_CATEGORIES
-
-```json
-{}
-```
-
-- 该任务不接收业务参数，`payload_json` 必须是空 JSON 对象。
-- 服务端以每页 15 条请求 `GET /api/v1/soft-ip-manager/soft-ip-categories/`，并根据 `data.total_pages` 查询全部分页。
-- 成功时合并各页的 `data.results`；gRPC 会删除每个分类及其 `params` 子项中的 `created_time`、`updated_time`，其他字段保持不变。
-- 最终 payload 只返回过滤后的 `results`，以及根据该数组长度计算的 `count`。
-- 任意一页发生网络、HTTP、JSON 解析或业务错误时，任务整体失败，不返回已查询到的部分软 IP 分类；具体原因位于事件 `message`。
 
 ### SEARCH_PUBLIC_SOFT_IP_MODELS
 
@@ -646,11 +757,12 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 ```
 
 - `description`、`save_path` 为必填的非空字符串；`description` 是模型设计需求，`save_path` 是服务端可访问的完整目标文件路径。
-- `freq`、`bandwidth` 为可选有限数值；`freq` 提供时必须大于 `0`。
+- `freq`、`bandwidth` 为可选有限数值；具体可用上下限以插值范围接口的返回为准。
 - 服务端调用 `POST /api/v1/models/smart-search/`，将 `description` 映射到下游 `question`，并固定携带 `"model_type":"soft_ip_model"`。存在候选时使用 `results` 的第一项模型。
-- `freq` 或 `bandwidth` 任一未提供时，服务端调用 `/api/v1/soft-ip-manager/soft-ip-models/<id>/interp-range/`。仅当对应的最小值和最大值字段同时存在且为数值时才补齐：缺失的 `freq` 使用 `freq_min + (freq_max - freq_min) / 2`，缺失的 `bandwidth` 使用 `bandwidth_min + (bandwidth_max - bandwidth_min) / 2`。带宽范围字段不存在时不填充 `bandwidth`；频率范围字段不存在且请求也未提供 `freq` 时，任务失败并返回“无法确定软 IP 下载频率”。
+- 服务端始终调用 `/api/v1/soft-ip-manager/soft-ip-models/<id>/interp-range/` 查询可设计范围。客户端已提供 `freq` 或 `bandwidth` 时，按包含边界的 `[min,max]` 范围校验；某个参数越界时，仅将该参数替换为对应范围的中间值，然后继续下载。未提供的 `freq` 使用 `freq_min + (freq_max - freq_min) / 2` 补齐，未提供的 `bandwidth` 使用 `bandwidth_min + (bandwidth_max - bandwidth_min) / 2` 补齐。带宽范围字段不存在时不填充 `bandwidth`；频率范围字段不存在且请求也未提供 `freq` 时，任务失败并返回“无法确定软 IP 下载频率”。
 - 下载时复用 `DOWNLOAD_SOFT_IP_MODEL`：存在 `bandwidth` 时自动携带 `allow_extrapolation=false`，否则只携带 `freq`。
 - 成功 payload 返回 `status=DESIGN_READY`、`success=true`、最终绝对路径 `save_path`、实际使用的 `freq`，以及存在时的 `bandwidth`；由插值范围补齐参数时还会返对应单位字段。不返回模型名称和模型 ID，对外 `message` 为“软 IP 设计准备完成”。
+- 参数越界不再返回 `DESIGN_UNSUPPORTED`；下载成功时，payload 中的 `freq` 和 `bandwidth` 为实际使用的值，越界参数会显示为对应范围中间值。
 - 智能设计的 `results` 为空时，返回 `status=DESIGN_UNSUPPORTED`、`success=false`，`message` 为“当前暂不具备该设计需求的软 IP 设计能力”。插值范围接口返回错误时，当前实现也统一返回该状态和提示；其他错误返回 `status=DESIGN_PREPARE_FAILED`、`success=false`，`message` 为“软 IP 设计准备失败”。
 
 ### LIST_IDEAL_COMPONENTS
@@ -983,6 +1095,7 @@ enum ResultStatus {
 - `SIMULATE_NETLIST`：`netlist_path`、`result_path`、`ads_output`
 - `CREATE_SIMULATION_COMPONENT`：`project_path`、`component_type`、`action`、`instance_name`
 - `UPDATE_SIMULATION_COMPONENT`：`project_path`、`instance_name`
+- `UPDATE_SCHEMATIC_COMPONENTS_TRANSFORM`：最终事件包含 `project_path`、`component_count`、`components`；成功时返回本批器件的更新后完整信息（含几何信息与引脚坐标），失败时通过 `message` 说明原因。
 - `DELETE_SIMULATION_COMPONENT`：`project_path`、`instance_name`
 - `SET_COMPONENT_ACTIVE_STATE`：`project_path`、`instance_name`、`state`
 - `REPLACE_PORT_COMPONENT`：`project_path`、`target_instance_name`、`old_component_type`、`new_component_type`、`new_instance_name`
@@ -1009,7 +1122,6 @@ enum ResultStatus {
 - `DESIGN_SCHEMATIC_TOPOLOGY`：始终返回布尔字段 `success`（正常结束为 `true`，其余为 `false`）与业务状态 `status`，`status` 取值为 `DESIGN_COMPLETED`、`NO_SUPPORTED_TOPOLOGY`、`PROJECT_CREATE_FAILED`、`SCHEMATIC_IMPORT_FAILED`、`DESIGN_FAILED`；成功时另有 `project_path`、`schematic_id`、`component_count`、`net_segment_count`，成功与失败均带 `project_name`，原因位于 `message`
 - `EXPORT_SCHEMATIC_COMPONENTS_TO_CSV`：成功返回最终文件路径 `csv_path`；失败返回 `{}`
 - `BATCH_QUERY_COMPONENT`：模型服务返回的完整响应对象，通常包含 `code`、`message`、`data`
-- `SEARCH_SOFT_IP_CATEGORIES`：成功仅返回 `count`、`results`，其中分类和参数项不包含 `created_time`、`updated_time`，`count` 等于合并后的 `results` 数组长度；失败返回 `{}`
 - `SEARCH_PUBLIC_SOFT_IP_MODELS`：成功仅返回 `count`、`results`，每项不包含 `created_time`、`result_download_url`、`updated_time`，`count` 等于合并后的 `results` 数组长度；失败返回 `{}`
 - `SEARCH_PERSONAL_SOFT_IP_MODELS`：成功仅返回 `count`、`results`，每项不包含 `created_time`、`result_download_url`、`updated_time`，`count` 等于合并后的 `results` 数组长度；失败返回 `{}`
 - `DOWNLOAD_SOFT_IP_MODEL`：成功返回最终绝对文件路径 `save_path`；失败返回 `{}`
@@ -1421,9 +1533,24 @@ enum ResultStatus {
   "event_type": "GET_SCHEMATIC_COMPONENT_INFO",
   "status": "RESULT_STATUS_SUCCESS",
   "message": "schematic component found",
-  "payload_json": "{\"project_path\":\"C:/test/project.epp\",\"instance_name\":\"R1\",\"component\":{\"instance_name\":\"R1\",\"component_type\":\"R\",\"general_type\":\"\",\"sub_type\":\"\",\"active_state\":0,\"state\":\"NORMAL\",\"parameters\":{\"R\":{\"Value\":\"50\",\"Unit\":\"Ohm\"}}}}"
+  "payload_json": "{\"project_path\":\"C:/test/project.epp\",\"instance_name\":\"R1\",\"component\":{\"instance_name\":\"R1\",\"component_type\":\"R\",\"general_type\":\"\",\"sub_type\":\"\",\"active_state\":0,\"state\":\"NORMAL\",\"parameters\":{\"R\":{\"Value\":\"50\",\"Unit\":\"Ohm\"}},\"uuid\":\"11111111-1111-4111-8111-111111111111\",\"component_uuid\":\"\",\"coordinate_system\":\"schematic_scene\",\"position\":{\"x\":100,\"y\":200},\"rotation_deg\":0,\"mirrored_horizontal\":false,\"mirrored_vertical\":false,\"pins\":[{\"uuid\":\"22222222-2222-4222-8222-222222222222\",\"index\":0,\"position\":{\"x\":80,\"y\":200},\"local_position\":{\"x\":-20,\"y\":0}},{\"uuid\":\"33333333-3333-4333-8333-333333333333\",\"index\":1,\"position\":{\"x\":120,\"y\":200},\"local_position\":{\"x\":20,\"y\":0}}]}}"
 }
 ```
+
+### 9.8.1 批量更新器件位置、旋转和镜像
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-update-transforms-001",
+  "type": "UPDATE_SCHEMATIC_COMPONENTS_TRANSFORM",
+  "payload_json": "{\"project_path\":\"C:/test/project.epp\",\"components\":[{\"instance_name\":\"R1\",\"position\":{\"x\":100,\"y\":200},\"rotation_deg\":90,\"mirrored_horizontal\":true,\"mirrored_vertical\":false},{\"instance_name\":\"R2\",\"position\":{\"x\":300,\"y\":200}}]}"
+}
+```
+
+如果 Postman 未识别最新枚举，请重新导入 `ecserver.proto`，也可以将 `type` 填为数值 `64`。请求中的位置为场景坐标，省略的变换字段保持不变；若要按 UUID 定位，将对应项的 `instance_name` 替换为查询接口返回的实例 `uuid`。
+
+`PerformAction` 返回受理成功后，继续监听同一 `client_uuid` 的 `FetchEvent`，按 `task_id` 匹配最终事件。最终 `event_type` 为 `UPDATE_SCHEMATIC_COMPONENTS_TRANSFORM`；成功时解码 `payload_json`，读取 `component_count` 和 `components` 中的实际变换及引脚坐标。该数组仅包含本次请求的器件，不是整个原理图的器件列表。
 
 ### 9.9 从文件加载原理图
 
@@ -1997,33 +2124,8 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `40`。请�
 
 `payload_json` 中的实际字段和值以模型服务返回为准。Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `41`。
 
-### 9.31 查询软 IP 分类
 
-```json
-{
-  "client_uuid": "postman-test-client-001",
-  "task_id": "postman-search-soft-ip-categories-001",
-  "type": "SEARCH_SOFT_IP_CATEGORIES",
-  "payload_json": "{}"
-}
-```
-
-最终成功事件示意：
-
-```json
-{
-  "client_uuid": "postman-test-client-001",
-  "task_id": "postman-search-soft-ip-categories-001",
-  "event_type": "SEARCH_SOFT_IP_CATEGORIES",
-  "status": "RESULT_STATUS_SUCCESS",
-  "message": "soft IP categories retrieved",
-  "payload_json": "{\"count\":3,\"results\":[...]}"
-}
-```
-
-Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `42`。分页中的任一请求失败时，最终事件状态为 `RESULT_STATUS_FAILED`，`payload_json` 为 `{}`。
-
-### 9.32 查询公共软 IP
+### 9.31 查询公共软 IP
 
 ```json
 {
@@ -2049,7 +2151,7 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `42`。分�
 
 Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `43`。分页中的任一请求失败时，最终事件状态为 `RESULT_STATUS_FAILED`，`payload_json` 为 `{}`。
 
-### 9.33 查询个人软 IP
+### 9.32 查询个人软 IP
 
 ```json
 {
@@ -2075,7 +2177,7 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `43`。分�
 
 Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `44`。分页中的任一请求失败时，最终事件状态为 `RESULT_STATUS_FAILED`，`payload_json` 为 `{}`。
 
-### 9.34 下载软 IP AEDT 模型
+### 9.33 下载软 IP AEDT 模型
 
 ```json
 {
@@ -2101,7 +2203,7 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `44`。分�
 
 Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `45`。`PerformAction` 返回成功仅表示任务已受理，最终下载结果通过 `FetchEvent` 获取。
 
-### 9.35 上传 Agent 记录包
+### 9.34 上传 Agent 记录包
 
 ```json
 {
@@ -2127,7 +2229,7 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `45`。`Perf
 
 失败时 `status` 为 `RESULT_STATUS_FAILED`，`message` 为具体失败原因，`payload_json` 为 `{}`。Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `46`。
 
-### 9.36 智能设计统一接口（语义检索并创建工程）
+### 9.35 智能设计统一接口（语义检索并创建工程）
 
 ```json
 {
@@ -2200,7 +2302,7 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `45`。`Perf
 
 `project_name` 始终为服务端生成或清洗后的最终工程目录名，失败时也会携带。Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `47`。原有 4 个接口（`SEARCH_SCHEMATIC_FROM_PUBLIC_LIBRARY`、`SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY`、`USE_SCHEMATIC_FROM_LIBRARY_CREATE_PROJECT`、`USE_SCHEMATIC_FROM_LIBRARY_IMPORT`）保持原样可用。
 
-### 9.37 设计并下载公共软 IP 模型
+### 9.36 设计并下载公共软 IP 模型
 
 ```json
 {
@@ -2211,7 +2313,7 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `45`。`Perf
 }
 ```
 
-上例未提供 `freq` 和 `bandwidth`，服务端将查询插值范围，分别使用频率和带宽范围的中间值。插值范围查询失败时，按 `DESIGN_UNSUPPORTED` 返回。最终成功事件示意：
+上例未提供 `freq` 和 `bandwidth`，服务端将查询插值范围，分别使用频率和带宽范围的中间值。已提供参数时也会先查询范围并校验；插值范围查询失败时，按 `DESIGN_UNSUPPORTED` 返回。最终成功事件示意：
 
 ```json
 {
@@ -2224,7 +2326,7 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `45`。`Perf
 }
 ```
 
-无匹配模型时，失败事件的 `payload_json` 为 `{"status":"DESIGN_UNSUPPORTED","success":false,"message":"当前暂不具备该设计需求的软 IP 设计能力"}`；其他错误的 `payload_json` 为 `{"status":"DESIGN_PREPARE_FAILED","success":false,"message":"软 IP 设计准备失败"}`。
+无匹配模型时，失败事件的 `payload_json` 为 `{"status":"DESIGN_UNSUPPORTED","success":false,"message":"当前暂不具备该设计需求的软 IP 设计能力"}`。请求参数越界时改用范围中间值继续下载，成功事件的 `payload_json` 返回实际设计参数。其他错误的 `payload_json` 为 `{"status":"DESIGN_PREPARE_FAILED","success":false,"message":"软 IP 设计准备失败"}`。
 
 Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `48`。`PerformAction` 成功仅表示任务已受理，最终结果通过 `FetchEvent` 获取。
 
@@ -2289,6 +2391,7 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `48`。`Perf
 - 涉及工程的任务中，`project_path` 必须指向已存在的 `.epp` 文件。
 - `CREATE_SIMULATION_COMPONENT` 只接收 `project_path` 和非空 `component_type`，按工厂默认参数创建器件；携带 `parameters` 会被拒绝。
 - `UPDATE_SIMULATION_COMPONENT` 必须提供器件 `instance_name` 和非空 `parameters`；任意普通器件均可更新已有参数，只有 `HarmonicBalance`、`XDB`、`P_nToneG`、`P_nTone` 和 `Var` 支持按各自规则新增参数或变量；Sweep 引用参数必须通过对应校验。
+- `UPDATE_SCHEMATIC_COMPONENTS_TRANSFORM`（编号 `64`）必须提供非空 `components` 数组；按实例 `uuid` 或 `instance_name` 定位，位置、角度和镜像字段均为绝对目标状态。任一项校验失败时整批不修改；存在实际改动时形成一个撤销操作并保存，保存失败时回滚。客户端需使用包含新枚举的协议文件。
 - `DELETE_SIMULATION_COMPONENT` 和 `SET_COMPONENT_ACTIVE_STATE` 使用 `instance_name` 精确定位器件。
 - 器件创建、参数更新、删除或状态设置成功后会立即保存工程；保存失败时回滚本次操作。
 - `REPLACE_PORT_COMPONENT` 只能在 `TermG` 和 `P_nToneG` 之间替换；目标器件和新器件都必须只有一个外部引脚，替换会保留原连线关系。
