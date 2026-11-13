@@ -77,7 +77,7 @@ EDI_PATH=                    # 留空自动检测
 TURBOCHARTS_PATH=            # 留空自动检测
 MCP_TRANSPORT=streamable-http
 MCP_PORT=50026
-MCP_HIDE_INTERNAL_TOOLS=0    # 1 = 下架内部 gRPC/仿真工具（对智能体彻底不可见），0 = 全量暴露（默认）
+MCP_HIDE_INTERNAL_TOOLS=0    # 0 = 全量暴露（默认）；1 = 下架内部 gRPC/仿真工具；2 = 只保留内部工具 + 无依赖计算工具
 MCP_ALLOWED_PROCESSES=       # 可选：默认 hermes_cli.main,edi-agent-service.exe（写死在 settings.py），置空=关闭；配置后只放行「精确匹配」的进程访问 /mcp（整词 token / exe basename / 完整路径）
 ```
 

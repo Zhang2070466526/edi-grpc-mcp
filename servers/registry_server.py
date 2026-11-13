@@ -119,17 +119,67 @@ _INTERNAL_RESOURCES: frozenset[str] = frozenset({
     "edi://reference/turbocharts-guide",
 })
 
+#: 无依赖的本地纯计算工具（微波计算 / 射频链路计算）。mode=2 时与内部工具一起保留。
+_CALC_TOOLS: frozenset[str] = frozenset({
+    "calculate_transline", "design_wilkinson",
+    "filter_order_lowpass", "filter_order_highpass",
+    "filter_order_bandpass", "filter_order_bandstop",
+    "wilkinson_marchand_order",
+    "analyze_mixer_spur", "calculate_rf_dynamic_range",
+})
+
+#: mode=3 下架：软 IP（design_chip）+ LASPCEM 电磁仿真工具。
+_MODE3_TOOLS: frozenset[str] = frozenset({
+    "design_chip",
+    "launch_laspcem", "open_laspcem_project", "import_aedt_as_sem",
+    "run_laspcem_solve_async", "laspcem_solve_query",
+    "laspcem_task_cancel", "laspcem_task_list",
+    "export_laspcem_snp", "build_laspcem_report", "get_laspcem_setup",
+    "laspcem_cleanup_orphans",
+})
+
 
 def _hide_internal_tools() -> None:
-    """按开关下架内部工具/prompt/resource（从注册表 pop，代码保留、可逆）。"""
-    if not get_settings().mcp_hide_internal_tools:
+    """按开关下架工具/prompt/resource（从注册表 pop，代码保留、可逆）。
+
+    mode = get_settings().mcp_hide_internal_tools：
+      0 = 全量暴露（不动）；
+      1 = 下架内部工具（_INTERNAL_TOOLS 黑名单 + 配套 prompt/resource）；
+      2 = 只保留「内部工具 + 无依赖计算工具」，其余（ANSYS/CST/LASPCEM/图片/文档等）全下架；
+      3 = 下架软 IP（design_chip）+ LASPCEM 电磁仿真工具。
+    """
+    mode = get_settings().mcp_hide_internal_tools
+    if mode == 0:
         return
-    for name in _INTERNAL_TOOLS:
-        mcp._tool_manager._tools.pop(name, None)
-    for name in _INTERNAL_PROMPTS:
-        mcp._prompt_manager._prompts.pop(name, None)
-    for name in _INTERNAL_RESOURCES:
-        mcp._resource_manager._resources.pop(name, None)
+
+    if mode == 1:
+        for name in _INTERNAL_TOOLS:
+            mcp._tool_manager._tools.pop(name, None)
+        for name in _INTERNAL_PROMPTS:
+            mcp._prompt_manager._prompts.pop(name, None)
+        for name in _INTERNAL_RESOURCES:
+            mcp._resource_manager._resources.pop(name, None)
+        return
+
+    if mode == 2:  # 白名单：只保留内部工具 + 无依赖计算工具（+ describe_tool 元工具）
+        keep_tools = _INTERNAL_TOOLS | _CALC_TOOLS | {"describe_tool"}
+        for name in list(mcp._tool_manager._tools):
+            if name not in keep_tools:
+                mcp._tool_manager._tools.pop(name, None)
+        for name in list(mcp._prompt_manager._prompts):
+            if name not in _INTERNAL_PROMPTS:
+                mcp._prompt_manager._prompts.pop(name, None)
+        for name in list(mcp._resource_manager._resources):
+            if name not in _INTERNAL_RESOURCES:
+                mcp._resource_manager._resources.pop(name, None)
+        return
+
+    if mode == 3:  # 下架软 IP（design_chip）+ LASPCEM 电磁仿真工具
+        for name in _MODE3_TOOLS:
+            mcp._tool_manager._tools.pop(name, None)
+        return
+
+    # 其它未知值：保守按全量暴露处理（int 字段，正常到不了这里）
 
 
 _hide_internal_tools()
