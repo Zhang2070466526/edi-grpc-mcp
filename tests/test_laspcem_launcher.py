@@ -80,7 +80,7 @@ def test_build_export_snp_script_no_analyze():
     assert "cem.FEMAnalyze" not in s
     assert "'Solution Name': 'FEM_2'" in s
     assert "C:/proj/CPW.sNp" in s
-    assert s.rstrip().endswith("pass") or "app.Exit()" in s         # 导出脚本会自己退出
+    assert "app.Exit" not in s                                     # 不再让脚本自己退（会弹确认框）
 
 
 def test_build_report_script():
@@ -313,7 +313,7 @@ def test_export_uses_port_suffixed_artifact(tmp_path, monkeypatch):
     monkeypatch.setattr(L, "_results_present", lambda p: True)      # 结果目录不在本用例范围
     art = tmp_path / "p.s2p"
     art.write_text("! touchstone\n1.0 2.0 3.0\n", encoding="utf-8")
-    monkeypatch.setattr(L, "_wait_for_artifact", lambda out, proc, t, before_sig=None: str(art))
+    monkeypatch.setattr(L, "_wait_for_artifact", lambda out, proc, t, before_sig=None, log_path="": str(art))
     r = L.export_laspcem_snp(str(sem))
     assert r["success"] is True
     assert r["output_path"].endswith("p.s2p")
@@ -472,7 +472,7 @@ def test_export_empty_artifact_rejected(tmp_path, monkeypatch):
     monkeypatch.setattr(L, "_project_in_use", lambda p: [])
     monkeypatch.setattr(L, "_results_present", lambda p: True)
     monkeypatch.setattr(L, "_spawn_script", lambda e, s: (None, "t.py", None))
-    monkeypatch.setattr(L, "_wait_for_artifact", lambda o, p, t, before_sig=None: str(art))
+    monkeypatch.setattr(L, "_wait_for_artifact", lambda o, p, t, before_sig=None, log_path="": str(art))
     r = L.export_laspcem_snp(str(sem))
     assert r["success"] is False
     assert r["error_code"] == "EXPORT_EMPTY"
@@ -865,7 +865,7 @@ def test_export_proceeds_even_if_results_dir_missing(tmp_path, monkeypatch):
         spawned["n"] += 1
         return _P(), "s.py", None
 
-    def fake_wait(out, proc, timeout, before_sig=None, poll=1.0):
+    def fake_wait(out, proc, timeout, before_sig=None, poll=1.0, log_path=""):
         art.write_text("! header\n1.0 2.0 3.0\n", encoding="utf-8")
         return str(art)
 
@@ -907,12 +907,155 @@ def test_export_reports_no_output(tmp_path, monkeypatch):
     sem.write_bytes(b"SolutionId FEM_1 Setup1(FEM)")
     monkeypatch.setattr(L, "_resolve_exe", lambda p: (r"D:\fake\laspcem.exe", None))
     monkeypatch.setattr(L, "_spawn_script", lambda exe, s: (None, "tmp.py", None))
-    monkeypatch.setattr(L, "_wait_for_artifact", lambda out, proc, t, before_sig=None: None)
+    monkeypatch.setattr(L, "_wait_for_artifact", lambda out, proc, t, before_sig=None, log_path="": None)
     monkeypatch.setattr(L, "_results_present", lambda p: True)
     r = L.export_laspcem_snp(str(sem))
     assert r["success"] is False
     assert r["error_code"] == "EXPORT_NO_OUTPUT"
     assert "script_log" in r.get("details", {})
+
+
+def test_export_rejects_directory_output_path(tmp_path):
+    """output_path 传目录 ⇒ 立刻 INVALID_PARAMETERS（不再白等 30 s 才 EXPORT_NO_OUTPUT）。
+
+    2026-11-13 实测：旧实现 `output_path.strip()` 直接拿去拼，传目录时 LASPCEM 导不出文件，
+    要等满 30 s 兜底窗口，期间还占着异步的单 worker。
+    """
+    import servers.laspcem.launcher as L
+
+    sem = tmp_path / "p.sem"
+    sem.write_bytes(b"SolutionId FEM_1 Setup1(FEM)")
+    r = L.export_laspcem_snp(str(sem), output_path=str(tmp_path))
+    assert r["success"] is False
+    assert r["error_code"] == "INVALID_PARAMETERS", r
+    assert "目录" in r["message"]
+
+
+def test_report_rejects_empty_name(tmp_path):
+    """report_name 传空串 ⇒ INVALID_PARAMETERS（旧实现会原样塞进报告脚本）。"""
+    import servers.laspcem.launcher as L
+
+    sem = tmp_path / "p.sem"
+    sem.write_bytes(b"SolutionId FEM_1 Setup1(FEM)")
+    r = L.build_laspcem_report(str(sem), report_name="  ")
+    assert r["success"] is False
+    assert r["error_code"] == "INVALID_PARAMETERS", r
+
+
+def test_close_laspcem_project_terminates_matching_instance(tmp_path, monkeypatch):
+    """close 只关「cmdline 里带这个工程」的实例；别的工程不动；无匹配返回 closed=[]。"""
+    import servers.laspcem.launcher as L
+
+    sem = tmp_path / "p.sem"
+    sem.write_bytes(b"SolutionId FEM_1 Setup1(FEM)")
+    other = tmp_path / "o.sem"
+    other.write_bytes(b"SolutionId FEM_1 Setup1(FEM)")
+
+    acted: list[str] = []
+
+    class _P:
+        def terminate(self):
+            acted.append("terminate")
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            acted.append("kill")
+
+    monkeypatch.setattr(L, "find_laspcem_processes",
+                        lambda: [{"pid": 11, "project": str(sem)},
+                                 {"pid": 22, "project": str(other)}])
+    monkeypatch.setattr(L.psutil, "Process", lambda pid: _P())
+
+    r = L.close_laspcem_project(str(sem))
+    assert r["success"] is True
+    assert r["closed"] == [11], r            # 只关匹配的那个
+    assert acted == ["terminate"], acted
+    assert 22 not in r["closed"]
+
+
+def test_close_laspcem_project_no_match_is_success(tmp_path, monkeypatch):
+    import servers.laspcem.launcher as L
+
+    sem = tmp_path / "p.sem"
+    sem.write_bytes(b"SolutionId FEM_1 Setup1(FEM)")
+    monkeypatch.setattr(L, "find_laspcem_processes", list)
+    r = L.close_laspcem_project(str(sem))
+    assert r["success"] is True and r["closed"] == [], r
+    assert "没有实例" in r["message"]
+
+
+def test_solve_progress_ignores_logs_older_than_since(tmp_path):
+    """`since` 之前的日志不算本次进度（实测新任务刚提交会读到上个任务的 Iter3）。"""
+    import os
+    import time as _time
+
+    import servers.laspcem.launcher as L
+
+    sem = tmp_path / "prog.sem"
+    sem.write_bytes(b"x")
+    res = tmp_path / "prog" / "1_Result"
+    res.mkdir(parents=True)
+
+    old_prog = res / "Prog.log"
+    old_prog.write_text("OLD-TASK-LINE\n", encoding="utf-8")
+    os.utime(old_prog, (1000, 1000))
+    old_itr = res / "HOFEM_adapt_itr_1.log"
+    old_itr.write_text("a", encoding="utf-8")
+    os.utime(old_itr, (1000, 1000))
+
+    now = _time.time()
+    new_itr = res / "HOFEM_adapt_itr_2.log"
+    new_itr.write_text("b", encoding="utf-8")
+    os.utime(new_itr, (now, now))
+
+    allp = L.solve_progress(str(sem))
+    assert allp["adapt_iterations"] == 2, allp
+    assert allp["last_log_line"] == "OLD-TASK-LINE", allp
+
+    fresh = L.solve_progress(str(sem), since=now - 1)
+    assert fresh["adapt_iterations"] == 1, fresh        # 只剩本次那个
+    assert fresh["last_log_line"] == "", fresh           # 旧 Prog.log 被过滤
+
+
+def test_close_laspcem_project_works_when_file_deleted(tmp_path, monkeypatch):
+    """工程文件已被删/改名，但实例 cmdline 仍指向它 ⇒ 也要能按路径关掉。
+
+    2026-11-13 复核：原来用 `validate_file` 先校验存在性，文件一丢就回 `INVALID_PATH`，
+    恰恰关不掉这种最需要收拾的残留。
+    """
+    import servers.laspcem.launcher as L
+
+    gone = tmp_path / "deleted.sem"          # 故意不创建
+    acted: list[str] = []
+
+    class _P:
+        def terminate(self):
+            acted.append("t")
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            acted.append("k")
+
+    monkeypatch.setattr(L, "find_laspcem_processes",
+                        lambda: [{"pid": 33, "project": str(gone)}])
+    monkeypatch.setattr(L.psutil, "Process", lambda pid: _P())
+    r = L.close_laspcem_project(str(gone))
+    assert r["success"] is True and r["closed"] == [33], r
+    assert acted == ["t"]
+
+
+def test_close_laspcem_project_rejects_bad_input(tmp_path):
+    """扩展名 / 空路径仍要拦（放宽的只是「文件是否存在」）。"""
+    import servers.laspcem.launcher as L
+
+    r = L.close_laspcem_project("")
+    assert r["error_code"] == "INVALID_PATH", r
+    r = L.close_laspcem_project(str(tmp_path / "x.txt"))
+    assert r["error_code"] == "INVALID_PATH" and "扩展名" in r["message"], r
 
 
 def test_export_laspcem_snp_rejects_bad_extension(tmp_path):
@@ -1266,7 +1409,7 @@ def test_export_short_waits_when_results_missing(tmp_path, monkeypatch):
     sem.write_bytes(b"SolutionId FEM_1 Setup1(FEM)")
     seen = {}
 
-    def fake_wait(out, proc, timeout, before_sig=None, poll=1.0):
+    def fake_wait(out, proc, timeout, before_sig=None, poll=1.0, log_path=""):
         seen["timeout"] = timeout
 
     monkeypatch.setattr(L, "_resolve_exe", lambda p: ("x", None))
@@ -1291,7 +1434,7 @@ def test_export_uses_full_timeout_when_results_present(tmp_path, monkeypatch):
     sem.write_bytes(b"SolutionId FEM_1 Setup1(FEM)")
     seen = {}
 
-    def fake_wait(out, proc, timeout, before_sig=None, poll=1.0):
+    def fake_wait(out, proc, timeout, before_sig=None, poll=1.0, log_path=""):
         seen["timeout"] = timeout
 
     monkeypatch.setattr(L, "_resolve_exe", lambda p: ("x", None))

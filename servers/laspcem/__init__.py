@@ -23,6 +23,7 @@ from servers.laspcem.async_solve import (
 )
 from servers.laspcem.launcher import (
     build_laspcem_report,
+    close_laspcem_project,
     export_laspcem_snp,
     get_laspcem_setup,
     import_aedt_as_sem,
@@ -32,6 +33,7 @@ from servers.laspcem.launcher import (
 
 __all__ = [
     "build_laspcem_report",
+    "close_laspcem_project",
     "export_laspcem_snp",
     "get_laspcem_setup",
     "import_aedt_as_sem",

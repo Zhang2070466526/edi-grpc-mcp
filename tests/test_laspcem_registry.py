@@ -28,6 +28,25 @@ def _clean_registry():
     project_registry.bind_thread("")
 
 
+@pytest.fixture
+def isolated_runner(monkeypatch):
+    """给需要提交真任务的用例一套**独立**的 runner + 表。
+
+    2026-11-13 全仓跑暴露：直接用模块级 `_runner`（单 worker）会留下阻塞/已完成任务，
+    后续用例看到 "有在跑的任务" 就改走 skipped 分支 ⇒ 顺序相关的 9 个失败。
+    这里整体替换，跑完全仓不再互相影响。
+    """
+    from servers.task_runner import TaskRunner
+
+    monkeypatch.setattr(async_solve, "_runner",
+                        TaskRunner(name_prefix="t_iso", max_workers=1, max_tasks=5))
+    monkeypatch.setattr(async_solve, "_phases", {})
+    monkeypatch.setattr(async_solve, "_cancel_events", {})
+    monkeypatch.setattr(async_solve, "_handles", {})
+    monkeypatch.setattr(async_solve, "_progress_cache", {})
+    yield
+
+
 def test_registry_acquire_conflict_and_exemption():
     sem = r"D:\tmp\A.sem"
     ok, _ = project_registry.acquire(sem, "owner1", "solve")
@@ -201,7 +220,7 @@ def test_solve_timeout_kills_solvers_and_mpi_before_persist(tmp_path, monkeypatc
     assert r["details"]["killed_solver_pids"] == [7, 8], r["details"]
 
 
-def test_cleanup_orphans_skips_project_with_running_task(tmp_path, monkeypatch):
+def test_cleanup_orphans_skips_project_with_running_task(tmp_path, monkeypatch, isolated_runner):
     """P1-2 回归：显式指定**正在求解**的工程时，cleanup 不能杀掉它的求解器。
 
     原实现里守卫写成 `owner_key in active_sems and owner_key != want`，
@@ -236,7 +255,7 @@ def test_cleanup_orphans_skips_project_with_running_task(tmp_path, monkeypatch):
     assert any("正在跑" in s.get("reason", "") for s in r["skipped"]), r
 
 
-def test_cancel_clears_all_three_tables():
+def test_cancel_clears_all_three_tables(isolated_runner):
     """P2-3 回归：cancel 后 _phases / _cancel_events / _handles 三张表都要清。"""
     gate = threading.Event()
     tid = async_solve._runner.submit(lambda: gate.wait(20), metadata={"sem_path": ""})
@@ -280,7 +299,7 @@ def test_report_not_verified_returns_error(tmp_path, monkeypatch):
     assert r["details"]["verified"] is False, r     # error_response 的 extra 进 details
 
 
-def test_cleanup_orphans_handles_solvers_without_project_path(tmp_path, monkeypatch):
+def test_cleanup_orphans_handles_solvers_without_project_path(tmp_path, monkeypatch, isolated_runner):
     """求解器类进程 cmdline 无工程路径时（实测 phofem 就是这样）的三条分支。
 
     - 无在跑任务 ⇒ 当孤儿清掉（服务重启后最常见的残留，旧代码会静默漏掉）
@@ -380,6 +399,47 @@ def test_cleanup_orphans_records_unresolvable_gui(monkeypatch):
     r = async_solve.laspcem_cleanup_orphans(dry_run=False)
     assert r["killed"] == [], r
     assert any(s["pid"] == 303 and "无工程路径" in s["reason"] for s in r["skipped"]), r
+
+
+def test_cleanup_orphans_can_clear_unattributed_when_explicit(monkeypatch, isolated_runner):
+    """无归属的 `laspcem.exe`（open_laspcem_project 起的、re-exec 后丢了参数）：
+    默认只记录不动，显式 `include_unattributed=True` 才清。
+    """
+    class _Gui:
+        def __init__(self):
+            self.info = {"pid": 404, "name": "laspcem.exe", "cmdline": ["laspcem.exe"]}
+
+    monkeypatch.setattr(async_solve.psutil, "process_iter", lambda attrs=None: [_Gui()])
+    killed: list[int] = []
+    monkeypatch.setattr(async_solve, "_terminate_pid", lambda pid: killed.append(pid))
+
+    r1 = async_solve.laspcem_cleanup_orphans(dry_run=False)
+    assert r1["killed"] == [], r1
+    assert killed == [], "默认不该动无归属实例"
+    assert any(s["pid"] == 404 for s in r1["skipped"]), r1
+
+    r2 = async_solve.laspcem_cleanup_orphans(dry_run=False, include_unattributed=True)
+    assert [k["pid"] for k in r2["killed"]] == [404], r2
+    assert killed == [404]
+
+
+def test_cleanup_dry_run_reason_is_uniform(monkeypatch, isolated_runner):
+    """`include_unattributed` 分支在 dry_run 下的 reason 也要写 "dry_run"。
+
+    2026-11-13 复核：其它分支 dry_run 都写 "dry_run"，只有这条写
+    "显式要求清理无归属实例（include_unattributed）" ⇒ 预览报告看起来像已经杀了。
+    """
+    class _Gui:
+        def __init__(self):
+            self.info = {"pid": 505, "name": "laspcem.exe", "cmdline": ["laspcem.exe"]}
+
+    monkeypatch.setattr(async_solve.psutil, "process_iter", lambda attrs=None: [_Gui()])
+    killed: list[int] = []
+    monkeypatch.setattr(async_solve, "_terminate_pid", lambda pid: killed.append(pid))
+
+    r = async_solve.laspcem_cleanup_orphans(dry_run=True, include_unattributed=True)
+    assert [k["reason"] for k in r["killed"]] == ["dry_run"], r
+    assert killed == [], "dry_run 不能真杀"
 
 
 def test_kill_solver_procs_by_pid(monkeypatch):

@@ -43,7 +43,7 @@ from servers.laspcem.setup_reader import (
     read_setup_report,
     split_setup_name,
 )
-from servers.utils import error_response, validate_file
+from servers.utils import error_response, require_nonempty, validate_file
 
 
 def _resolve_exe(laspcem_path: str) -> tuple[str | None, dict | None]:
@@ -166,6 +166,75 @@ def open_laspcem_project(project_path: str, laspcem_path: str = "",
         "message": (f"LASPCEM 无进程间打开接口，已新起实例 PID {child.pid} 打开 {resolved}"
                     f"（此前已有实例：{existing}）"),
     }
+
+
+@mcp.tool()
+def close_laspcem_project(project_path: str, force: bool = False) -> dict[str, Any]:
+    """关闭在 LASPCEM 中打开某个 .sem 的 GUI 实例（等价于关窗口）。
+
+    LASPCEM 没有进程间 IPC，只能按「谁的 cmdline 里带这个工程」定位实例。
+    与 `export_laspcem_snp` / `build_laspcem_report` 的关系：工程被 GUI 打开期间它们一律回
+    `PROJECT_IN_USE`，关掉之后立刻可用（不必等到进程自然退出）。
+
+    用法："把这个工程的 LASPCEM 窗口关掉"、"关闭 CPW_SL.sem 的实例"
+
+    Args:
+        project_path: .sem 工程文件绝对路径。**不要求文件仍然存在** —— 工程被删/改名后
+            LASPCEM 实例的 cmdline 仍可能指向原路径，这种残留更要能关掉。
+        force: True 时 terminate 超时后再 kill；默认只 terminate 并等 5 s。
+
+    Returns:
+        {"success": True, "project": "<绝对路径>", "closed": [pid, ...],
+         "remaining": [pid, ...], "message": "..."}
+        `closed` 为空 = 没有实例在打开该工程（不算失败）。
+    """
+    raw = (project_path or "").strip()
+    if not raw:
+        return error_response("INVALID_PATH", "project_path 不能为空")
+    if Path(raw).suffix.lower() != ".sem":
+        return error_response("INVALID_PATH", f"文件扩展名必须是 ('.sem',): {raw}")
+    # 这里**不**调 validate_file：那个会校验文件存在，而"关掉一个文件已被删除的工程"
+    # 恰恰是需要的场景（2026-11-13 复核）。匹配仍走 _same_path（不依赖文件存在）。
+    try:
+        resolved = os.path.abspath(raw)
+    except OSError:
+        resolved = raw
+
+    closed: list[int] = []
+    failed: list[dict[str, Any]] = []
+    for proc in find_laspcem_processes():
+        proj = proc.get("project") or ""
+        if not proj or not _same_path(proj, resolved):
+            continue
+        pid = proc.get("pid")
+        try:
+            p = psutil.Process(int(pid))
+            p.terminate()
+            try:
+                p.wait(timeout=5)
+            except psutil.TimeoutExpired:
+                if not force:
+                    failed.append({"pid": pid, "reason": "terminate 超时（需要时传 force=True 强杀）"})
+                    continue
+                p.kill()
+                p.wait(timeout=5)
+            closed.append(int(pid))
+        except (psutil.Error, OSError) as exc:
+            failed.append({"pid": pid, "reason": str(exc)[:60]})
+
+    remaining = [p.get("pid") for p in find_laspcem_processes()
+                 if p.get("project") and _same_path(p["project"], resolved)]
+    resp: dict[str, Any] = {
+        "success": True,
+        "project": resolved,
+        "closed": closed,
+        "remaining": remaining,
+        "message": (f"已关闭 {len(closed)} 个打开该工程的实例（PID {closed}）" if closed
+                    else "没有实例在打开该工程（可能已关闭）"),
+    }
+    if failed:
+        resp["details"] = {"failed": failed}
+    return resp
 
 
 def _run_script(exe: str, script_text: str, timeout_seconds: int, background: bool = False) -> tuple[str, str | None, int | None]:
@@ -299,18 +368,31 @@ def _solver_cpu_total(solvers: list[dict[str, Any]]) -> float:
     return total
 
 
-def solve_progress(sem_path: str) -> dict[str, Any]:
+def solve_progress(sem_path: str, since: float = 0.0) -> dict[str, Any]:
     """求解进度快照（供异步查询展示）：自适应轮次 + Prog.log 末行 + 日志总量。
 
     只读文件，不碰 GUI；工程未开始求解时返回空字段。
+
+    `since`：只统计 mtime 不早于该时间戳的日志。传任务 `started_at` 可避免读到**上一个任务**
+    留在同一工程目录里的 `Hofem_adapt_itr*.log` / `Prog.log` —— 2026-11-13 实测新任务刚提交时
+    出现过 `adapt_iterations=0` 却 `last_log_line="Iter3: FEM 2D solver finished"` 的自相矛盾。
     """
     base = Path(sem_path).with_suffix("")
     iters = 0
     log_bytes = 0
     last_line = ""
+
+    def _fresh(path: Path) -> bool:
+        if not since:
+            return True
+        try:
+            return path.stat().st_mtime >= since
+        except OSError:
+            return False
+
     try:
         for f in base.rglob("*"):
-            if not f.is_file():
+            if not f.is_file() or not _fresh(f):
                 continue
             name = f.name.lower()
             if name.startswith("hofem_adapt_itr"):
@@ -321,7 +403,7 @@ def solve_progress(sem_path: str) -> dict[str, Any]:
                 except OSError:
                     continue
         prog = base / "1_Result" / "Prog.log"
-        if prog.is_file():
+        if prog.is_file() and _fresh(prog):
             text = prog.read_text(encoding="utf-8", errors="replace").strip().splitlines()
             last_line = text[-1].strip() if text else ""
     except OSError:
@@ -768,9 +850,24 @@ def _busy_response(held: list[dict[str, Any]], action: str) -> dict[str, Any]:
     )
 
 
+def _script_log_failed(log_path: str) -> bool:
+    """脚本日志里已有失败痕迹（traceback）⇒ 不必再等 GUI 退出或等满 timeout。
+
+    `render_script` 会写 `_w('BEGIN …')` / `_w('OK …')`，异常时写 traceback。
+    2026-11-13：去掉 `app.Exit()` 后 GUI 不再自己退出，等待循环失去 `proc.poll()`
+    这个提前结束信号 ⇒ 失败路径会白等满 timeout（实测 report 撞无效工程 600 s，
+    并把单 worker 占死，后续异步任务全部排队）。
+    """
+    try:
+        text = Path(log_path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    return "Traceback (most recent call last)" in text
+
+
 def _wait_for_artifact(out: str, proc: subprocess.Popen | None, timeout_seconds: int,
                        before_sig: tuple[int, float] | None = None,
-                       poll: float = 1.0) -> str | None:
+                       poll: float = 1.0, log_path: str = "") -> str | None:
     """等导出产物**真的被本次导出改写**（不能把上一次遗留的同名文件当成功）。
 
     实测坑：目录里已有 `x.s2p` 时，直接 `_resolve_snp_output()` 会立刻返回旧文件 ⇒
@@ -789,6 +886,9 @@ def _wait_for_artifact(out: str, proc: subprocess.Popen | None, timeout_seconds:
             actual = _resolve_snp_output(out)
             sig = _file_sig(actual) if actual else None
             return actual if sig is not None and sig != before_sig and sig[0] > 0 else None
+        if log_path and _script_log_failed(log_path):
+            # 脚本已抛异常 ⇒ 不会再有产物，立刻收手（别再等满 timeout）
+            return None
         if time.time() - t0 > timeout_seconds:
             return None
         time.sleep(poll)
@@ -1115,6 +1215,14 @@ def export_laspcem_snp(
          "exported": True, "setup_name": "Setup1(FEM)", "solution_name": "FEM_Setup1",
          "solved_first": bool, "attempts": ["export-only"], "exit_code": int, "message": "..."}
     """
+    out_path_raw = (output_path or "").strip()
+    if out_path_raw and Path(out_path_raw).is_dir():
+        return error_response(
+            "INVALID_PARAMETERS",
+            f"output_path 必须是文件路径，收到的是目录: {out_path_raw}",
+            hint=("传 .../xxx.sNp 或 .../xxx.s2p。只给目录时 LASPCEM 导不出文件，"
+                  "工具会白等 30 s 才报 EXPORT_NO_OUTPUT（2026-11-13 实测）。"),
+        )
     try:
         resolved = validate_file(sem_path, (".sem",))
     except (FileNotFoundError, ValueError) as exc:
@@ -1200,7 +1308,7 @@ def export_laspcem_snp(
         results_invalid_suspect = True
     t0 = time.time()
     try:
-        actual = _wait_for_artifact(out, proc, wait_seconds, before_sig=before_sig)
+        actual = _wait_for_artifact(out, proc, wait_seconds, before_sig=before_sig, log_path=log)
     finally:
         _terminate(proc)
         after_lock = _clear_stale_lock(resolved)
@@ -1326,6 +1434,9 @@ def build_laspcem_report(
          "solved_first": bool, "verified": False, "message": "..."}
         solution_candidates 是 .sem 里的内部结果 id，仅供排查，不是 report API 的解名。
     """
+    report_name, name_err = require_nonempty(report_name, label="report_name")
+    if name_err:
+        return name_err
     try:
         resolved = validate_file(sem_path, (".sem",))
     except (FileNotFoundError, ValueError) as exc:
@@ -1390,6 +1501,8 @@ def build_laspcem_report(
             if sig is not None and sig != sig0:
                 verified = True
                 break
+            if _script_log_failed(log):
+                break          # 脚本已抛异常 ⇒ 工程不会再有改动，立刻收手
             if proc.poll() is not None:
                 break
             time.sleep(1)

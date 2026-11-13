@@ -37,6 +37,10 @@ def test_submit_returns_task_id_and_steps(tmp_path, monkeypatch):
 def test_submit_with_then_export_declares_steps(tmp_path, monkeypatch):
     monkeypatch.setattr(A, "run_laspcem_solve", lambda *a, **k: {"success": True})
     monkeypatch.setattr(A, "export_laspcem_snp", lambda *a, **k: {"success": True, "data_rows": 1})
+    # then_report=True 会真的调 build_laspcem_report（起 LASPCEM GUI、占住单 worker）
+    # ⇒ 必须一起 mock，否则后续用例全部排队超时（2026-11-13 全仓 8 个失败的真因）
+    monkeypatch.setattr(A, "build_laspcem_report",
+                        lambda *a, **k: {"success": True, "verified": True})
     r = A.run_laspcem_solve_async(_sem(tmp_path), then_export=True, then_report=True)
     assert r["steps"] == ["solve", "export", "report"]
     _wait(r["task_id"])
@@ -150,20 +154,29 @@ def test_query_reports_phase_and_progress(tmp_path, monkeypatch):
     sem = _sem(tmp_path)
     base = tmp_path / "p"
     (base / "1_Result").mkdir(parents=True)
-    (base / "1_Result" / "Prog.log").write_text("Iter1 mesh\nIter6: Solving\n", encoding="utf-8")
-    for i in (1, 2):
-        (base / "1_Result" / f"HOFEM_adapt_itr{i}.log").write_text("x", encoding="utf-8")
+
+    def fake_solve(*a, **k):
+        # 日志必须在**任务开始之后**产生：`solve_progress` 现在按任务 started_at 过滤，
+        # 事先摆好的日志会被当成上一个任务的残留而忽略（2026-11-13 的行为修正）
+        time.sleep(0.2)
+        (base / "1_Result" / "Prog.log").write_text("Iter1 mesh\nIter6: Solving\n", encoding="utf-8")
+        for i in (1, 2):
+            (base / "1_Result" / f"HOFEM_adapt_itr{i}.log").write_text("x", encoding="utf-8")
+        time.sleep(1.3)
+        return {"success": True}
 
     monkeypatch.setattr(A, "export_laspcem_snp", lambda *a, **k: {"success": True})
-    monkeypatch.setattr(A, "run_laspcem_solve",
-                        lambda *a, **k: (time.sleep(1.5), {"success": True})[1])
+    monkeypatch.setattr(A, "run_laspcem_solve", fake_solve)
+    # 2 s 的进度缓存会把"日志刚写出来"这一步吞掉；本用例只验 since 过滤，绕开缓存层
+    monkeypatch.setattr(A, "_cached_progress",
+                        lambda sem, ttl=2.0, since=0.0: A.solve_progress(sem, since=since))
     r = A.run_laspcem_solve_async(sem, then_export=True)
     # 单 worker 可能排队：轮询到 "solving" 那一刻取样（求解 1.5 s，足够取到）
     sample = None
     deadline = time.time() + 3
     while time.time() < deadline:
         q = A.laspcem_solve_query(r["task_id"])
-        if q.get("phase") == "solving":
+        if q.get("phase") == "solving" and q.get("adapt_iterations"):
             sample = q
             break
         if q.get("completed"):

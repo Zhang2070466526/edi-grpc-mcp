@@ -54,7 +54,7 @@ _handles: dict[str, dict] = {}
 #: task_id → 链式进度（phase / steps），查询时回传
 _phases: dict[str, dict] = {}
 #: sem_path → (时间戳, solve_progress 结果)：轮询时避免重复扫盘/枚举进程
-_progress_cache: dict[str, tuple[float, dict]] = {}
+_progress_cache: dict[tuple[str, float], tuple[float, dict]] = {}
 _events_lock = threading.Lock()
 
 
@@ -174,17 +174,21 @@ def _reap_stale() -> int:
     return reaped
 
 
-def _cached_progress(sem_path: str, ttl: float = 2.0) -> dict[str, Any]:
+def _cached_progress(sem_path: str, ttl: float = 2.0, since: float = 0.0) -> dict[str, Any]:
     """带 2 s 缓存的求解进度：`solve_progress` 要扫结果目录 + 枚举全表进程，
-    轮询密集时太贵（2026-11-13 审查）。读写都持 `_events_lock`，与其它表一致。"""
+    轮询密集时太贵（2026-11-13 审查）。读写都持 `_events_lock`，与其它表一致。
+
+    `since`（任务 started_at）进缓存 key：同一工程前后两个任务的进度不能混用。
+    """
     now = time.time()
+    key = (sem_path, round(since, 3))
     with _events_lock:
-        hit = _progress_cache.get(sem_path)
+        hit = _progress_cache.get(key)
         if hit and now - hit[0] < ttl:
             return hit[1]
-    value = solve_progress(sem_path)
+    value = solve_progress(sem_path, since=since)
     with _events_lock:
-        _progress_cache[sem_path] = (now, value)
+        _progress_cache[key] = (now, value)
     return value
 
 
@@ -431,7 +435,8 @@ def laspcem_solve_query(task_id: str) -> dict[str, Any]:
             out["elapsed_seconds"] = round(time.time() - snap["started_at"], 1)
         sem = (snap.get("metadata") or {}).get("sem_path")
         if sem:
-            out.update(_cached_progress(sem))
+            # 只算本次任务开始后的日志，避免把上一个任务的 Iter/末行当成本次进度
+            out.update(_cached_progress(sem, since=snap.get("started_at") or 0.0))
         return out
 
     _reap(task_id, snap)
@@ -560,7 +565,8 @@ def _sem_of_process(cmd: str) -> str:
 
 
 @mcp.tool()
-def laspcem_cleanup_orphans(sem_path: str = "", dry_run: bool = False) -> dict[str, Any]:
+def laspcem_cleanup_orphans(sem_path: str = "", dry_run: bool = False,
+                            include_unattributed: bool = False) -> dict[str, Any]:
     """清理残留的 LASPCEM 进程（GUI / mpiexec / phofem / MPI 代理）。
 
     服务重启或强杀后内存任务表已丢失，`laspcem_task_cancel` 拿不到 task_id，
@@ -571,6 +577,10 @@ def laspcem_cleanup_orphans(sem_path: str = "", dry_run: bool = False) -> dict[s
     Args:
         sem_path: 只清理这个工程的残留；留空 = 清理所有「能判定归属、且不属于在跑任务」的进程。
         dry_run: True 只报告要杀谁、不动手（建议先跑一次看清）。
+        include_unattributed: True 时连**判定不出归属**的 `laspcem.exe` 也清（cmdline 里没有
+            工程路径的实例，例如 `open_laspcem_project` 起的、LASPCEM re-exec 后丢掉参数的）。
+            默认 False：用户自己 File→Open 打开的窗口 cmdline 同样是纯 `laspcem.exe`，
+            默认保守跳过；确认没有人工窗口时再开这个开关。
 
     Returns:
         {"success": True, "dry_run": False, "killed": [{pid,name,sem_path,reason}],
@@ -639,6 +649,15 @@ def laspcem_cleanup_orphans(sem_path: str = "", dry_run: bool = False) -> dict[s
             # 但必须**记录**下来：cmdline 读不出工程路径的实例（如 /session 的临时脚本已被删）
             # 属于"我看到了但没敢动"，不能静默吞掉（2026-11-13 复核，与 solver 分支口径一致）。
             if not owner_key:
+                if include_unattributed and name == "laspcem.exe":
+                    # reason 与其它分支保持同一口径：dry_run 就写 "dry_run"，
+                    # 否则报告里看不出"这只是个预览"（2026-11-13 复核）
+                    killed.append({"pid": pid, "name": proc.info.get("name"), "sem_path": "",
+                                   "reason": "dry_run" if dry_run
+                                   else "显式要求清理无归属实例（include_unattributed）"})
+                    if not dry_run:
+                        _terminate_pid(pid)
+                    continue
                 skipped.append({"pid": pid, "name": proc.info.get("name"), "sem_path": "",
                                 "reason": "cmdline 无工程路径（可能 /session 脚本已删），保守跳过"})
                 continue

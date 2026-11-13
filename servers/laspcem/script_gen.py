@@ -45,13 +45,12 @@ _WRAPPER_EXCEPT = [
     "    _log.flush()",
 ]
 
-_WRAPPER_EXIT = [
-    "finally:",
-    "    try:",
-    "        app.Exit()",
-    "    except BaseException:",
-    "        pass",
-]
+#: ⚠️ **不再生成 `app.Exit()`**（2026-11-13 三次实测）：LASPCEM 在有未保存改动时会弹
+#: 「Do you want to exit the program?」模态确认框，脚本就卡在那儿 —— GUI 不退出、脚本不返回，
+#: 只能等工具侧超时后强杀。作者原注释也记了「GUI 常常 app.Exit() 后仍不退出」
+#: （launcher.py:516/1380）。GUI 由 `_terminate(proc)` 在 finally 里收掉，比让脚本自己退可靠。
+#: 保留常量名以免调用点改动；`render_script(exit_at_end=…)` 现仅为兼容参数。
+_WRAPPER_EXIT: list[str] = []
 
 
 def default_log_path(tag: str = "script") -> str:
@@ -65,7 +64,8 @@ def render_script(steps: list[tuple[str, list[str]]], log_path: str,
                   exit_at_end: bool = True) -> str:
     """把 (步骤名, 代码行) 列表渲染成带日志与异常捕获的完整脚本。
 
-    exit_at_end=False：求解用 —— 脚本结束后 GUI 要继续活着跑异步求解器。
+    exit_at_end：兼容参数，**不再**追加 `app.Exit()`（见 `_WRAPPER_EXIT` 注释）；
+    GUI 由 launcher 的 `_terminate(proc)` 回收。
     """
     # ⚠️ 前两行必须在最前面：宿主靠 `#Version Information:` 选脚本版本
     lines = [
