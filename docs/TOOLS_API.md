@@ -21,14 +21,14 @@ from servers.eda.project_manage import list_epp_projects
 - **[导出与分析（4 个）](#导出与分析4个)**：导出网表、截图原理图、器件 CSV、信号链路追踪
 - **[模型库 / 原理图库（6 个）](#模型库--原理图库6个)**：模型替换、模型分类/查询/搜索、性能器件放置、拓扑设计
 - **[软 IP（1 个）](#软ip1个)**：按设计描述下载芯片模型
-- **[微波计算（6 个）](#微波计算6个)**：传输线特性阻抗 / 线宽计算、多级威尔金森功分器设计、滤波器阶数评估（高通/低通/带阻）、功分器/巴伦节数（本地纯计算，无任务信封）
+- **[微波计算（7 个）](#微波计算7个)**：传输线特性阻抗 / 线宽计算、多级威尔金森功分器设计、滤波器阶数评估（高通/低通/带通/带阻）、功分器/巴伦节数（本地纯计算，无任务信封）
 - **[射频链路计算（2 个）](#射频链路计算2个)**：混频杂散枚举、噪声底 / 灵敏度 / 压缩受限动态范围（本地纯计算，无任务信封）
 - **[工作区（3 个）](#工作区3个)**：创建 / 切换 / 查询当前工作区
 - **[原理图扩展（5 个）](#原理图扩展5个)**：内置器件、清空原理图、连线、批量器件变换
 - **[启动 / 诊断（3 个）](#启动--诊断3个)**：启动 EDI、服务诊断、日志读取
 - **[ANSYS HFSS（6 个）](#ansys-hfss6个)**：AEDT 工程开关、HFSS 异步仿真
 - **[CST 电磁仿真（13 个）](#cst电磁仿真13个)**：异步求解 .cst、导出 S 参数 / 远场方向图
-- **[LASPCEM 电磁仿真（10 个）](#laspcem电磁仿真10个)**：启动 LASPCEM、打开 .sem 工程、aedt 转 sem、异步求解（可带导出/建报告后处理）、任务查询与取消、同步导出 S 参数 / 建报告、读取求解设置
+- **[LASPCEM 电磁仿真（11 个）](#laspcem电磁仿真11个)**：启动 LASPCEM、打开 .sem 工程、aedt 转 sem、异步求解（可带导出/建报告后处理）、任务查询与取消、同步导出 S 参数 / 建报告、读取求解设置
 - **[图表（3 个）](#图表3个)**：RAW 曲线解析、转图、结果对比
 - **[图片（2 个）](#图片2个)**：显示图片、视觉分析
 - **[仿真器件管理（10 个）](#仿真器件管理10个协议-v3)**：器件 Schema、增删改、状态、网表导入、原理图加载
@@ -1199,7 +1199,7 @@ cst_export_farfield_query(task_id: str) -> dict
 
 ---
 
-## LASPCEM 电磁仿真（10 个）
+## LASPCEM 电磁仿真（11 个）
 
 > LASPCEM（西安电子科技大学国产电磁仿真平台）无 COM/gRPC 接口，程序化入口是 GUI 内嵌 Python 脚本（`app`/`cem`/`report`/`viewer` 全局对象），用 `laspcem /session <脚本>` 执行（会弹 GUI，需要可见桌面会话）。
 >
@@ -1244,6 +1244,25 @@ open_laspcem_project(project_path: str, laspcem_path: str = "", force_new_instan
 | `force_new_instance` | bool | 否 | False | 该工程已打开时也强制再起新实例 |
 
 返回：`{"success": true, "exe": "...", "project": "...", "reused_existing": bool, "new_instance": bool, "pid": int|null, "running_instances": [pid,...], "message": "..."}`。
+
+### `close_laspcem_project`
+
+关闭在 LASPCEM 中打开某个 `.sem` 的 GUI 实例（等价于关窗口）。
+
+```python
+close_laspcem_project(project_path: str, force: bool = False) -> dict
+# → {"success": true, "project": "...", "closed": [29792], "remaining": [], "message": "..."}
+```
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `project_path` | str | 是 | — | `.sem` 绝对路径。**不要求文件仍存在** —— 工程被删/改名后，实例 cmdline 仍可能指向原路径，这种残留更要能关掉 |
+| `force` | bool | 否 | False | terminate 超时后再 kill；默认只 terminate 并等 5 s |
+
+- 按 **cmdline 里的工程路径**匹配实例（LASPCEM 没有进程间 IPC，只能这样定位）。
+- 工程被 GUI 打开期间，`export_laspcem_snp` / `build_laspcem_report` 一律回 `PROJECT_IN_USE`；
+  调本工具关掉后立刻可用，不必等进程自然退出。
+- `closed=[]` 表示当前没有实例打开该工程，**不算失败**（`success=true`、`remaining=[]`）。
 
 ### `run_laspcem_solve`（内部实现，非 MCP 工具）
 
@@ -1329,6 +1348,39 @@ laspcem_task_list() -> dict
 - ⚠️ `TaskRunner` 的 worker 线程是非 daemon：**服务重启/停止会被仍在跑的任务拖住**，重启前先 `laspcem_solve_cancel` 或等任务结束。
 - 后台任务里跑的仍是同步 `run_laspcem_solve`，所以它自带的判据（`saw_solver` / `solve_log_finished` / 补保存 / 锁清理）全部照旧。
 
+### `laspcem_cleanup_orphans`
+
+服务重启/强杀后内存任务表已丢失（`laspcem_task_cancel` 拿不到 task_id），残留的 GUI / `mpiexec` /
+`phofem` / `hydra_pmi_proxy` 会一直占 CPU 和结果目录句柄。本工具按**工程归属**定位并终止它们。
+
+```python
+laspcem_cleanup_orphans(sem_path: str = "", dry_run: bool = False,
+                        include_unattributed: bool = False) -> dict
+# → {"success": true, "dry_run": false,
+#    "killed":  [{"pid": 31932, "name": "phofem.exe", "sem_path": "...", "reason": "terminated"}],
+#    "skipped": [{"pid": 12852, "name": "laspcem.exe", "sem_path": "",
+#                 "reason": "cmdline 无工程路径（可能 /session 脚本已删），保守跳过"}],
+#    "active_sems": []}
+```
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `sem_path` | str | 否 | `""` | 只清这个工程的残留；留空 = 清所有「能判定归属、且不属于在跑任务」的进程 |
+| `dry_run` | bool | 否 | False | True 只报告不动手（建议先跑一次看清） |
+| `include_unattributed` | bool | 否 | False | True 时连**判不出归属**的 `laspcem.exe` 也清。默认 False —— 自己 `File→Open` 打开的窗口 cmdline 同样是纯 `laspcem.exe`，默认保守跳过 |
+
+**归属怎么判**（决定谁进 `killed`）：
+1. cmdline 能直接读到 `.sem`（GUI 带工程打开）⇒ 按工程匹配；
+2. `/session <临时脚本>` 形态 ⇒ 读脚本内容反查 `.sem`；
+3. `mpiexec` / `phofem` / `hydra_pmi_proxy` 的 cmdline **通常不含工程路径**（实测 `phofem Design ADAPTIVE-MESH`）
+   ⇒ 无在跑任务时当孤儿清掉；有在跑任务时跳过并**记录**到 `skipped`（不静默）；
+4. 判不出归属的 `laspcem.exe` ⇒ 默认只记 `skipped`，`include_unattributed=True` 才清。
+
+`killed[].reason` 口径：`dry_run=true` 时一律是 `"dry_run"`（只是预览，什么都没杀）；
+真清时才写 `"terminated"` 或 `"显式要求清理无归属实例（include_unattributed）"`。
+
+**不会误杀活任务**：属于 `active_sems`（有未结束后台任务）的工程一律跳过，要停走 `laspcem_task_cancel`。
+
 ### `export_laspcem_snp`
 
 > **只导已求解的工程**：没求解就立刻返回 `SOLVE_REQUIRED`（0.1 s，不起 GUI、不阻塞）。
@@ -1395,6 +1447,11 @@ build_laspcem_report(sem_path: str, setup_name: str = "", report_name: str = "Sp
 返回：`{"success": true, "report_name": "Sparameter_1", "verified": true, "elapsed_seconds": 3.1, "exit_code": 1, "script_log": "...", "message": "..."}`
 `verified=true` 表示工程确实被 `SaveAs` 改写过（报告已落盘），不代表报告内容已校验。
 
+> ⚠️ **`success` / `verified=true` 只说明「报告对象已写进工程」，不代表工程里有可用的仿真结果**。
+> 2026-11-13 实测（Horn 副本，结果失效即 GUI 面板 error 892）：`build_laspcem_report` **3.4 s 成功**，
+> 而同工程的 `export_laspcem_snp` **30.4 s 失败**（`EXPORT_NO_OUTPUT`）—— 建报告只写对象、不读结果，
+> 所以两者结论相反是正常的。要判断结果是否可用，看 `export_laspcem_snp` 或 `results_dir`。
+
 **`verified=false` 就是失败**（`exit_code` 恒为 1，不是判据）：脚本执行了但工程没被改写时返回
 `REPORT_NOT_VERIFIED`（`success=false`、`retryable=true`，`details` 带 `verified` / `exit_code` /
 `report_name` / `port_count` 与 `script_output`）。其余失败码：`REPORT_TIMEOUT`（等满 `timeout_seconds`
@@ -1455,7 +1512,7 @@ get_laspcem_setup(sem_path: str) -> dict
 
 ---
 
-## 微波计算（6 个）
+## 微波计算（7 个）
 
 > 本地纯计算（不产生 task 信封，`details` 为 `null`，数据在顶层）。数值解算独立复核过（见 `审查报告.md` §十四）。
 
@@ -2058,7 +2115,7 @@ replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seco
 
 ## Resources & Prompts
 
-除了 Tool（启动时动态统计，当前 88 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
+除了 Tool（启动时动态统计，当前 101 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
 
 ### Resources（7 个）
 

@@ -2,7 +2,7 @@
 
 > 自动生成，勿手改。权威数量见 /ready 的 tool_count。
 
-共 100 个工具：
+共 101 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
 - `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
@@ -19,6 +19,7 @@
 - `clear_schematic` — 清空工程原理图中的全部器件和网段并保存（破坏性操作）。
 - `close_edi_project` — ⚠️ 关闭当前 .epp 工程（未保存改动会丢）。打开用 open_edi_project；只是想看状态用 get_edi_project_info。
 - `close_hfss_project` — ⚠️ 关闭 AEDT 项目（未保存改动会丢；force 会强杀进程）。
+- `close_laspcem_project` — 关闭在 LASPCEM 中打开某个 .sem 的 GUI 实例（等价于关窗口）。
 - `compare_simulation_results` — 比较多个 RAW 仿真结果文件中的同一条曲线并生成对比图。
 - `create_project` — 创建新的 EDI 工程（不显示创建向导，也不自动打开）。
 - `create_simulation_component` — 使用 EDI 器件工厂默认参数创建器件。

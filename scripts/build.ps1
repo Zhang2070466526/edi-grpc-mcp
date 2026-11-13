@@ -61,7 +61,7 @@ EDI_PATH=
 TURBOCHARTS_PATH=
 MCP_TRANSPORT=streamable-http
 MCP_PORT=50026
-# 0 = all tools; 1 = hide internal (EDI gRPC + standalone exe + diagnostics); 2 = keep only internal + no-dependency calculators
+# 0 = all tools; 1 = hide internal (EDI gRPC + standalone exe + diagnostics); 2 = keep only internal + no-dependency calculators; 3 = hide soft IP + LASPCEM
 MCP_HIDE_INTERNAL_TOOLS=0
 # Listen address: 127.0.0.1 = this machine only; 0.0.0.0 = all interfaces (remote).
 # NOTE: the .bat launchers pass --host explicitly (start_local=127.0.0.1, start_remote=0.0.0.0), which overrides this.

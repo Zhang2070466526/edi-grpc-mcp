@@ -125,7 +125,7 @@
     "stateless": true,
     "version": "0.1.11",
     "grpc": "online",
-    "tool_count": 88,
+    "tool_count": 101,
     "started_at": 1750000000.0
 }
 ```

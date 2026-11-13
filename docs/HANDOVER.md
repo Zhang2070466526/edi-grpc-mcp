@@ -43,7 +43,7 @@ servers/
   task_runner.py          # 通用异步任务队列（EDA/HFSS/CST 复用）
   resources_prompts/       # 7 个 Resource + 8 个 Prompt
   multimodal_vision/      # 图片 + 视觉分析 + 文档工具
-  eda/                   # EDI 工程工具（49 个）
+  eda/                   # EDI 工程工具（50 个）
     __init__.py           # 公共 API + 工具清单
     config.py             # 配置 / 路径检测
     project_reader.py     # ProjectReader + S-expression 解析器
@@ -112,7 +112,7 @@ PyPI: https://pypi.org/project/edi-grpc-mcp/  |  当前版本：0.1.11
 
 ## MCP 工具清单
 
-工具总数随版本变化（当前 88 个，以运行时 `/ready` 的 `tool_count` 为准），按功能分 16 类：
+工具总数随版本变化（当前 101 个，以运行时 `/ready` 的 `tool_count` 为准），按功能分 17 类：
 
 | 分类 | 数量 | 说明 |
 |---|---|---|
@@ -124,12 +124,13 @@ PyPI: https://pypi.org/project/edi-grpc-mcp/  |  当前版本：0.1.11
 | 软 IP | 1 | 按设计描述下载芯片模型（生成 AEDT 模型） |
 | 启动 / 诊断 | 3 | 启动 EDI、服务状态、日志读取 |
 | 工作区 | 3 | 创建 / 切换 / 查询工作区 |
-| 原理图扩展 | 4 | 内置器件、理想器件放置、清空原理图、连线 |
+| 原理图扩展 | 5 | 内置器件、理想器件放置、清空原理图、连线、批量器件变换 |
 | ANSYS HFSS | 6 | AEDT 工程开关、HFSS 异步仿真 |
 | CST 电磁仿真 | 13 | 异步求解 / 查询 / 取消、结果浏览、导出 S 参数 / 远场方向图 |
+| LASPCEM 电磁仿真 | 11 | 启动/打开/导入 aedt、异步求解、导出 S 参数、建报告、孤儿进程清理 |
 | 图表与图片 | 5 | RAW 曲线、转图、结果对比、显示、视觉分析 |
 | 报告与文档 | 2 | 打开本地文档、下载任意产物（fetch_artifact） |
-| 微波工具 | 6 | 传输线计算、威尔金森功分器设计、滤波器阶数评估（高通/低通/带阻）、功分器/巴伦节数（本地纯计算，无任务信封） |
+| 微波工具 | 7 | 传输线计算、威尔金森功分器设计、滤波器阶数评估（高通/低通/带通/带阻）、功分器/巴伦节数（本地纯计算，无任务信封） |
 | 射频链路计算 | 2 | 混频杂散分析（analyze_mixer_spur）、噪声底/灵敏度/压缩受限动态范围（calculate_rf_dynamic_range）（本地纯计算，无任务信封） |
 | 独立仿真 | 4 | 独立报告导出（Report_Exporter.exe → PDF/DOCX）、TR 纯硬编码仿真（TR_Simulator.exe）、混频链路仿真（mixer_simulation.exe）、XY 数据绘图（drawtool.exe） |
 
