@@ -152,6 +152,16 @@ def _install_shutdown_handlers() -> None:
             return  # 已经在关闭
         _server_stopping.set()
         _lifecycle_log("MCP_STOPPING")
+        # 退出前收掉 RUNNING 的 LASPCEM 任务：TaskRunner 的 worker 是非 daemon 线程，
+        # 不收就会一直等求解跑完（最长 timeout_seconds）；强杀则留孤儿 mpiexec/phofem，
+        # 而重启后内存任务表已丢、cancel 拿不到 task_id（2026-11-13 审查）。
+        try:
+            from servers.laspcem.async_solve import kill_running_tasks
+            handled = kill_running_tasks("服务停止")
+            if handled:
+                _lifecycle_log(f"LASPECM_TASKS_STOPPED count={handled}")
+        except Exception as exc:  # noqa: BLE001 — 关闭路径绝不能抛
+            _lifecycle_log(f"LASPECM_TASKS_STOP_FAILED {exc}")
         sys.exit(0)
 
     for sig in (signal.SIGINT, signal.SIGTERM):

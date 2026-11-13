@@ -171,6 +171,8 @@ _DEFAULT_HINTS: dict[str, str] = {
     "UNSUPPORTED_COMPONENT_TYPE": "先查可用器件类型与参数，再重试",
     "OUTPUT_ALREADY_EXISTS": "换一个 output_path，或先删除同名产物",
     "PERMISSION_DENIED": "换可写目录（如 %TEMP% 或工作区内），避开 Program Files 等受保护路径",
+    "REPORT_NOT_VERIFIED": "脚本跑了但工程没被改写 ⇒ 报告未必建上：看 script_output / script_log 与 GUI Message 面板，"
+                           "核对解名/setup，必要时到 GUI 手工建一次确认",
     "AEDT_NOT_RUNNING": "先 launch_aedt 启动 AEDT（或 open_hfss_project 会自动拉起）",
     "AEDT_NOT_FOUND": "用 aedt_path 显式指定 AEDT 安装目录",
 }

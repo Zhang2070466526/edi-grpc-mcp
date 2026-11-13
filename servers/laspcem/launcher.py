@@ -19,6 +19,7 @@ from typing import Any
 import psutil
 
 from servers import mcp
+from servers.laspcem import project_registry
 from servers.laspcem.config import (
     find_laspcem_exe,
     find_laspcem_processes,
@@ -335,7 +336,7 @@ def _running_solve_task_for(sem_path: str) -> str | None:
 
         for task in _a._runner.list():
             meta = task.get("metadata") or {}
-            if task.get("finished_at") is None and meta.get("sem_path") == sem_path:
+            if task.get("finished_at") is None and _same_project(meta.get("sem_path", ""), sem_path):
                 return task.get("task_id")
     except Exception:      # noqa: BLE001 —— 只是提示信息，任何异常都不该影响主流程
         return None
@@ -361,10 +362,22 @@ def _progress_sig(sem_path: str) -> tuple[int, tuple[int, float] | None]:
     return (total, _file_sig(sem_path))
 
 
-def _kill_solver_procs(sem_path: str) -> list[int]:
-    """杀掉属于该工程的求解器进程（mpiexec / phofem / hydra_pmi_proxy），返回被处理的 pid。"""
-    stem = Path(sem_path).stem.lower()
+def _kill_solver_procs(sem_path: str, pids: list[int] | None = None) -> list[int]:
+    """杀掉属于该工程的求解器进程（mpiexec / phofem / hydra_pmi_proxy），返回被处理的 pid。
+
+    pids 给出时按 pid **精确**杀（超时路径传 `wait["solver_processes"]` 的实际 pid，最可靠）；
+    未给出时按工程 stem 模糊匹配 cmdline 兜底 —— 不同目录的同名工程会互相误伤。
+    """
     killed: list[int] = []
+    if pids:
+        for pid in pids:
+            try:
+                psutil.Process(pid).terminate()
+                killed.append(pid)
+            except (psutil.Error, OSError):
+                continue
+        return killed
+    stem = Path(sem_path).stem.lower()
     if not stem:
         return killed
     for proc in psutil.process_iter(["pid", "name", "cmdline"]):
@@ -382,12 +395,41 @@ def _kill_solver_procs(sem_path: str) -> list[int]:
     return killed
 
 
+def _kill_orphan_mpi_since(since: float) -> list[int]:
+    """补杀 LASPCEM 的 MPI 代理 `hydra_pmi_proxy.exe`，返回被处理的 pid。
+
+    实测（2026-11-12 cancel / 2026-11-13 超时现场）：mpiexec 被杀后它会残留，
+    cmdline 里**没有工程路径**（只有 `--usize -1 --auto-cleanup 1`），按工程名和 pid
+    都够不到，会一直占着结果目录句柄（删目录报 "Device or resource busy"）。
+    这里按「exe 在 LASPCEM 目录下 + 启动时间不早于 since」筛，避免误伤其它 MPI 作业。
+    """
+    killed: list[int] = []
+    try:
+        for proc in psutil.process_iter(["pid", "name", "exe", "create_time"]):
+            if (proc.info.get("name") or "").lower() != "hydra_pmi_proxy.exe":
+                continue
+            exe = (proc.info.get("exe") or "").lower().replace("\\", "/")
+            if "laspcem" not in exe:
+                continue
+            if (proc.info.get("create_time") or 0) < since - 5:
+                continue
+            try:
+                psutil.Process(proc.info["pid"]).terminate()
+                killed.append(proc.info["pid"])
+            except (psutil.Error, OSError):
+                continue
+    except (psutil.Error, OSError):
+        pass
+    return killed
+
+
 def _wait_for_solve(sem_path: str, timeout_seconds: int, poll: float = 2.0,
                     quiet_seconds: float = 15.0,
                     no_solver_grace: float = 120.0,
                     no_change_seconds: float = 60.0,
                     cancel_event: threading.Event | None = None,
-                    stall_seconds: float = 900.0) -> dict[str, Any]:
+                    stall_seconds: float = 900.0,
+                    proc: Any = None) -> dict[str, Any]:
     """等异步求解结束：见过 mpiexec/phofem → 求解器退出且**安静 quiet_seconds 秒**才算完。
 
     实测（2026-11-12）：自适应求解有**多轮**（每轮一个 mpiexec + 2×phofem），轮次之间求解器会
@@ -409,6 +451,14 @@ def _wait_for_solve(sem_path: str, timeout_seconds: int, poll: float = 2.0,
             return {"saw_solver": saw_solver, "timed_out": False, "cancelled": True,
                     "solver_seconds": round(time.time() - t0, 1),
                     "solver_processes": seen, "sem_changed": False}
+        # GUI 自己退出且从未见到求解器 ⇒ 不可能是"正在建网格"，立刻返回。
+        # 不检查的话，未求解工程会白等满宽限期（实测 BPF.sem 在 app.Open 就崩/挂，
+        # 旧的 grace=timeout+1 会等 30 分钟才报错）—— 2026-11-13 审查。
+        if proc is not None and not saw_solver and proc.poll() is not None:
+            return {"saw_solver": False, "timed_out": False, "reason": "gui_exited",
+                    "gui_exit_code": proc.returncode,
+                    "solver_seconds": round(time.time() - t0, 1),
+                    "solver_processes": [], "sem_changed": False}
         solvers = _solver_processes()
         now_sig = _file_sig(sem_path)
         now_prog = _progress_sig(sem_path)
@@ -663,20 +713,44 @@ def _snp_data_rows(path: str) -> int:
     return rows
 
 
+def _registry_busy_response(held: dict[str, Any], action: str) -> dict[str, Any]:
+    """后台任务正占用该工程时回 PROJECT_IN_USE（复用既有错误码，不新增词典项）。"""
+    kind = held.get("kind") or "后台任务"
+    task_id = _running_solve_task_for(held.get("sem_path") or "")
+    return error_response(
+        "PROJECT_IN_USE",
+        f"该工程正被后台任务占用（{kind}），无法{action}",
+        hint=("求解与导出/建报告不能同时动同一个 .sem（会互相踩坏结果）。"
+              "等任务跑完再调本工具，或先 laspcem_solve_query 看进度 / laspcem_task_cancel 取消；"
+              "也可以提交时直接用 then_export / then_report 让服务端串起来。"),
+        holder=held,
+        running_solve_task=task_id,
+    )
+
+
+def _same_project(a: str, b: str) -> bool:
+    """两个 .sem 路径是否指向同一工程（大小写/斜杠/相对路径统一归一化后比较）。
+
+    占用检测与「该工程是否已有求解任务」必须用同一把尺子：一边精确比字符串、
+    另一边归一化，路径写法不同就会漏判（2026-11-13 审查）。
+    """
+    if not a or not b:
+        return False
+    try:
+        return str(Path(a).resolve()).lower() == str(Path(b).resolve()).lower()
+    except OSError:
+        return a.replace("\\", "/").lower() == b.replace("\\", "/").lower()
+
+
 def _project_in_use(sem_path: str) -> list[dict[str, Any]]:
     """是否有 LASPCEM 实例已经打开了这个工程（避免两个实例抢同一 .sem）。"""
-    target = str(Path(sem_path).resolve()).lower()
     held: list[dict[str, Any]] = []
     try:
         for proc in find_laspcem_processes():
             proj = proc.get("project") or ""
             if not proj:
                 continue
-            try:
-                same = str(Path(proj).resolve()).lower() == target
-            except OSError:
-                same = proj.lower() == target
-            if same:
+            if _same_project(proj, sem_path):
                 held.append(proc)
     except Exception:  # noqa: BLE001 — 进程枚举失败不该阻断主流程
         return []
@@ -725,7 +799,7 @@ def _wait_for_artifact(out: str, proc: subprocess.Popen | None, timeout_seconds:
 def run_laspcem_solve(
     sem_path: str,
     setup_name: str = "",
-    timeout_seconds: int = 1800,
+    timeout_seconds: int = 7200,
     close_gui: bool = True,
     cancel_event: threading.Event | None = None,
     handle: dict[str, Any] | None = None,
@@ -742,7 +816,7 @@ def run_laspcem_solve(
     Args:
         sem_path: .sem 工程文件绝对路径。
         setup_name: setup 名；默认从 .sem 自动探测（存的是 Setup1(FEM)，传给 API 时用显示名 Setup1）。
-        timeout_seconds: 最长等待秒数，默认 1800。
+        timeout_seconds: 最长等待秒数，默认 7200（2 h）。
         close_gui: 求解结束后是否关掉本次拉起的 GUI 实例（结果已写回工程，默认 True）。
     Returns:
         {"success": True, "sem_path": "...", "setup_name": "Setup1(FEM)", "solved": True,
@@ -790,13 +864,15 @@ def run_laspcem_solve(
         handle["proc"] = proc
         handle["script_path"] = script_path
 
-    # 未求解工程首次 Analyze 要先建网格，mpiexec 可能 120 s 后才出现，且这段时间 .sem 不变
-    # ⇒ 不能启用「无求解器就早退」的宽限（那会把正在建网格的 GUI 误判成没触发并杀掉）。
-    grace = 120.0 if was_solved else float(timeout_seconds) + 1
+    # 未求解工程首次 Analyze 要先建网格，mpiexec 可能 120 s 后才出现，且这段时间 .sem 不变，
+    # 所以不能用「无求解器就早退」的窄宽限。但也不能像以前那样给 timeout+1（=30 分钟）：
+    # 工程打不开/脚本崩退时调用方会白等半小时（2026-11-13 实测 BPF.sem）。
+    # 折中：上限 10 分钟，并且 GUI 进程退出时立即返回（_wait_for_solve 里的 proc 检测）。
+    grace = 120.0 if was_solved else min(float(timeout_seconds), 600.0)
     try:
         wait = _wait_for_solve(resolved, timeout_seconds, no_solver_grace=grace,
                                cancel_event=cancel_event or _ctx_event(),
-                               stall_seconds=stall_seconds)
+                               stall_seconds=stall_seconds, proc=proc)
     finally:
         if close_gui:
             _terminate(proc)
@@ -806,6 +882,17 @@ def run_laspcem_solve(
 
     after = detect_solution_names(resolved)
     size_after = Path(resolved).stat().st_size
+    # 超时/卡死时必须**先**把求解器（含 MPI 代理）清掉，再考虑补保存：
+    # 否则会一边有求解器在写结果、一边起新 GUI 去 SaveAs 同一个工程。
+    # 2026-11-13 实测 1800 s 超时现场：persist.saved=true 且 phofem/mpiexec 仍在跑，
+    # 杀完还留下 hydra_pmi_proxy 占着结果目录。
+    solver_pids = [p.get("pid") for p in wait["solver_processes"] if p.get("pid")]
+    killed_solver_pids: list[int] = []
+    if wait.get("timed_out") or wait.get("stalled"):
+        killed_solver_pids = _kill_solver_procs(resolved, pids=solver_pids)
+        killed_solver_pids += _kill_orphan_mpi_since(
+            time.time() - float(wait.get("solver_seconds") or 0.0) - 120)
+        time.sleep(1.0)                     # 让 OS 释放文件句柄，再决定要不要 SaveAs
     # 结果常常只落在 <stem>/1_Result 的工作副本里 ⇒ 补一次 Open+SaveAs 合并回顶层 .sem
     persist = None
     if wait["saw_solver"] and not wait.get("cancelled") and not is_solved(resolved):
@@ -855,19 +942,20 @@ def run_laspcem_solve(
 
     if wait["timed_out"]:
         resp = error_response("SOLVE_TIMEOUT", f"{timeout_seconds}s 内未等到求解结束",
-                              retryable=True, script_log=log, saw_solver=wait["saw_solver"])
+                              retryable=True, script_log=log, saw_solver=wait["saw_solver"],
+                              killed_solver_pids=killed_solver_pids)
         resp.update(evidence)
+        resp["orphan_solvers_after_kill"] = _solver_processes()
         return resp
 
     if wait.get("stalled"):
-        # 求解器还在跑但长时间零进展：先把它清掉，再如实报卡死（不报成功、也不等到 timeout）
-        killed = _kill_solver_procs(resolved)
+        # 求解器还在跑但长时间零进展：已在上面清掉求解器，这里只如实报卡死
         resp = error_response(
             "SOLVE_STALLED",
             f"求解卡住：{wait.get('stalled_seconds')}s 内日志与工程文件都没有任何进展（求解器进程仍在）",
             hint=("看 solve_log 与 <工程名>/1_Result/Prog.log 末尾；已尝试结束求解器进程。"
                   "常见原因：网格规模异常、内存不足、求解器死锁。"),
-            killed_solver_pids=killed,
+            killed_solver_pids=killed_solver_pids,
             stalled_seconds=wait.get("stalled_seconds"),
         )
         resp.update(evidence)
@@ -876,6 +964,22 @@ def run_laspcem_solve(
     if not wait["saw_solver"]:
         # 不报成功：没见求解器就等于「没有发生求解」。工程里已有解时，大概率是 LASPCEM 认为
         # 结果已是最新而跳过（Message: already calculated）——这是正常优化，重算需让模型真的变化。
+        if wait.get("reason") == "gui_exited":
+            # 求解脚本刻意不包装（包装会抑制异步求解）⇒ 脚本内异常拿不到；
+            # 只能靠 GUI 退出码 + 让调用方去 GUI Message 面板看（2026-11-13 实测 BPF.sem）
+            resp = error_response(
+                "SOLVE_NOT_TRIGGERED",
+                (f"LASPCEM GUI 执行求解脚本时自行退出（exit_code={wait.get('gui_exit_code')}），"
+                 "没有出现 mpiexec/phofem 求解器"),
+                hint=("求解脚本刻意不做日志包装（实测包装会抑制异步求解），脚本内异常拿不到。"
+                      "先用 open_laspcem_project 手动打开该工程、点 Analyze 看 Message 面板；"
+                      "常见原因：工程打不开（引用的材质/文件缺失、从别处拷贝的工程）、"
+                      "setup 与算法不匹配、.sem 版本过旧。"),
+            )
+            resp.update(evidence)
+            resp["reason"] = "gui_exited"
+            resp["gui_exit_code"] = wait.get("gui_exit_code")
+            return resp
         hint = _solve_hint(setup, script_log, resolved)
         if before:
             hint += (f"（工程里已有解 {', '.join(before)}：也可能是 LASPCEM 认为结果已是最新而跳过；"
@@ -1027,6 +1131,9 @@ def export_laspcem_snp(
     held = _project_in_use(resolved)
     if held:
         return _busy_response(held, "导出")
+    busy = project_registry.conflict(resolved)   # 后台求解任务正在动这个工程
+    if busy:
+        return _registry_busy_response(busy, "导出")
     locks_removed = [p for p in [_clear_stale_lock(resolved)] if p]
     out = output_path.strip() or str(Path(resolved).with_suffix(".sNp"))
     sn, candidates = _resolve_solution_name(resolved, setup, solution_name)
@@ -1048,13 +1155,16 @@ def export_laspcem_snp(
         resp = error_response(
             "SOLVE_REQUIRED",
             "工程尚未求解（.sem 里没有解记录），导出需要已求解的工程",
-            hint=("调 run_laspcem_solve_async(sem_path=…, then_export=True)：服务端会先求解、"
-                  "完成后自动导出；也可以先单独求解，完成后再调本工具（那时只要 5 秒）"),
+            hint=("先调 run_laspcem_solve_async(sem_path=…) 求解；想一把串完就加 then_export=True，"
+                  "完成后用同一个 task_id 查结果（那时导出只需 5 秒）"
+                  + ("。results_present=true：工程目录里有结果日志但 .sem 无解记录"
+                     "（可能被回滚/替换过），重跑前先确认旧结果是否还有效" if results_present else "")),
             sem_path=resolved,
         )
         resp["suggested"] = {"tool": "run_laspcem_solve_async",
                              "arguments": {"sem_path": resolved, "then_export": True}}
         resp["running_solve_task"] = _running_solve_task_for(resolved)
+        resp["results_present"] = results_present
         return resp
 
     sweeping_auto = sweeping_parameters is None
@@ -1082,8 +1192,8 @@ def export_laspcem_snp(
     existing = _resolve_snp_output(out)
     before_sig = _file_sig(existing) if existing else None
     # 实测（2026-11-13）：`is_solved=True` 但结果目录被清空的工程，LASPCEM 会报
-    # error 167（calculation result is no longer valid）并且**不会产出** Touchstone。
-    # 这种情形最多等 30 s 就判失败，别让调用方白等满 timeout（实测白等 92 s）。
+    # error 892（calculation result is no longer valid；旧版报 167）并且**不会产出** Touchstone，
+    # 同时弹一个模态「Do you want to exit the program?」确认框。这种情形最多等 30 s 就判失败。
     wait_seconds, results_invalid_suspect = timeout_seconds, False
     if solved_now and not results_present:
         wait_seconds = min(int(timeout_seconds), 30)
@@ -1100,6 +1210,9 @@ def export_laspcem_snp(
     elapsed = round(time.time() - t0, 1)
     rc = proc.returncode if proc is not None else None
 
+    # 脚本自己会往同一个 log 写 BEGIN/OK/traceback；下面写摘要前先留存原文，
+    # 否则脚本异常栈被摘要覆盖，script_log_tail 里只剩摘要（2026-11-13 审查）
+    script_output = _read_script_log(log)
     Path(log).write_text("\n".join([
         f"exe={exe}",
         f"script={script_path}",
@@ -1124,6 +1237,7 @@ def export_laspcem_snp(
             solution_name=sn,
             script_log=log,
             script_log_tail=_read_script_log(log),
+            script_output=script_output,
         )
 
     if actual:
@@ -1150,6 +1264,7 @@ def export_laspcem_snp(
             "script_path": script_path,
             "script_log": log,
             "script_log_tail": _read_script_log(log),
+            "script_output": script_output,
             "message": (f"已导出 {actual}（{rows} 行数据）"
                         + ("（导出前自动求解）" if solved_first else "")),
         }
@@ -1160,9 +1275,10 @@ def export_laspcem_snp(
     resp = error_response(
         "EXPORT_NO_OUTPUT",
         (f"{wait_seconds}s 内没有产生 Touchstone 文件（请求 {out}，也未找到同名 .s<N>p）"
-         + ("；工程有解记录但结果目录为空，疑似结果已失效（GUI Message 面板常见 error 167）"
+         + ("；工程有解记录但结果目录为空，疑似结果已失效（GUI Message 面板实测 error 892，旧版 167）"
             if results_invalid_suspect else "")),
-        hint=(("工程有解记录但结果目录为空，GUI Message 面板常见 error 167（结果已失效）；"
+        hint=(("工程有解记录但结果目录为空，GUI Message 面板实测 error 892（旧版 167，结果已失效）；"
+               "此时 GUI 会弹「Do you want to exit the program?」模态框，工具等 30 s 后强杀。"
                "重新求解一次（模型真的变化才会重算：改变量/几何），或从源 .aedt 重新导入；"
                "本工具不做强制重解。")
               if results_invalid_suspect else
@@ -1177,6 +1293,7 @@ def export_laspcem_snp(
     resp["results_dir_after"] = results_dir_after
     resp["results_dir_changed"] = results_dir_before != results_dir_after
     resp["waited_seconds"] = wait_seconds
+    resp["script_output"] = script_output
     return resp
 
 
@@ -1225,8 +1342,13 @@ def build_laspcem_report(
     held = _project_in_use(resolved)
     if held:
         return _busy_response(held, "建报告")
+    busy = project_registry.conflict(resolved)   # 后台求解任务正在动这个工程
+    if busy:
+        return _registry_busy_response(busy, "建报告")
     locks_removed = [p for p in [_clear_stale_lock(resolved)] if p]
     sn, candidates = _resolve_solution_name(resolved, setup, solution_name)
+    # 遗留字段：旧版「导出前自动求解」删掉后 solved_first 永远是 False，
+    # message 里的「（导出前自动求解）」分支永不触发（2026-11-13 复核，保留字段以免破坏调用方）
     solved_first = False
     solved_now = is_solved(resolved)
     results_present = _results_present(resolved)   # 同上：只记录，不阻断
@@ -1235,13 +1357,16 @@ def build_laspcem_report(
         resp = error_response(
             "SOLVE_REQUIRED",
             "工程尚未求解（.sem 里没有解记录），建报告需要已求解的工程",
-            hint=("调 run_laspcem_solve_async(sem_path=…, then_report=True)：服务端会先求解、"
-                  "完成后自动建报告；也可以先单独求解，完成后再调本工具（那时只要 6 秒）"),
+            hint=("先调 run_laspcem_solve_async(sem_path=…) 求解；想一把串完就加 then_report=True，"
+                  "完成后用同一个 task_id 查结果（那时建报告只需 6 秒）"
+                  + ("。results_present=true：工程目录里有结果日志但 .sem 无解记录"
+                     "（可能被回滚/替换过），重跑前先确认旧结果是否还有效" if results_present else "")),
             sem_path=resolved,
         )
         resp["suggested"] = {"tool": "run_laspcem_solve_async",
                              "arguments": {"sem_path": resolved, "then_report": True}}
         resp["running_solve_task"] = _running_solve_task_for(resolved)
+        resp["results_present"] = results_present
         return resp
     sweeping_parameters = {v: ["nominal"] for v in extract_design_variables(resolved)}
     results_dir_before = _dir_stat(_results_dir(resolved))
@@ -1275,6 +1400,8 @@ def build_laspcem_report(
             locks_removed.append(after_lock)
     elapsed = round(time.time() - t0, 1)
     rc = proc.returncode if proc is not None else None
+    # 同 export：摘要覆盖前先留存脚本原文
+    script_output = _read_script_log(log)
     Path(log).write_text("\n".join([
         f"exe={exe}", f"script={script_path}", f"setup={setup}", f"solution={sn}",
         f"report={report_name}", f"sem_saved={verified}", f"elapsed={elapsed}", f"exit_code={rc}",
@@ -1283,7 +1410,23 @@ def build_laspcem_report(
 
     if not verified and elapsed >= timeout_seconds:
         return error_response("REPORT_TIMEOUT", f"{timeout_seconds}s 内没看到工程被改写（SaveAs）",
-                              retryable=True, script_log=log, elapsed=elapsed)
+                              retryable=True, script_log=log, elapsed=elapsed,
+                              script_output=script_output)
+
+    if not verified:
+        # GUI 提前退出（proc.poll() 有值）或循环异常结束 ⇒ 无法确认报告真的建上，
+        # 不能报 success。2026-11-13 复核：原来只在 message 里写「请到 GUI 确认」，
+        # 读 success 的 agent 会当成「建报告成功」。
+        return error_response(
+            "REPORT_NOT_VERIFIED",
+            (f"建报告脚本已执行，但工程没有被改写，无法确认报告 {report_name} 是否真的建上"
+             f"（elapsed={elapsed}s，exit_code={rc}）"),
+            hint=("看 script_output / script_log 与 GUI Message 面板；常见原因：解名或 setup 不匹配、"
+                  "工程打不开、报告脚本报错。必要时到 GUI 手工建一次确认。"),
+            retryable=True, script_log=log, elapsed=elapsed, exit_code=rc,
+            report_name=report_name, verified=False, script_output=script_output,
+            port_count=ports, setup_name=setup, solution_name=sn,
+        )
 
     return {
         "success": True,
@@ -1304,6 +1447,7 @@ def build_laspcem_report(
         "script_path": script_path,
         "script_log": log,
         "script_log_tail": _read_script_log(log),
+        "script_output": script_output,
         "message": (f"已在 LASPCEM 中创建报告 {report_name}"
                     f"（verified={verified}：{'工程已被 SaveAs 改写' if verified else '未见工程改写，请到 GUI 确认'}）"),
     }
@@ -1584,7 +1728,7 @@ def _project_state(sem_path: str, results_present: bool | None = None) -> dict[s
     """工程状态三态：solved_ok / results_missing / unsolved + 推荐下一步。
 
     实测（2026-11-13，BGA）：结果目录被删后 `.sem` 里仍留着 SolutionId，
-    `is_solved=True` 但数据没了 —— LASPCEM 报 error 167、导出拿不到东西。
+    `is_solved=True` 但数据没了 —— LASPCEM 报 error 892（旧版 167）、导出拿不到东西。
     这个组合必须能提前识别，否则调用方要等到导出失败才知道。
     """
     solved = is_solved(sem_path)
@@ -1598,7 +1742,7 @@ def _project_state(sem_path: str, results_present: bool | None = None) -> dict[s
         return {"state": "results_missing", "is_solved": True, "results_present": False,
                 "next_action": "run_laspcem_solve_async",
                 "hint": "解记录在但结果目录为空（数据被删/只拷了 .sem）；导出与建报告都会失败"
-                        "（LASPCEM error 167）。需重新求解（模型要真的变化）或从源 .aedt 重新导入"}
+                        "（LASPCEM error 892，旧版 167）。需重新求解（模型要真的变化）或从源 .aedt 重新导入"}
     return {"state": "solved_ok", "is_solved": True, "results_present": True,
             "next_action": "export_laspcem_snp",
             "hint": "工程已求解且结果数据在；导出/建报告可直接调（5–6 秒）"}

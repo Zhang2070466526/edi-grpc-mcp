@@ -137,13 +137,43 @@ def read_setup_params(sem_path: str) -> dict[str, Any]:
     return read_setup_report(sem_path)["setup"]
 
 
-def is_solved(sem_path: str) -> bool:
-    """工程是否已求解过（.sem 里存在 SolutionId 标记）。
+def _finished_solver_log(sem_path: str) -> str:
+    """结果目录里「已跑完」的求解日志路径（尾部含 `successfully finished`），没有则空串。
 
-    实测：CPW_SL（已求解）含 SolutionId，CPWG-1（未求解）不含。用于「导出/建报告前
-    先判断要不要自动求解」。
+    实测（2026-11-13）：CPWG-3 求解完成后顶层 `.sem` 里**没有** `SolutionId`，
+    但 `<stem>/1_Result/Design_FEM.log` 末尾是 `Job is successfully finished !`。
     """
-    return b"SolutionId" in Path(sem_path).read_bytes()
+    p = Path(sem_path)
+    base = p.with_suffix("") if p.suffix.lower() == ".sem" else p
+    if not base.is_dir():
+        return ""
+    for log in sorted(base.rglob("Design_*.log")):
+        try:
+            with log.open("rb") as fh:
+                fh.seek(0, 2)
+                fh.seek(max(0, fh.tell() - 20000))
+                tail = fh.read()
+        except OSError:
+            continue
+        if b"successfully finished" in tail:
+            return str(log)
+    return ""
+
+
+def is_solved(sem_path: str) -> bool:
+    """工程是否已求解过。两个判据**取或**，单用任一个都会误判（2026-11-13 实测）：
+
+    * 顶层 `.sem` 含 `SolutionId`（Horn / LPF 这类旧格式）；
+    * 结果目录里有跑完的求解日志（`<stem>/**/Design_*.log` 尾部 `successfully finished`）——
+      CPWG-3 求解后 `.sem` 从 342 KB 涨到 7.6 MB，里面**根本没有** `SolutionId` 字样，
+      只看字节会把「刚算完」判成「没解」，进而误报 `SOLVE_NOT_SAVED`。
+
+    ⚠️ 不能用 `detect_solution_names()` 当判据：未求解工程的 `.sem` 里也可能残留
+    `FEM_1/FEM_2` 明文（见 `test_export_unsolved_with_stale_ids_still_requires_solve`）。
+    """
+    if b"SolutionId" in Path(sem_path).read_bytes():
+        return True
+    return bool(_finished_solver_log(sem_path))
 
 
 def extract_design_variables(sem_path: str) -> list[str]:

@@ -1136,7 +1136,9 @@ def test_report_passes_port_count(tmp_path, monkeypatch):
 
     r = L.build_laspcem_report(str(sem), port_count=4)
     assert seen.get("port_count") == 4
-    assert r.get("port_count") == 4
+    # verified=False（脚本没让工程改写）现在如实报错，port_count 放在 details 里供排查
+    assert r.get("error_code") == "REPORT_NOT_VERIFIED", r
+    assert (r.get("details") or {}).get("port_count") == 4, r
 
 
 def test_wait_for_solve_detects_stall(tmp_path, monkeypatch):
@@ -1199,7 +1201,8 @@ def test_solve_reports_stalled_and_kills_solvers(tmp_path, monkeypatch):
                                          "solver_seconds": 950.0, "solver_processes": [],
                                          "sem_changed": False})
     monkeypatch.setattr(L, "_kill_solver_procs",
-                        lambda p: killed.setdefault("pids", [111, 222]))
+                        lambda p, pids=None: killed.setdefault("pids", pids or [111, 222]))
+    monkeypatch.setattr(L, "_kill_orphan_mpi_since", lambda since: [])
     monkeypatch.setattr(L, "_solve_log_verdict", lambda p: (None, ""))
 
     r = L.run_laspcem_solve(str(sem))
@@ -1276,8 +1279,8 @@ def test_export_short_waits_when_results_missing(tmp_path, monkeypatch):
     assert r["error_code"] == "EXPORT_NO_OUTPUT"
     assert seen["timeout"] == 30                    # 缩到 30 s
     assert r["waited_seconds"] == 30
-    assert "结果已失效" in r["message"] or "error 167" in r["message"]
-    assert "error 167" in r["hint"]
+    assert "结果已失效" in r["message"] or "error 892" in r["message"]
+    assert "892" in r["hint"] and "167" in r["hint"]     # 2026-11-13 实测为 892，旧版 167
 
 
 def test_export_uses_full_timeout_when_results_present(tmp_path, monkeypatch):

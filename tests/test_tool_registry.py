@@ -43,6 +43,7 @@ def test_all_tools_registered():
         "run_laspcem_solve_async", "laspcem_solve_query",
         "laspcem_task_cancel", "laspcem_task_list",
         "export_laspcem_snp", "build_laspcem_report", "get_laspcem_setup",
+        "laspcem_cleanup_orphans",
         "start_hfss_analysis_async", "get_hfss_analysis_status",
         "cst_solve_async", "cst_solve_query", "cst_export_snp",
         "cst_export_snp_async", "cst_export_snp_query",

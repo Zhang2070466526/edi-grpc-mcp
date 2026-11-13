@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from servers.laspcem import async_solve  # noqa: F401 — 导入即注册异步工具
 from servers.laspcem.async_solve import (
+    laspcem_cleanup_orphans,
     laspcem_solve_query,
     laspcem_task_cancel,
     laspcem_task_list,
@@ -34,6 +35,7 @@ __all__ = [
     "export_laspcem_snp",
     "get_laspcem_setup",
     "import_aedt_as_sem",
+    "laspcem_cleanup_orphans",
     "laspcem_solve_query",
     "laspcem_task_cancel",
     "laspcem_task_list",

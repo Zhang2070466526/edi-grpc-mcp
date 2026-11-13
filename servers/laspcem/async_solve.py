@@ -14,16 +14,20 @@ RUNNING 期间 `phase` 依次是 solving → exporting → reporting。
 from __future__ import annotations
 
 import contextlib
+import re
 import threading
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
 import psutil
 
 from servers import mcp
+from servers.laspcem import project_registry
 from servers.laspcem.launcher import (
     _check_explicit_setup,
+    _kill_orphan_mpi_since,
     build_laspcem_report,
     clear_task_context,
     export_laspcem_snp,
@@ -49,6 +53,8 @@ _cancel_events: dict[str, threading.Event] = {}
 _handles: dict[str, dict] = {}
 #: task_id → 链式进度（phase / steps），查询时回传
 _phases: dict[str, dict] = {}
+#: sem_path → (时间戳, solve_progress 结果)：轮询时避免重复扫盘/枚举进程
+_progress_cache: dict[str, tuple[float, dict]] = {}
 _events_lock = threading.Lock()
 
 
@@ -81,20 +87,8 @@ def _related_pids(script_path: str, sem_path: str) -> list[int]:
 
 
 def _kill_orphan_mpi(since: float) -> None:
-    """补杀 LASPCEM 自带的 MPI 代理（`hydra_pmi_proxy.exe`）。
-
-    实测（2026-11-12）：mpiexec 被杀后它可能残留，cmdline 里**没有工程路径**（只有
-    `--usize -1 --auto-cleanup 1`），按工程名匹配不到，会把结果目录句柄一直占住
-    （删目录报 "Device or resource busy"）。这里按「exe 位于 LASPCEM solver 目录 + 启动时间
-    不早于本次任务」筛，避免误杀其它 MPI 作业。
-    """
-    for proc in psutil.process_iter(["pid", "name", "exe", "create_time"]):
-        if (proc.info.get("name") or "").lower() != "hydra_pmi_proxy.exe":
-            continue
-        exe = (proc.info.get("exe") or "").lower().replace("\\", "/")
-        created = proc.info.get("create_time") or 0
-        if "laspcem" in exe and created >= since - 5:
-            _terminate_pid(proc.info["pid"])
+    """兼容旧调用名：实现已搬到 launcher（超时路径也要用），这里只转调。"""
+    _kill_orphan_mpi_since(since)
 
 
 def _kill_task(handle: dict[str, Any], sem_path: str) -> None:
@@ -126,13 +120,25 @@ def _kill_task(handle: dict[str, Any], sem_path: str) -> None:
     _kill_orphan_mpi(started)
 
 
-def _entry_with_context(func, event: threading.Event, handle: dict):
-    """把内部实现包一层：进线程先设上下文（取消信号/句柄），出来清掉。"""
+def _entry_with_context(func, event: threading.Event, handle: dict,
+                        owner: str = "", sem_path: str = ""):
+    """把内部实现包一层：进线程先设上下文（取消信号/句柄 + 工程占用），出来清掉。
+
+    工程占用登记是 P0 修复的关键：求解期间该 .sem 在 `project_registry` 里被登记，
+    同步 export/report 的入口据此回 PROJECT_IN_USE，避免起第二个实例抢工程
+    （`_project_in_use` 看不到 /session 实例，见模块 docstring）。
+    """
     def entry(*args, **kwargs):
         set_task_context(event, handle)
+        project_registry.bind_thread(owner)
+        if owner and sem_path:
+            project_registry.acquire(sem_path, owner, "solve")
         try:
             return func(*args, **kwargs)
         finally:
+            if owner and sem_path:
+                project_registry.clear_owner(owner)
+            project_registry.bind_thread("")
             clear_task_context()
     return entry
 
@@ -147,19 +153,82 @@ def _reap(task_id: str, snap: dict[str, Any] | None) -> None:
         _phases.pop(task_id, None)
 
 
+def _reap_stale() -> int:
+    """清掉「已从 TaskRunner 淘汰、却还留在本地三张表里」的条目。
+
+    本地表（_phases/_cancel_events/_handles）原本只在 `laspcem_solve_query` 读到终态时
+    才回收；调用方"提交后从不查询"或任务被 TTL/max_tasks 淘汰时，条目会永久残留
+    （2026-11-13 审查）。这里以 TaskRunner 的存活任务为基准兜底回收。
+    """
+    alive = {t.get("task_id") for t in _runner.list()}
+    reaped = 0
+    with _events_lock:
+        stale = [tid for tid in _phases if tid not in alive]
+        for tid in stale:
+            _phases.pop(tid, None)
+            _cancel_events.pop(tid, None)
+            _handles.pop(tid, None)
+            reaped += 1
+    if len(_progress_cache) > 50:
+        _progress_cache.clear()
+    return reaped
+
+
+def _cached_progress(sem_path: str, ttl: float = 2.0) -> dict[str, Any]:
+    """带 2 s 缓存的求解进度：`solve_progress` 要扫结果目录 + 枚举全表进程，
+    轮询密集时太贵（2026-11-13 审查）。读写都持 `_events_lock`，与其它表一致。"""
+    now = time.time()
+    with _events_lock:
+        hit = _progress_cache.get(sem_path)
+        if hit and now - hit[0] < ttl:
+            return hit[1]
+    value = solve_progress(sem_path)
+    with _events_lock:
+        _progress_cache[sem_path] = (now, value)
+    return value
+
+
+def kill_running_tasks(reason: str = "服务停止") -> int:
+    """进程退出前收掉所有 RUNNING 的 LASPCEM 任务，返回处理条数。
+
+    不做这件事的后果（2026-11-13 审查）：`TaskRunner` 的 worker 是非 daemon 线程，
+    `sys.exit` 后解释器会等它跑完（可能 30 分钟）；强杀则留下孤儿 GUI + mpiexec，
+    而重启后内存任务表已丢，`laspcem_task_cancel` 拿不到 task_id 就再也清不掉。
+    """
+    handled = 0
+    try:
+        for task in _runner.list():
+            if task.get("finished_at") is not None or task.get("status") != "RUNNING":
+                continue
+            tid = task.get("task_id") or ""
+            sem = (task.get("metadata") or {}).get("sem_path") or ""
+            event = _cancel_events.get(tid)
+            if event is not None:
+                event.set()
+            if sem:
+                _kill_task(_handles.get(tid) or {}, sem)
+                handled += 1
+    except Exception:  # noqa: BLE001 — 退出路径绝不能抛
+        return handled
+    return handled
+
+
 def _submit_laspcem_task(func, resolved: str, metadata: dict[str, Any],
                          state: dict | None = None, **kwargs) -> dict[str, Any]:
     """校验后把任务丢进队列：返回 submitted_response 或错误响应。
 
     事件/句柄必须在 submit 之前建好并传进去 —— 否则 cancel 打不到已经在跑的任务。
     """
+    # 与 TaskRunner 的 max_tasks 构成双闸门：这里先快速拒（不占 submit 路径、不进日志噪声），
+    # 保留是有意的防御性冗余 —— 有测试 `test_queue_full_rejected` 锁定该行为（2026-11-13）。
     if _runner.pending_count() >= 20:
         return queue_full_response("LASPECM_QUEUE_FULL", message="排队任务过多，请稍后再提交")
     event = threading.Event()
     handle: dict = {}
     state = state if state is not None else {}
     # state 必须显式传进任务体：它是"同一个 dict"，任务体写 phase/steps，查询读同一份
-    task_id = _runner.submit(_entry_with_context(func, event, handle), resolved,
+    owner = f"task:{uuid.uuid4().hex[:8]}"
+    task_id = _runner.submit(_entry_with_context(func, event, handle, owner, resolved), resolved,
                              metadata=metadata, state=state, **kwargs)
     if task_id is None:
         return queue_full_response("LASPECM_QUEUE_FULL", message="提交失败，请稍后重试")
@@ -182,7 +251,7 @@ def _mark(steps: list[dict], name: str, status: str) -> None:
 def _run_solve_chain(
     sem_path: str,
     setup_name: str = "",
-    timeout_seconds: int = 1800,
+    timeout_seconds: int = 7200,
     stall_seconds: float = 900.0,
     then_export: bool = False,
     then_report: bool = False,
@@ -265,7 +334,7 @@ def _run_solve_chain(
 def run_laspcem_solve_async(
     sem_path: str,
     setup_name: str = "",
-    timeout_seconds: int = 1800,
+    timeout_seconds: int = 7200,
     stall_seconds: int = 900,
     then_export: bool = False,
     then_report: bool = False,
@@ -349,7 +418,8 @@ def laspcem_solve_query(task_id: str) -> dict[str, Any]:
         return error_response("TASK_CANCELLED", snap.get("error") or "任务已取消",
                              task_id=task_id, status="CANCELLED")
 
-    state = _phases.get(task_id) or {}
+    with _events_lock:
+        state = dict(_phases.get(task_id) or {})
     if not snap.get("finished_at"):
         out: dict[str, Any] = {"success": True, "task_id": task_id, "status": status,
                                "completed": False, "message": "任务进行中"}
@@ -361,7 +431,7 @@ def laspcem_solve_query(task_id: str) -> dict[str, Any]:
             out["elapsed_seconds"] = round(time.time() - snap["started_at"], 1)
         sem = (snap.get("metadata") or {}).get("sem_path")
         if sem:
-            out.update(solve_progress(sem))
+            out.update(_cached_progress(sem))
         return out
 
     _reap(task_id, snap)
@@ -373,6 +443,11 @@ def laspcem_solve_query(task_id: str) -> dict[str, Any]:
         for key in ("steps", "solve_result", "export_result", "report_result"):
             if key in result:
                 resp[key] = result[key]
+        # 外层 hint 是错误码词典查的（SOLVE_TIMEOUT → do_not_retry），内层 solve_result
+        # 明确 retry_safe；不覆盖会让 agent 误判「不可重试」（2026-11-13 实测）
+        inner_hint = (result.get("solve_result") or {}).get("hint")
+        if inner_hint:
+            resp["hint"] = inner_hint
         return resp
 
     out = {"success": True, "task_id": task_id, "status": status, "completed": True,
@@ -410,23 +485,29 @@ def laspcem_task_cancel(task_id: str) -> dict[str, Any]:
         if sem:
             _kill_task(handle, sem)
 
-    ok = _runner.cancel(task_id, kill=_do_kill)
+    ok, cancel_msg = _runner.cancel(task_id, kill=_do_kill)
     if not ok:
-        return error_response("TASK_ALREADY_FINISHED", "任务已结束，无法取消",
+        return error_response("TASK_ALREADY_FINISHED", cancel_msg or "任务已结束，无法取消",
                              task_id=task_id, status=(_runner.snapshot(task_id) or {}).get("status"))
     with _events_lock:
+        # 三张表一起回收：_reap_stale 以 _phases 为基准找 stale，只 pop _phases
+        # 会让 _handles（含 GUI 句柄）/_cancel_events 永远扫不到（2026-11-13 复核）
         _phases.pop(task_id, None)
+        _cancel_events.pop(task_id, None)
+        _handles.pop(task_id, None)
     return {"success": True, "task_id": task_id, "status": "CANCELLED",
-            "message": "任务已取消（执行中，已尝试终止）"}
+            "message": cancel_msg}
 
 
 @mcp.tool()
 def laspcem_task_list() -> dict[str, Any]:
     """列出 LASPCEM 后台任务（含 operation=solve、phase、steps、状态与耗时）。"""
+    reaped = _reap_stale()
     tasks = []
     for snap in _runner.list():
         meta = snap.get("metadata") or {}
-        state = _phases.get(snap.get("task_id")) or {}
+        with _events_lock:
+            state = dict(_phases.get(snap.get("task_id")) or {})
         item = {
             "task_id": snap.get("task_id"),
             "status": snap.get("status"),
@@ -442,4 +523,156 @@ def laspcem_task_list() -> dict[str, Any]:
         if state.get("phase"):
             item["phase"] = state["phase"]
         tasks.append(item)
-    return {"success": True, "count": len(tasks), "tasks": tasks}
+    return {"success": True, "count": len(tasks), "tasks": tasks,
+            "reaped_stale": reaped}
+
+
+# ── 孤儿进程清理（服务重启/强杀后唯一的收拾手段）────────────────────────
+
+#: LASPCEM 求解器相关进程名 —— 它们的 cmdline 常常不含工程路径（判不出归属）
+_SOLVER_NAMES = frozenset({"mpiexec.exe", "phofem.exe", "hydra_pmi_proxy.exe"})
+
+_SEM_RE = re.compile(r'[^\s"\']+\.sem\b', re.IGNORECASE)
+
+
+def _sem_of_process(cmd: str) -> str:
+    """尽力判定一个 LASPCEM 相关进程属于哪个 .sem（判不出返回空串）。
+
+    两种 GUI 形态：cmdline 直接带 .sem；或 `laspcem.exe /session <临时脚本>` ——
+    工程路径只写在脚本内容里（`async_solve._related_pids` 的实测注释就是这点）。
+    """
+    hits = _SEM_RE.findall(cmd)
+    if hits:
+        return hits[0]
+    if "/session" in cmd.lower():
+        parts = cmd.split()
+        for i, tok in enumerate(parts):
+            if tok.lower() == "/session" and i + 1 < len(parts):
+                script = parts[i + 1].strip('"')
+                try:
+                    text = Path(script).read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    return ""
+                inner = _SEM_RE.findall(text)
+                if inner:
+                    return inner[0]
+    return ""
+
+
+@mcp.tool()
+def laspcem_cleanup_orphans(sem_path: str = "", dry_run: bool = False) -> dict[str, Any]:
+    """清理残留的 LASPCEM 进程（GUI / mpiexec / phofem / MPI 代理）。
+
+    服务重启或强杀后内存任务表已丢失，`laspcem_task_cancel` 拿不到 task_id，
+    这些孤儿会一直占 CPU 和工程目录。本工具按工程精确定位并终止它们。
+
+    用法：服务重启后收拾残留；求解卡死时手工清场
+
+    Args:
+        sem_path: 只清理这个工程的残留；留空 = 清理所有「能判定归属、且不属于在跑任务」的进程。
+        dry_run: True 只报告要杀谁、不动手（建议先跑一次看清）。
+
+    Returns:
+        {"success": True, "dry_run": False, "killed": [{pid,name,sem_path,reason}],
+         "skipped": [...], "active_sems": [...]}
+    """
+    want = project_registry.canon(sem_path)
+    try:
+        want_stem = Path(sem_path).stem.lower() if sem_path else ""
+    except (OSError, ValueError):
+        want_stem = ""
+
+    active_sems: set[str] = set()
+    for task in _runner.list():
+        if task.get("finished_at") is not None:
+            continue
+        active_sems.add(project_registry.canon((task.get("metadata") or {}).get("sem_path", "")))
+    active_stems = {Path(s).stem.lower() for s in active_sems if s}
+
+    killed: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+        name = (proc.info.get("name") or "").lower()
+        if name not in ("laspcem.exe", "laspcemapp.exe", "mpiexec.exe",
+                        "phofem.exe", "hydra_pmi_proxy.exe"):
+            continue
+        cmd = " ".join(proc.info.get("cmdline") or [])
+        pid = proc.info.get("pid")
+        owner_sem = _sem_of_process(cmd)
+        owner_key = project_registry.canon(owner_sem) if owner_sem else ""
+
+        # 求解器类进程（mpiexec / phofem / hydra）的 cmdline 里常常**没有工程路径**：
+        # 实测 `phofem Design ADAPTIVE-MESH`、`hydra_pmi_proxy --usize -1 --auto-cleanup 1`。
+        # 这类既判不出归属、也匹配不到工程 stem，旧代码直接静默 continue ⇒
+        # 「重启后清理孤儿」这个主用途正好漏掉最关键的求解器本体（2026-11-13 实测）。
+        if not owner_key and name in _SOLVER_NAMES:
+            if want:
+                skipped.append({"pid": pid, "name": proc.info.get("name"), "sem_path": "",
+                                "reason": "求解器类进程但 cmdline 无工程路径，无法确认属于该工程，保守跳过"})
+                continue
+            if active_sems:
+                skipped.append({"pid": pid, "name": proc.info.get("name"), "sem_path": "",
+                                "reason": "当前有在跑的任务，无法确认归属，保守跳过"})
+                continue
+            item = {"pid": pid, "name": proc.info.get("name"), "sem_path": "",
+                    "reason": "dry_run" if dry_run else "terminated"}
+            if dry_run:
+                killed.append(item)          # dry_run 里 killed = 「将要清掉的」
+                continue
+            try:
+                psutil.Process(pid).terminate()
+                killed.append(item)
+            except (psutil.Error, OSError) as exc:
+                item["reason"] = f"terminate 失败：{exc}"
+                skipped.append(item)
+            continue
+
+        # 目标筛选：给了工程 ⇒ 只动归属该工程的（判不出归属时用 stem 兜底）
+        if want:
+            if owner_key:
+                if owner_key != want:
+                    continue
+            elif not (want_stem and want_stem in cmd.lower()):
+                continue
+        else:
+            # 未指定工程：只动「能判定归属」的；判不出归属的不碰（保守，避免误杀手动开的窗口）。
+            # 但必须**记录**下来：cmdline 读不出工程路径的实例（如 /session 的临时脚本已被删）
+            # 属于"我看到了但没敢动"，不能静默吞掉（2026-11-13 复核，与 solver 分支口径一致）。
+            if not owner_key:
+                skipped.append({"pid": pid, "name": proc.info.get("name"), "sem_path": "",
+                                "reason": "cmdline 无工程路径（可能 /session 脚本已删），保守跳过"})
+                continue
+            if owner_key in active_sems:
+                skipped.append({"pid": pid, "name": proc.info.get("name"),
+                                "sem_path": owner_sem, "reason": "有正在跑的任务，别杀"})
+                continue
+
+        # 该工程的求解任务正在跑时一律不动（活任务应走 laspcem_task_cancel）。
+        # 2026-11-13 复核：原来的 `and owner_key != want` 让「显式指定正在求解的工程」
+        # 这个**最该保护**的场景漏过守卫 —— want 分支里 owner_key 已等于 want，
+        # 条件恒 False，于是会 terminate 掉活着的求解器。
+        if owner_key in active_sems:
+            skipped.append({"pid": pid, "name": proc.info.get("name"), "sem_path": owner_sem,
+                            "reason": "该工程有正在跑的任务，别杀（要停请用 laspcem_task_cancel）"})
+            continue
+        if not owner_key and want_stem and want_stem in active_stems:
+            skipped.append({"pid": pid, "name": proc.info.get("name"),
+                            "sem_path": "", "reason": "该工程有正在跑的任务，别杀"})
+            continue
+
+        item = {"pid": pid, "name": proc.info.get("name"), "sem_path": owner_sem,
+                "reason": "dry_run" if dry_run else "terminated"}
+        if dry_run:
+            killed.append(item)
+            continue
+        try:
+            psutil.Process(pid).terminate()
+            killed.append(item)
+        except (psutil.Error, OSError) as exc:
+            item["reason"] = f"terminate 失败：{exc}"
+            skipped.append(item)
+
+    return {"success": True, "dry_run": bool(dry_run), "killed": killed, "skipped": skipped,
+            "active_sems": sorted(s for s in active_sems if s),
+            "message": ("仅报告（dry_run），未终止任何进程" if dry_run
+                        else f"已终止 {len(killed)} 个残留进程")}
