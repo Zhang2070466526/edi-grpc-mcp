@@ -18,7 +18,10 @@ _UNIT_FACTORS = {"hz": 1.0, "khz": 1e3, "mhz": 1e6, "ghz": 1e9}
 
 def bandwidth_to_hz(value: float, unit: str) -> float:
     """带宽数值 + 单位 → Hz。"""
-    u = (unit or "hz").lower()
+    u = unit.strip().lower() if isinstance(unit, str) else ""
+    if not u:
+        u = "mhz"          # 省略/空串按工具声明默认；别兜成 hz（差 60 dB）
+
     if u not in _UNIT_FACTORS:
         raise ValueError(f"未知带宽单位: {unit}")
     if not math.isfinite(value) or value <= 0.0:
@@ -27,12 +30,12 @@ def bandwidth_to_hz(value: float, unit: str) -> float:
 
 
 def _calc(
-    noise_figure_db: float,
-    input_p1dbm: float,
-    bandwidth: float,
-    bandwidth_unit: str = "mhz",
-    required_snr_db: float = 0.0,
-    target_dynamic_range_db: float | None = None,
+        noise_figure_db: float,
+        input_p1dbm: float,
+        bandwidth: float,
+        bandwidth_unit: str = "mhz",
+        required_snr_db: float = 0.0,
+        target_dynamic_range_db: float | None = None,
 ) -> dict:
     """计算链路噪声底、最低输入灵敏度、压缩受限动态范围；给 target 时顺带做目标评价。
 
@@ -40,7 +43,7 @@ def _calc(
         noise_figure_db: 链路等效总噪声系数（dB，≥0）。
         input_p1dbm: 输入 1dB 压缩点（dBm，可为负）。
         bandwidth: 等效噪声带宽数值。
-        bandwidth_unit: 带宽单位 hz/khz/mhz/ghz，默认 mhz。
+        bandwidth_unit: 带宽单位 hz/khz/mhz/ghz（大小写不敏感、忽略两侧空格），省略或空串按 mhz。
         required_snr_db: 最低所需信噪比（dB，可为负）。
         target_dynamic_range_db: 可选，目标动态范围（dB），给了就输出 meets_target/margin/required_sensitivity。
 
@@ -82,25 +85,34 @@ def _calc(
 
 @mcp.tool()
 def calculate_rf_dynamic_range(
-    noise_figure_db: float,
-    input_p1dbm: float,
-    bandwidth: float,
-    bandwidth_unit: str = "mhz",
-    required_snr_db: float = 0.0,
-    target_dynamic_range_db: float | None = None,
+        noise_figure_db: float,
+        input_p1dbm: float,
+        bandwidth: float,
+        bandwidth_unit: str = "mhz",
+        required_snr_db: float = 0.0,
+        target_dynamic_range_db: float | None = None,
 ) -> dict[str, Any]:
-    """计算射频链路的噪声底、最低输入灵敏度与压缩受限动态范围。
+    """计算射频链路的灵敏度(S)与压缩受限动态范围(DR)。
+
+    输入：中频带宽(BW，Hz/MHz 带单位)、链路噪声系数(NF)、所需最低信噪比(SNRmin，默认 0)、输入 1dB 压缩点(P1dB_in)。
+
+    公式：
+        N  = 常数项 + 10·log10(BW) + NF      —— N 底噪，BW 带宽(Hz)，NF 噪声系数
+        S  = N + SNRmin                     —— S 灵敏度
+        DR = P1dB_in − S                    —— DR 压缩受限动态范围
+
+    常数项随带宽单位：BW 用 Hz 时为 -174（-174 dBm/Hz 热噪声基准，10·log10(1Hz)=0 ⇒ -174）；
+    BW 用 MHz 时为 -114（10·log10(1MHz)=60 ⇒ -174+60=-114）。本工具内部统一转 Hz 后套 -174，与 -114 等价。
+
+    给 target 时顺带算是否达标与所需灵敏度界限。
 
     用法："算一下 NF=3dB、P1dB=-10dBm、1MHz 带宽、要求 10dB 信噪比这条链路的灵敏度"
-
-    公式：噪声底 = -174 + 10·log10(BW) + NF；灵敏度 = 噪声底 + 所需 SNR；
-    动态范围 = P1dB − 灵敏度。给 target 时顺带算是否达标与所需灵敏度界限。
 
     Args:
         noise_figure_db: 链路等效总噪声系数（dB，≥0）。
         input_p1dbm: 输入 1dB 压缩点（dBm，可为负）。
         bandwidth: 等效噪声带宽数值（>0）。
-        bandwidth_unit: 带宽单位 hz/khz/mhz/ghz，默认 mhz。
+        bandwidth_unit: 带宽单位 hz/khz/mhz/ghz（大小写不敏感、忽略两侧空格），省略或空串按 mhz。
         required_snr_db: 最低所需信噪比（dB，可为负），默认 0。
         target_dynamic_range_db: 目标动态范围（dB，可选），给了就输出 meets_target/margin_db/required_sensitivity_dbm。
 
@@ -111,7 +123,7 @@ def calculate_rf_dynamic_range(
     try:
         result = _calc(noise_figure_db, input_p1dbm, bandwidth, bandwidth_unit,
                        required_snr_db, target_dynamic_range_db)
-    except ValueError as exc:
+    except (ValueError, TypeError) as exc:
         return error_response("INVALID_PARAMETERS", str(exc))
     result["success"] = True
     return result

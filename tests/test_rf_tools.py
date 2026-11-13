@@ -41,6 +41,23 @@ def test_dynamic_range_target():
     assert _near(r["required_sensitivity_dbm"], -90.0), r
 
 
+def test_dynamic_range_empty_unit_defaults_to_mhz():
+    # 空串/纯空格单位按默认 mhz（不能静默兜成 hz —— 差 60 dB）
+    base = calculate_rf_dynamic_range(3.0, -10.0, 1.0, "mhz", 10.0)
+    for unit in ("", "   ", " mhz ", "MHz"):
+        r = calculate_rf_dynamic_range(3.0, -10.0, 1.0, unit, 10.0)
+        assert r["success"] is True, (unit, r)
+        assert _near(r["noise_floor_dbm"], base["noise_floor_dbm"]), (unit, r)
+        assert _near(r["dynamic_range_db"], base["dynamic_range_db"]), (unit, r)
+
+
+def test_dynamic_range_non_numeric_returns_error_code():
+    # 源码直调传非数值：走 INVALID_PARAMETERS，不能裸抛 TypeError
+    r = calculate_rf_dynamic_range("3", -10.0, 1.0, "mhz")
+    assert r["success"] is False, r
+    assert r["error_code"] == "INVALID_PARAMETERS", r
+
+
 # ── 混频杂散 ─────────────────────────────────────────────────────
 
 def test_spur_no_collision():
