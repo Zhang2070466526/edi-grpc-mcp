@@ -48,7 +48,7 @@
 - `open_document` — 打开本地文档：link 模式生成 10 分钟 HTTP 链接，local 模式用系统默认程序打开。
 - `open_hfss_project` — 启动 AEDT 并打开 .aedt 项目（COM 附着优先，subprocess 单次启动兜底）。
 - `open_laspcem_project` — 在 LASPCEM 中打开 .sem 工程文件。
-- `run_laspcem_solve_async` — 提交 LASPCEM 求解任务（异步，立即返回 task_id）—— 大模型求解用这个。
+- `run_laspcem_solve_async` — 提交 LASPCEM 求解任务（异步，立即返回 task_id）
 - `show_image` — 读取本地图片，返回标准 MCP ImageContent 和本地路径。
 - `start_hfss_analysis_async` — 异步启动 HFSS Setup 仿真，立即返回 task_id。
 - `wilkinson_marchand_order` — 估计 Wilkinson 功分器 / Marchand 巴伦的节数（阶数）。

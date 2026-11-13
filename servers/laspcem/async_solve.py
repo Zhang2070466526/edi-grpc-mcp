@@ -273,7 +273,7 @@ def run_laspcem_solve_async(
     report_name: str = "Sparameter_1",
     port_count: int = 0,
 ) -> dict[str, Any]:
-    """提交 LASPCEM 求解任务（异步，立即返回 task_id）—— 大模型求解用这个。
+    """提交 LASPCEM 求解任务（异步，立即返回 task_id）
 
     用法：后台跑这个 sem 的求解；求解完顺便导出 sNp（then_export=True）；求解完建报告
 
