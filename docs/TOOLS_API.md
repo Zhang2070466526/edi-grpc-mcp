@@ -28,7 +28,7 @@ from servers.eda.project_manage import list_epp_projects
 - **[启动 / 诊断（3 个）](#启动--诊断3个)**：启动 EDI、服务诊断、日志读取
 - **[ANSYS HFSS（6 个）](#ansys-hfss6个)**：AEDT 工程开关、HFSS 异步仿真
 - **[CST 电磁仿真（13 个）](#cst电磁仿真13个)**：异步求解 .cst、导出 S 参数 / 远场方向图
-- **[LASPCEM 电磁仿真（3 个）](#laspcem电磁仿真3个)**：启动 LASPCEM、打开 .sem 工程、读取求解设置
+- **[LASPCEM 电磁仿真（10 个）](#laspcem电磁仿真10个)**：启动 LASPCEM、打开 .sem 工程、aedt 转 sem、异步求解（可带导出/建报告后处理）、任务查询与取消、同步导出 S 参数 / 建报告、读取求解设置
 - **[图表（3 个）](#图表3个)**：RAW 曲线解析、转图、结果对比
 - **[图片（2 个）](#图片2个)**：显示图片、视觉分析
 - **[仿真器件管理（10 个）](#仿真器件管理10个协议-v3)**：器件 Schema、增删改、状态、网表导入、原理图加载
@@ -776,16 +776,10 @@ design_chip(description: str, save_path: str, freq: float | None = None, bandwid
 | `description` | str | 是 | — | 模型设计需求（非空）：电路类型（带通/低通滤波器、天线、负载…）+ 指标 |
 | `save_path` | str | 是 | — | 目标文件完整路径（如 `D:/soft-ip/PCB.aedt`） |
 | `freq` | float | 否 | None | 可选中心频率（>0，GHz）；未提供时服务端按该软 IP 插值范围中点补齐 |
-| `bandwidth` | float | 否 | None | 可选**相对带宽，单位 %**（5 = 5%）；未提供时同上。⚠️ 部分软 IP **必填**（不给 → `FAILED`「缺少相对带宽（bandwidth,单位:%）」）；超出有效范围（实测带通模板 **[1.2267, 6.27922]%，与 freq 无关**：20/25/30 GHz 同区间）也会 `FAILED`，而本工具 payload 固定 `allow_extrapolation=false`（未暴露该参数，见 `审查报告.md` P2-7）⇒ 只能改 `bandwidth` 或改 `freq` |
+| `bandwidth` | float | 否 | None | 可选**相对带宽，单位 %**（5 = 5%）；未提供时同上。⚠️ 部分软 IP **必填**（不给 → `FAILED`「缺少相对带宽（bandwidth,单位:%）」）；超出有效范围（实测带通模板 **[1.2267, 6.27922]%，与 freq 无关**：20/25/30 GHz 同区间）也会 `FAILED` |
 | `timeout_seconds` | int | 否 | 120 | 最长等待秒数 |
 
-返回（gRPC 统一结构）：
-
-```python
-{"success": True, "status": "SUCCEEDED",
- "details": {"description": "...", "freq": 20, "bandwidth": 6,
-             "save_path": "D:/soft-ip/BPF_20G.aedt", "status": "MODEL_DESIGN_COMPLETED"}}
-```
+返回（gRPC 统一结构）：`{"success": true, "status": "SUCCEEDED", "details": {"description": "...", "freq": 20, "bandwidth": 6, "save_path": "D:/soft-ip/BPF_20G.aedt", "status": "MODEL_DESIGN_COMPLETED"}}`。
 
 ⚠️ **产物路径读 `details.save_path`**（`result_path` 恒为空串）；`details` 只回 `description/freq/bandwidth/save_path/status`。
 
@@ -1187,9 +1181,17 @@ cst_export_farfield_query(task_id: str) -> dict
 
 ---
 
-## LASPCEM 电磁仿真（3 个）
+## LASPCEM 电磁仿真（10 个）
 
-> LASPCEM（西安电子科技大学的国产电磁仿真平台）无 COM/gRPC/headless 接口，其唯一程序化入口是 GUI 内嵌 Python 脚本（控制台 / Run Script）。本组工具只做「启动 / 打开工程 / 读求解设置」三件事，**不触发求解**（求解需 GUI 手动 Run Script，或后续拿到厂商批处理接口再补）。
+> LASPCEM（西安电子科技大学国产电磁仿真平台）无 COM/gRPC 接口，程序化入口是 GUI 内嵌 Python 脚本（`app`/`cem`/`report`/`viewer` 全局对象），用 `laspcem /session <脚本>` 执行（会弹 GUI，需要可见桌面会话）。
+>
+> **实测要点（2026-11-12，BuildNo 28167，2 端口 CPW 模型）**
+> - `cem.FEMAnalyze` 是**异步**的：调用立即返回，真正求解在 GUI 里跑 `mpiexec + phofem`，结果由 GUI 自己写回 `.sem`。脚本里**不能**跟 `SaveAs`/`app.Exit()`（会把求解器掐死）。
+> - 脚本首行必须是 `#Version Information:` + `app.SetScriptVersion(...)`，否则宿主拒绝执行；给脚本套 `try/except` 日志包装会导致求解不启动。
+> - setup 名传**显示名**（`.sem` 里存的是 `Setup1(FEM)`，API 要用 `Setup1`）。
+> - 判定"求解完成"看**求解器进程**：见过 `mpiexec/phofem` → 等它们退出且 `.sem` 安静 15 s。只看解序号不行（同一 setup 重解是**覆盖**，不新增序号）。
+> - 工程已有解且模型没变化时，LASPCEM 会跳过重算（Message: `already calculated`）——正常行为，本组工具**不提供强制重解**；需要重算就让模型真的变化。
+> - 实测耗时：一次完整求解 ≈ **220 s**；未求解工程"求解→导出" ≈ **238 s**；已求解工程导出 **2–5 s**。
 
 ### `launch_laspcem`
 
@@ -1205,7 +1207,7 @@ launch_laspcem(laspcem_path: str = "") -> dict
 |---|---|---|---|---|
 | `laspcem_path` | str | 否 | 自动检测 | laspcem.exe 路径（LASPCEM_PATH → 注册表卸载项 → 注册表 .sem 关联） |
 
-返回：`{"success": true, "started": bool, "already_running": bool, "exe": "...", "message": "..."}`；失败 `{"success": false, "error_code": "LASPCEM_NOT_FOUND"/"LAUNCH_FAILED"}`。
+返回：`{"success": true, "started": bool, "already_running": bool, "exe": "...", "message": "..."}`。
 
 ### `open_laspcem_project`
 
@@ -1215,7 +1217,7 @@ from servers.laspcem.launcher import open_laspcem_project
 open_laspcem_project(project_path: str, laspcem_path: str = "", force_new_instance: bool = False) -> dict
 ```
 
-在 LASPCEM 中打开 .sem 工程（等价于双击 .sem）。⚠️ LASPCEM 无进程间投递，带文件启动一律新起 GUI 进程，故本工具做同工程去重：目标 .sem 已在某实例命令行里则复用、不再起新实例；要强制新开传 `force_new_instance=True`。
+在 LASPCEM 中打开 .sem 工程（等价于双击 .sem）。LASPCEM 无进程间投递，带文件启动一律新起 GUI 实例，故本工具做同工程去重：目标 .sem 已在某实例命令行里则复用；`force_new_instance=True` 强制新开。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
@@ -1223,9 +1225,188 @@ open_laspcem_project(project_path: str, laspcem_path: str = "", force_new_instan
 | `laspcem_path` | str | 否 | 自动检测 | laspcem.exe 路径 |
 | `force_new_instance` | bool | 否 | False | 该工程已打开时也强制再起新实例 |
 
-返回：`{"success": true, "exe": "...", "project": "...", "reused_existing": bool, "new_instance": bool, "pid": int|null, "running_instances": [pid,...], "message": "..."}`；失败 `{"success": false, "error_code": "INVALID_PATH"/"LASPCEM_NOT_FOUND"/"LAUNCH_FAILED"}`。
+返回：`{"success": true, "exe": "...", "project": "...", "reused_existing": bool, "new_instance": bool, "pid": int|null, "running_instances": [pid,...], "message": "..."}`。
+
+### `run_laspcem_solve`（内部实现，非 MCP 工具）
+
+> 求解对外**只提供异步工具** `run_laspcem_solve_async`（见下一节）。本函数是内部实现：
+> 异步队列、`export_laspcem_snp`、`build_laspcem_report` 都复用它，下列判据/返回字段同样适用于
+> 异步任务完成后的 `solve_result`。
+
+```python
+from servers.laspcem.launcher import run_laspcem_solve
+
+run_laspcem_solve(sem_path: str, setup_name: str = "", timeout_seconds: int = 1800, close_gui: bool = True) -> dict
+```
+
+对 .sem 工程跑 FEM 求解：非阻塞启动脚本（`app.Open` → `SetSelectionMode` → `cem.FEMAnalyze`），**轮询求解器进程**直到跑完，再按需关闭本次拉起的 GUI；结果自动写回 `.sem`。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `sem_path` | str | 是 | — | .sem 文件绝对路径 |
+| `setup_name` | str | 否 | 自动探测 | setup 名；探测到 `Setup1(FEM)` 会剥成显示名 `Setup1` 再传给 API |
+| `timeout_seconds` | int | 否 | 1800 | 最长等待秒数（本机一次求解约 220 s，大模型往上加） |
+| `close_gui` | bool | 否 | True | 求解结束后是否关掉本次拉起的 GUI 实例 |
+
+返回：`{"success": true, "solved": true, "saw_solver": true, "solver_seconds": 216.9, "solver_processes": [...], "sem_size_before": 260979, "sem_size_after": 6169622, "orphan_solvers": [], "script_log": "...", "message": "..."}`
+
+失败码：`SETUP_NOT_FOUND`（显式传的 setup_name 在 .sem 里不存在，调用前就拦下）、`SOLVE_NOT_TRIGGERED`（脚本跑完但没出现求解器；`skipped_likely=true` 表示工程已有解、大概率被 LASPCEM 跳过）、`SOLVE_INCOMPLETE`（求解器跑完但 `Design_*.log` 里没有 `successfully finished`，可能不收敛/中途失败）、`SOLVE_NOT_SAVED`（求解跑完、补了 SaveAs 后顶层 .sem 仍无解记录）、`SOLVE_TIMEOUT`、`PROJECT_IN_USE`（该 .sem 已被别的实例打开）、`INVALID_PATH`。
+
+证据字段：`saw_solver`、`solver_seconds`、`solver_processes`、`sem_size_before/after`、`solve_log`（最新 `Design_*.log` 路径）、`solve_log_finished`（True/False/null）、`persist`（补保存的结果，`null` 表示 GUI 自己写回了）、`stale_lock_removed`、`orphan_solvers`。
+
+落盘细节：`cem.FEMAnalyze` 的结果有时只写进 `<工程名>/1_Result/` 的工作副本，顶层 `.sem` 仍是求解前状态。工具在 `is_solved` 仍为 false 时会自动补一次 `app.Open + app.SaveAs` 把结果合并回去（约 5 s），合并后仍无解才报 `SOLVE_NOT_SAVED`。
+
+### 异步求解（大模型用这组）
+
+LASPCEM 求解在 GUI 里跑，大模型可能几十分钟到几小时。同步的 `run_laspcem_solve` 会一直占住
+MCP 请求，容易客户端超时；异步组把它丢进后台**单 worker 串行队列**（`servers/task_runner.py`），
+立即返回 `task_id`。
+
+```python
+run_laspcem_solve_async(sem_path: str, setup_name: str = "", timeout_seconds: int = 1800,
+                        stall_seconds: int = 900,
+                        then_export: bool = False, then_report: bool = False,
+                        export_path: str = "", report_name: str = "Sparameter_1",
+                        port_count: int = 0) -> dict
+# → {"success": true, "task_id": "a1b2c3d4e5f6", "status": "QUEUED",
+#    "steps": ["solve", "export"], "hint": "poll", "sem_path": "..."}
+# then_export / then_report：**由服务端串**——求解完成后自动接着导出 / 建报告，
+# 调用方只提交一次、只查一个 task_id，不需要自己按顺序调工具。
+
+laspcem_solve_query(task_id: str) -> dict
+# 运行中 → {"status": "RUNNING", "completed": false, "phase": "solving"|"exporting"|"reporting",
+#           "steps": [{"name": "solve", "status": "RUNNING"}, {"name": "export", "status": "PENDING"}],
+#           "elapsed_seconds": 88.0, "adapt_iterations": 10,
+#           "last_log_line": "@0.0-Iter6: Solving 1 out of 1 frequencies @"}
+# 完成   → {"status": "SUCCEEDED", "completed": true, "phase": "done",
+#           "solve_result": {...}, "export_result": {...}, "report_result": {...}}
+# 失败   → error_code = 失败那一步的错误码（SOLVE_STALLED / EXPORT_NO_OUTPUT …），
+#           已完成步骤的结果仍然带回（例如 solve_result 成功 + export_result 失败）
+
+laspcem_task_cancel(task_id: str) -> dict
+# 排队中 → 直接标记 CANCELLED；运行中 → 置取消信号（等待循环立刻收手、跳过补保存）
+# + 终止该工程的 LASPCEM GUI 和它的 mpiexec/phofem/hydra_pmi_proxy
+# → 之后 laspcem_solve_query 返回 error_code = "TASK_CANCELLED"
+
+laspcem_task_list() -> dict
+# {"count": n, "tasks": [{"task_id","status","operation","sem_path","steps",
+#                          "created_at","started_at","finished_at","error","phase"}]}
+```
+
+要点：
+- **单 worker 串行**：同时提交多个只会排队，不会起多个 LASPCEM 抢同一工程/CPU。
+- 求解与导出都走同一条队列（串行），互不抢占；`laspcem_task_list` 的 `operation` 字段区分 `solve`/`export`。
+- 参数校验（路径、`setup_name` 是否存在）在**提交时同步做**，`INVALID_PATH` / `SETUP_NOT_FOUND` 立即返回，不进队列、不占 worker。
+- **取消不会引发额外动作**：取消信号让 `_wait_for_solve` 立刻返回，`run_laspcem_solve` 跳过补保存（否则会再起一个 GUI 去 SaveAs），并连带杀掉 `mpiexec / phofem / hydra_pmi_proxy`（Intel MPI 代理 cmdline 里没有工程路径，会一直占住结果目录句柄，删目录报 "Device or resource busy"）。实测取消 4.2 s、清理 1.0 s、进程残留为空、结果目录可删。
+- 任务状态机 `QUEUED → RUNNING → SUCCEEDED/FAILED/CANCELLED`，完成后保留 6 小时（TTL）；**服务重启后任务表丢失**（返回 `TASK_NOT_FOUND`）。
+- **卡死检测**：求解器还在，但「日志不增长 + `.sem` 不变 + 求解器 CPU 时间不涨」持续 `stall_seconds`（默认 900 s）⇒ 报 `SOLVE_STALLED` 并结束求解器。CPU 时间是关键判据 —— 插值扫频阶段不写日志但 CPU 在跑（实测 80–140 s 无日志增长）。
+- **进度查询**：`laspcem_solve_query` 运行中回传 `elapsed_seconds` / `adapt_iterations`（`HOFEM_adapt_itr*.log` 计数）/ `last_log_line`（`Prog.log` 末行）。
+- 任务进入终态后，取消信号/进程句柄会从内存表里回收（长跑服务不会只增不减）。
+- ⚠️ `TaskRunner` 的 worker 线程是非 daemon：**服务重启/停止会被仍在跑的任务拖住**，重启前先 `laspcem_solve_cancel` 或等任务结束。
+- 后台任务里跑的仍是同步 `run_laspcem_solve`，所以它自带的判据（`saw_solver` / `solve_log_finished` / 补保存 / 锁清理）全部照旧。
+
+### `export_laspcem_snp`
+
+> **只导已求解的工程**：没求解就立刻返回 `SOLVE_REQUIRED`（0.1 s，不起 GUI、不阻塞）。
+> 要"先求解再导出"，用 `run_laspcem_solve_async(…, then_export=True)`，服务端会自动串起来。
+
+
+```python
+from servers.laspcem.launcher import export_laspcem_snp
+
+export_laspcem_snp(sem_path: str, output_path: str = "", setup_name: str = "", solution_name: str = "",
+                   sweeping_parameters: dict | None = None,
+                   timeout_seconds: int = 600) -> dict
+```
+
+导出 S 参数为 Touchstone 文件。**没有解记录就先自动求解**（等求解器真跑完）再导出；已经有解就直接导出。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `sem_path` | str | 是 | — | .sem 文件绝对路径 |
+| `output_path` | str | 否 | `<工程名>.sNp` | 输出路径；`N` 按端口数落地（2 端口 → `.s2p`） |
+| `setup_name` | str | 否 | 自动探测 | setup 名（显示名） |
+| `solution_name` | str | 否 | `算法_<setup基名>` | 解名，如 `FEM_Setup1`（不是 `.sem` 里的内部 id `FEM_1`） |
+| `sweeping_parameters` | dict | 否 | 自动抽变量 | `{变量: ['nominal', ...]}` |
+| `timeout_seconds` | int | 否 | 600 | **导出阶段**最长等待秒数 |
+
+返回：`{"success": true, "output_path": "...s2p", "requested_output_path": "...sNp", "exported": true, "setup_name": "Setup1(FEM)", "solution_name": "FEM_Setup1", "solved_first": bool, "elapsed_seconds": 5.1, "script_log": "...", "message": "..."}`
+
+要点与失败码：
+- **产物按端口数命名**：请求 `x.sNp`，2 端口工程落地 `x.s2p`；`output_path` 给实际文件，`requested_output_path` 保留请求原样。
+- **旧文件不算数**：导出前给已有同名产物拍指纹，只认被本次改写过的文件（否则错解名也会"秒成功"）。
+- `SOLVE_REQUIRED`（工程未求解；返回体带 `suggested` = 建议的求解任务参数、`running_solve_task` = 该工程已在跑的任务 id）、`EXPORT_EMPTY`（产物只有表头、0 行数值）、`EXPORT_NO_OUTPUT`、`PROJECT_IN_USE`、`SETUP_NOT_FOUND`。
+- **结果目录审计**：成功/失败返回体都带 `results_dir_before` / `results_dir_after`（`{exists, files, bytes}`）与 `results_dir_changed`，可据此判断“这次调用有没有动结果目录”。
+- **结果失效快速失败**：`is_solved=True` 但结果目录为空时，等待窗口自动缩到 **30 s**（默认 600 s），返回 `EXPORT_NO_OUTPUT` 并指出"疑似结果已失效（GUI Message 面板常见 error 167）"，实测 32 s 返回（原 92 s）。
+- **结果目录（`<工程名>/1_Result`）不是硬门槛**：实测 BGA 工程把结果目录删掉后仍能导出（`.sem` 自带结果数据，打开工程时目录会被重建，4.2 s 出 91 行）。所以只在返回里记 `results_present_before`，真正导不出来由 `EXPORT_NO_OUTPUT` 兜底。
+- 成功时带 `data_rows`（数出来的数据行数，本次实测 91 行）与 `sweeping_parameters_auto`；自动探测不到设计变量时返回 `warning`。
+
+### `build_laspcem_report`
+
+> 同导出：**只对已求解工程生效**，未求解立刻 `SOLVE_REQUIRED`；
+> 要"先求解再建报告"，用 `run_laspcem_solve_async(…, then_report=True)`。
+
+
+```python
+from servers.laspcem.launcher import build_laspcem_report
+
+build_laspcem_report(sem_path: str, setup_name: str = "", report_name: str = "Sparameter_1",
+                     solution_name: str = "", timeout_seconds: int = 600,
+                     port_count: int = 0) -> dict
+```
+
+给**已求解**的 .sem 工程建 S 参数网络报告（`report.CreateNetworkPlot` + `SaveAs`）；未求解立刻返回 `SOLVE_REQUIRED`。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `sem_path` | str | 是 | — | .sem 文件绝对路径 |
+| `setup_name` | str | 否 | 自动探测 | setup 名（显示名） |
+| `report_name` | str | 否 | Sparameter_1 | 报告名 |
+| `solution_name` | str | 否 | `算法_<setup基名>` | 解名 |
+| `timeout_seconds` | int | 否 | 600 | 建报告阶段最长等待秒数 |
+| `port_count` | int | 否 | 0（自动） | 端口数 → 决定画哪些 S(i,j)；自动时看同目录 Touchstone 后缀，兜底 2 |
+
+返回：`{"success": true, "report_name": "Sparameter_1", "verified": true, "elapsed_seconds": 3.1, "message": "..."}`
+`verified=true` 表示工程确实被 `SaveAs` 改写过（报告已落盘），不代表报告内容已校验。
+
+### `import_aedt_as_sem`
+
+```python
+from servers.laspcem.launcher import import_aedt_as_sem
+
+import_aedt_as_sem(aedt_path: str, output_dir: str = "", ansys_version: str = "2020.2",
+                    with_geometry_parameters: bool = True, delete_operand_parts: bool = True,
+                    delete_coordinate_systems: bool = False, background: bool = True,
+                    compatible: bool = True, timeout_seconds: int = 900) -> dict
+```
+
+把 ANSYS HFSS `.aedt` 导入 LASPCEM 并生成 `.sem` 工程（等价 GUI 的 Import）。脚本照抄录制：`app.New(0)` → 关掉空的 `Untitled 0` → `aedt.Import({...})`。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `aedt_path` | str | 是 | — | 源 `.aedt` 绝对路径 |
+| `output_dir` | str | 否 | 与 aedt 同目录 | `.sem` 输出目录 |
+| `ansys_version` | str | 否 | `2020.2` | 源文件 ANSYS 版本 |
+| `with_geometry_parameters` | bool | 否 | True | 带上几何参数 |
+| `delete_operand_parts` | bool | 否 | True | 删除布尔运算 operand 体 |
+| `delete_coordinate_systems` | bool | 否 | False | 删除坐标系 |
+| `background` | bool | 否 | True | 后台导入（异步） |
+| `compatible` | bool | 否 | True | 兼容模式 |
+| `timeout_seconds` | int | 否 | 900 | 等 `.sem` 出现的最长秒数 |
+
+要点：
+- `background=True` 时导入是**异步**的 —— 工具轮询 `output_dir` 里**新出现/被改写**的 `.sem`，拿到文件后关闭 GUI，不按输入文件名硬推（`CPWG-1.aedt` 实测产出 `CPWG-1-HFSSDesign1.sem`，名字来自 aedt 内的 design 名）。
+- 返回里带 `is_solved` / `setup_name` / `setup_candidates`，新导入的工程应为 `is_solved=false`，正好可以接着调 `export_laspcem_snp`（会自动先求解）。
+- **自动清理副产物**：导入会生成同名建模脚本 `<工程名>.py`（如 `TSV_SL-HFSSDesign1.py`），工具在拿到 `.sem` 后删除**本次生成**的那份（回传 `removed_scripts`）；用户原有的同名/其它 `.py` 不动。同时清掉残留锁 `~$<工程名>.lock`（`stale_lock_removed`）。
+- 失败码：`IMPORT_NO_OUTPUT`（没产出 `.sem`）、`INVALID_PATH`、`IMPORT_FAILED`。
 
 ### `get_laspcem_setup`
+
+> 除求解设置外，还回传**工程状态三态**与结果目录审计（只读）：
+> `state` = `solved_ok`（解记录+结果都在，可直接导出）/ `results_missing`（有解记录但结果被删，
+> 导出会失败并报 error 167）/ `unsolved`（没求解），并给出 `next_action` 与 `hint`。
+> 实测 BGA 工程：`{"state": "results_missing", "results_present": false, "next_action": "run_laspcem_solve_async"}`。
+
 
 ```python
 from servers.laspcem.launcher import get_laspcem_setup
@@ -1233,13 +1414,13 @@ from servers.laspcem.launcher import get_laspcem_setup
 get_laspcem_setup(sem_path: str) -> dict
 ```
 
-读取 .sem 工程当前配置的求解设置参数（cem.EditSolution 那套键，约 64 个），直接从二进制文件提取，无需打开 LASPCEM。
+读取 .sem 工程当前配置的求解设置参数（cem.EditSolution 那套键，约 64 个），直接从二进制文件提取，无需打开 LASPCEM。double 型字段（扫频 RangeStart/RangeEnd/RangeStep、Frequency）在 .sem 记录里只有引用序号、无数值，值为 null 并列入 `unresolved_double_keys`。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `sem_path` | str | 是 | — | .sem 文件绝对路径 |
 
-返回：`{"success": true, "sem_path": "...", "setup": {...}, "count": N, "resolved_count": M, "unresolved_double_keys": [...], "warning"?: "..."}`。double 型字段（扫频 RangeStart/RangeEnd/RangeStep、Frequency）在 .sem 记录里只有引用序号、无数值，故值为 `null` 并列入 `unresolved_double_keys`；真实扫频以 GUI 为准。
+返回：`{"success": true, "sem_path": "...", "setup": {...}, "count": N, "resolved_count": M, "unresolved_double_keys": [...], "warning"?: "..."}`。
 
 ---
 
@@ -1499,7 +1680,7 @@ calculate_rf_dynamic_range(noise_figure_db: float, input_p1dbm: float, bandwidth
 | `noise_figure_db` | float | 是 | — | 链路等效总 NF（dB，**≥0**） |
 | `input_p1dbm` | float | 是 | — | 输入 1 dB 压缩点（dBm，可负） |
 | `bandwidth` | float | 是 | — | 等效噪声带宽数值（**> 0**） |
-| `bandwidth_unit` | str | 否 | mhz | `hz/khz/mhz/ghz`（只做换算系数） |
+| `bandwidth_unit` | str | 否 | mhz | `hz/khz/mhz/ghz`，大小写不敏感、两侧空格会被去掉；**省略或空串按 `mhz`** |
 | `required_snr_db` | float | 否 | 0.0 | 最低所需信噪比（dB，可为负） |
 | `target_dynamic_range_db` | float | 否 | null | 目标动态范围（dB） |
 

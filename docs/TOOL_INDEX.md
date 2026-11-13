@@ -2,7 +2,7 @@
 
 > 自动生成，勿手改。权威数量见 /ready 的 tool_count。
 
-共 91 个工具：
+共 98 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
 - `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
@@ -12,7 +12,8 @@
 - `analyze_variables` — 分析工程中的变量定义和引用关系。
 - `attach_out_component` — 为目标器件引脚挂载一个 Out 器件，并自动连线。
 - `batch_query_component` — 按器件型号字符串列表批量查询模型信息，返回对齐到输入顺序的结果。
-- `calculate_rf_dynamic_range` — 计算射频链路的噪声底、最低输入灵敏度与压缩受限动态范围。
+- `build_laspcem_report` — 给已求解的 .sem 工程建 S 参数网络报告（没求解就返回 SOLVE_REQUIRED）。
+- `calculate_rf_dynamic_range` — 计算射频链路的灵敏度(S)与压缩受限动态范围(DR)。
 - `calculate_transline` — 计算传输线的特性阻抗或线宽（微带 / 带状 / 接地共面波导 / 同轴）。
 - `capture_schematic` — 截取 EDA 工程原理图为图片。
 - `clear_schematic` — 清空工程原理图中的全部器件和网段并保存（破坏性操作）。
@@ -41,6 +42,7 @@
 - `design_schematic_topology` — 用户输入指标来设计电路拓扑（收发组件、滤波器、天线等），自动创建并打开新工程。
 - `design_wilkinson` — 设计多级威尔金森功分器，输出各级微带线宽、线长和隔离电阻。
 - `draw_chart` — 把一组或多组 XY 数据绘制为曲线图并保存为图片（PNG/JPG，固定 1600×1000）。
+- `export_laspcem_snp` — 导出 .sem 工程的 S 参数为 Touchstone 文件（.sNp 会按端口数落成 .s<N>p）。
 - `export_project_netlist` — 查看 EDA .epp 工程的网表，返回网表文件路径。
 - `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV。
 - `export_simulation_report` — 将提取的各链路参数数据（JSON）导出成正式报告(PDF/DOCX/report.json)
@@ -64,6 +66,10 @@
 - `get_simulation_async_result` — 获取异步仿真最终结果，完整仿真日志在 ads_output 字段。运行中返回部分日志，完成后返回完整结果。
 - `get_simulation_async_status` — 查询异步仿真进度和实时日志（仿真日志在 ads_output 字段）。运行中即可调用，不阻塞。
 - `get_simulation_component_schema` — 查询已建模器件类型的参数 Schema 和权限。
+- `import_aedt_as_sem` — 把 ANSYS HFSS `.aedt` 导入 LASPCEM 并生成 `.sem` 工程（等价于 GUI 的 Import）。
+- `laspcem_solve_query` — 查询 LASPCEM 求解任务（配合 run_laspcem_solve_async 的 task_id）。
+- `laspcem_task_cancel` — 取消 LASPCEM 求解任务（求解/导出/建报告 任一阶段都能取消）。
+- `laspcem_task_list` — 列出 LASPCEM 后台任务（含 operation=solve、phase、steps、状态与耗时）。
 - `launch_aedt` — 启动 AEDT（不打开项目）。已运行时仅返回状态。
 - `launch_edi` — 启动 EDI 客户端并等待 gRPC 就绪。已运行时跳过启动。
 - `launch_laspcem` — 启动 LASPCEM 电磁仿真软件。已运行时返回状态，不重复启动。
@@ -80,6 +86,7 @@
 - `replace_models_from_csv` — ⚠️ 按 CSV 批量替换工程元件模型（影响面大，建议先 get_project_summary 核对）。
 - `replace_port_component` — ⚠️ 将原理图中的端口器件替换为另一种类型（会改变端口）。
 - `replace_schematic_from_file` — ⚠️ 从 .ep 文件整体替换原理图（整图覆盖，原内容丢失）。
+- `run_laspcem_solve_async` — 提交 LASPCEM 求解任务（异步，立即返回 task_id）—— 大模型求解用这个。
 - `run_mixer_simulation` — 执行混频链路仿真（含混频器、LO 本振、上下变频，15 个指标）。不含变频的纯链路请用 run_tr_simulation。
 - `run_tr_simulation` — 跑 TR 收发链路仿真（纯链路：增益/噪声/P−1dB，不含混频器与变频）。有混频/本振/镜像指标请用 run_mixer_simulation。
 - `search_personal_models` — 个人模型库检索（自己导入的件）：按子类列出型号与参数。官方件在公共库，用 search_public_models。
