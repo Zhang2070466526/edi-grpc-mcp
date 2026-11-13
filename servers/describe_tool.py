@@ -118,6 +118,16 @@ _EXAMPLES: dict[str, Any] = {
                                     "parameters": {"Start": {"value": "29", "unit": "GHz"}}},
     "create_simulation_component": {"project_path": "C:/path/11.epp",
                                      "component_type": "SParameter"},
+    # 批量变换：对外只有 project_path + components（内部 payload 顶层另有 sub_type/filters，
+    # 属 EDI 侧 DTO 必填残留，不由调用方提供，示例里不出现）
+    "update_schematic_components_transform": {
+        "project_path": "C:/Users/<user>/EDI-Workspace/projects/11/11.epp",
+        "components": [
+            {"instance_name": "TermG2", "position": {"x": 1400, "y": 125}, "rotation_deg": 90},
+            {"uuid": "11111111-1111-4111-8111-111111111111", "mirrored_horizontal": True},
+            {"instance_name": "SP1", "rotation_deg": 180},
+        ],
+    },
     # ── 模型库 / 拓扑 / 软 IP ──────────────────────────────────
     "search_public_models": {"sub_type": "62", "filters": [{"key": "gain", "min": 20}],
                              "limit": 10},

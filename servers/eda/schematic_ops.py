@@ -187,13 +187,28 @@ def update_schematic_components_transform(
         components: list[dict],
         timeout_seconds: int = 120,
 ) -> dict[str, Any]:
-    """批量设置原理图器件的位置、旋转角度和镜像状态。
+    """批量设置原理图器件的位置、旋转角度和镜像状态（对齐/挪位/批量旋转镜像；坐标为场景值，按 12.5 网格吸附）。
 
-    用法："把 R1 移到 (100,200) 并旋转 90 度"、"批量镜像这几个器件"
+    用法："把 R1 移到 (100,200) 并旋转 90 度"、"批量镜像这几个器件"、"把这四个器件对齐到同一水平线"
 
     按实例 uuid 或 instance_name 定位器件；position / rotation_deg / mirrored_horizontal /
     mirrored_vertical 均为目标绝对状态，省略的字段保持原值。整批一起校验，任一项非法则整批
     不修改；存在实际修改时形成一个撤销操作并保存，保存失败回滚。
+
+    坐标口径（实测）：position 是原理图场景坐标，与 get_schematic_component_info 返回的
+    position 同一套，不是毫米也不是截图像素；落位按工程网格吸附——请求 y=120 实际会落到
+    125。以返回的 position 为准，别拿请求值当结果，否则会误判成"没生效"。
+    取现值用 get_schematic_component_info，或 list_schematic_components(include_transform=True)
+    一次带出（列表接口默认不返回几何）。
+
+    限制与副作用（均实测）：
+        - 目标为 InsertText 时整批拒绝：文本框不能用本工具挪。
+        - 只改器件几何，不重算传输线/键合线参数：挪了器件后相邻 EBOND 的 Length 仍是原值，
+          需要自己用 update_simulation_component 同步，否则仿真口径与实际布局不一致。
+        - 同一批次不能重复指定同一器件（uuid 与名称各指定一次也算重复）。
+        - 器件不存在、字段非法时整批不修改，不会出现"改了一半"的状态。
+        - rotation_deg 归一化到 [0, 360)：450 等效 90，-90 等效 270；两个镜像字段是目标绝对
+          状态，重复发同一状态不会来回翻转。
 
     Args:
         project_path: .epp 工程文件绝对路径。
@@ -203,6 +218,8 @@ def update_schematic_components_transform(
 
     Returns:
         gRPC 统一返回结构，成功时 details 含 project_path / component_count / components（本批器件更新后完整信息，含引脚坐标）。
+        返回可直接自证：每项的 position / rotation_deg / mirrored_* 是落位后的实际值，pins 里的
+        引脚坐标会随旋转和镜像变化（如镜像后 pin0 从左侧翻到右侧），据此核对方向，不必再查一次。
     """
     resolved, err = require_project_path(project_path)
     if err:
@@ -257,6 +274,13 @@ def update_schematic_components_transform(
                 out[mf] = item[mf]
         cleaned.append(out)
 
+    # 实测（2026-11-13）：本事件不需要 payload 顶层的 sub_type / filters。
+    #   - EDI 于 15:09 启动的那次实例，缺 sub_type 会 REJECTED「sub_type must be a non-empty string」，
+    #     当时只能补上 sub_type/filters 才通；
+    #   - EDI 重启后的实例，同一个 payload（只有 project_path + components）直接 SUCCEEDED，
+    #     sub_type × filters 的 24 种组合（缺失/空串/null/数组/字符串）全部成功，说明二者均非必填。
+    # 结论：不带这两个字段即可，代码保持最小 payload；若某天又出现 sub_type 报错，先看 EDI 进程/版本，
+    # 不要以为是器件字段问题（报错措辞会误导）。
     return call_grpc(
         ecserver_pb2.UPDATE_SCHEMATIC_COMPONENTS_TRANSFORM,
         {"project_path": resolved, "components": cleaned},

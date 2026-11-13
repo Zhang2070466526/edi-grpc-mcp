@@ -160,6 +160,8 @@ def test_update_transform_payload(monkeypatch, fake_caller):
         {"uuid": "11111111-1111-4111-8111-111111111111", "position": {"x": 300, "y": 200}},
     ])
     assert calls[-1][0] == ecserver_pb2.UPDATE_SCHEMATIC_COMPONENTS_TRANSFORM
+    # payload 保持最小：不带顶层 sub_type / filters（2026-11-13 实测二者均非必填，
+    # 曾经缺 sub_type 报错是 EDI 那次实例的问题，重启后消失）
     assert calls[-1][1] == {
         "project_path": "C:/test.epp",
         "components": [
