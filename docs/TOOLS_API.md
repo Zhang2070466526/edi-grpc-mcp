@@ -24,7 +24,7 @@ from servers.eda.project_manage import list_epp_projects
 - **[微波计算（6 个）](#微波计算6个)**：传输线特性阻抗 / 线宽计算、多级威尔金森功分器设计、滤波器阶数评估（高通/低通/带阻）、功分器/巴伦节数（本地纯计算，无任务信封）
 - **[射频链路计算（2 个）](#射频链路计算2个)**：混频杂散枚举、噪声底 / 灵敏度 / 压缩受限动态范围（本地纯计算，无任务信封）
 - **[工作区（3 个）](#工作区3个)**：创建 / 切换 / 查询当前工作区
-- **[原理图扩展（4 个）](#原理图扩展4个)**：内置器件、清空原理图、连线
+- **[原理图扩展（5 个）](#原理图扩展5个)**：内置器件、清空原理图、连线、批量器件变换
 - **[启动 / 诊断（3 个）](#启动--诊断3个)**：启动 EDI、服务诊断、日志读取
 - **[ANSYS HFSS（6 个）](#ansys-hfss6个)**：AEDT 工程开关、HFSS 异步仿真
 - **[CST 电磁仿真（13 个）](#cst电磁仿真13个)**：异步求解 .cst、导出 S 参数 / 远场方向图
@@ -837,7 +837,7 @@ get_current_workspace(timeout_seconds: int = 60) -> dict
 
 ---
 
-## 原理图扩展（4 个）
+## 原理图扩展（5 个）
 
 ### `list_ideal_components`
 
@@ -910,6 +910,24 @@ add_wire(project_path: str, first_instance_name: str, first_pin_index: int, seco
 | `second_instance_name` | str | 是 | — | 第二个器件实例名 |
 | `second_pin_index` | int | 是 | — | 第二个器件引脚编号（0 开始） |
 | `timeout_seconds` | int | 否 | 120 | 最长等待秒数 |
+
+### `update_schematic_components_transform`
+
+```python
+from servers.eda.schematic_ops import update_schematic_components_transform
+
+update_schematic_components_transform(project_path: str, components: list[dict], timeout_seconds: int = 120) -> dict
+```
+
+批量设置原理图器件的位置、旋转角度和镜像状态（gRPC 枚举 `64`）。按实例 `uuid` 或 `instance_name` 定位，`position` / `rotation_deg` / `mirrored_horizontal` / `mirrored_vertical` 均为目标绝对状态，省略字段保持原值；整批校验，任一项非法整批不修改，有改动时形成一个撤销操作并保存。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `project_path` | str | 是 | — | `.epp` 文件绝对路径 |
+| `components` | list | 是 | — | 非空数组，每项 `{uuid?, instance_name?, position?, rotation_deg?, mirrored_horizontal?, mirrored_vertical?}`；每项至少提供 `uuid` 或 `instance_name`，且至少一个变换字段 |
+| `timeout_seconds` | int | 否 | 120 | 最长等待秒数 |
+
+返回：gRPC 统一返回结构，成功时 `details` 含 `project_path` / `component_count` / `components`（本批器件更新后完整信息，含引脚坐标）。
 
 ---
 

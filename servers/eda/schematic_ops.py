@@ -1,19 +1,21 @@
-"""EDA 原理图扩展操作工具 — 内置器件 / 清空原理图 / 连线。
+"""EDA 原理图扩展操作工具 — 内置器件 / 清空原理图 / 连线 / 批量器件变换。
 
-list_ideal_components   列出内置器件类型及说明（只读，无需工程）
-add_ideal_component     按指定坐标新增内置器件（工厂默认参数）
-clear_schematic         清空原理图全部器件和网段（破坏性，需 confirm_clear）
-add_wire                连接两个器件的指定引脚
+list_ideal_components                   列出内置器件类型及说明（只读，无需工程）
+add_ideal_component                     按指定坐标新增内置器件（工厂默认参数）
+clear_schematic                         清空原理图全部器件和网段（破坏性，需 confirm_clear）
+add_wire                                连接两个器件的指定引脚
+update_schematic_components_transform   批量设置器件位置/旋转/镜像
 """
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from proto import ecserver_pb2
 from servers.eda.config import require_project_path
 from servers.eda.grpc_client import call_grpc
-from servers.utils import require_nonempty, error_response, require_position
+from servers.utils import require_nonempty, error_response, require_position, require_uuid
 from servers import mcp
 
 
@@ -174,6 +176,90 @@ def add_wire(
             "second_instance_name": second_instance_name,
             "second_pin_index": second_pin_index,
         },
+        timeout_seconds,
+        max_timeout_seconds=300,
+    )
+
+
+@mcp.tool()
+def update_schematic_components_transform(
+        project_path: str,
+        components: list[dict],
+        timeout_seconds: int = 120,
+) -> dict[str, Any]:
+    """批量设置原理图器件的位置、旋转角度和镜像状态。
+
+    用法："把 R1 移到 (100,200) 并旋转 90 度"、"批量镜像这几个器件"
+
+    按实例 uuid 或 instance_name 定位器件；position / rotation_deg / mirrored_horizontal /
+    mirrored_vertical 均为目标绝对状态，省略的字段保持原值。整批一起校验，任一项非法则整批
+    不修改；存在实际修改时形成一个撤销操作并保存，保存失败回滚。
+
+    Args:
+        project_path: .epp 工程文件绝对路径。
+        components: 非空数组，每项 {uuid?, instance_name?, position?, rotation_deg?, mirrored_horizontal?, mirrored_vertical?}。
+            每项至少提供 uuid 或 instance_name，且至少一个变换字段。
+        timeout_seconds: 最长等待秒数，默认 120。
+
+    Returns:
+        gRPC 统一返回结构，成功时 details 含 project_path / component_count / components（本批器件更新后完整信息，含引脚坐标）。
+    """
+    resolved, err = require_project_path(project_path)
+    if err:
+        return err
+    if not isinstance(components, list) or not components:
+        return error_response("INVALID_PARAMETERS", "components 必须是非空数组")
+
+    cleaned: list[dict] = []
+    for i, item in enumerate(components):
+        where = f"components[{i}]"
+        if not isinstance(item, dict):
+            return error_response("INVALID_PARAMETERS", f"{where} 必须是对象")
+
+        out: dict[str, Any] = {}
+        # 标识符：uuid（须合法 UUID）或 instance_name（非空字符串），至少一个
+        if item.get("uuid") is not None:
+            uid, uerr = require_uuid(item["uuid"], label=f"{where}.uuid")
+            if uerr:
+                return uerr
+            out["uuid"] = uid
+        if item.get("instance_name") is not None:
+            name, nerr = require_nonempty(item["instance_name"], label=f"{where}.instance_name")
+            if nerr:
+                return nerr
+            out["instance_name"] = name
+        if "uuid" not in out and "instance_name" not in out:
+            return error_response("INVALID_PARAMETERS",
+                                  f"{where} 至少要提供 uuid 或 instance_name 之一")
+
+        transform_keys = ("position", "rotation_deg", "mirrored_horizontal", "mirrored_vertical")
+        if not any(k in item for k in transform_keys):
+            return error_response("INVALID_PARAMETERS",
+                                  f"{where} 至少要提供一个变换字段（{'/'.join(transform_keys)}）")
+
+        if "position" in item:
+            pos, perr = require_position(item["position"])
+            if perr:
+                return error_response("INVALID_PARAMETERS", f"{where} {perr['message']}")
+            if not (-1e9 <= pos["x"] <= 1e9 and -1e9 <= pos["y"] <= 1e9):
+                return error_response("INVALID_PARAMETERS",
+                                      f"{where}.position 的 x、y 必须在 [-1e9, 1e9] 范围内")
+            out["position"] = pos
+        if "rotation_deg" in item:
+            r = item["rotation_deg"]
+            if not isinstance(r, (int, float)) or isinstance(r, bool) or not math.isfinite(r):
+                return error_response("INVALID_PARAMETERS", f"{where}.rotation_deg 必须是有限数值")
+            out["rotation_deg"] = r
+        for mf in ("mirrored_horizontal", "mirrored_vertical"):
+            if mf in item:
+                if not isinstance(item[mf], bool):
+                    return error_response("INVALID_PARAMETERS", f"{where}.{mf} 必须是布尔值")
+                out[mf] = item[mf]
+        cleaned.append(out)
+
+    return call_grpc(
+        ecserver_pb2.UPDATE_SCHEMATIC_COMPONENTS_TRANSFORM,
+        {"project_path": resolved, "components": cleaned},
         timeout_seconds,
         max_timeout_seconds=300,
     )

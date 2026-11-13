@@ -74,6 +74,7 @@ _INTERNAL_TOOLS: frozenset[str] = frozenset({
     "replace_port_component", "delete_simulation_component",
     "set_component_active_state", "generate_schematic_from_netlist",
     "replace_schematic_from_file", "attach_out_component",
+    "update_schematic_components_transform",
     # 网表/截图/CSV
     "export_project_netlist", "capture_schematic", "export_schematic_components_to_csv",
     # 信号链（本地网表优先，gRPC 兜底）
