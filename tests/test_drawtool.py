@@ -46,11 +46,21 @@ def test_draw_chart_needs_elevation(monkeypatch):
 
 
 def test_draw_chart_no_temp_dir_leak(monkeypatch, tmp_path):
-    """写配置失败/跑 exe 失败都不能把临时目录漏在 %TEMP%。"""
-    import glob
+    """写配置失败/跑 exe 失败都不能把临时目录漏在本用例的临时根下。
+
+    2026-11-13：原来 glob 的是系统 %TEMP%，全仓顺序执行时会被别的用例创建的
+    `edi_drawtool_*` 干扰（before/after 集合不等 ⇒ 偶发失败，单独跑却绿）。
+    改成把 `tempfile.tempdir` 指向 tmp_path，只统计本用例自己建的目录。
+    """
     import tempfile
 
-    before = set(glob.glob(str(Path(tempfile.gettempdir()) / "edi_drawtool_*")))
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+
+    def _dirs():
+        return {p.name for p in tmp_path.glob("edi_drawtool_*")}
+
+    before = _dirs()
+    assert before == set()
 
     def _run(exe_path, args, timeout_seconds):
         raise OSError(22, "Invalid argument")
@@ -58,8 +68,7 @@ def test_draw_chart_no_temp_dir_leak(monkeypatch, tmp_path):
     monkeypatch.setattr("servers.simulation_tool.xy_chart.run_exe", _run)
     assert draw_chart([{"points": [[0.0, 1.0]]}], "D:/out")["success"] is False
 
-    after = set(glob.glob(str(Path(tempfile.gettempdir()) / "edi_drawtool_*")))
-    assert after == before
+    assert _dirs() == before
 
 
 def test_draw_chart_success(monkeypatch, tmp_path):
