@@ -18,7 +18,7 @@ from typing import Any
 
 import pythoncom
 from dotenv import load_dotenv
-from win32com.client import GetActiveObject
+from win32com.client import Dispatch, GetActiveObject
 
 load_dotenv()
 from servers.settings import get_settings  # noqa: E402 — 必须在 load_dotenv 之后
@@ -93,19 +93,41 @@ _COM_PROGIDS = ("AnsoftHfss.HfssScriptInterface", "Ansoft.ElectronicsDesktop")
 
 
 def _attach_aedt():
-    """附着现有 AEDT 实例，返回 (app, desktop)，失败抛异常。
+    """附着现有 AEDT 实例，返回 (app, desktop)，失败抛异常。**绝不创建新实例。**
 
     全程持 _AEDT_LOCK：worker 线程、refresh_from_aedt、query_desktop_state 等多条
     调用路径都走这里，串行化 COM 附着避免并发操作 AEDT 单实例桌面。
+
+    ⚠️ 两条通道都要试（2026-11-16 本机 AEDT 2020 R2 实测）：
+
+    1. `GetActiveObject(progid)` —— 只查 ROT，最快，且绝不新建实例。但 **AEDT 2020 R2
+       不把对象注册到 ROT**，实测两个 PROGID 都返回 `MK_E_UNAVAILABLE`（"操作无法使用"），
+       AEDT 明明在跑（GUI 已加载、Responding=True）也附着不上。
+    2. `Dispatch(progid)` —— 走 CLSID 找已运行的 COM 服务器，实测 0.0 s 连上现有 pid、
+       进程数不变、`GetProjectList()` 正常。**但它在本实例不存在时会新建一个**，
+       所以必须先 `aedt_is_running()` 守卫，否则违反"绝不创建新实例"的约定。
+
+    取到对象后还要探活（`GetProjectList()`）：现场机（star）曾出现"对象拿到了但方法全炸"
+    的瘦壳情形，探不通就换下一个 PROGID。
     """
     with _AEDT_LOCK:
-        for pid in _COM_PROGIDS:
-            try:
-                app = GetActiveObject(pid)
-                return app, app.GetAppDesktop()
-            except Exception:
-                continue
-        raise RuntimeError(f"GetActiveObject failed for: {_COM_PROGIDS}")
+        if not aedt_is_running():
+            raise RuntimeError(
+                "AEDT 未运行：_attach_aedt 只附着现有实例，绝不创建新实例"
+                "（需要新建请用 launch_aedt）"
+            )
+        errors: list[str] = []
+        for progid in _COM_PROGIDS:
+            for name, getter in (("GetActiveObject", GetActiveObject), ("Dispatch", Dispatch)):
+                try:
+                    app = getter(progid)
+                    desktop = app.GetAppDesktop()
+                    list(desktop.GetProjectList())      # 探活：瘦壳 / 空壳在这里抛
+                    return app, desktop
+                except Exception as exc:                # noqa: BLE001 —— 换下一通道/PROGID
+                    errors.append(f"{progid} via {name}: {exc}")
+                    continue
+        raise RuntimeError(f"attached none of {_COM_PROGIDS}: {' | '.join(errors)}")
 
 
 def query_desktop_state() -> dict[str, Any]:

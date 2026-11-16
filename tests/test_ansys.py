@@ -133,5 +133,102 @@ class TestStartAsync:
         assert r["error_code"] == "ANALYSIS_BUSY"
 
 
+def test_attach_aedt_requires_running_instance():
+    """AEDT 未运行 ⇒ 直接报错，**一个 COM 通道都不许碰**。
+
+    `Dispatch` 在实例不存在时会新建一个，所以没有这层守卫就违反了
+    "_attach_aedt 只附着、绝不创建"的约定。
+    """
+    from servers.ansys import config as C
+
+    touched: list[str] = []
+
+    with patch.object(C, "aedt_is_running", return_value=False), \
+         patch.object(C, "GetActiveObject", side_effect=lambda p: touched.append(p)), \
+         patch.object(C, "Dispatch", side_effect=lambda p: touched.append(p)), \
+         pytest.raises(RuntimeError) as ei:
+        C._attach_aedt()
+
+    assert touched == [], f"未运行时不该碰任何 COM 通道，实际碰了 {touched}"
+    assert "绝不创建新实例" in str(ei.value)
+
+
+def test_attach_aedt_falls_back_to_dispatch_when_rot_empty():
+    """AEDT 2020 R2 实测：`GetActiveObject` 两个 PROGID 都 `MK_E_UNAVAILABLE`
+    （AEDT 不注册 ROT），必须靠 `Dispatch` 走 CLSID 连上已运行实例。
+    """
+    from servers.ansys import config as C
+
+    good_desktop = MagicMock()
+    good_desktop.GetProjectList.return_value = ["Project5"]
+    good_app = MagicMock()
+    good_app.GetAppDesktop.return_value = good_desktop
+
+    tried: list[tuple[str, str]] = []
+
+    def ga(progid):
+        tried.append(("GetActiveObject", progid))
+        raise OSError("MK_E_UNAVAILABLE (操作无法使用)")
+
+    def di(progid):
+        tried.append(("Dispatch", progid))
+        return good_app
+
+    with patch.object(C, "aedt_is_running", return_value=True), \
+         patch.object(C, "GetActiveObject", side_effect=ga), \
+         patch.object(C, "Dispatch", side_effect=di):
+        app, desktop = C._attach_aedt()
+
+    assert app is good_app and desktop is good_desktop
+    assert ("GetActiveObject", C._COM_PROGIDS[0]) in tried
+    assert ("Dispatch", C._COM_PROGIDS[0]) in tried, tried
+
+
+def test_attach_aedt_skips_shell_object_and_tries_next_progid():
+    """拿到对象但方法全炸（瘦壳）⇒ 探活拦下，继续试下一个 PROGID。"""
+    from servers.ansys import config as C
+
+    good_desktop = MagicMock()
+    good_desktop.GetProjectList.return_value = ["Project8", "HFSS_MultiDesign_Test"]
+    good_app = MagicMock()
+    good_app.GetAppDesktop.return_value = good_desktop
+
+    def getter(progid):
+        if progid == C._COM_PROGIDS[0]:
+            shell = MagicMock()
+            shell.GetAppDesktop.return_value = MagicMock(
+                GetProjectList=MagicMock(side_effect=AttributeError("shell object"))
+            )
+            return shell
+        return good_app
+
+    with patch.object(C, "aedt_is_running", return_value=True), \
+         patch.object(C, "GetActiveObject", side_effect=getter), \
+         patch.object(C, "Dispatch", side_effect=getter):
+        app, desktop = C._attach_aedt()
+
+    assert app is good_app
+    assert desktop is good_desktop, "两个通道对第一个 PROGID 都是瘦壳时，必须换到第二个 PROGID"
+
+
+def test_attach_aedt_error_keeps_each_attempt_reason():
+    """全都附着不上时，RuntimeError 要带每个 PROGID × 通道的真实原因。"""
+    from servers.ansys import config as C
+
+    def boom(progid):
+        raise OSError(f"cannot attach {progid}")
+
+    with patch.object(C, "aedt_is_running", return_value=True), \
+         patch.object(C, "GetActiveObject", side_effect=boom), \
+         patch.object(C, "Dispatch", side_effect=boom), \
+         pytest.raises(RuntimeError) as ei:
+        C._attach_aedt()
+
+    msg = str(ei.value)
+    assert "AnsoftHfss.HfssScriptInterface" in msg and "Ansoft.ElectronicsDesktop" in msg
+    assert "via GetActiveObject" in msg and "via Dispatch" in msg
+    assert msg.count("cannot attach") == 4, msg      # 2 PROGID × 2 通道
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-p", "no:cacheprovider"])
