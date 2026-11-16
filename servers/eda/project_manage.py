@@ -162,7 +162,7 @@ def close_edi_project(
         need_save: bool = False,
         timeout_seconds: int = 60,
 ) -> dict[str, Any]:
-    """⚠️ 关闭当前 .epp 工程（未保存改动会丢）。打开用 open_edi_project；只是想看状态用 get_edi_project_info。
+    """⚠️ 关闭当前 .epp 工程（未保存改动会丢）。打开用 open_edi_project；只是想看状态用 get_project_summary。
 
     Args:
         project_path: EDA 服务所在机器上的 .epp 工程文件绝对路径。
@@ -512,8 +512,8 @@ def batch_query_component(
 
     用法：批量查这几个型号的模型信息（如 MAAD_008866）
 
-    注意：本工具只接受器件型号串（如 "MAAD_008866"），不接受 UUID。
-    按 UUID 查固有参数用 get_components_static_params，UUID 或型号都认用 tr_query_components。
+    注意：本工具只接受器件型号串（如 "MAAD_008866"），不接受 UUID；
+    按 UUID 查固有参数（重量/尺寸/封装/厂商）用 get_components_static_params。
 
     下游模型服务只返回命中的型号且不保序。本工具将返回的 data 按输入 model_name_list
     顺序对齐：未命中的型号补 null 占位，并在 missing 中列出未命中的型号。
