@@ -76,6 +76,9 @@ class Settings(BaseSettings):
     edi_log_dir: str = ""
     # 独立仿真工具目录（Report_Exporter / TR_Simulator / Mixer_Simulator / drawtool 固定目录）
     simulation_tool_dir: str = ""
+    # 默认产物目录：工具生成产物（截图/图表/报告/CSV）时，调用方没传输出路径就落到这里。
+    # 空字符串 = 默认系统临时目录下 mcp_result/（%TEMP%/mcp_result）；可用 MCP_RESULT_DIR 环境变量覆盖。
+    mcp_result_dir: str = ""
 
     # ── LLM / Chat ──
     llm_api_key: str = ""

@@ -9,6 +9,7 @@ import functools
 import math
 import os
 import socket
+import tempfile
 import threading
 import time
 import uuid
@@ -351,6 +352,72 @@ def build_transport_security(extra_hosts: Iterable[str] = ()):
 
 
 # ── 产物与文件链接 ──
+
+def _artifact_stamp() -> str:
+    """默认产物名用的时间戳，精确到毫秒。
+
+    只用 `%Y%m%d_%H%M%S` 时同秒内连续调用会撞同一路径（实测：循环出图前几张就撞），
+    产物互相覆盖且难排查。加毫秒后常见调用间隔（>1ms）都不会撞。
+    """
+    now = time.time()
+    return time.strftime("%Y%m%d_%H%M%S", time.localtime(now)) + f"_{int(now * 1000) % 1000:03d}"
+
+
+def result_dir() -> str:
+    """返回默认产物目录（`settings.mcp_result_dir` 或系统临时目录下的 `mcp_result`）。
+
+    默认是 `%TEMP%/mcp_result`（`tempfile.gettempdir()`，本机即
+    `C:\\Users\\<用户>\\AppData\\Local\\Temp\\mcp_result`）—— 产物属中间文件，
+    放系统临时目录，不污染用户主目录。
+
+    绝对化后再建：`MCP_RESULT_DIR` 若配成相对路径，不能让产物跟着服务进程的 cwd 跑
+    （从不同目录启动服务就会落到不同地方）。
+    """
+    from servers.settings import get_settings
+    base = ((get_settings().mcp_result_dir or "").strip()
+            or str(Path(tempfile.gettempdir()) / "mcp_result"))
+    resolved = Path(base).expanduser().resolve()
+    resolved.mkdir(parents=True, exist_ok=True)
+    return str(resolved)
+
+
+def default_result_path(tool_name: str, extension: str = "") -> str:
+    """生成默认产物文件路径：`<result_dir>/<工具名>_<时间戳>[_序号]<扩展名>`。
+
+    时间戳到毫秒；同毫秒重复调用再追加 `_1`/`_2`… 保证不覆盖已有文件。
+    `extension` 形如 `.png`，少写点号会自动补（避免出现 `x_20261116_120000png`）。
+    """
+    ext = (extension or "").strip()
+    if ext and not ext.startswith("."):
+        ext = "." + ext
+    base = Path(result_dir())
+    stamp = _artifact_stamp()
+    for i in range(100):
+        suffix = "" if i == 0 else f"_{i}"
+        candidate = base / f"{tool_name}_{stamp}{suffix}{ext}"
+        if not candidate.exists():
+            return str(candidate)
+    return str(base / f"{tool_name}_{stamp}_overflow{ext}")     # 极端情况兜底，不抛异常
+
+
+def result_subdir(tool_name: str) -> str:
+    """生成默认产物子目录（原子创建）：`<result_dir>/<工具名>_<时间戳>[_序号]/`。
+
+    不带 `exist_ok`：撞名时 `mkdir` 抛 `FileExistsError` 再加序号重试 —— 这是原子的，
+    并发调用也不会两个线程拿到同一个目录（多文件/目录类产物混在一起很难排查）。
+    """
+    base = Path(result_dir())
+    stamp = _artifact_stamp()
+    for i in range(100):
+        suffix = "" if i == 0 else f"_{i}"
+        candidate = base / f"{tool_name}_{stamp}{suffix}"
+        try:
+            candidate.mkdir(parents=True)
+            return str(candidate)
+        except FileExistsError:
+            continue
+    raise RuntimeError(f"无法为 {tool_name} 创建唯一产物目录（{stamp} 后已试 100 次）")
+
 
 def build_artifact(type_: str, path: str, generated_by: str) -> dict[str, Any]:
     """构建统一产物条目（用于 artifacts 数组）。"""
