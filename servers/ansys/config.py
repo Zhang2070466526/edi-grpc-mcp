@@ -101,8 +101,12 @@ def _attach_aedt():
     ⚠️ 两条通道都要试（2026-11-16 本机 AEDT 2020 R2 实测）：
 
     1. `GetActiveObject(progid)` —— 只查 ROT，最快，且绝不新建实例。但 **AEDT 2020 R2
-       不把对象注册到 ROT**，实测两个 PROGID 都返回 `MK_E_UNAVAILABLE`（"操作无法使用"），
+       不把对象注册到 ROT**，两个 PROGID 都返回 `MK_E_UNAVAILABLE`（"操作无法使用"），
        AEDT 明明在跑（GUI 已加载、Responding=True）也附着不上。
+       ⚠️ 三种启动方式实测都不注册 ROT（2026-11-16，本机 2020 R2）：
+         无参数 / `-Embedding`（EDI 嵌入模式）/ `-Automation` —— `GetActiveObject`
+         全部 `MK_E_UNAVAILABLE`，而 `Dispatch` 全部能连。所以**不要试图靠换启动参数
+         修这个问题**，只有 Dispatch 通道走得通。
     2. `Dispatch(progid)` —— 走 CLSID 找已运行的 COM 服务器，实测 0.0 s 连上现有 pid、
        进程数不变、`GetProjectList()` 正常。**但它在本实例不存在时会新建一个**，
        所以必须先 `aedt_is_running()` 守卫，否则违反"绝不创建新实例"的约定。

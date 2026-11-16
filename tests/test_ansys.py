@@ -230,5 +230,292 @@ def test_attach_aedt_error_keeps_each_attempt_reason():
     assert msg.count("cannot attach") == 4, msg      # 2 PROGID × 2 通道
 
 
+def test_launch_aedt_already_running_waits_for_com(tmp_path, monkeypatch):
+    """「AEDT 已运行」分支也要按 `timeout_seconds` 轮询等 COM，并返回 pid/pids。
+
+    2026-11-16 复核：原实现只查一次 `query_desktop_state()` 就返回，且不带 pid ——
+    AEDT 刚启动、COM 还在加载时会立刻回 `com_ready=false`，调用方误判「AEDT 不可用」；
+    两个分支返回结构也不一致（started 有 pid、already_running 没有）。
+    """
+    from servers.ansys import project_manage as P
+
+    fake_exe = tmp_path / "ansysedt.exe"
+    fake_exe.write_text("x", encoding="utf-8")
+
+    calls = {"n": 0}
+
+    def fake_state():
+        calls["n"] += 1
+        return {"connected": calls["n"] >= 3}      # 第 3 次查询才就绪
+
+    monkeypatch.setattr(P, "aedt_is_running", lambda: True)
+    monkeypatch.setattr(P, "get_aedt_pids", lambda: [111, 222])
+    monkeypatch.setattr(P, "query_desktop_state", fake_state)
+    monkeypatch.setattr(P.time, "sleep", lambda s: None)
+
+    r = P.launch_aedt(aedt_path=str(fake_exe), timeout_seconds=10)
+    assert r["status"] == "already_running"
+    assert r["com_ready"] is True, "必须轮询到 COM 就绪，而不是一查就返回"
+    assert r["pid"] == 111 and r["pids"] == [111, 222]
+    assert calls["n"] >= 3, calls
+
+
+def test_launch_aedt_already_running_times_out_with_pid(tmp_path, monkeypatch):
+    """COM 一直不就绪 ⇒ `com_ready=false`，但仍 `success=true` 且**带 pid**（可定位实例）。"""
+    from servers.ansys import project_manage as P
+
+    fake_exe = tmp_path / "ansysedt.exe"
+    fake_exe.write_text("x", encoding="utf-8")
+
+    clock = {"v": 0.0}
+
+    def fake_monotonic():
+        clock["v"] += 5.0
+        return clock["v"]
+
+    monkeypatch.setattr(P, "aedt_is_running", lambda: True)
+    monkeypatch.setattr(P, "get_aedt_pids", lambda: [333])
+    monkeypatch.setattr(P, "query_desktop_state", lambda: {"connected": False})
+    monkeypatch.setattr(P.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(P.time, "sleep", lambda s: None)
+
+    r = P.launch_aedt(aedt_path=str(fake_exe), timeout_seconds=2)
+    assert r["success"] is True
+    assert r["com_ready"] is False
+    assert r["pid"] == 333 and r["pids"] == [333]
+    assert "未在时间内就绪" in r["message"]
+
+
+def test_launch_aedt_does_not_hold_lock_while_waiting_for_com(tmp_path, monkeypatch):
+    """等 COM 期间**不能**持 `_AEDT_LOCK`，否则 open/close/query 全被堵住。
+
+    2026-11-16 复核：原实现把等待放在 `with _AEDT_LOCK` 里，最长持锁
+    `timeout_seconds`（上限 120 s）；改成「锁内只判断+起进程，锁外等待」。
+    `_AEDT_LOCK` 是 RLock（可重入），同线程探不出占用，必须用**另一线程**探。
+    """
+    import threading
+
+    from servers.ansys import project_manage as P
+    from servers.ansys.config import _AEDT_LOCK
+
+    fake_exe = tmp_path / "ansysedt.exe"
+    fake_exe.write_text("x", encoding="utf-8")
+
+    observed: list[bool] = []
+
+    def fake_state():
+        got: dict = {}
+
+        def probe():
+            free = _AEDT_LOCK.acquire(blocking=False)
+            got["free"] = free
+            if free:
+                _AEDT_LOCK.release()
+
+        t = threading.Thread(target=probe)
+        t.start()
+        t.join(timeout=3)
+        observed.append(bool(got.get("free")))
+        return {"connected": False}
+
+    clock = {"v": 0.0}
+
+    def fast_clock():
+        clock["v"] += 5.0
+        return clock["v"]
+
+    monkeypatch.setattr(P, "aedt_is_running", lambda: True)
+    monkeypatch.setattr(P, "get_aedt_pids", lambda: [1])
+    monkeypatch.setattr(P, "query_desktop_state", fake_state)
+    monkeypatch.setattr(P.time, "monotonic", fast_clock)
+    monkeypatch.setattr(P.time, "sleep", lambda s: None)
+
+    P.launch_aedt(aedt_path=str(fake_exe), timeout_seconds=2)
+    assert observed, "探测函数没被调用"
+    assert all(observed), f"等 COM 时锁被占用（observed={observed}）—— 会阻塞其它 AEDT 工具"
+
+
+def test_close_hfss_project_com_success_no_kill(monkeypatch):
+    from servers.ansys import project_manage as pm
+    monkeypatch.setattr(pm, "_resolve_close_targets", lambda: [12345])
+    monkeypatch.setattr(pm, "aedt_is_running", lambda: True)
+    monkeypatch.setattr(pm, "_com_close_project",
+                        lambda *a, **k: {"success": True, "method": "com"})
+    killed = []
+    monkeypatch.setattr(pm, "_kill_aedt_processes", lambda *a, **k: killed.append(1) or {"method": "kill"})
+    r = pm.close_hfss_project(project_name="demo")
+    assert r["method"] == "com"
+    assert killed == []
+
+
+def test_close_hfss_project_com_failure_falls_back_to_kill(monkeypatch):
+    from servers.ansys import project_manage as pm
+    monkeypatch.setattr(pm, "_resolve_close_targets", lambda: [12345])
+    monkeypatch.setattr(pm, "aedt_is_running", lambda: True)
+    monkeypatch.setattr(pm, "_com_close_project", lambda *a, **k: None)  # COM 附着失败
+    calls = {}
+
+    def fake_kill(pids, lock_path, project_name, hard):
+        calls["pids"], calls["hard"] = pids, hard
+        return {"success": True, "method": "taskkill"}
+
+    monkeypatch.setattr(pm, "_kill_aedt_processes", fake_kill)
+    r = pm.close_hfss_project(project_name="demo")
+    assert r["method"] == "taskkill"
+    assert calls["pids"] == [12345]
+    assert calls["hard"] is False  # 非 force：先 taskkill（WM_CLOSE），失败才 /F
+
+
+def test_close_hfss_project_force_direct_hard_kill(monkeypatch):
+    from servers.ansys import project_manage as pm
+    monkeypatch.setattr(pm, "_resolve_close_targets", lambda: [12345])
+    calls = {}
+
+    def fake_kill(pids, lock_path, project_name, hard):
+        calls["hard"] = hard
+        return {"success": True, "method": "taskkill"}
+
+    monkeypatch.setattr(pm, "_kill_aedt_processes", fake_kill)
+    pm.close_hfss_project(force=True)
+    assert calls["hard"] is True  # force：直接 /F 硬杀
+
+
+def test_com_close_project_returns_error_when_closeproject_fails(monkeypatch):
+    """附着成功但 `CloseProject` 抛异常 ⇒ 必须返回 `CLOSE_FAILED`，**不能**返回 None。
+
+    返回 None 会让调用方走进程级兜底硬杀 AEDT —— 而这类失败多半是「项目有未保存
+    改动 / AEDT 弹了确认框」，硬杀会把改动一起丢掉（2026-11-16 复核）。
+    只有**附着阶段**失败才允许返回 None。
+    """
+    import contextlib
+
+    from servers.ansys import project_manage as P
+
+    class _Desktop:
+        def GetProjectList(self):
+            return ["demo"]
+
+        def GetActiveProject(self):
+            return None
+
+        def CloseProject(self, name):
+            raise RuntimeError("project has unsaved changes")
+
+    class _App:
+        def GetAppDesktop(self):
+            return _Desktop()
+
+    monkeypatch.setattr(P, "_attach_aedt", lambda: (_App(), _Desktop()))
+    monkeypatch.setattr(P, "com_session", contextlib.nullcontext)
+
+    r = P._com_close_project("demo", False, "")
+    assert r is not None, "关项目失败不能返回 None（None 会让调用方硬杀进程）"
+    assert r["error_code"] == "CLOSE_FAILED"
+    assert "已连通但关闭项目失败" in r["message"]
+    assert r["details"]["attached"] is True, "要标明'已附着'，区别于附着失败"
+    assert "force=true" in r["hint"], "提示要让调用方知道可显式强杀"
+    assert r["details"]["modal_dialogs"] == [], "无 AEDT 时弹框检测应为空"
+    assert "未检测到 AEDT 对话框" in r["message"], "没弹框时也要说清'不是弹框问题'"
+
+
+def test_com_close_project_reports_modal_dialog_when_present(monkeypatch):
+    """检测到 AEDT 对话框时报文要直接指向「是不是弹了保存确认框」。"""
+    import contextlib
+
+    from servers.ansys import project_manage as P
+
+    class _Desktop:
+        def GetProjectList(self):
+            return ["demo"]
+
+        def GetActiveProject(self):
+            return None
+
+        def CloseProject(self, name):
+            raise RuntimeError("command rejected while modal dialog is open")
+
+    monkeypatch.setattr(P, "_attach_aedt", lambda: (object(), _Desktop()))
+    monkeypatch.setattr(P, "com_session", contextlib.nullcontext)
+    monkeypatch.setattr(P, "_aedt_modal_dialogs",
+                        lambda: ["ANSYS Electronics Desktop", "Save changes?"])
+
+    r = P._com_close_project("demo", False, "")
+    assert r["error_code"] == "CLOSE_FAILED"
+    assert "检测到 AEDT 上有 2 个对话框" in r["message"], r["message"]
+    assert "Save changes?" in r["message"], "要把框标题摆出来，方便用户对号"
+    assert r["details"]["modal_dialogs"] == ["ANSYS Electronics Desktop", "Save changes?"]
+    assert "处理掉它" in r["message"]
+
+
+def test_aedt_modal_dialogs_empty_without_aedt(monkeypatch):
+    """AEDT 未运行时弹框检测直接返回空列表，不抛异常。"""
+    from servers.ansys import project_manage as P
+
+    monkeypatch.setattr(P, "get_aedt_pids", list)
+    assert P._aedt_modal_dialogs() == []
+
+
+def test_com_close_project_returns_none_on_attach_failure(monkeypatch):
+    import contextlib
+    from servers.ansys import project_manage as pm
+    monkeypatch.setattr(pm, "com_session", contextlib.nullcontext)
+
+    def boom(*a, **k):
+        raise RuntimeError("attached none")
+
+    monkeypatch.setattr(pm, "_attach_aedt", boom)
+    assert pm._com_close_project("demo", False, "") is None
+
+
+def test_resolve_close_targets_groups_by_create_time(monkeypatch):
+    """AEDT 会分裂成**互不为父子**的多个 ansysedt.exe；关闭目标要按创建时间收同一批。
+
+    2026-11-16 实测：pid 31348（启动器，Popen 起的）与 32576（`-Embedding` GUI）
+    create_time 只差 0.01 s，但 ppid 分别是 18080 / 1632 —— `children()` 抓不到，
+    只认 `_LAST_PID` 会留下孤儿（实测杀 31348 后 32576 残留，要手工清）。
+    """
+    from servers.ansys import project_manage as P
+
+    t0 = 1794810910.95
+
+    class _Proc:
+        def __init__(self, pid, ct):
+            self.pid = pid
+            self._ct = ct
+
+        def is_running(self):
+            return True
+
+        def name(self):
+            return "ansysedt.exe"
+
+        def create_time(self):
+            return self._ct
+
+    class _Info:
+        def __init__(self, pid, name, ct):
+            self.info = {"pid": pid, "name": name, "create_time": ct}
+
+    launcher = _Proc(31348, t0)
+    embedding = _Proc(32576, t0 + 0.01)     # 同一批（分裂出的 -Embedding GUI）
+    older = _Proc(20000, t0 - 3600)         # 一小时前手动开的，不该碰
+
+    table = {31348: launcher, 32576: embedding, 20000: older}
+    iterable = [
+        _Info(31348, "ansysedt.exe", t0),
+        _Info(32576, "ansysedt.exe", t0 + 0.01),
+        _Info(20000, "ansysedt.exe", t0 - 3600),
+        _Info(999, "explorer.exe", t0),
+    ]
+    monkeypatch.setattr(P, "_LAST_PID", 31348)
+    monkeypatch.setattr(P.psutil, "Process", lambda pid: table[pid])
+    monkeypatch.setattr(P.psutil, "process_iter", lambda attrs=None: iterable)
+    monkeypatch.setattr(P, "get_aedt_pids", lambda: [31348, 32576, 20000])
+
+    targets = P._resolve_close_targets()
+    assert set(targets) == {31348, 32576}, f"同批两个都要收，实际 {targets}"
+    assert 20000 not in targets, "不该误伤更早启动的实例"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-p", "no:cacheprovider"])
