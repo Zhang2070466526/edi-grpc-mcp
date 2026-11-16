@@ -59,6 +59,8 @@ EDA_GRPC_SERVER=127.0.0.1:50055
 EDI_PATH=
 # TurboCharts path: leave empty to auto-detect (turbocharts_app.exe > TurboCharts.exe)
 TURBOCHARTS_PATH=
+# Default artifacts dir: leave empty to use system temp dir (%TEMP%/mcp_result)
+MCP_RESULT_DIR=
 MCP_TRANSPORT=streamable-http
 MCP_PORT=50026
 # 0 = all tools; 1 = hide internal (EDI gRPC + standalone exe + diagnostics); 2 = keep only internal + no-dependency calculators; 3 = hide soft IP + LASPCEM

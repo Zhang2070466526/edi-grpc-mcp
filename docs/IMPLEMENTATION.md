@@ -352,9 +352,7 @@ if ac_config:  cmd.extend(["--ac", ac_config])
 
 #### RAW 曲线查询（list_result_curves）
 
-解析 ADS RAW 文件头，支持 MDS 和 XML 两种格式。MDS 解析状态机逐行读：`Plotname:` 提取 dependencies → `Variables:` 进入变量模式 → `Values:` 退出 → 变量行解析 index/name/type/indep。**截断保护**：只读前 65536 字节，达上限返回 `warning`。
-
-曲线推荐规则（`_suggest_curves`）：`S.delay[x,y]` 最高优先级；complex S[n,n] 反射参数加 VSWR，传输参数不加。
+调引擎 `--curve-info` 原生列出「依赖 → 曲线名 + 可用单位」，透传引擎 JSON（`{依赖: [{曲线: [单位]}]}`），不再手写解析 RAW 头。`detect_chart_type` 读 Plotname 补 chart_type（SP/HB/XDB），并按类型附 unit_notes（HB 下 db/phase/imag/mag 会被引擎静默回退成 dBm，只有 dBm_/real_ 出真图）。
 
 #### 仿真结果对比（compare_simulation_results）
 
@@ -423,6 +421,7 @@ CST 工具不走 ANSYS COM，用 CST 官方接口（`servers/cst/cst_api.py`，�
 | `mcp_hide_internal_tools` | `0` | 0 = 全量暴露（默认）；1 = 下架内部 gRPC/仿真工具（`registry_server._INTERNAL_*`）；2 = 只保留内部工具 + 无依赖计算工具；3 = 下架软 IP + LASPCEM |
 | `edi_path` / `turbocharts_path` / `aedt_path` | 空 | 空 = 自动检测 |
 | `edi_log_dir` | 空 | EDI 日志目录（空 = 自动检测，EDI 根下 logs） |
+| `mcp_result_dir` | 空 | 默认产物目录（空 = 系统临时目录 `%TEMP%/mcp_result`） |
 | `llm_api_key` / `llm_base_url` / `llm_model` | 空 | Chat 的 LLM 配置 |
 | `vision_*` | 空 | 视觉分析（独立于 Chat） |
 
@@ -442,6 +441,8 @@ CST 工具不走 ANSYS COM，用 CST 官方接口（`servers/cst/cst_api.py`，�
 | `error_response(code, message, retryable)` | 统一错误信封（`success:false` + `error_code` + `hint`） |
 | `submitted_response(task_id, status)` | 异步任务提交响应（`success:true` + `task_id` + `hint:poll`） |
 | `queue_full_response(code, retryable)` | 队列满响应（`hint:retry_safe`） |
+| `result_dir()` / `default_result_path()` / `result_subdir()` | 默认产物目录三件套（目录 / 带时间戳文件名 / 带时间戳子目录，毫秒+序号不覆盖） |
+| `prune_empty_default_dirs(fn)` | 工具装饰器：本次调用失败时回收它刚建的**空**默认产物目录（见 2.5） |
 | `build_artifact(type_, path, generated_by)` | 产物统一格式（见 2.5） |
 | `build_file_link(path, label)` | `file://` + Markdown 链接（本机产物） |
 | `get_server_base_url()` / `set_server_address()` | 运行时地址（Host 推导，见 3.1） |
@@ -830,7 +831,7 @@ else:                                 # 两者都没有
 | `get_model_category_params` | GET_MODEL_CATEGORY_PARAMS(24) | 无业务参数 |
 | `search_public_models` / `search_personal_models` | SEARCH_*_MODELS(25/26) | `sub_type` 非空；`filters` 原样转发 |
 | `export_schematic_components_to_csv` | EXPORT_SCHEMATIC_COMPONENTS_TO_CSV(40) | `csv_path` 非空 |
-| `get_signal_chain` | — | 本地 | 解析网表，节点接力追踪信号链路（源→负载），方向 forward/backward |
+| `get_signal_chain` | — | 本地解析网表，节点接力追踪信号链路（源→负载），方向 forward/backward |
 | `design_chip` | DESIGN_SOFT_IP(48) | `description` + `save_path` 非空 + 可选 `freq`/`bandwidth` |
 
 ### 4.5 工作区 / 原理图扩展
@@ -849,8 +850,8 @@ else:                                 # 两者都没有
 
 | 工具 | 通信 | 关键实现 |
 |---|---|---|
-| `list_result_curves` | subprocess | 解析 RAW 头（MDS/XML 两种格式），前 65536 字节，`_suggest_curves` 推荐曲线名 |
-| `turbocharts_convert` | subprocess | `run_turbocharts()` 串行信号量，`--linename`/`--dependcy`（真实参数名少一个 n） |
+| `list_result_curves` | subprocess | 调引擎 `--curve-info` 透传曲线+单位（不再手写解析 RAW 头），`detect_chart_type` 补 chart_type + unit_notes |
+| `turbocharts_convert` | subprocess | `run_turbocharts()` 串行信号量，`--linename`/`--dependcy`（真实参数名少一个 n）；chart_type 留空调 list_result_curves 自动推断 |
 | `compare_simulation_results` | subprocess | 2-8 个 RAW 对比，alignment=intersection/interpolation，Matplotlib 叠图 |
 
 ### 4.7 ANSYS HFSS 与 CST
@@ -859,7 +860,7 @@ else:                                 # 两者都没有
 |---|---|---|
 | `launch_aedt` | COM | 已运行返回状态；否则 subprocess 启动 → 轮询 COM 就绪 |
 | `open_hfss_project` | COM | 清理失效锁 → COM 附着 OpenProject / subprocess 启动 |
-| `close_hfss_project` | COM | CloseProject（可选 Save）→ 等 2 秒 → 清残留锁 |
+| `close_hfss_project` | COM + 进程 | COM `CloseProject`（可选 Save）→ 附着失败退 `taskkill`（WM_CLOSE）→ 10s 未退 `/F`；`force` 直接 `/F`，返回 `scope`（managed=只自己起的 / all=机器上所有） |
 | `get_hfss_project_info` | COM | 读 GetProjectList / GetActiveProject / GetActiveDesign |
 | `start_hfss_analysis_async` | COM | `hfss_runner.submit(require_idle=True)` 忙则拒绝 |
 | `get_hfss_analysis_status` | 内存 | 读 hfss_runner.snapshot，可选 refresh_from_aedt |

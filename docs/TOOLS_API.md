@@ -1032,14 +1032,14 @@ from servers.ansys.project_manage import close_hfss_project
 close_hfss_project(project_name: str = "", project_path: str = "", save_before_close: bool = False, force: bool = False) -> dict
 ```
 
-关闭 AEDT 项目（COM 优先，force 仅结束 MCP 最后启动的 PID）。
+关闭 AEDT 项目，三级兜底：COM `CloseProject` → `taskkill`（WM_CLOSE）→ `taskkill /F`。COM 只关指定项目；COM 附着失败才退进程级（会关掉它名下所有项目）。`force=True` 直接 /F 硬杀：MCP 记录到自己启动的 AEDT 时只终止那一批（`scope="managed"`），没记录时终止机器上所有 `ansysedt.exe`（`scope="all"`，含手动开的实例）。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `project_name` | str | 否 | "" | 项目名，为空关闭活动项目 |
 | `project_path` | str | 否 | "" | 项目路径，用于清理锁文件 |
 | `save_before_close` | bool | 否 | False | 关闭前保存 |
-| `force` | bool | 否 | False | 仅结束 MCP 最后启动的 PID |
+| `force` | bool | 否 | False | True 跳过 COM/WM_CLOSE 直接 `taskkill /F`；作用范围见返回的 `scope`（managed=只自己起的，all=机器上所有） |
 
 返回：`{"success": true, "method": "com", "project_closed": true, "message": "已关闭: demo"}`；失败 `{"success": false, "message": "..."}`。
 
@@ -1830,8 +1830,8 @@ from servers.turbocharts.convert_raw import turbocharts_convert
 
 turbocharts_convert(
     raw_path: str,
-    output_path: str,
-    chart_type: str,
+    output_path: str = "",
+    chart_type: str = "",
     csv_path: str = "",
     linename: str = "",
     dependency: str = "",
@@ -1844,8 +1844,8 @@ ADS RAW 结果文件转换为曲线图 + CSV。
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `raw_path` | str | 是 | RAW 文件路径 |
-| `output_path` | str | 否 | 默认产物目录 | 输出图片路径（PNG/JPG/BMP/SVG）；留空落到 `<result_dir>/turbocharts_convert_<时间戳>.png`，父目录自动创建 |
-| `chart_type` | str | 是 | `"SP"` / `"HB"` / `"XDB"`，**须与 RAW 的 Plotname 一致** |
+| `output_path` | str | 否 | 输出图片路径（PNG/JPG/BMP/SVG）；留空落到默认产物目录 `<result_dir>/turbocharts_convert_<时间戳>.png`，父目录自动创建 |
+| `chart_type` | str | 否 | `"SP"` / `"HB"` / `"XDB"`；留空则调 list_result_curves 自动推断（引擎 --curve-info + Plotname），识别不出退 `"SP"`。**须与 RAW 的 Plotname 一致** |
 | `csv_path` | str | 否 | 同步导出 CSV 路径（多曲线拆分时自动加曲线后缀） |
 | `linename` | str | 否 | 曲线名 `<前缀>_<变量名>`，多条用 `&` 分隔 |
 | `dependency` | str | 否 | 依赖轴，通常 `"freq"`（HB 下引擎忽略） |
@@ -1896,8 +1896,8 @@ from servers.turbocharts.compare_results import compare_simulation_results
 compare_simulation_results(
     result_paths: list[str],
     curve: str,
-    output_path: str,
-    chart_type: str = "SP",
+    output_path: str = "",
+    chart_type: str = "",
     labels: list[str] | None = None,
     dependency: str = "freq",
     csv_path: str = "",
@@ -1912,10 +1912,13 @@ compare_simulation_results(
 |---|---|---|---|
 | `result_paths` | list | 是 | RAW 文件路径（2-8 个） |
 | `curve` | str | 是 | 曲线名 |
-| `output_path` | str | 否 | 默认产物目录 | 输出图片路径；留空落到 `<result_dir>/compare_simulation_results_<时间戳>.png` |
+| `output_path` | str | 否 | 输出图片路径；留空落到默认产物目录 `<result_dir>/compare_simulation_results_<时间戳>.png` |
+| `chart_type` | str | 否 | `"SP"` / `"HB"` / `"XDB"`；留空从第一个 RAW 的 Plotname 自动识别，识别不出退 `"SP"` |
 | `labels` | list | 否 | 每条曲线标签 |
 | `dependency` | str | 否 | 依赖轴（默认 "freq"） |
+| `csv_path` | str | 否 | 对比数据 CSV 输出路径 |
 | `alignment` | str | 否 | 对齐方式："intersection" 或 "interpolation" |
+| `reference_index` | int | 否 | interpolation 模式下的参考文件索引（默认 0） |
 
 返回：
 ```python
@@ -2293,7 +2296,7 @@ run_mixer_simulation(project: dict, out_dir: str, workers: int = 10,
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `project` | dict | 是 | — | 参数表 `{name, epp, links}`；links[i] = {switch_bits?, defaults, indicators} |
-| `out_dir` | str | 是 | — | 结果目录（response.json / indicator_results / runs / figs 落这里） |
+| `out_dir` | str | 否 | 默认产物目录 | 结果目录；留空落到 `<result_dir>/run_mixer_simulation_<时间戳>/`（response.json / indicator_results / runs / figs 落这里） |
 | `workers` | int | 否 | 10 | 并发进程数；EDI 不稳定时降 5 |
 | `turbocharts_exe` | str | 否 | "" | turbocharts 路径，默认用 MCP 自动探测（往上找 EDI 根） |
 | `timeout_seconds` | int | 否 | 1800 | 最长等待秒数（上限 3600） |
@@ -2319,7 +2322,7 @@ draw_chart(series: list, image_path: str, chart_title: str = "", x_axis_title: s
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `series` | list | 是 | — | 数据组数组，每项 `{name, points: [[x,y],...]}`；name 缺失/空则不显示图例，已提供的 name 必须唯一 |
-| `image_path` | str | 是 | — | 输出目录绝对路径（不存在时自动创建） |
+| `image_path` | str | 否 | 默认产物目录 | 输出目录绝对路径；留空落到 `<result_dir>/draw_chart_<时间戳>/`（不存在时自动创建） |
 | `chart_title` / `x_axis_title` / `y_axis_title` | str | 否 | "" | 标题（空串=不显示） |
 | `marks` | list | 否 | None | 标记数组，每项 `{series, point: [x,y], label}` |
 | `file_stem` | str | 否 | "chart" | 输出文件名（不含扩展名） |
