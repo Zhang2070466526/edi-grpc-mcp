@@ -255,5 +255,69 @@ class TestResultPath:
         assert Path(d) == (tmp_path / "rel_out").resolve()
 
 
+class TestPruneEmptyDefaultDirs:
+    """工具失败时回收它刚建的空默认产物目录（2026-11-16，ART-1）。
+
+    实测背景：`result_subdir()` 先建目录再执行，失败调用会在 `%TEMP%/mcp_result` 下
+    攒空目录（实测残留 cst_export_snp_* 2 个、export_simulation_report_* 4 个）。
+    """
+
+    def _tool(self, monkeypatch, tmp_path, *, mode: str, boom: bool = False):
+        import servers.utils as u
+
+        monkeypatch.setattr(u, "result_dir", lambda: str(tmp_path / "out"))
+
+        @u.prune_empty_default_dirs
+        def tool():
+            d = u.result_subdir("demo_tool")
+            if boom:
+                raise RuntimeError("上游炸了")
+            if mode == "write":
+                Path(d, "a.png").write_text("x")
+            # mode == "submit_only"：模拟异步提交成功但目录还是空的
+            return {"success": mode != "fail", "dir": d}
+
+        return tool
+
+    def test_failure_removes_empty_dir(self, monkeypatch, tmp_path):
+        r = self._tool(monkeypatch, tmp_path, mode="fail")()
+        assert r["success"] is False
+        assert not Path(r["dir"]).exists(), "失败后不该留空目录"
+
+    def test_success_with_products_keeps_dir(self, monkeypatch, tmp_path):
+        r = self._tool(monkeypatch, tmp_path, mode="write")()
+        assert Path(r["dir"]).is_dir()
+        assert (Path(r["dir"]) / "a.png").is_file()
+
+    def test_success_but_still_empty_is_kept(self, monkeypatch, tmp_path):
+        """异步工具提交成功时目录还是空的，后台 worker 马上写 —— 不能删。"""
+        r = self._tool(monkeypatch, tmp_path, mode="submit_only")()
+        assert r["success"] is True
+        assert Path(r["dir"]).is_dir(), "success=True 的调用一律不动"
+
+    def test_exception_also_prunes_then_reraises(self, monkeypatch, tmp_path):
+        import servers.utils as u
+
+        tool = self._tool(monkeypatch, tmp_path, mode="submit_only", boom=True)
+        with pytest.raises(RuntimeError):
+            tool()
+        assert list((tmp_path / "out").glob("demo_tool_*")) == [], "抛异常也要回收空目录"
+
+    def test_leaves_non_default_dirs_alone(self, monkeypatch, tmp_path):
+        """只清理本次 result_subdir 建的目录；用户显式指定的目录不碰。"""
+        import servers.utils as u
+
+        monkeypatch.setattr(u, "result_dir", lambda: str(tmp_path / "out"))
+        keep = tmp_path / "user_dir"
+        keep.mkdir()
+
+        @u.prune_empty_default_dirs
+        def tool():
+            return {"success": False, "dir": str(keep)}
+
+        tool()
+        assert keep.is_dir(), "不是默认产物目录，不该被删"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-p", "no:cacheprovider"])

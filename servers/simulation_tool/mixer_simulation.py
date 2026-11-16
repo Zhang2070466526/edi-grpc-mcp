@@ -31,6 +31,7 @@ from servers.utils import (
     collect_simulation_artifacts,
     error_response,
     per_tool_mutex,
+    prune_empty_default_dirs,
     require_file,
     result_subdir,
     tcp_port_open,
@@ -405,6 +406,7 @@ def _check_netlist_consistency(project: dict, netlist_path: Path) -> dict | None
 
 @mcp.tool()
 @per_tool_mutex
+@prune_empty_default_dirs
 def run_mixer_simulation(
     project: dict,
     out_dir: str = "",

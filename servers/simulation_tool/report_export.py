@@ -19,7 +19,7 @@ from typing import Any
 from servers import mcp
 from servers.simulation_tool.config import REPORT_EXPORTER_PATH, fmt_errors, run_exe
 from servers.utils import (build_artifact, build_file_link, error_response, per_tool_mutex,
-                           result_subdir)
+                           prune_empty_default_dirs, result_subdir)
 
 _logger = logging.getLogger("simulation_tool.report_export")
 
@@ -55,6 +55,7 @@ def _absolutize_images(report: dict) -> dict:
 
 @mcp.tool()
 @per_tool_mutex
+@prune_empty_default_dirs
 def export_simulation_report(
     report: dict,
     output_dir: str = "",
@@ -85,6 +86,9 @@ def export_simulation_report(
         {"success": True, "report_dir": "...", "pdf_path": "...", "docx_path": "...",
          "report_data_path": "...", "chart_count": 0, "errors": [],
          "artifacts": [...], "links": {"pdf": {...}, "docx": {...}}}
+
+        `output_dir` 与 `report_dir` 同值 —— 其余产物类工具的目录键统一叫 `output_dir`，
+        这里补个别名免得调用方按统一口径取路径时扑空（2026-11-16，ENV-2）。
     """
     # 1. report 必须是非空对象
     if not isinstance(report, dict) or not report:
@@ -184,6 +188,7 @@ def export_simulation_report(
     resp: dict[str, Any] = {
         "success": True,
         "report_dir": data.get("report_dir", str(out_dir)),
+        "output_dir": data.get("report_dir", str(out_dir)),   # 统一口径别名（ENV-2）
         "pdf_path": pdf,
         "docx_path": docx,
         "report_data_path": report_data,

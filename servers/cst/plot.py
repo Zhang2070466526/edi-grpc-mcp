@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 from servers import mcp
 from servers.utils import (build_artifact, build_file_link, error_response, per_tool_mutex,
-                           result_subdir, validate_file)
+                           prune_empty_default_dirs, result_subdir, validate_file)
 
 _logger = logging.getLogger("cst.plot")
 
@@ -101,6 +101,7 @@ def _parse_farfield(text: str) -> dict[str, Any]:
 
 @mcp.tool()
 @per_tool_mutex
+@prune_empty_default_dirs
 def cst_plot_farfield(txt_path: str, cut: str = "phi=0", output_dir: str = "") -> dict[str, Any]:
     """把 CST 远场 ASCII .txt 画成方向图（极坐标切面 + 直角曲线各一张 PNG）。
 

@@ -21,6 +21,7 @@ from servers.cst.cst_api import (
 from servers.task_runner import QueueBusyError
 from servers.utils import (
     error_response,
+    prune_empty_default_dirs,
     queue_full_response,
     require_file,
     result_subdir,
@@ -56,6 +57,7 @@ _result_exporter = CstResultExporter()
 
 
 @mcp.tool()
+@prune_empty_default_dirs
 def cst_export_snp(
     model_path: str,
     output_dir: str = "",
@@ -102,6 +104,7 @@ def cst_export_snp(
 
 
 @mcp.tool()
+@prune_empty_default_dirs
 def cst_export_farfield(model_path: str, output_dir: str = "") -> dict[str, Any]:
     """导出 CST 模型的远场方向图为 ASCII .txt（自动判断是否已求解）。
 
@@ -161,6 +164,7 @@ def cst_export_farfield_query(task_id: str) -> dict[str, Any]:
 
 
 @mcp.tool()
+@prune_empty_default_dirs
 def cst_export_snp_async(
     model_path: str,
     output_dir: str = "",

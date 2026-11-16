@@ -273,6 +273,8 @@ def test_report_success_builds_artifacts_and_links(tmp_path, monkeypatch):
     assert set(r["links"]) == {"pdf", "docx"}
     assert r["links"]["pdf"]["download_url"] and r["links"]["docx"]["download_url"]
     assert r["chart_count"] == 2
+    # 目录键统一口径别名（ENV-2）：其余产物工具都叫 output_dir，这里两个键同值
+    assert r["output_dir"] == r["report_dir"] == str(out)
 
 
 def test_new_error_codes_registered_in_chat_dictionary():

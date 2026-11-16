@@ -405,6 +405,9 @@ def result_subdir(tool_name: str) -> str:
 
     不带 `exist_ok`：撞名时 `mkdir` 抛 `FileExistsError` 再加序号重试 —— 这是原子的，
     并发调用也不会两个线程拿到同一个目录（多文件/目录类产物混在一起很难排查）。
+
+    建好的目录会登记到当前线程的「本次调用」栈上，供 `prune_empty_default_dirs`
+    在工具失败时回收（见下）。
     """
     base = Path(result_dir())
     stamp = _artifact_stamp()
@@ -413,10 +416,71 @@ def result_subdir(tool_name: str) -> str:
         candidate = base / f"{tool_name}_{stamp}{suffix}"
         try:
             candidate.mkdir(parents=True)
-            return str(candidate)
         except FileExistsError:
             continue
+        _remember_created_dir(str(candidate))
+        return str(candidate)
     raise RuntimeError(f"无法为 {tool_name} 创建唯一产物目录（{stamp} 后已试 100 次）")
+
+
+# ── 默认产物目录的空目录回收 ──
+_result_dirs_tls = threading.local()
+
+
+def _created_result_dirs() -> list[str]:
+    """当前线程里「本次调用期间」由 `result_subdir` 建过的目录（栈）。"""
+    dirs = getattr(_result_dirs_tls, "created", None)
+    if dirs is None:
+        dirs = _result_dirs_tls.created = []
+    return dirs
+
+
+def _remember_created_dir(path: str) -> None:
+    _created_result_dirs().append(path)
+
+
+def discard_empty_dir(path: str) -> None:
+    """删掉「建了但一个文件都没写进去」的默认产物目录。
+
+    只删空目录：非空（已有产物）、不存在、被占用一律静默跳过 —— 清理是尽力而为，
+    绝不能因为清理失败把工具的真实错误盖掉。
+    """
+    try:
+        p = Path(path)
+        if p.is_dir() and not any(p.iterdir()):
+            p.rmdir()
+    except OSError:
+        pass
+
+
+def prune_empty_default_dirs(fn):
+    """工具装饰器：本次调用失败时，回收它刚建的空默认产物目录。
+
+    背景（2026-11-16 实测）：`result_subdir()` 是「先建目录再执行」，工具在校验失败 /
+    上游未就绪时提前返回，`%TEMP%/mcp_result` 下就攒一串空的 `<工具名>_<时间戳>/`
+    （实测残留 `cst_export_snp_*` 2 个、`export_simulation_report_*` 4 个）。
+
+    **只按返回值判**：`success` 为真的调用一律不动 —— 异步工具（如 `cst_export_farfield`
+    的 `submitted_response`）提交成功时目录还是空的，后台 worker 马上会往里写，不能删。
+    """
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        buf = _created_result_dirs()
+        depth = len(buf)
+        try:
+            result = fn(*args, **kwargs)
+        except Exception:
+            for d in buf[depth:]:
+                discard_empty_dir(d)
+            del buf[depth:]
+            raise
+        made = buf[depth:]
+        del buf[depth:]
+        if isinstance(result, dict) and not result.get("success"):
+            for d in made:
+                discard_empty_dir(d)
+        return result
+    return wrapper
 
 
 def build_artifact(type_: str, path: str, generated_by: str) -> dict[str, Any]:
