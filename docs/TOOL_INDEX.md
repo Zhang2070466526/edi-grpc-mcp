@@ -15,7 +15,7 @@
 - `build_laspcem_report` — 给已求解的 .sem 工程建 S 参数网络报告（没求解就返回 SOLVE_REQUIRED）。
 - `calculate_rf_dynamic_range` — 计算射频链路的灵敏度(S)与压缩受限动态范围(DR)。
 - `calculate_transline` — 计算传输线的特性阻抗或线宽（微带 / 带状 / 接地共面波导 / 同轴）。
-- `capture_schematic` — 截取 EDA 工程原理图为图片。
+- `capture_schematic` — 截取工程原理图为图片。
 - `clear_schematic` — 清空工程原理图中的全部器件和网段并保存（破坏性操作）。
 - `close_edi_project` — ⚠️ 关闭当前 .epp 工程（未保存改动会丢）。打开用 open_edi_project；只是想看状态用 get_edi_project_info。
 - `close_hfss_project` — ⚠️ 关闭 AEDT 项目（未保存改动会丢；force 会强杀进程）。
