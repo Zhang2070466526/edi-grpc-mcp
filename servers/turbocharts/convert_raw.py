@@ -1,7 +1,7 @@
 r"""Turbocharts MCP 工具 — ADS RAW 文件转曲线图与 CSV。
 
 turbocharts_convert   将 ADS 仿真 RAW 结果转为 PNG 曲线图和 CSV
-list_result_curves    解析 RAW 头部、列出可用曲线名（画图前先调用）
+list_result_curves    引擎 --curve-info 列出曲线+单位（画图前先调用）
 
 命令格式与曲线命名的权威说明见引擎自带文档（同目录，本模块按它实现）：
     servers/turbocharts/RAW 转图像工具使用说明.txt
@@ -299,10 +299,6 @@ def list_result_curves(result_path: str) -> dict[str, Any]:
             "SP 实测（2026-11-16）：db/dBm/phase/real/imag/mag/VSWR 各出不同图；"
             "APS/MAS/MV/PSS 需要 RAW 里含对应数控器件数据，否则图能出但 CSV 只有表头。"
         )
-    notes.append(
-        "turbocharts_convert 会在传入 csv_path 时自动核对产物表头，"
-        "若单位被引擎回退会写进返回的 warnings —— 以那里为准。"
-    )
     return {"success": True, "result_path": resolved,
             "chart_type": chart, "curves": engine_curves, "unit_notes": notes}
 
@@ -377,7 +373,8 @@ def _default_unit(units: list[str], chart_type: str) -> str | None:
     for want in _DEFAULT_UNIT_BY_CHART.get((chart_type or "").upper(), ["db", "dBm", "real"]):
         if want.lower() in lower:
             return lower[want.lower()]
-    return units[0] if units else None
+    # 兜底：期望单位都不在时，优先 real（SP/HB 都出真图、最不易被引擎回退），再退引擎列表第一个。
+    return lower.get("real") or (units[0] if units else None)
 
 
 def _label_unit(label: str) -> str:
@@ -430,7 +427,7 @@ def turbocharts_convert(
         raw_path: 输入的 ADS RAW 文件路径（必填）。
         output_path: 输出的图像文件路径，支持 PNG/JPG/BMP/SVG；留空则落到默认产物目录
                     （<result_dir>/turbocharts_convert_<时间戳>.png）。父目录会自动创建。
-        chart_type: 转换类型，如 "SP"、"HB"、"XDB"；留空默认 "SP"（建议传，需与 RAW 的 Plotname 一致）。
+        chart_type: 转换类型，如 "SP"、"HB"、"XDB"；留空则调 list_result_curves 解析 RAW 自动推断（引擎 --curve-info + Plotname），识别不出再退 "SP"。
         csv_path: 可选，同时导出的 CSV 文件路径（多曲线拆分时在其文件名后加曲线后缀）。
         linename: 可选，绘制线段名，格式 单位_线段名（如说明里的 "db_s[1,1]"、"real_delayS[1,1]"），
                   多条用 & 分隔。
@@ -462,7 +459,17 @@ def turbocharts_convert(
     except (FileNotFoundError, ValueError) as e:
         return error_response("FILE_NOT_FOUND", str(e))
 
-    chart_type = (chart_type or "").strip() or "SP"
+    _requested_chart = (chart_type or "").strip()
+    _curve_info: dict[str, Any] | None = None
+    _detected_chart = ""
+    if _requested_chart:
+        chart_type = _requested_chart
+    else:
+        # chart_type 留空 → 先调 list_result_curves 解析 RAW（曲线 + 对应单位），以它为准
+        _curve_info = list_result_curves(raw_file)
+        if _curve_info.get("success"):
+            _detected_chart = (_curve_info.get("chart_type") or "").strip()
+        chart_type = _detected_chart or "SP"
     if not (output_path or "").strip():
         output_path = default_result_path("turbocharts_convert", ".png")
 
@@ -480,6 +487,31 @@ def turbocharts_convert(
         )
 
     warnings: list[str] = []
+    if not _requested_chart:
+        # 只在「没显式指定类型」时交代类型是怎么来的。
+        if _detected_chart:
+            warnings.append(f"未传 chart_type：已按 RAW 的 Plotname 推断为 {_detected_chart}")
+        elif _curve_info is not None and _curve_info.get("success"):
+            warnings.append(
+                "未传 chart_type：RAW 里没有可识别的 Plotname 类型标记（SP/HB/XDB），"
+                "已退默认 SP —— 请确认数据类型，必要时显式传 chart_type"
+            )
+        else:
+            _err = (_curve_info or {}).get("error_code")
+            _why = "引擎 --curve-info 不可用" if _err == "CURVE_INFO_FAILED" else "RAW 解析失败"
+            warnings.append(
+                f"未传 chart_type：list_result_curves 解析失败（{_why}），"
+                "已退默认 SP（HB/XDB 数据请显式传 chart_type）"
+            )
+    # 单位科普只在「自动组图」时给：调用方已经写死 linename 时不需要。
+    if not (linename or "").strip() and _curve_info is not None and _curve_info.get("success"):
+        for n in _curve_info.get("unit_notes") or []:
+            if n not in warnings:
+                warnings.append(n)
+    if csv_path:
+        warnings.append(
+            "已核对产物 CSV 表头：若请求的单位被引擎静默回退，会写进下面的 warnings —— 以那里为准。"
+        )
     artifacts: list[dict] = []
     command_runs: list[dict] = []
 
@@ -493,7 +525,13 @@ def turbocharts_convert(
     # ── 第 0.1 步：linename 校验（语法 + 变量存在性）──
     # 变量存在性以引擎 --curve-info 为准（与 list_result_curves 同一事实源），
     # 不再手写解析 RAW（手写解析有 HB 多 sweep 读不全 / 64KB 截断的盲区）。
-    engine_curves = _engine_curve_info(raw_file)
+    if _curve_info is not None and _curve_info.get("success"):
+        engine_curves = _curve_info.get("curves")
+    elif _curve_info is None:
+        engine_curves = _engine_curve_info(raw_file)
+    else:
+        # list_result_curves 已失败（引擎 --curve-info 不可用），不再重复调引擎
+        engine_curves = None
     # 引擎返回 {"依赖": [{"曲线名": ["单位"]}]}（2026-11-16 实测，JSON 走 stderr）；
     # 提取每个 dict 的 key（曲线名）做存在性校验，否则拼错的曲线名直接送引擎，
     # SP 段错误 / HB 出空图且 rc=0。

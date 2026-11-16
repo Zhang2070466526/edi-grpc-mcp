@@ -188,7 +188,61 @@ def test_no_fallback_warning_when_unit_matches(env):
     resp = cr.turbocharts_convert(
         raw_path=str(env.raw), output_path=str(env.tmp / "o.png"), chart_type="HB",
         csv_path=str(env.tmp / "o.csv"), linename="dBm_Out1")
-    assert not [w for w in (resp.get("warnings") or []) if "回退" in w]
+    # 传了 csv_path 会带一条「已核对产物 CSV 表头…」的流程说明（含「回退」二字，2026-11-16），
+    # 它不是在报回退 —— 判据看有没有真说「未出现在产物表头」。
+    assert not [w for w in (resp.get("warnings") or []) if "未出现在产物表头" in w]
+
+
+def test_csv_header_hint_only_when_csv_requested(env):
+    """「已核对产物 CSV 表头」只在该传 csv_path 时出现（未传时出现条件句会自相矛盾）。"""
+    with_csv = cr.turbocharts_convert(
+        raw_path=str(env.raw), output_path=str(env.tmp / "a.png"), chart_type="HB",
+        csv_path=str(env.tmp / "a.csv"), linename="dBm_Out1")
+    assert any("产物 CSV 表头" in w for w in (with_csv.get("warnings") or []))
+
+    without_csv = cr.turbocharts_convert(
+        raw_path=str(env.raw), output_path=str(env.tmp / "b.png"), chart_type="HB",
+        linename="dBm_Out1")
+    assert not any("产物 CSV 表头" in w for w in (without_csv.get("warnings") or []))
+
+
+def test_unit_notes_only_for_auto_compose(env):
+    """类型科普只在自动组图时给；调用方写死 linename 时不该再灌一遍。"""
+    monkeypatch_note = {"success": True, "chart_type": "HB",
+                        "curves": {"freq": [{"Out1": ["dBm"]}]},
+                        "unit_notes": ["HB 实测：只有 dBm_ 与 real_ 出真图。"]}
+    orig = cr.list_result_curves
+    try:
+        cr.list_result_curves = lambda p: monkeypatch_note
+        r = cr.turbocharts_convert(
+            raw_path=str(env.raw), output_path=str(env.tmp / "c.png"), linename="dBm_Out1")
+        assert not any("HB 实测" in w for w in (r.get("warnings") or [])), r.get("warnings")
+
+        r2 = cr.turbocharts_convert(raw_path=str(env.raw), output_path=str(env.tmp / "d.png"))
+        assert any("HB 实测" in w for w in (r2.get("warnings") or [])), r2.get("warnings")
+    finally:
+        cr.list_result_curves = orig
+
+
+def test_chart_type_autodetect_tells_user(env):
+    """不传 chart_type 时必须交代「类型是怎么来的」（推断成功 / 识别不出 / 解析失败三种）。"""
+    orig = cr.list_result_curves
+    try:
+        cr.list_result_curves = lambda p: {"success": True, "chart_type": "HB",
+                                          "curves": {"freq": [{"Out1": ["dBm"]}]}, "unit_notes": []}
+        r = cr.turbocharts_convert(raw_path=str(env.raw), output_path=str(env.tmp / "e.png"))
+        assert any("推断为 HB" in w for w in (r.get("warnings") or [])), r.get("warnings")
+
+        cr.list_result_curves = lambda p: {"success": True, "chart_type": "",
+                                          "curves": {"freq": [{"Out1": ["dBm"]}]}, "unit_notes": []}
+        r2 = cr.turbocharts_convert(raw_path=str(env.raw), output_path=str(env.tmp / "f.png"))
+        assert any("没有可识别的 Plotname" in w for w in (r2.get("warnings") or [])), r2.get("warnings")
+
+        cr.list_result_curves = lambda p: {"success": False, "error_code": "CURVE_INFO_FAILED"}
+        r3 = cr.turbocharts_convert(raw_path=str(env.raw), output_path=str(env.tmp / "g.png"))
+        assert any("解析失败" in w for w in (r3.get("warnings") or [])), r3.get("warnings")
+    finally:
+        cr.list_result_curves = orig
 
 
 def test_label_unit_maps_csv_header():
@@ -211,7 +265,6 @@ def test_list_result_curves_includes_unit_notes(tmp_path, monkeypatch):
     resp = cr.list_result_curves(str(raw))
     notes = " ".join(resp.get("unit_notes") or [])
     assert "HB" in notes and "回退" in notes, notes
-    assert "csv_path" in notes, "要指向 turbocharts_convert 的自检路径"
     assert resp["curves"] == {"freq": [{"Out1": ["dBm", "real"]}]}, "curves 必须原样透传引擎"
 
 
