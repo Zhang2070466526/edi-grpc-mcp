@@ -14,7 +14,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from servers import mcp
-from servers.utils import build_artifact, build_file_link, error_response, per_tool_mutex, validate_file
+from servers.utils import (build_artifact, build_file_link, error_response, per_tool_mutex,
+                           result_subdir, validate_file)
 
 _logger = logging.getLogger("cst.plot")
 
@@ -114,7 +115,7 @@ def cst_plot_farfield(txt_path: str, cut: str = "phi=0", output_dir: str = "") -
     Args:
         txt_path: 远场 txt 绝对路径（cst_export_farfield 返回的 farfield_txts 之一）。
         cut: 切面，格式 phi=0 或 theta=0（默认 phi=0）。
-        output_dir: 图片输出目录（空则与 txt 同目录）。
+        output_dir: 图片输出目录；空则落到默认产物目录（<result_dir>/cst_plot_farfield_<时间戳>/）。
 
     Returns:
         {"success": True, "artifacts": [...], "output_paths": {"polar": ..., "rect": ...},
@@ -158,7 +159,7 @@ def cst_plot_farfield(txt_path: str, cut: str = "phi=0", output_dir: str = "") -
     sweep = [p[0] for p in pts]
     gain = [p[1] for p in pts]
 
-    out_dir = output_dir or str(Path(resolved).parent)
+    out_dir = output_dir or result_subdir("cst_plot_farfield")
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     stem = Path(resolved).stem
     out_rect = os.path.join(out_dir, stem + "_rect.png")

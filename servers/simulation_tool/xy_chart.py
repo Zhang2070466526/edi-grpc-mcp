@@ -22,7 +22,8 @@ from typing import Any
 
 from servers import mcp
 from servers.simulation_tool.config import DRAWTOOL_PATH, run_exe
-from servers.utils import build_artifact, build_file_link, error_response, per_tool_mutex
+from servers.utils import (build_artifact, build_file_link, error_response, per_tool_mutex,
+                           result_subdir)
 
 _logger = logging.getLogger("simulation_tool.xy_chart")
 
@@ -60,7 +61,7 @@ def _file_stem_error(stem: Any) -> str:
 @per_tool_mutex
 def draw_chart(
     series: list[dict],
-    image_path: str,
+    image_path: str = "",
     chart_title: str = "",
     x_axis_title: str = "",
     y_axis_title: str = "",
@@ -77,7 +78,7 @@ def draw_chart(
     Args:
         series: 数据组数组（至少一组），每项 {name, points: [[x,y],...]}；
             name 缺失/为空则不显示图例，已提供的 name 必须唯一，points 为非空有限数值数组。
-        image_path: 输出目录绝对路径（不存在时自动创建）。
+        image_path: 输出目录绝对路径；留空则落到默认产物目录（<result_dir>）。不存在时自动创建。
         chart_title: 图表标题（空串=不显示）。
         x_axis_title: X 轴标题（空串=不显示）。
         y_axis_title: Y 轴标题（空串=不显示）。
@@ -106,7 +107,7 @@ def draw_chart(
 
     # 2. image_path 非空、转绝对路径（相对路径按服务进程 cwd 解析，这里统一转绝对）
     if not isinstance(image_path, str) or not image_path.strip():
-        return error_response("INVALID_PARAMETERS", "image_path 不能为空")
+        image_path = result_subdir("draw_chart")
     out_dir = Path(image_path).expanduser().resolve()
 
     # 3. image_format 合法

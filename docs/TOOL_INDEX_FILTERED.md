@@ -43,7 +43,7 @@
 - `laspcem_solve_query` — 查询 LASPCEM 求解任务（配合 run_laspcem_solve_async 的 task_id）。
 - `laspcem_task_cancel` — 取消 LASPCEM 求解任务（求解/导出/建报告 任一阶段都能取消）。
 - `laspcem_task_list` — 列出 LASPCEM 后台任务（含 operation=solve、phase、steps、状态与耗时）。
-- `launch_aedt` — 启动 AEDT（不打开项目）。已运行时仅返回状态。
+- `launch_aedt` — 启动 AEDT（不打开项目）。已运行时跳过启动、返回状态（含 COM 就绪）。
 - `launch_laspcem` — 启动 LASPCEM 电磁仿真软件。已运行时返回状态，不重复启动。
 - `list_epp_projects` — 扫描指定文件夹中的 .epp 工程文件。
 - `list_simulation_components` — 列出已保存工程中的全部器件及参数（含 wire→public 参数名映射）。

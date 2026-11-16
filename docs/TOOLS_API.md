@@ -482,7 +482,7 @@ simulate_netlist_with_ads(netlist_path: str, ads_path: str = "", timeout_seconds
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `netlist_path` | str | 是 | — | 网表文件路径 |
-| `ads_path` | str | 否 | "" | ADS 安装路径（空则自动判断） |
+| `ads_path` | str | 否 | "" | ADS 安装路径。**留空则由 MCP 本侧探测后转发**（`EDI_ADS_PATH` → EDI `config.ini` 的 `[ads] hpeesof_dir` → glob 取版本号最高）；探测不到直接返回 `ADS_NOT_FOUND`，不会把空串丢给 EDI 服务端去回落硬编码的 `.../ADS2020` |
 | `timeout_seconds` | int | 否 | 120 | 最长等待秒数 |
 
 ---
@@ -577,7 +577,7 @@ capture_schematic(project_path: str, output_path: str, timeout_seconds: int = 60
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `project_path` | str | 是 | — | `.epp` 文件绝对路径 |
-| `output_path` | str | 是 | — | 输出图片路径 |
+| `output_path` | str | 否 | 默认产物目录 | 输出图片路径；留空落到 `<result_dir>/capture_schematic_<时间戳>.png` |
 | `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
 
 ---
@@ -595,7 +595,7 @@ export_schematic_components_to_csv(project_path: str, csv_path: str, timeout_sec
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `project_path` | str | 是 | — | `.epp` 文件绝对路径 |
-| `csv_path` | str | 是 | — | CSV 输出文件路径 |
+| `csv_path` | str | 否 | 默认产物目录 | CSV 输出文件路径；留空落到 `<result_dir>/export_schematic_components_to_csv_<时间戳>.csv` |
 | `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
 
 ---
@@ -774,7 +774,7 @@ design_chip(description: str, save_path: str, freq: float | None = None, bandwid
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `description` | str | 是 | — | 模型设计需求（非空）：电路类型（带通/低通滤波器、天线、负载…）+ 指标 |
-| `save_path` | str | 是 | — | 目标文件完整路径（如 `D:/soft-ip/PCB.aedt`） |
+| `save_path` | str | 否 | 默认产物目录 | 目标文件完整路径（如 `D:/soft-ip/PCB.aedt`）；留空落到 `<result_dir>/design_chip_<时间戳>.aedt` |
 | `freq` | float | 否 | None | 可选中心频率（>0，GHz）；未提供时服务端按该软 IP 插值范围中点补齐 |
 | `bandwidth` | float | 否 | None | 可选**相对带宽，单位 %**（5 = 5%）；未提供时同上。⚠️ 部分软 IP **必填**（不给 → `FAILED`「缺少相对带宽（bandwidth,单位:%）」）；超出有效范围（实测带通模板 **[1.2267, 6.27922]%，与 freq 无关**：20/25/30 GHz 同区间）也会 `FAILED` |
 | `timeout_seconds` | int | 否 | 120 | 最长等待秒数 |
@@ -1058,7 +1058,11 @@ launch_aedt(aedt_path: str = "", timeout_seconds: int = 30) -> dict
 | `aedt_path` | str | 否 | 自动检测 | ansysedt.exe 路径 |
 | `timeout_seconds` | int | 否 | 30 | 等待超时秒数 |
 
-返回：`{"success": true, "status": "started"/"already_running", "com_ready": true, "pid": 12345, "message": "..."}`
+返回：`{"success": true, "status": "started"/"already_running", "com_ready": true, "pid": 12345, "pids": [12345, 12346], "message": "..."}`
+
+- `started` 与 `already_running` **两个分支都会按 `timeout_seconds` 等 COM 就绪**，并都返回 `pid` / `pids`。
+- `pids` 是列表：AEDT 启动后会 re-exec 出子进程，单 `pid` 会漏掉另一个。
+- `success=true` 只代表**进程层面**完成（ansysedt.exe 在跑）；能不能用 COM 要看 `com_ready`。
 
 ### `get_hfss_project_info`
 
@@ -1159,7 +1163,7 @@ cst_export_snp(model_path: str, output_dir: str = "", port_count: int | None = N
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `model_path` | str | 是 | — | .cst 模型文件绝对路径（需已求解） |
-| `output_dir` | str | 否 | "" | 导出目录（空则模型同级目录） |
+| `output_dir` | str | 否 | 默认产物目录 | 导出目录；留空落到 `<result_dir>/cst_export_snp_<时间戳>/` |
 | `port_count` | int | 否 | None | 端口数（None 自动推断） |
 
 返回：`{"success": true, "snp_path": "C:/.../xxx.s2p"}`；失败 `{"success": false, "error_code": "CST_EXPORT_FAILED"}`。
@@ -1177,7 +1181,7 @@ cst_export_farfield(model_path: str, output_dir: str = "") -> dict
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `model_path` | str | 是 | — | .cst 模型文件绝对路径（模型需配置 farfield 监视器） |
-| `output_dir` | str | 否 | "" | 导出目录（空则模型同级目录） |
+| `output_dir` | str | 否 | 默认产物目录 | 导出目录；留空落到 `<result_dir>/cst_export_farfield_<时间戳>/` |
 
 返回：`{"success": true, "task_id": "cst-a1b2...", "status": "QUEUED"}`；队列满 `{"success": false, "error_code": "CST_QUEUE_FULL"}`。
 
@@ -1400,7 +1404,7 @@ export_laspcem_snp(sem_path: str, output_path: str = "", setup_name: str = "", s
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `sem_path` | str | 是 | — | .sem 文件绝对路径 |
-| `output_path` | str | 否 | `<工程名>.sNp` | 输出路径；`N` 按端口数落地（2 端口 → `.s2p`） |
+| `output_path` | str | 否 | 默认产物目录 | 输出路径；留空落到 `<result_dir>/export_laspcem_snp_<时间戳>.sNp`；`N` 按端口数落地（2 端口 → `.s2p`） |
 | `setup_name` | str | 否 | 自动探测 | setup 名（显示名） |
 | `solution_name` | str | 否 | `算法_<setup基名>` | 解名，如 `FEM_Setup1`（不是 `.sem` 里的内部 id `FEM_1`） |
 | `sweeping_parameters` | dict | 否 | 自动抽变量 | `{变量: ['nominal', ...]}` |
@@ -1788,9 +1792,9 @@ from servers.turbocharts.convert_raw import list_result_curves
 list_result_curves(result_path: str) -> dict
 ```
 
-解析 ADS RAW 仿真结果文件，返回可用曲线名和依赖轴。画图前调用避免猜测曲线名。
+调用引擎原生 `--curve-info` 列出 RAW 中可用的「依赖 → 曲线名 + 可用单位」。引擎是唯一事实源，不再手写解析 RAW 头部。
 
-`suggested_curves` 只列该 plot 类型下**实测有效**的写法（HB 数据不给 `phase_`/`imag_`，因为引擎会静默回退成 dBm 图），被排除的原因见 `curve_notes`。
+返回的 `curves` 结构为 `{依赖名: [{曲线名: [可用单位...]}, ...]}`，单位列表由引擎直接给出（每个曲线名映射到它可画的单位前缀）。画图时拼成 `<单位>_<曲线名>`（如 `db_s[1,1]`），单位从列表里选，依赖名原样传 `--dependcy`。
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
@@ -1798,13 +1802,24 @@ list_result_curves(result_path: str) -> dict
 
 返回：
 ```python
-{"success": True, "format": "MDS", "datasets": [
-    {"plot_name": "SP SP1[1]", "plot_type": "SP", "dependencies": ["freq"],
-     "variables": [{"name": "S[2,1]", "type": "complex"}],
-     "suggested_curves": ["dBm_S[2,1]", "real_S[2,1]", "DB_S[2,1]", ...],
-     "curve_notes": ["...被排除的写法及原因..."]}
-], "curve_notes": ["..."]}
+{"success": True, "result_path": "C:/path/history/result.raw", "chart_type": "SP",
+ "curves": {"freq": [{"S[1,1]": ["db", "dBm", "phase", "real", "imag", "mag", "VSWR", ...]}, ...]}}
 ```
+
+`chart_type` 取自 RAW 首个 plot 的 `Plotname`（识别不出时为空串，可作 `turbocharts_convert(chart_type=...)` 的缺省值）。
+
+### `unit_notes`：引擎声明 ≠ 实际绘图能力
+
+返回里还带一个 `unit_notes` 数组，写明**实测校准**结论（`curves` 本身仍是引擎原样，不做过滤）：
+
+| chart | 实测（2026-11-16） |
+|---|---|
+| `HB` | 引擎 `--curve-info` 会列出 `db/dBm/phase/real/imag/mag`，但绘图时**只有 `dBm_` 与 `real_` 出真图**；`db`/`phase`/`imag`/`mag` 以及 `VSWR`/`APS`/`MAS`/`MV`/`PSS` 全部被静默回退成 dBm 图（CSV 表头仍为 `dBm(x)`、数据与 dBm 逐行相同） |
+| `SP` | `db`/`dBm`/`phase`/`real`/`imag`/`mag`/`VSWR` 各出不同图；`APS`/`MAS`/`MV`/`PSS` 需要 RAW 含对应数控器件数据，否则图能出但 CSV 只有表头 |
+
+⚠️ 这是**引擎实现与它自己的 `--curve-info` / 说明文档不一致**（文档第 84 行声明「通用单位：db,dBm,phase,real,imag,mag」）。MCP 侧不改写引擎的答案，只把实测差异作为提示带上；**真正的判据是 `turbocharts_convert` 的产物表头自检**（见下文 `warnings`）。
+
+引擎不可用 / 超时 / 输出非 JSON 时返回 `error_code: "CURVE_INFO_FAILED"`。
 
 ---
 
@@ -1829,7 +1844,7 @@ ADS RAW 结果文件转换为曲线图 + CSV。
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `raw_path` | str | 是 | RAW 文件路径 |
-| `output_path` | str | 是 | 输出图片路径（PNG/JPG/BMP/SVG），父目录自动创建 |
+| `output_path` | str | 否 | 默认产物目录 | 输出图片路径（PNG/JPG/BMP/SVG）；留空落到 `<result_dir>/turbocharts_convert_<时间戳>.png`，父目录自动创建 |
 | `chart_type` | str | 是 | `"SP"` / `"HB"` / `"XDB"`，**须与 RAW 的 Plotname 一致** |
 | `csv_path` | str | 否 | 同步导出 CSV 路径（多曲线拆分时自动加曲线后缀） |
 | `linename` | str | 否 | 曲线名 `<前缀>_<变量名>`，多条用 `&` 分隔 |
@@ -1897,7 +1912,7 @@ compare_simulation_results(
 |---|---|---|---|
 | `result_paths` | list | 是 | RAW 文件路径（2-8 个） |
 | `curve` | str | 是 | 曲线名 |
-| `output_path` | str | 是 | 输出图片路径 |
+| `output_path` | str | 否 | 默认产物目录 | 输出图片路径；留空落到 `<result_dir>/compare_simulation_results_<时间戳>.png` |
 | `labels` | list | 否 | 每条曲线标签 |
 | `dependency` | str | 否 | 依赖轴（默认 "freq"） |
 | `alignment` | str | 否 | 对齐方式："intersection" 或 "interpolation" |
@@ -2213,7 +2228,7 @@ export_simulation_report(report: dict, output_dir: str, schematic: str = "", tim
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `report` | dict | 是 | — | 报告数据对象，非空 dict。常用字段见下 |
-| `output_dir` | str | 是 | — | 输出目录（自动创建）；三个目标文件任一已存在时 exe 拒绝 |
+| `output_dir` | str | 否 | 默认产物目录 | 输出目录；留空落到 `<result_dir>/export_simulation_report_<时间戳>/`（自动创建）；三个目标文件任一已存在时 exe 拒绝 |
 | `schematic` | str | 否 | "" | 可选原理图图片路径，覆盖 report 的 schematic_path |
 | `timeout_seconds` | int | 否 | 300 | 最长等待秒数 |
 

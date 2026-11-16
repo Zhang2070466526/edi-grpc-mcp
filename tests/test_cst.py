@@ -410,15 +410,16 @@ class TestJobDispatch:
         assert r["success"] is True
         assert r["snp_path"] == "C:/o/m.s2p"
 
-    def test_export_farfield_defaults_output_dir_to_model_dir(self, tmp_path):
-        """output_dir 留空时按模型所在目录投递（不依赖后台线程时序：拦 submit）。"""
+    def test_export_farfield_defaults_output_dir_to_result_dir(self, tmp_path):
+        """output_dir 留空时落到默认产物目录（不再模型同级）。"""
         from servers.cst import result_export
         model = tmp_path / "m.cst"
         model.write_text("x")
         with patch.object(result_export.cst_runner, "submit", return_value="t1") as submit:
             r = result_export.cst_export_farfield(str(model))
         assert r["success"] is True
-        assert submit.call_args[0][2] == str(tmp_path)
+        out = submit.call_args[0][2]
+        assert "cst_export_farfield_" in out and out != str(tmp_path)
 
     def test_export_farfield_queue_full(self, tmp_path):
         from servers.cst import result_export

@@ -32,6 +32,7 @@ from servers.utils import (
     error_response,
     per_tool_mutex,
     require_file,
+    result_subdir,
     tcp_port_open,
 )
 
@@ -406,7 +407,7 @@ def _check_netlist_consistency(project: dict, netlist_path: Path) -> dict | None
 @per_tool_mutex
 def run_mixer_simulation(
     project: dict,
-    out_dir: str,
+    out_dir: str = "",
     workers: int = 10,
     turbocharts_exe: str = "",
     timeout_seconds: int = 1800,
@@ -440,7 +441,7 @@ def run_mixer_simulation(
     Args:
         project: 参数表 dict，必含 name（工程名）、epp（.epp 绝对路径）、links（链路数组，≥1）。
             详见 Mixer_Simulator使用说明.md 的参数表章节。
-        out_dir: 结果目录（建议每次用新目录）；response.json / indicator_results / runs / figs 都落这里。
+        out_dir: 结果目录；留空则落到默认产物目录下的子目录（<result_dir>/run_mixer_simulation_<时间戳>/）。response.json / indicator_results / runs / figs 都落这里。
         workers: 并发进程数（正整数），默认 10；EDI 不稳定时降到 5。
         turbocharts_exe: turbocharts_app.exe 路径，默认空 = 用 MCP 自动探测的 turbocharts（从 exe 往上找 EDI 根）。
         timeout_seconds: 最长等待秒数，默认 1800（上限 3600）。
@@ -489,7 +490,7 @@ def run_mixer_simulation(
 
     # 2. out_dir / workers 校验
     if not isinstance(out_dir, str) or not out_dir.strip():
-        return error_response("INVALID_PARAMETERS", "out_dir 必须是非空的结果目录路径")
+        out_dir = result_subdir("run_mixer_simulation")
     if isinstance(workers, bool) or not isinstance(workers, int) or workers < 1:
         return error_response("INVALID_PARAMETERS", "workers 必须是正整数")
 

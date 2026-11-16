@@ -72,13 +72,13 @@
 - `laspcem_solve_query` — 查询 LASPCEM 求解任务（配合 run_laspcem_solve_async 的 task_id）。
 - `laspcem_task_cancel` — 取消 LASPCEM 求解任务（求解/导出/建报告 任一阶段都能取消）。
 - `laspcem_task_list` — 列出 LASPCEM 后台任务（含 operation=solve、phase、steps、状态与耗时）。
-- `launch_aedt` — 启动 AEDT（不打开项目）。已运行时仅返回状态。
+- `launch_aedt` — 启动 AEDT（不打开项目）。已运行时跳过启动、返回状态（含 COM 就绪）。
 - `launch_edi` — 启动 EDI 客户端并等待 gRPC 就绪。已运行时跳过启动。
 - `launch_laspcem` — 启动 LASPCEM 电磁仿真软件。已运行时返回状态，不重复启动。
 - `list_eda_tasks` — 列出当前所有异步仿真任务，可选按状态过滤。不阻塞。
 - `list_epp_projects` — 扫描指定文件夹中的 .epp 工程文件。
 - `list_ideal_components` — 列出内置器件类型及其简要说明。
-- `list_result_curves` — 解析 ADS RAW 仿真结果文件，返回可用曲线名和依赖轴。
+- `list_result_curves` — 调用引擎原生 `--curve-info` 列出 RAW 中可用的「依赖 → 曲线名 + 可用单位」。
 - `list_schematic_components` — 通过 gRPC 查询原理图全部器件（含完整参数），比本地文件读取更实时。
 - `list_simulation_components` — 列出已保存工程中的全部器件及参数（含 wire→public 参数名映射）。
 - `open_document` — 打开本地文档：link 模式生成 10 分钟 HTTP 链接，local 模式用系统默认程序打开。
@@ -97,7 +97,7 @@
 - `show_image` — 读取本地图片，返回标准 MCP ImageContent 和本地路径。
 - `simulate_anti_burnout` — 对工程原理图中具备抗烧毁数据的器件执行输入功率仿真和抗烧毁风险评估。
 - `simulate_netlist` — 仿真指定 netlist.log 文件，不需打开 .epp 工程。返回 RAW 结果+日志。
-- `simulate_netlist_with_ads` — 调用 ADS 仿真控制器。
+- `simulate_netlist_with_ads` — 调用 ADS 仿真控制器（经 EDI gRPC 转发）。
 - `start_hfss_analysis_async` — 异步启动 HFSS Setup 仿真，立即返回 task_id。
 - `start_simulation_async` — 启动异步仿真，立即返回 task_id 供 get_simulation_async_status 查进度；仿真日志在结果查询的 ads_output 字段。
 - `switch_workspace` — ⚠️ 设置下次启动时的工作区（不是立即切换，当前保持不变）。

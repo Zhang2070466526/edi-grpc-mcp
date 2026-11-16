@@ -11,14 +11,14 @@ from typing import Any
 
 from proto import ecserver_pb2
 from servers.eda.grpc_client import call_grpc
-from servers.utils import require_nonempty, error_response
+from servers.utils import default_result_path, error_response, require_nonempty
 from servers import mcp
 
 
 @mcp.tool()
 def design_chip(
         description: str,
-        save_path: str,
+        save_path: str = "",
         freq: float | None = None,
         bandwidth: float | None = None,
         timeout_seconds: int = 600,
@@ -33,7 +33,7 @@ def design_chip(
 
     Args:
         description: 模型设计需求（非空字符串），写清电路类型（带通/低通滤波器、天线、负载…）与指标（中心频率、相对带宽、截止频率）。
-        save_path: 目标文件完整路径（如 D:/soft-ip/PCB.aedt）。
+        save_path: 目标文件完整路径（如 D:/soft-ip/PCB.aedt）；留空则落到默认产物目录（<result_dir>/design_chip_<时间戳>.aedt）。
         freq: 可选中心频率（大于 0 的有限数值，按 GHz 理解）；未提供时服务端按该软 IP 插值范围中点补齐。
         bandwidth: 可选相对带宽，单位 %（如 5 = 5%）；未提供时同上。注意：部分软 IP 该参数必填（不给会 FAILED「缺少相对带宽」）；超出有效范围也会 FAILED。
         timeout_seconds: 最长等待秒数，默认 600。
@@ -47,6 +47,8 @@ def design_chip(
     description, err = require_nonempty(description, label="description")
     if err:
         return err
+    if not (save_path or "").strip():
+        save_path = default_result_path("design_chip", ".aedt")
     save_path, err = require_nonempty(save_path, label="save_path")
     if err:
         return err

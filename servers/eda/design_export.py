@@ -24,7 +24,8 @@ from typing import Any
 
 from proto import ecserver_pb2
 from servers.eda.grpc_client import call_project_grpc
-from servers.utils import build_artifact, build_file_link, error_response, require_nonempty
+from servers.utils import (build_artifact, build_file_link, default_result_path,
+                           error_response, require_nonempty)
 from servers import mcp
 
 
@@ -48,7 +49,7 @@ def export_project_netlist(
 @mcp.tool()
 def capture_schematic(
     project_path: str,
-    output_path: str,
+    output_path: str = "",
     timeout_seconds: int = 60,
 ) -> dict[str, Any]:
     """截取工程原理图为图片。
@@ -62,9 +63,11 @@ def capture_schematic(
 
     Args:
         project_path: EDI 服务所在机器上的 .epp 工程文件绝对路径。
-        output_path: 输出图片路径，支持 PNG/JPG 等。
+        output_path: 输出图片路径，支持 PNG/JPG 等；留空则落到默认产物目录（<result_dir>/capture_schematic_<时间戳>.png）。
         timeout_seconds: 最长等待时间，默认 60 秒。
     """
+    if not (output_path or "").strip():
+        output_path = default_result_path("capture_schematic", ".png")
     # Basic path validation: resolve and check output extension
     img_resolved = str(Path(output_path).expanduser().resolve())
     img_ext = Path(img_resolved).suffix.lower()
@@ -85,7 +88,7 @@ def capture_schematic(
 @mcp.tool()
 def export_schematic_components_to_csv(
     project_path: str,
-    csv_path: str,
+    csv_path: str = "",
     timeout_seconds: int = 60,
 ) -> dict[str, Any]:
     """将工程原理图中的有效器件信息导出为 CSV。
@@ -99,7 +102,7 @@ def export_schematic_components_to_csv(
 
     Args:
         project_path: .epp 工程文件绝对路径。
-        csv_path: CSV 输出文件路径（非空，父目录必须已存在）。
+        csv_path: CSV 输出文件路径；留空则落到默认产物目录（<result_dir>/export_schematic_components_to_csv_<时间戳>.csv）。父目录必须已存在。
         timeout_seconds: 最长等待秒数，默认 60。
 
     Returns:
@@ -108,6 +111,8 @@ def export_schematic_components_to_csv(
         注意：details 里下游回显的请求键 save_path（与 csv_path 同文件但非权威）已被本工具
         移除，避免与最终路径混淆。
     """
+    if not (csv_path or "").strip():
+        csv_path = default_result_path("export_schematic_components_to_csv", ".csv")
     csv_path, err = require_nonempty(csv_path, label="csv_path")
     if err:
         return err

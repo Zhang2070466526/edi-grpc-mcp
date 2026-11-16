@@ -23,8 +23,14 @@ def test_export_schematic_components_payload(monkeypatch):
     assert calls[-1][2] == {"save_path": "C:/out.csv"}
 
 
-def test_export_schematic_components_rejects_empty_csv_path(monkeypatch):
+def test_export_schematic_components_defaults_empty_csv_path(monkeypatch):
     from servers.eda import design_export as de
-    monkeypatch.setattr(de, "call_project_grpc", lambda *a, **k: {"success": True})
+    captured = {}
+
+    def fake_grpc(*a, **k):
+        captured["save_path"] = k.get("save_path")
+        return {"success": True}
+    monkeypatch.setattr(de, "call_project_grpc", fake_grpc)
     r = de.export_schematic_components_to_csv("C:/test.epp", "   ")
-    assert r["success"] is False and r["error_code"] == "INVALID_PARAMETERS"
+    assert r["success"] is True
+    assert "export_schematic_components_to_csv_" in captured["save_path"]

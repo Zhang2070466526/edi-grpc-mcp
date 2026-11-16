@@ -10,11 +10,36 @@ from servers.simulation_tool.xy_chart import draw_chart
 
 def test_draw_chart_invalid_params():
     assert draw_chart([], "D:/out")["success"] is False
-    assert draw_chart([{"points": [[0.0, 1.0]]}], "")["success"] is False
     assert draw_chart([{"points": [[0.0, 1.0]]}], "D:/out",
                       image_format="bmp")["success"] is False
     assert draw_chart([{"points": [[0.0, 1.0]]}], "D:/out",
                       file_stem="a/b")["success"] is False
+
+
+def test_draw_chart_empty_image_path_uses_default_dir(monkeypatch, tmp_path):
+    """image_path 留空 ⇒ 落到默认产物目录（原断言「空即失败」已过时）。
+
+    2026-11-16 起：不传输出路径统一落到 `result_dir()`（默认 `~/mcp_result`），
+    与「工具产物统一放一个目录」的设计一致，不再算参数错误。
+    """
+    defaults = tmp_path / "mcp_result"
+    captured: dict = {}
+
+    def _run(exe_path, args, timeout_seconds):
+        captured["config"] = json.loads(Path(args[0]).read_text(encoding="utf-8"))
+        img = Path(captured["config"]["image_path"]) / "chart.png"
+        img.parent.mkdir(parents=True, exist_ok=True)
+        img.write_bytes(b"\x89PNG")
+        return {"returncode": 0, "stdout": "", "stderr": "",
+                "json": {"status": "success", "image_path": str(img), "error_code": None},
+                "json_error": ""}
+
+    monkeypatch.setattr("servers.simulation_tool.xy_chart.run_exe", _run)
+    monkeypatch.setattr("servers.utils.result_dir", lambda: str(defaults))
+    r = draw_chart([{"points": [[0.0, 1.0]]}], "")
+    assert r["success"] is True, r.get("error_code") or r.get("message")
+    used = Path(captured["config"]["image_path"])
+    assert used.is_relative_to(defaults), f"应落在默认目录 {defaults} 下，实际 {used}"
 
 
 def test_draw_chart_rejects_bad_windows_filenames():

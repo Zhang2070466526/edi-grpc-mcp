@@ -75,6 +75,7 @@ pip install edi-grpc-mcp
 EDA_GRPC_SERVER=127.0.0.1:50055
 EDI_PATH=                    # 留空自动检测
 TURBOCHARTS_PATH=            # 留空自动检测
+MCP_RESULT_DIR=              # 默认产物目录（工具生成截图/图表/报告/CSV 时没传输出路径就落到这；留空 = 系统临时目录下 mcp_result/，即 %TEMP%/mcp_result）
 MCP_TRANSPORT=streamable-http
 MCP_PORT=50026
 MCP_HIDE_INTERNAL_TOOLS=0    # 0 = 全量暴露（默认）；1 = 下架内部 gRPC/仿真工具；2 = 只保留内部工具 + 无依赖计算工具；3 = 下架软 IP + LASPCEM

@@ -18,7 +18,8 @@ from typing import Any
 
 from servers import mcp
 from servers.simulation_tool.config import REPORT_EXPORTER_PATH, fmt_errors, run_exe
-from servers.utils import build_artifact, build_file_link, error_response, per_tool_mutex
+from servers.utils import (build_artifact, build_file_link, error_response, per_tool_mutex,
+                           result_subdir)
 
 _logger = logging.getLogger("simulation_tool.report_export")
 
@@ -56,7 +57,7 @@ def _absolutize_images(report: dict) -> dict:
 @per_tool_mutex
 def export_simulation_report(
     report: dict,
-    output_dir: str,
+    output_dir: str = "",
     schematic: str = "",
     timeout_seconds: int = 300,
 ) -> dict[str, Any]:
@@ -76,7 +77,7 @@ def export_simulation_report(
             ⚠️ 图片路径请传绝对路径：`schematic_path` / `charts[].image_path` 若写成相对路径，
             会被本工具按服务进程当前目录转成绝对（exe 只按「JSON 文件所在目录」解析，而本工具
             把 JSON 写在临时目录，相对路径必然找不到图）。
-        output_dir: 输出目录（自动创建，产出 document.pdf / document.docx / report.json；三个文件任一已存在时 exe 会拒绝）。
+        output_dir: 输出目录；留空则落到默认产物目录下的子目录（<result_dir>/export_simulation_report_<时间戳>/）。自动创建，产出 document.pdf / document.docx / report.json；三个文件任一已存在时 exe 会拒绝。
         schematic: 可选，原理图图片路径（覆盖 report 里的 schematic_path）。
         timeout_seconds: 最长等待秒数，默认 300。
 
@@ -91,7 +92,7 @@ def export_simulation_report(
 
     # 2. output_dir 非空，解析为绝对路径（exe 相对路径按进程 cwd 算，这里统一转绝对）
     if not isinstance(output_dir, str) or not output_dir.strip():
-        return error_response("INVALID_OUTPUT_DIR", "output_dir 不能为空")
+        output_dir = result_subdir("export_simulation_report")
     out_dir = Path(output_dir).expanduser().resolve()
 
     # 2.5 输出目录占用预检：exe 也会拒绝，但这里能给出语义化错误码 + 冲突文件，省一次 exe 白跑

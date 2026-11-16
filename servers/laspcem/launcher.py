@@ -43,7 +43,7 @@ from servers.laspcem.setup_reader import (
     read_setup_report,
     split_setup_name,
 )
-from servers.utils import error_response, require_nonempty, validate_file
+from servers.utils import default_result_path, error_response, require_nonempty, validate_file
 
 
 def _resolve_exe(laspcem_path: str) -> tuple[str | None, dict | None]:
@@ -1204,7 +1204,7 @@ def export_laspcem_snp(
 
     Args:
         sem_path: .sem 工程文件绝对路径。
-        output_path: 输出路径（可写 .sNp），默认 .sem 同目录 <工程名>.sNp；实际文件名由端口数决定。
+        output_path: 输出路径（可写 .sNp）；空则落到默认产物目录（<result_dir>/export_laspcem_snp_<时间戳>.sNp）。实际文件名由端口数决定。
         setup_name: setup 名；默认从 .sem 探测（求解过的是 Setup1(FEM) 这种，带算法后缀）。
         solution_name: 解名称；默认 = 算法_<setup 基名>（如 FEM_Setup1）。
         sweeping_parameters: 扫参变量 {变量名: ['nominal',...]}，默认按工程变量取标称值。
@@ -1243,7 +1243,7 @@ def export_laspcem_snp(
     if busy:
         return _registry_busy_response(busy, "导出")
     locks_removed = [p for p in [_clear_stale_lock(resolved)] if p]
-    out = output_path.strip() or str(Path(resolved).with_suffix(".sNp"))
+    out = output_path.strip() or default_result_path("export_laspcem_snp", ".sNp")
     sn, candidates = _resolve_solution_name(resolved, setup, solution_name)
     # ⚠️ 判「是否已求解」必须以 is_solved()（SolutionId 记录）为准，不能用解 id 候选是否非空：
     # 未求解的工程里也会残留 FEM_1/FEM_2 这类旧字符串（实测 2026-11-12：is_solved=False 但

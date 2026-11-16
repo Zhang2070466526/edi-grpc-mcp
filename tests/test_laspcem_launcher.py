@@ -317,7 +317,8 @@ def test_export_uses_port_suffixed_artifact(tmp_path, monkeypatch):
     r = L.export_laspcem_snp(str(sem))
     assert r["success"] is True
     assert r["output_path"].endswith("p.s2p")
-    assert r["requested_output_path"].endswith("p.sNp")
+    assert r["requested_output_path"].endswith(".sNp")
+    assert "export_laspcem_snp_" in r["requested_output_path"]
     assert r["setup_name"] == "Setup1(FEM)"
     assert r["solution_name"] == "FEM_Setup1"
     assert r["solved_first"] is False

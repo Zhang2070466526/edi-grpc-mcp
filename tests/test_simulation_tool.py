@@ -48,9 +48,18 @@ def test_report_rejects_non_dict():
     assert r["error_code"] == "INVALID_REPORT_JSON"
 
 
-def test_report_rejects_empty_output_dir():
+def test_report_defaults_empty_output_dir(monkeypatch):
+    captured = {}
+
+    def fake_run_exe(exe_path, args, timeout_seconds):
+        captured["out"] = args[args.index("--output") + 1]
+        return {"returncode": 0, "stdout": "{}", "stderr": "", "json_error": "",
+                "json": {"success": True, "report_dir": "", "pdf_path": "", "docx_path": "",
+                         "report_data_path": "", "schematic_path": "", "chart_count": 1, "errors": []}}
+    monkeypatch.setattr(report_export, "run_exe", fake_run_exe)
     r = export_simulation_report({"model_name": "x"}, "")
-    assert r["error_code"] == "INVALID_OUTPUT_DIR"
+    assert r["success"] is True
+    assert "export_simulation_report_" in captured["out"]
 
 
 def test_report_rejects_missing_schematic(tmp_path):

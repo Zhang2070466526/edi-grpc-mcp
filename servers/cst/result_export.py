@@ -23,6 +23,7 @@ from servers.utils import (
     error_response,
     queue_full_response,
     require_file,
+    result_subdir,
     submitted_response,
 )
 
@@ -74,7 +75,7 @@ def cst_export_snp(
 
     Args:
         model_path: .cst 模型文件绝对路径（需已求解，存在 S 参数结果）。
-        output_dir: 导出目录（空则默认导出到模型同级目录）。
+        output_dir: 导出目录；空则落到默认产物目录（<result_dir>/cst_export_snp_<时间戳>/）。
         port_count: 端口数（None 则自动从结果推断）。
 
     Returns:
@@ -83,6 +84,8 @@ def cst_export_snp(
     resolved, err = require_file(model_path, (".cst",))
     if err:
         return err
+    if not output_dir:
+        output_dir = result_subdir("cst_export_snp")
     # 走 cst_runner 串行执行：与求解/远场导出的会话互斥，避免无会话读结果时
     # 与正在求解的会话并发（读到半写结果或 CST 单实例冲突）
     try:
@@ -113,7 +116,7 @@ def cst_export_farfield(model_path: str, output_dir: str = "") -> dict[str, Any]
 
     Args:
         model_path: .cst 模型文件绝对路径（模型需配置 farfield 监视器）。
-        output_dir: 导出目录（空则默认模型同级目录）。
+        output_dir: 导出目录；空则落到默认产物目录（<result_dir>/cst_export_farfield_<时间戳>/）。
 
     Returns:
         {"success": True, "task_id": "cst-a1b2...", "status": "QUEUED"}
@@ -122,7 +125,7 @@ def cst_export_farfield(model_path: str, output_dir: str = "") -> dict[str, Any]
     if err:
         return err
     if not output_dir:
-        output_dir = os.path.dirname(os.path.abspath(resolved))
+        output_dir = result_subdir("cst_export_farfield")
     task_id = cst_runner.submit(
         _result_exporter.export_farfield, resolved, output_dir,
         metadata={"op": "export_farfield", "model_path": resolved},
@@ -172,7 +175,7 @@ def cst_export_snp_async(
 
     Args:
         model_path: .cst 模型文件绝对路径（需已求解，存在 S 参数结果）。
-        output_dir: 导出目录（空则默认导出到模型同级目录）。
+        output_dir: 导出目录；空则落到默认产物目录（<result_dir>/cst_export_snp_<时间戳>/）。
         port_count: 端口数（None 则自动从结果推断）。
 
     Returns:
@@ -181,6 +184,8 @@ def cst_export_snp_async(
     resolved, err = require_file(model_path, (".cst",))
     if err:
         return err
+    if not output_dir:
+        output_dir = result_subdir("cst_export_snp")
     task_id = cst_runner.submit(
         _result_exporter.export_snp, resolved, output_dir, port_count,
         metadata={"op": "export_snp", "model_path": resolved},

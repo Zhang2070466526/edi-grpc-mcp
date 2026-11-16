@@ -199,5 +199,61 @@ class TestTokenStore:
         assert store.lookup(t2)["expires_at"] - now == pytest.approx(600, abs=2)
 
 
+class TestResultPath:
+    """默认产物目录：`<result_dir>/<工具名>_<时间戳>[_序号]<ext>`。"""
+
+    def test_default_result_path_format(self):
+        from servers.utils import default_result_path
+        p = default_result_path("capture_schematic", ".png")
+        assert p.endswith(".png")
+        assert "capture_schematic_" in p
+
+    def test_extension_without_dot_is_normalized(self):
+        """少写点号要自动补，别产出 `x_20261116_120000png`。"""
+        from servers.utils import default_result_path
+        p = default_result_path("draw_chart", "png")
+        assert p.endswith(".png"), p
+        assert "png.png" not in p
+
+    def test_same_millisecond_does_not_collide(self, monkeypatch):
+        """同毫秒连续调用必须拿到不同路径（时间戳只到秒时会同名覆盖）。
+
+        2026-11-16：`result_dir` 下循环出图时同秒撞名，产物互相覆盖难排查。
+        """
+        import servers.utils as u
+        monkeypatch.setattr(u.time, "time", lambda: 1794825050.123)
+        a = u.result_subdir("draw_chart")
+        b = u.result_subdir("draw_chart")
+        assert a != b, f"同毫秒两次应不同，实际都是 {a}"
+        assert Path(a).is_dir() and Path(b).is_dir()
+        Path(a).rmdir()
+        Path(b).rmdir()
+
+    def test_same_millisecond_file_path_not_reused(self, monkeypatch, tmp_path):
+        """文件路径：同毫秒且前一个文件已存在时要换名，不能返回已存在路径。"""
+        import servers.utils as u
+        monkeypatch.setattr(u, "result_dir", lambda: str(tmp_path))
+        monkeypatch.setattr(u.time, "time", lambda: 1794825050.456)
+        first = u.default_result_path("x", ".png")
+        Path(first).write_text("exists")
+        second = u.default_result_path("x", ".png")
+        assert second != first, "已有文件时不能返回同一路径（会被覆盖）"
+        assert not Path(second).exists()
+
+    def test_result_dir_is_absolute(self, monkeypatch, tmp_path):
+        """MCP_RESULT_DIR 配成相对路径时也要解析成绝对路径。"""
+        import servers.utils as u
+        from servers import settings as st
+
+        class _S:
+            mcp_result_dir = "rel_out"
+
+        monkeypatch.setattr(st, "get_settings", lambda: _S())
+        monkeypatch.chdir(tmp_path)
+        d = u.result_dir()
+        assert Path(d).is_absolute(), d
+        assert Path(d) == (tmp_path / "rel_out").resolve()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-p", "no:cacheprovider"])
