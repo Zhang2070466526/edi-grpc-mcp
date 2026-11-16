@@ -337,7 +337,7 @@ def test_launch_aedt_does_not_hold_lock_while_waiting_for_com(tmp_path, monkeypa
 
 def test_close_hfss_project_com_success_no_kill(monkeypatch):
     from servers.ansys import project_manage as pm
-    monkeypatch.setattr(pm, "_resolve_close_targets", lambda: [12345])
+    monkeypatch.setattr(pm, "_resolve_close_targets", lambda: ([12345], "managed"))
     monkeypatch.setattr(pm, "aedt_is_running", lambda: True)
     monkeypatch.setattr(pm, "_com_close_project",
                         lambda *a, **k: {"success": True, "method": "com"})
@@ -350,13 +350,13 @@ def test_close_hfss_project_com_success_no_kill(monkeypatch):
 
 def test_close_hfss_project_com_failure_falls_back_to_kill(monkeypatch):
     from servers.ansys import project_manage as pm
-    monkeypatch.setattr(pm, "_resolve_close_targets", lambda: [12345])
+    monkeypatch.setattr(pm, "_resolve_close_targets", lambda: ([12345], "managed"))
     monkeypatch.setattr(pm, "aedt_is_running", lambda: True)
     monkeypatch.setattr(pm, "_com_close_project", lambda *a, **k: None)  # COM 附着失败
     calls = {}
 
-    def fake_kill(pids, lock_path, project_name, hard):
-        calls["pids"], calls["hard"] = pids, hard
+    def fake_kill(pids, lock_path, project_name, hard, scope="managed"):
+        calls["pids"], calls["hard"], calls["scope"] = pids, hard, scope
         return {"success": True, "method": "taskkill"}
 
     monkeypatch.setattr(pm, "_kill_aedt_processes", fake_kill)
@@ -364,20 +364,22 @@ def test_close_hfss_project_com_failure_falls_back_to_kill(monkeypatch):
     assert r["method"] == "taskkill"
     assert calls["pids"] == [12345]
     assert calls["hard"] is False  # 非 force：先 taskkill（WM_CLOSE），失败才 /F
+    assert calls["scope"] == "managed"  # 兜底也要把范围透出去
 
 
 def test_close_hfss_project_force_direct_hard_kill(monkeypatch):
     from servers.ansys import project_manage as pm
-    monkeypatch.setattr(pm, "_resolve_close_targets", lambda: [12345])
+    monkeypatch.setattr(pm, "_resolve_close_targets", lambda: ([12345], "managed"))
     calls = {}
 
-    def fake_kill(pids, lock_path, project_name, hard):
-        calls["hard"] = hard
+    def fake_kill(pids, lock_path, project_name, hard, scope="managed"):
+        calls["hard"], calls["scope"] = hard, scope
         return {"success": True, "method": "taskkill"}
 
     monkeypatch.setattr(pm, "_kill_aedt_processes", fake_kill)
     pm.close_hfss_project(force=True)
     assert calls["hard"] is True  # force：直接 /F 硬杀
+    assert calls["scope"] == "managed"
 
 
 def test_com_close_project_returns_error_when_closeproject_fails(monkeypatch):
@@ -499,12 +501,14 @@ def test_resolve_close_targets_groups_by_create_time(monkeypatch):
     launcher = _Proc(31348, t0)
     embedding = _Proc(32576, t0 + 0.01)     # 同一批（分裂出的 -Embedding GUI）
     older = _Proc(20000, t0 - 3600)         # 一小时前手动开的，不该碰
+    nearby = _Proc(21000, t0 - 10)          # 10 s 前手动开的：超出 5 s 窗口，不该碰
 
-    table = {31348: launcher, 32576: embedding, 20000: older}
+    table = {31348: launcher, 32576: embedding, 20000: older, 21000: nearby}
     iterable = [
         _Info(31348, "ansysedt.exe", t0),
         _Info(32576, "ansysedt.exe", t0 + 0.01),
         _Info(20000, "ansysedt.exe", t0 - 3600),
+        _Info(21000, "ansysedt.exe", t0 - 10),
         _Info(999, "explorer.exe", t0),
     ]
     monkeypatch.setattr(P, "_LAST_PID", 31348)
@@ -512,9 +516,72 @@ def test_resolve_close_targets_groups_by_create_time(monkeypatch):
     monkeypatch.setattr(P.psutil, "process_iter", lambda attrs=None: iterable)
     monkeypatch.setattr(P, "get_aedt_pids", lambda: [31348, 32576, 20000])
 
-    targets = P._resolve_close_targets()
+    targets, scope = P._resolve_close_targets()
     assert set(targets) == {31348, 32576}, f"同批两个都要收，实际 {targets}"
     assert 20000 not in targets, "不该误伤更早启动的实例"
+    assert 21000 not in targets, "窗口已收到 5 s，10 s 前手动开的不能被算进同一批"
+    assert scope == "managed", "MCP 自己起的批次应标 managed"
+
+
+def test_resolve_close_targets_scope_all_without_managed_pid(monkeypatch):
+    """没有 `_LAST_PID` 时退化为「机器上所有 AEDT」，必须如实标 `scope="all"`。
+
+    这条是给调用方的口径：force 会连用户手动开的实例一起终止，返回体不能让人以为
+    只关了自己起的那个（2026-11-16 复核 AEDT-1）。
+    """
+    from servers.ansys import project_manage as P
+
+    monkeypatch.setattr(P, "_LAST_PID", None)
+    monkeypatch.setattr(P, "get_aedt_pids", lambda: [111, 222])
+
+    targets, scope = P._resolve_close_targets()
+    assert targets == [111, 222]
+    assert scope == "all"
+
+
+def test_resolve_close_targets_catches_slow_embedding(monkeypatch):
+    """慢启动场景：`-Embedding` 晚 20 s 才出现也必须收（AEDT-4）。
+
+    本机实测启动器与 `-Embedding` 只差 0.01 s，但慢机器 / 网络许可下可能几十秒 ——
+    纯时间窗口会漏杀、把孤儿留在后台。判据改为「30 s 上界 + 命令行含 `-Embedding`」，
+    同时保证同一时刻手动双击开的普通实例不被卷进来。
+    """
+    from servers.ansys import project_manage as P
+
+    t0 = 1794810910.95
+
+    class _Proc:
+        def __init__(self, pid, ct):
+            self.pid, self._ct = pid, ct
+
+        def is_running(self):
+            return True
+
+        def name(self):
+            return "ansysedt.exe"
+
+        def create_time(self):
+            return self._ct
+
+    class _Info:
+        def __init__(self, pid, ct, cmdline):
+            self.info = {"pid": pid, "name": "ansysedt.exe", "create_time": ct, "cmdline": cmdline}
+
+    iterable = [
+        _Info(50001, t0 + 20, ["ansysedt.exe", "-Embedding"]),   # 慢启动的 GUI：要收
+        _Info(50002, t0 + 20, ["ansysedt.exe"]),                 # 同时刻手动开的普通实例：不收
+        _Info(50003, t0 + 40, ["ansysedt.exe", "-Embedding"]),   # 超出 30 s 上界：不收
+    ]
+    monkeypatch.setattr(P, "_LAST_PID", 50000)
+    monkeypatch.setattr(P.psutil, "Process", lambda pid: _Proc(pid, t0))
+    monkeypatch.setattr(P.psutil, "process_iter", lambda attrs=None: iterable)
+    monkeypatch.setattr(P, "get_aedt_pids", lambda: [50000])
+
+    targets, scope = P._resolve_close_targets()
+    assert 50001 in targets, "慢启动的 -Embedding 必须收，否则会留孤儿"
+    assert 50002 not in targets, "同时刻手动开的普通实例不能被卷进来"
+    assert 50003 not in targets, "超出 30 s 上界的不能收"
+    assert scope == "managed"
 
 
 if __name__ == "__main__":

@@ -221,8 +221,52 @@ def open_hfss_project(
         }
 
 
-def _resolve_close_targets() -> list[int]:
-    """关闭目标 PID：优先 MCP 自己启动的那一批 ansysedt.exe（含它分裂出的 `-Embedding` 进程）。"""
+_SAME_LAUNCH_WINDOW_SECONDS = 30.0
+"""认「同一批启动」的时间**上界**（秒）。
+
+启动器进程与它拉起的 `-Embedding` GUI 进程在本机实测只差 0.01 s（2026-11-16），但慢机器 /
+网络许可下 `-Embedding` 可能要几十秒才出现 —— 窗口太小会漏杀、把孤儿留在后台（回到重构前的坑）。
+所以窗口放宽，改由 `_is_same_launch()` 里的**特征判据**决定是不是同批，而不是只靠时间。
+"""
+
+_EMBEDDING_SLACK_SECONDS = 5.0
+"""不带 `-Embedding` 特征时，允许的最大时间差（秒）。
+
+`-Embedding` 是 AEDT 被 COM / 自动化拉起时的命令行标志，启动器分裂出的 GUI 进程一定带它；
+用户手工双击启动的 AEDT 不带。用它替代「纯时间窗口」：慢启动也认得出，几分钟前手动开的
+实例又不会被卷进来。
+"""
+
+_LAUNCH_CLOCK_SKEW_SECONDS = 2.0
+"""允许 `create_time` 略早于 `_LAST_PID`（采样 / 时钟误差），负向不超过该值。"""
+
+
+def _is_same_launch(info: dict[str, Any], t0: float) -> bool:
+    """判断一条进程记录是否与 `t0` 那次启动同批。
+
+    条件：`create_time` 落在 `[t0 - skew, t0 + window]`，且满足其一 ——
+      ① 与 `t0` 相差 ≤ `_EMBEDDING_SLACK_SECONDS`（启动瞬间分裂出的进程）；
+      ② 命令行含 `-Embedding`（自动化拉起的 GUI，可能晚几十秒才起）。
+
+    ⚠️ 局限：别的自动化工具（如 pyaedt）启动的 AEDT 也带 `-Embedding`，若在窗口内启动会被
+    归为同批。要绝对隔离只能按「启动器 PID 的子孙 + 它拉起的那一个」精确追踪，代价高且
+    AEDT 分裂后父子关系已断（实测 ppid 互不相干）。
+    """
+    delta = (info.get("create_time") or 0.0) - t0
+    if delta < -_LAUNCH_CLOCK_SKEW_SECONDS or delta > _SAME_LAUNCH_WINDOW_SECONDS:
+        return False
+    if delta <= _EMBEDDING_SLACK_SECONDS:
+        return True
+    return "-Embedding" in " ".join(info.get("cmdline") or [])
+
+
+def _resolve_close_targets() -> tuple[list[int], str]:
+    """返回 `(关闭目标 PID, 范围标识)`：范围是 `"managed"`（MCP 自己启动的那批）或 `"all"`。
+
+    优先 MCP 自己启动的那一批 ansysedt.exe（含它分裂出的 `-Embedding` 进程）；
+    没记录（或记录已失效）时退化为**机器上所有** ansysedt.exe —— 调用方必须把这个
+    范围如实回给用户，别让人以为只关了自己起的那个。
+    """
     global _LAST_PID
     if _LAST_PID is not None:
         try:
@@ -237,25 +281,25 @@ def _resolve_close_targets() -> list[int]:
                 #   启动器进程（Popen 直接起的，_LAST_PID） + 它拉起的 `-Embedding` GUI 进程。
                 # 2026-11-16 实测：ppid 分别 18080 / 1632，create_time 只差 0.01 s ——
                 # 所以 `children()` 抓不到它，只认 _LAST_PID 会留下孤儿进程（实测杀 31348 后
-                # 32576 残留）。用「创建时间相近」认同一批启动的实例，30 s 窗口足够覆盖启动分裂，
-                # 又不会误伤更早手动开的 AEDT。
+                # 32576 残留）。同批判据见 `_is_same_launch()`：时间上界 30 s + `-Embedding`
+                # 特征 —— 慢启动也能认出来，又不会卷进几分钟前手动开的实例。
                 if t0 is not None:
-                    for other in psutil.process_iter(["pid", "name", "create_time"]):
+                    for other in psutil.process_iter(["pid", "name", "create_time", "cmdline"]):
                         info = other.info
                         if info["pid"] in pids:
                             continue
                         if (info["name"] or "").lower() != "ansysedt.exe":
                             continue
                         try:
-                            if abs((info["create_time"] or 0.0) - t0) <= 30:
+                            if _is_same_launch(info, t0):
                                 pids.append(info["pid"])
                         except (psutil.NoSuchProcess, psutil.AccessDenied):
                             continue
-                return pids
+                return pids, "managed"
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
         _LAST_PID = None
-    return get_aedt_pids()
+    return get_aedt_pids(), "all"
 
 
 def _taskkill(pid: int, force: bool) -> tuple[bool, str]:
@@ -278,8 +322,12 @@ def _taskkill(pid: int, force: bool) -> tuple[bool, str]:
 
 
 def _kill_aedt_processes(pids: list[int], lock_path: str, project_name: str,
-                         hard: bool) -> dict[str, Any]:
-    """进程级关闭 AEDT。hard=True 直接 /F；hard=False 先 taskkill（WM_CLOSE）再 /F 兜底。"""
+                         hard: bool, scope: str = "managed") -> dict[str, Any]:
+    """进程级关闭 AEDT。hard=True 直接 /F；hard=False 先 taskkill（WM_CLOSE）再 /F 兜底。
+
+    `scope` 只用于返回体：告诉调用方这次终止的是「MCP 自己起的」（`managed`）还是
+    「机器上所有 AEDT」（`all`）—— 后者会连用户手动开的实例一起关掉。
+    """
     global _LAST_PID
 
     killed: list[int] = []
@@ -309,9 +357,11 @@ def _kill_aedt_processes(pids: list[int], lock_path: str, project_name: str,
 
     if failed:
         return error_response("CLOSE_FAILED", f"部分 AEDT 进程未能终止：{failed}",
-                              killed=killed, method="taskkill")
+                              killed=killed, method="taskkill", scope=scope)
     return {"success": True, "method": "taskkill",
-            "message": f"已终止 AEDT 进程 PID {killed}", **lock_cleanup}
+            "message": f"已终止 AEDT 进程 PID {killed}"
+                       + ("（含非 MCP 启动的 AEDT 实例）" if scope == "all" else ""),
+            "scope": scope, **lock_cleanup}
 
 
 def _aedt_modal_dialogs() -> list[str]:
@@ -459,24 +509,33 @@ def close_hfss_project(
 ) -> dict[str, Any]:
     """⚠️ 关闭 AEDT 项目（未保存改动会丢；force 会强杀进程）。
 
-    关闭三级兜底（从优雅到粗暴）：COM CloseProject → taskkill（发 WM_CLOSE）→ taskkill /F。
-    COM 只关指定项目；COM 打不通时退回进程级兜底（kill 整个 AEDT 进程，会关掉它名下所有项目）。
+    关闭三层兜底（从优雅到粗暴）：COM `CloseProject` → `taskkill`（发 WM_CLOSE）→ `taskkill /F`。
+    COM 只关指定项目；COM 附着失败才退回进程级兜底（kill 整个 AEDT，会关掉它名下所有项目）。
+
+    ⚠️ **非 force 也可能硬杀**：进程级兜底先发 WM_CLOSE，10 s 内没退出会自动补 `taskkill /F`。
+    这时若 AEDT 正弹「是否保存」确认框，改动会随进程一起丢 —— `save_before_close` 只作用于
+    COM 分支，兜底路径不受它保护。别把 `force=False` 当成「一定不会丢改动」。
+
+    `force=True` 的作用范围：MCP 记录到自己启动过 AEDT 时只终止那一批（启动器 + 它分裂出的
+    `-Embedding` 进程，按创建时间 ±5 s 认同批）；**没有记录时终止机器上所有 `ansysedt.exe`**，
+    包括手动开的实例 —— 返回体的 `scope` 会写明是 `managed` 还是 `all`。
+
     ⚠️ 跨权限（UAC 隔离）时 DCOM / UIPI / 进程权限会依次拦截这三层，需 MCP 与 AEDT 同权限运行。
 
     Args:
         project_name: 项目名，为空关闭活动项目。
         project_path: 项目路径，用于清理锁文件。
-        save_before_close: 关闭前保存（仅 COM 路径生效）。
-        force: True 跳过 COM / WM_CLOSE，直接 taskkill /F 硬杀。
+        save_before_close: 关闭前保存（**仅 COM 分支生效**；进程级兜底没有保存机会）。
+        force: True 跳过 COM / WM_CLOSE，直接 `taskkill /F` 硬杀。
     """
     lock_path = project_path or _OPEN_PROJECT_PATHS.get(project_name, "")
 
-    target_pids = _resolve_close_targets()
+    target_pids, scope = _resolve_close_targets()
 
     if force:
         if not target_pids:
             return error_response("NO_MANAGED_PROCESS", "没有可终止的 AEDT 进程")
-        return _kill_aedt_processes(target_pids, lock_path, project_name, hard=True)
+        return _kill_aedt_processes(target_pids, lock_path, project_name, hard=True, scope=scope)
 
     # ── 1) COM 优雅关闭 ──
     if aedt_is_running():
@@ -491,7 +550,7 @@ def close_hfss_project(
             "COM 关闭失败，且未找到可终止的 AEDT 进程",
             hint="确认 AEDT 是否在运行；若跨权限（UAC 隔离），需 MCP 与 AEDT 同权限运行",
         )
-    return _kill_aedt_processes(target_pids, lock_path, project_name, hard=False)
+    return _kill_aedt_processes(target_pids, lock_path, project_name, hard=False, scope=scope)
 
 
 @mcp.tool()
