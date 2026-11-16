@@ -48,6 +48,11 @@ _configured = (_settings.simulation_tool_dir or "").strip()
 if _configured:
     _SIM_TOOL_DIR = Path(_configured)
     EDI_INSTALL_DIR = str(_SIM_TOOL_DIR.parent)
+elif (_settings.edi_path or "").strip():
+    # 从 EDI_PATH（EDI.exe 路径）反推 EDI 安装根 —— 重装到非默认目录（如 D:\EDI）时，
+    # 不再依赖硬编码 C:\Program Files (x86)\EDI（2026-11-16 重装后自动探测失灵）。
+    EDI_INSTALL_DIR = str(Path(_settings.edi_path).expanduser().parent)
+    _SIM_TOOL_DIR = Path(EDI_INSTALL_DIR) / "simulation_tool"
 else:
     # 自动检测：往上找 EDI 根，找不到回退硬编码
     _root = _find_edi_root() or _HARDCODED_EDI_ROOT

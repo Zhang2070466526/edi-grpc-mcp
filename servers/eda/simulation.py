@@ -21,7 +21,7 @@ get_simulation_async_result   获取结果（运行中返回部分日志，完�
   project_path     EDA 服务所在机器上的 .epp 工程文件绝对路径
   netlist_path     网表文件路径（simulate_netlist_with_ads）
   log_source       调用方日志标识，默认 "mcp_client"
-  ads_path         ADS 安装路径，为空则自动判断
+  ads_path         ADS 安装路径，留空则本侧探测后转发
   timeout_seconds  最长等待秒数，无上限，默认 600（仿真）/ 120（控制器）
 """
 
@@ -38,8 +38,9 @@ from typing import Any
 _logger = logging.getLogger("eda.simulation")
 
 from proto import ecserver_pb2
-from servers.eda.grpc_client import call_grpc, call_project_grpc
 from servers.eda.config import require_project_path
+from servers.eda.grpc_client import call_grpc, call_project_grpc
+from servers.simulation_tool.config import detect_ads_path, normalize_dir
 from servers.utils import error_response, submitted_response, require_file, queue_full_response
 from servers import mcp
 
@@ -492,19 +493,32 @@ def simulate_netlist_with_ads(
         ads_path: str = "",
         timeout_seconds: int = 120,
 ) -> dict[str, Any]:
-    """调用 ADS 仿真控制器。
+    """调用 ADS 仿真控制器（经 EDI gRPC 转发）。
 
     Args:
         netlist_path: 网表文件路径。
-        ads_path: ADS 安装路径，为空则自动判断。
+        ads_path: ADS 安装路径；**留空则在本侧探测后转发**（见下）。
         timeout_seconds: 最长等待时间，默认 120 秒。
+
+    2026-11-16 复核：`ads_path` 必须在 MCP 这侧解析好再发给 EDI，不能让服务端自己探：
+    服务端探不到时会回退成硬编码的 `C:/Program Files/Keysight/ADS2020`，而机器上实际装的是
+    `ADS2020_update2` ⇒ 报「Can not find ...ADS2020」并静默失败（`ads_output` 为空）。
+    这里与 `tr_simulation` 用同一套探测：`normalize_dir` 修混合斜杠，
+    `detect_ads_path` 依次看 `EDI_ADS_PATH` → EDI `config/config.ini` → glob 取版本号最高。
     """
     resolved_netlist, err = require_file(netlist_path)
     if err:
         return err
+    ads = normalize_dir(ads_path) or detect_ads_path()
+    if not ads:
+        return error_response(
+            "ADS_NOT_FOUND",
+            "未找到 ADS 安装目录，请显式传 ads_path，或设置 EDI_ADS_PATH 环境变量 / EDI config.ini 的 [ads] hpeesof_dir",
+            hint="显式传 ads_path，或设置 EDI_ADS_PATH 环境变量，或在 EDI 的 config.ini 里配 [ads] hpeesof_dir",
+        )
     return call_grpc(
         ecserver_pb2.CALL_SIMULATION_CONTROLLER,
-        {"netlist_path": resolved_netlist, "ads_path": ads_path},
+        {"netlist_path": resolved_netlist, "ads_path": ads},
         timeout_seconds,
         max_timeout_seconds=3600,
     )
