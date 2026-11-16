@@ -483,6 +483,57 @@ def test_get_service_logs(tmp_path, monkeypatch):
     assert r3["matched_lines"] == 2
 
 
+def test_get_service_logs_accepts_edi_prefix(tmp_path, monkeypatch):
+    """现场机（star）只有 `edi_YYYY-MM-DD.log` 前缀 ⇒ 必须能读到。
+
+    2026-11-16 实测：本机目录里 `eda_*.log`(12) 与 `edi_*.log`(1) 并存；现场机只有
+    `edi_` 前缀，旧实现只 glob `eda_*.log` ⇒ 报 `LOG_NOT_FOUND`，而文件明明存在。
+    """
+    import datetime
+    from types import SimpleNamespace
+
+    from servers.eda import edi_launcher as el
+
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    only_edi = log_dir / f"edi_{datetime.date.today():%Y-%m-%d}.log"
+    only_edi.write_text(
+        "[2026-11-16 10:00:00.000] [主窗口] [info] 打开软件\n"
+        "[2026-11-16 10:01:00.000] [仿真模块] [error] 仿真失败\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(el, "get_settings", lambda: SimpleNamespace(edi_log_dir=str(log_dir)))
+
+    r = el.get_service_logs(lines=10)
+    assert r["success"] is True, r
+    assert r["log_file"].endswith(only_edi.name)
+    assert r["total_lines"] == 2
+    assert r["error_count"] == 1
+
+
+def test_get_service_logs_fallback_prefers_newest_across_prefixes(tmp_path, monkeypatch):
+    """当天两种前缀都没有时，回退要在 `eda_*` + `edi_*` 里挑最新的。"""
+    import os
+    from types import SimpleNamespace
+
+    from servers.eda import edi_launcher as el
+
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    old_eda = log_dir / "eda_2020-01-01.log"
+    old_eda.write_text("old eda\n", encoding="utf-8")
+    new_edi = log_dir / "edi_2026-11-15.log"
+    new_edi.write_text("new edi\n", encoding="utf-8")
+    os.utime(old_eda, (1_000_000, 1_000_000))
+    os.utime(new_edi, (2_000_000, 2_000_000))
+    monkeypatch.setattr(el, "get_settings", lambda: SimpleNamespace(edi_log_dir=str(log_dir)))
+
+    r = el.get_service_logs()
+    assert r["success"] is True, r
+    assert r["log_file"].endswith("edi_2026-11-15.log"), r.get("log_file")
+    assert "当天日志不存在" in (r.get("message") or "")
+
+
 def test_get_service_logs_not_found(tmp_path, monkeypatch):
     from types import SimpleNamespace
     from servers.eda import edi_launcher as el

@@ -117,8 +117,11 @@ def get_service_logs(
 
     用法："看看 EDI 服务有没有报错"、"查一下 EDI 最近的日志"
 
-    读取 EDI 软件目录下 logs/eda_YYYY-MM-DD.log（当天），支持按关键词/级别过滤，
+    读取 EDI 软件目录下 logs/ 的当天日志，支持按关键词/级别过滤，
     并统计 ERROR / WARN / 异常堆栈，便于快速判断服务是否异常。
+
+    ⚠️ 日志文件名有两种前缀，都会认：`eda_YYYY-MM-DD.log`（老版本）和
+    `edi_YYYY-MM-DD.log`（新版本 / 现场机）。当天不存在时回退到两种前缀里最新的那份。
 
     Args:
         lines: 返回最后 N 行（默认 50，范围 1-500）。
@@ -138,18 +141,22 @@ def get_service_logs(
     keyword = (keyword or "").strip()
 
     log_dir = Path(get_settings().edi_log_dir or f"{EDI_INSTALL_DIR}/logs").expanduser()
-    today_log = log_dir / f"eda_{datetime.date.today():%Y-%m-%d}.log"
+
+    # EDI 的日志文件名有**两种**前缀，都要认（2026-11-16 实测）：
+    #   老版本写 eda_YYYY-MM-DD.log；新版本 / 现场机（star）写 edi_YYYY-MM-DD.log。
+    # 本机目录里两种并存（12 个 eda_ + 1 个 edi_）；现场机只有 edi_ ⇒ 只 glob eda_*
+    # 会误报 LOG_NOT_FOUND，而文件明明存在（截图故障）。
+    today = datetime.date.today()
+    today_candidates = [log_dir / f"{prefix}_{today:%Y-%m-%d}.log" for prefix in ("eda", "edi")]
 
     # 每次调用都动态检测：优先读今天的日志；当天不存在则回退到最新的一份
     fallback_note = ""
-    if today_log.is_file():
+    today_log = next((p for p in today_candidates if p.is_file()), None)
+    if today_log is not None:
         log_file = today_log
     else:
-        candidates = sorted(
-            log_dir.glob("eda_*.log"),
-            key=lambda p: (p.stat().st_mtime, p.name),
-            reverse=True,
-        )
+        candidates = [p for prefix in ("eda", "edi") for p in log_dir.glob(f"{prefix}_*.log")]
+        candidates.sort(key=lambda p: (p.stat().st_mtime, p.name), reverse=True)
         if not candidates:
             return error_response("LOG_NOT_FOUND", f"日志目录下没有日志文件: {log_dir}")
         log_file = candidates[0]
