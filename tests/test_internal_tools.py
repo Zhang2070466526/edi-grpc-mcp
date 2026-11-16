@@ -16,7 +16,7 @@ from pathlib import Path
 
 import servers.registry_server  # noqa: F401
 from servers import mcp
-from servers.registry_server import _INTERNAL_PROMPTS, _INTERNAL_RESOURCES, _INTERNAL_TOOLS, _MODE3_TOOLS
+from servers.registry_server import _INTERNAL_PROMPTS, _INTERNAL_RESOURCES, _INTERNAL_TOOLS, _MODE3_TOOLS, _EXE_HIDDEN_TOOLS
 from servers.utils import registered_tools
 
 _REPO = Path(__file__).resolve().parent.parent
@@ -28,6 +28,7 @@ def test_internal_lists_are_valid():
     assert _INTERNAL_TOOLS <= tool_names, f"工具名单含未注册项: {sorted(_INTERNAL_TOOLS - tool_names)}"
     assert len(_INTERNAL_TOOLS) >= 30, f"工具名单过小（{len(_INTERNAL_TOOLS)}），疑似漏了 gRPC 工具"
     assert _MODE3_TOOLS <= tool_names, f"mode3 名单含未注册项: {sorted(_MODE3_TOOLS - tool_names)}"
+    assert _EXE_HIDDEN_TOOLS <= tool_names, f"exe 名单含未注册项: {sorted(_EXE_HIDDEN_TOOLS - tool_names)}"
 
     assert _INTERNAL_PROMPTS <= set(mcp._prompt_manager._prompts), \
         f"prompt 名单含未注册项: {sorted(_INTERNAL_PROMPTS - set(mcp._prompt_manager._prompts))}"
@@ -102,6 +103,23 @@ def test_switch_3_hides_design_chip_and_laspcem():
     )
     r = subprocess.run([sys.executable, "-c", code], env=env, cwd=str(_REPO), capture_output=True, text=True)
     assert r.returncode == 0, f"开关 3 行为不符:\n{r.stderr}"
+
+
+def test_frozen_hides_analyze_image(monkeypatch):
+    """exe 打包版（sys.frozen）无条件下架 analyze_image，与 MCP_HIDE_INTERNAL_TOOLS 无关。"""
+    import sys
+    from servers import mcp
+    from servers.registry_server import _hide_exe_hidden_tools
+
+    tool = mcp._tool_manager._tools.get("analyze_image")
+    assert tool is not None, "analyze_image 应先注册（源码态）"
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    try:
+        _hide_exe_hidden_tools()
+        assert "analyze_image" not in mcp._tool_manager._tools, "frozen 下 analyze_image 应被下架"
+        assert "show_image" in mcp._tool_manager._tools, "其它图片工具应保留"
+    finally:
+        mcp._tool_manager._tools["analyze_image"] = tool   # 恢复，避免污染其它测试
 
 
 def test_error_hints_do_not_leak_hidden_tools():

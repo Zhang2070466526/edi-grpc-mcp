@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import sys
+
 from starlette.responses import PlainTextResponse
 
 from servers import mcp  # noqa: E402 — 全局 MCP 实例
@@ -138,6 +140,18 @@ _MODE3_TOOLS: frozenset[str] = frozenset({
     "laspcem_cleanup_orphans",
 })
 
+#: exe 打包版（sys.frozen）**无条件**下架的工具：analyze_image 会上传第三方图片，交付包不暴露。
+_EXE_HIDDEN_TOOLS: frozenset[str] = frozenset({
+    "analyze_image",
+})
+
+
+def _hide_exe_hidden_tools() -> None:
+    """exe 打包版（PyInstaller frozen）无条件下架 _EXE_HIDDEN_TOOLS，与 mode 无关。"""
+    if getattr(sys, "frozen", False):
+        for name in _EXE_HIDDEN_TOOLS:
+            mcp._tool_manager._tools.pop(name, None)
+
 
 def _hide_internal_tools() -> None:
     """按开关下架工具/prompt/resource（从注册表 pop，代码保留、可逆）。
@@ -148,6 +162,7 @@ def _hide_internal_tools() -> None:
       2 = 只保留「内部工具 + 无依赖计算工具」，其余（ANSYS/CST/LASPCEM/图片/文档等）全下架；
       3 = 下架软 IP（design_chip）+ LASPCEM 电磁仿真工具。
     """
+    _hide_exe_hidden_tools()
     mode = get_settings().mcp_hide_internal_tools
     if mode == 0:
         return
