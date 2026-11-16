@@ -31,13 +31,15 @@ list_result_curves    解析 RAW 头部、列出可用曲线名（画图前先�
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from pathlib import Path
 from typing import Any
 
 from servers.eda.config import TURBOCHARTS_PATH
-from servers.utils import build_artifact, build_file_link, error_response, per_tool_mutex, validate_file
+from servers.utils import (build_artifact, build_file_link, default_result_path,
+                           error_response, per_tool_mutex, validate_file)
 from servers.turbocharts.config import (append_engine_log, engine_failures, engine_log_path,
                                         engine_report, record_run, run_turbocharts)
 from servers import mcp
@@ -62,6 +64,8 @@ _PREFIX_RULES: tuple[tuple[re.Pattern[str], str, str], ...] = (
      "phase(变量)：说明中的常用单位 phase（HB 下引擎静默回退成 dBm 图）"),
     (re.compile(r'^imag_(?P<var>.+)$', re.IGNORECASE), "imag",
      "imag(变量)：虚部（说明未列，实测有效；HB 下同样静默回退成 dBm 图）"),
+    (re.compile(r'^mag_(?P<var>.+)$', re.IGNORECASE), "mag",
+     "mag(变量)：幅度（引擎 --curve-info 返回的可用单位；SP 下出独立幅度图，HB 下回退 dBm）"),
     (re.compile(r'^VSWR_(?P<var>.+)$', re.IGNORECASE), "VSWR",
      "VSWR_S[i,j]：说明中的 vswr(驻波)，注明只支持单条曲线"),
     (re.compile(r'^(?:APS|AF|MAS|MV|PSS)_(?P<var>.+)$', re.IGNORECASE), "数控量",
@@ -71,6 +75,15 @@ _PREFIX_RULES: tuple[tuple[re.Pattern[str], str, str], ...] = (
 
 # HB 数据类型下引擎真正认的前缀；其它前缀会被静默忽略、退化成 dBm 图
 _HB_USEFUL_PREFIXES = frozenset({"dBm", "DB", "real"})
+
+# 「不传 linename 时自动组图」的默认单位优先级（按 chart 类型）。
+# HB 只挑 dBm：实测（2026-11-16）HB 下 db/phase/imag/mag/VSWR/APS/MAS/MV/PSS 全部被引擎
+# 静默回退成 dBm 图，只有 dBm_ 与 real_ 是真图；自动组图当然选那个真正有意义的绝对量。
+_DEFAULT_UNIT_BY_CHART = {
+    "HB": ["dBm", "real"],
+    "SP": ["db", "dBm", "real"],
+    "XDB": ["db", "dBm", "real"],
+}
 
 _VSWR_RE = re.compile(r'^VSWR_S\[\d+,\d+\]$', re.IGNORECASE)
 
@@ -198,283 +211,64 @@ def _validate_linename(
     return curves, syntax_errors, missing_errors, warnings
 
 
-def _suggest_curves(
-    var_name: str, var_type: str, plot_type: str = ""
-) -> tuple[list[str], list[str]]:
-    """Generate TurboCharts-compatible curve names for a variable.
-
-    Returns (curves, notes)，notes 说明被排除的写法与实测注意事项。
-
-    Rules（2026-09-11 实测校准）:
-      - type=HB 只认 dBm_/real_（phase_/imag_ 会被静默忽略并回退成 dBm 图）
-      - S.delay[x,y] → real_delayS[x,y]（实测出 ps(S.delay[x,y])，有崩溃历史，note 提示）
-      - real 类型 → real_{name}（nf 变量保留，引擎在缺该曲线时会段错误 → 调用前需校验存在性）
-      - complex S[n,n]（反射）→ dBm_/DB_/real_/phase_/imag_/VSWR_
-      - complex S[n,m]（传输）→ dBm_/DB_/real_/phase_/imag_
-      - 其它 complex（如 HB 节点电压）→ dBm_/real_（SP 下再加 phase_/imag_）
-    """
-    curves: list[str] = []
-    notes: list[str] = []
-    chart = (plot_type or "").upper()
-
-    delay_m = re.match(r'S\.delay\[(\d+),(\d+)\]', var_name)
-    if delay_m:
-        i, j = delay_m.group(1), delay_m.group(2)
-        curves.append(f"real_delayS[{i},{j}]")
-        notes.append(
-            f"real_delayS[{i},{j}] 实测可出 ps(S.delay[{i},{j}])(引擎会打印 complex→real 警告)；"
-            "历史上有 0xC0000005 崩溃记录，若失败请改用其它量并反馈。"
-        )
-        return curves, notes
-
-    if var_type == "real":
-        # ⚠️ 别写 [[(] / [\])]：那是「疑似嵌套字符类」，Python 3.13+ 起会由 FutureWarning
-        # 变硬错误（2026-09-28 复核）。显式转义语义完全相同。
-        if re.fullmatch(r'nf(?:min|[\[(]\d+[\]\)])?', var_name, re.IGNORECASE):
-            curves.append(f"real_{var_name}")
-            notes.append(
-                f"real_{var_name} 为噪声系数：引擎在 RAW 缺少该曲线时直接段错误，"
-                "本工具已在调用前校验变量是否存在。"
-            )
-            return curves, notes
-        # Normalize square brackets → round for other real variables
-        safe_name = var_name.replace("[", "(").replace("]", ")")
-        curves.append(f"real_{safe_name}")
-        return curves, notes
-
-    s_m = re.match(r'S\[(\d+),(\d+)\]', var_name)
-    if s_m:
-        i, j = s_m.group(1), s_m.group(2)
-        curves.append(f"dBm_S[{i},{j}]")
-        curves.append(f"real_S[{i},{j}]")
-        if chart == "HB":
-            notes.append(
-                "type=HB：引擎忽略 phase_/imag_ 前缀并回退成 dBm 图，故未列出；"
-                "VSWR 对 HB 数据同样无意义。"
-            )
-            return curves, notes
-        curves.append(f"DB_S[{i},{j}]")
-        curves.append(f"phase_S[{i},{j}]")
-        curves.append(f"imag_S[{i},{j}]")
-        if i == j:  # reflection parameter
-            curves.append(f"VSWR_S[{i},{j}]")
-        else:
-            notes.append(
-                f"VSWR_S[{i},{j}] 也能出图，但标签退化成 VSWR({i})，非反射参数不建议使用。"
-            )
-        return curves, notes
-
-    # 其它 complex（HB 的节点电压等）
-    curves.append(f"dBm_{var_name}")
-    curves.append(f"real_{var_name}")
-    if chart == "HB":
-        notes.append(
-            "type=HB：phase_/imag_ 前缀会被引擎忽略（回退 dBm 图），已排除。"
-        )
-    else:
-        curves.append(f"phase_{var_name}")
-        curves.append(f"imag_{var_name}")
-    return curves, notes
-
-
-def _consume_variable_line(current: dict, raw_line: str) -> None:
-    """解析一条变量定义行（列格式：<序号> <变量名> <类型描述...>）。"""
-    parts = raw_line.replace("\t", " ").split()
-    if len(parts) < 3:
-        return
-    var_name = parts[1]
-    var_type = "complex"
-    is_indep = False
-    for p in parts[2:]:
-        if p.startswith("type="):
-            var_type = p.split("=", 1)[1]
-        elif p.startswith("indep="):
-            is_indep = p.split("=", 1)[1] == "yes"
-
-    entry = {"name": var_name, "type": var_type}
-    current["variables"].append(entry)
-
-    if is_indep:
-        if var_name not in current["dependencies"]:
-            current["dependencies"].append(var_name)
-    else:
-        suggested, notes = _suggest_curves(var_name, var_type,
-                                           current.get("plot_type", ""))
-        for c in suggested:
-            if c not in current["suggested_curves"]:
-                current["suggested_curves"].append(c)
-        for n in notes:
-            if n not in current["curve_notes"]:
-                current["curve_notes"].append(n)
-
-
-def _parse_mds_format(text: str) -> list[dict]:
-    """Parse MDS-format RAW file header.
-
-    Format:
-        File Format: MDS
-        Plotname: SP SP1[1]
-        No. Variables: 11
-        Variables:
-            0 freq frequency type=real indep=yes
-            1 S[1,1] s-param type=complex indep=no
-    """
-    datasets: list[dict] = []
-    current: dict | None = None
-    in_variables = False
-
-    for line in text.splitlines():
-        line = line.strip()
-
-        if line.startswith("Plotname:"):
-            if current:
-                datasets.append(current)
-            plot_name = line.split(":", 1)[1].strip()
-            # plot 类型（SP/HB/XDB）决定哪些前缀真实可用
-            first_token = plot_name.split()[0].upper() if plot_name else ""
-            plot_type = first_token if first_token in ("SP", "HB", "XDB") else ""
-            current = {
-                "plot_name": plot_name,
-                "plot_type": plot_type,
-                "dependencies": [],
-                "variables": [],
-                "suggested_curves": [],
-                "curve_notes": [],
-            }
-            # Extract freq= from plotname (e.g. "SP SP1[1] freq=(1 GHz->10 GHz)")
-            freq_m = re.search(r'freq\s*=\s*\(([^)]+)\)', plot_name, re.IGNORECASE)
-            if freq_m and "freq" not in current["dependencies"]:
-                current["dependencies"].append("freq")
-            in_variables = False
-            continue
-
-        if current is None:
-            continue
-
-        if line.startswith("No. Variables:"):
-            continue
-
-        if line.startswith("Variables:"):
-            in_variables = True
-            # 真实 MDS 文件把第一个变量写在 "Variables:" 行内
-            # （Variables:\t0\tfreq\tfrequency type=real indep=yes），不能整行丢弃
-            remainder = line.split(":", 1)[1].strip()
-            if remainder:
-                _consume_variable_line(current, remainder)
-            continue
-
-        if line.startswith("Values:"):
-            in_variables = False
-            continue
-
-        if in_variables and line and not line.startswith("File Format:") \
-                and not line.startswith("Plotname:"):
-            _consume_variable_line(current, line)
-
-    if current:
-        datasets.append(current)
-    return datasets
-
-
-def _parse_raw_header(raw_path: str) -> dict:
-    """Parse ADS RAW file header and return structured curve info.
-
-    Returns {"format": str, "datasets": [...], "error": str|None}.
-    """
-    try:
-        with open(raw_path, "r", encoding="utf-8", errors="ignore") as f:
-            text = f.read(65536)
-    except OSError as e:
-        return {"format": "unknown", "datasets": [], "error": str(e)}
-
-    reached_limit = len(text) >= 65536
-
-    # MDS format
-    if "File Format: MDS" in text or "Plotname:" in text:
-        datasets = _parse_mds_format(text)
-        if not datasets:
-            return {"format": "MDS", "datasets": [],
-                    "warning": "Found MDS header but no Plotname entries"}
-        has_vars = any(d["variables"] for d in datasets)
-        if not has_vars:
-            return {"format": "MDS", "datasets": datasets,
-                    "warning": "MDS format detected but no variables extracted"}
-        result = {"format": "MDS", "datasets": datasets}
-        if reached_limit:
-            result["warning"] = "RAW 文件头可能被截断，结果可能不完整"
-        return result
-
-    # XML-style: <Number name="freq"/> <Complex name="S(2,1)"/> <Real name="nf(1)"/>
-    xml_vars: list[dict] = []
-    xml_deps: list[str] = []
-    xml_notes: list[str] = []
-    seen_xml = set()
-    for m in re.finditer(r'<(Number|Complex|Real)\s+[^>]*name="([^"]+)"', text):
-        tag = m.group(1)
-        name = m.group(2)
-        if name not in seen_xml:
-            seen_xml.add(name)
-            var_type = "complex" if tag == "Complex" else "real"
-            xml_vars.append({"name": name, "type": var_type})
-
-    if xml_vars:
-        dep_kw = {"freq", "frequency", "time", "power", "bias"}
-        for v in xml_vars[:]:
-            if v["name"].lower() in dep_kw or re.match(r'^freq', v["name"], re.IGNORECASE):
-                xml_deps.append(v["name"])
-                xml_vars.remove(v)
-        xml_curves: list[str] = []
-        for v in xml_vars:
-            suggested, notes = _suggest_curves(v["name"], v["type"], "")
-            for c in suggested:
-                if c not in xml_curves:
-                    xml_curves.append(c)
-            for n in notes:
-                if n not in xml_notes:
-                    xml_notes.append(n)
-        result = {"format": "XML", "datasets": [{
-            "plot_name": "",
-            "plot_type": "",
-            "dependencies": xml_deps,
-            "variables": xml_vars,
-            "suggested_curves": xml_curves,
-            "curve_notes": xml_notes,
-        }]}
-        if reached_limit:
-            result["warning"] = "RAW 文件头可能被截断，结果可能不完整"
-        return result
-
-    # Unknown
-    return {"format": "unknown", "datasets": [],
-            "error": "Unsupported RAW format. Expected MDS or XML."}
-
-
 def detect_chart_type(raw_path: str) -> str:
     """从 RAW 文件头识别第一个 plot 的数据集类型（SP / HB / XDB）。
 
     给 compare_simulation_results 之类的工具做缺省推断：chart_type 必须与 RAW 的
     Plotname 一致，猜错时 turbocharts 返回码仍为 0 却不出数据（白跑且报错信息为空）。
     识别不出（非 MDS/XML、无 Plotname）返回空串，调用方应要求显式指定。
+    只需读 Plotname 行取第一 token，不再走完整的手写头解析。
     """
-    header = _parse_raw_header(raw_path)
-    for dataset in header.get("datasets") or []:
-        plot_type = str(dataset.get("plot_type") or "").upper()
-        if plot_type in ("SP", "HB", "XDB"):
-            return plot_type
+    try:
+        with open(raw_path, "r", encoding="utf-8", errors="ignore") as f:
+            text = f.read(65536)
+    except OSError:
+        return ""
+    for m in re.finditer(r"Plotname:\s*(\S+)", text, re.IGNORECASE):
+        token = m.group(1).upper()
+        if token in ("SP", "HB", "XDB"):
+            return token
     return ""
+
+
+def _engine_curve_info(raw_path: str) -> dict[str, Any] | None:
+    """调用引擎 `--curve-info` 原生列出「依赖 → 曲线名」。
+
+    返回引擎 JSON（`{依赖名: [{曲线名: [单位...]}, ...]}`）；引擎不可用 / 超时 / 输出非
+    JSON 时返回 None，由调用方决定如何提示。引擎是单一事实源：手写解析有 64KB 截断、
+    HB 多 sweep 读不全的盲区（见 list_result_curves 的 docstring）。
+    """
+    try:
+        proc = run_turbocharts([TURBOCHARTS_PATH, "--raw", raw_path, "--curve-info"],
+                               timeout_seconds=60)
+    except (RuntimeError, OSError):
+        return None
+    for text in (proc.stdout, proc.stderr):
+        if not text or not text.strip():
+            continue
+        t = text.strip()
+        start, end = t.find("{"), t.rfind("}")
+        if start == -1 or end <= start:
+            continue
+        try:
+            parsed = json.loads(t[start:end + 1])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict) and parsed:
+            return parsed
+    return None
 
 
 @mcp.tool()
 def list_result_curves(result_path: str) -> dict[str, Any]:
-    """解析 ADS RAW 仿真结果文件，返回可用曲线名和依赖轴。
+    """调用引擎原生 `--curve-info` 列出 RAW 中可用的「依赖 → 曲线名 + 可用单位」。
 
-    支持 MDS 和 XML 格式。画图前调用，避免猜测曲线名；曲线名的单位/线段名写法见资源
-    edi://reference/turbocharts-guide（引擎自带《RAW 转图像工具使用说明》原文）。
-    suggested_curves 只列该 plot 类型下**实测真正有效**的写法（HB 数据不给
-    phase_/imag_，因为引擎会静默回退成 dBm 图），被排除的写法与原因见 curve_notes。
+    引擎是唯一事实源（不再手写解析 RAW 头部 —— 手写版有 64KB 截断、HB 多 sweep 读不全的
+    盲区）。画图前调用，避免猜曲线名。
 
-    ⚠️ suggested_curves 是可用写法清单，不是"随便挑一条都对"：变量名大小写必须与
-    variables 一致，多条曲线用 & 连接（逗号非法）。导出后用 CSV 表头核对实际画出的量。
+    返回结构：`{依赖名: [{曲线名: [可用单位...]}, ...]}`，单位列表由引擎直接给出。
+    画图时拼成 `<单位>_<曲线名>`（如 `db_s[1,1]`，单位大小写不敏感），依赖名原样传给
+    `--dependcy`。曲线名/依赖名大小写须与 curves 的键一致，多条曲线用 & 连接（逗号非法）。
 
     Args:
         result_path: RAW 结果文件路径（必须已存在）。
@@ -484,36 +278,33 @@ def list_result_curves(result_path: str) -> dict[str, Any]:
     except (FileNotFoundError, ValueError) as e:
         return error_response("FILE_NOT_FOUND", str(e))
 
-    result = _parse_raw_header(resolved)
-
-    if result.get("error") and not result.get("datasets"):
-        return error_response("UNSUPPORTED_RAW_FORMAT", result["error"],
-                          result_path=resolved, format=result.get("format", "unknown"))
-
-    response: dict = {
-        "success": True,
-        "result_path": resolved,
-        "format": result["format"],
-        "datasets": result["datasets"],
-    }
-    if result.get("warning"):
-        response["warning"] = result["warning"]
-    # Multi-plot warning: turbocharts_app.exe currently only reads the first plot
-    if len(result["datasets"]) > 1:
-        response["warning"] = (
-            response.get("warning", "")
-            + f" RAW 包含 {len(result['datasets'])} 个 plot，turbocharts 当前只处理第一个"
-            f" ({result['datasets'][0].get('plot_name', '')})。"
-            + " 如需画其他 plot 的曲线，请手动提取对应的 plot 数据。"
-        ).strip()
+    engine_curves = _engine_curve_info(resolved)
+    if engine_curves is None:
+        return error_response(
+            "CURVE_INFO_FAILED",
+            "引擎 --curve-info 未能列出曲线（引擎不可用 / 超时 / 输出非 JSON）",
+            result_path=resolved,
+        )
+    chart = detect_chart_type(resolved)
     notes: list[str] = []
-    for d in result["datasets"]:
-        for n in d.get("curve_notes", []):
-            if n not in notes:
-                notes.append(n)
-    if notes:
-        response["curve_notes"] = notes
-    return response
+    if chart == "HB":
+        notes.append(
+            "HB 实测（2026-11-16，逐个比对产物 CSV 表头+数据行）：--curve-info 会列出 "
+            "db/dBm/phase/real/imag/mag 等，但绘图时只有 dBm_ 与 real_ 出真图；"
+            "db/phase/imag/mag 以及 VSWR/APS/MAS/MV/PSS 全部被引擎静默回退成 dBm 图"
+            "（表头仍为 dBm(x)、数据与 dBm 逐行相同）。画 HB 建议只用 dBm 或 real。"
+        )
+    elif chart == "SP":
+        notes.append(
+            "SP 实测（2026-11-16）：db/dBm/phase/real/imag/mag/VSWR 各出不同图；"
+            "APS/MAS/MV/PSS 需要 RAW 里含对应数控器件数据，否则图能出但 CSV 只有表头。"
+        )
+    notes.append(
+        "turbocharts_convert 会在传入 csv_path 时自动核对产物表头，"
+        "若单位被引擎回退会写进返回的 warnings —— 以那里为准。"
+    )
+    return {"success": True, "result_path": resolved,
+            "chart_type": chart, "curves": engine_curves, "unit_notes": notes}
 
 
 def _build_cmd(raw_path, output_path, chart_type, *, linename="", dependency="", csv_path="", ac_config=""):
@@ -575,12 +366,38 @@ def _read_csv_labels(path: str) -> tuple[list[str], int]:
     return labels, data_rows
 
 
+def _default_unit(units: list[str], chart_type: str) -> str | None:
+    """从引擎给出的可用单位里挑一个默认值（用于"不传 linename 时自动组图"）。
+
+    优先级按 chart 类型定：HB 只用 dBm（实测只有 dBm_/real_ 是真图，其余会静默回退成
+    dBm）；SP/XDB 用 db（S 参数的工程习惯量，且实测与 dBm 出的是不同图）。
+    引擎给的单位大小写不固定（`db`/`dB`），按小写匹配后再返回引擎原始写法。
+    """
+    lower = {u.lower(): u for u in units}
+    for want in _DEFAULT_UNIT_BY_CHART.get((chart_type or "").upper(), ["db", "dBm", "real"]):
+        if want.lower() in lower:
+            return lower[want.lower()]
+    return units[0] if units else None
+
+
+def _label_unit(label: str) -> str:
+    """从 CSV 列名反推引擎实际用的单位前缀。
+
+    引擎的表头写法：`dBm(Out1)` / `dB(S11)` / `phase(S11)` / `VSWR(1)` / `mag(S11)`，
+    以及裸变量名 `S11` / `Out1`（等价于 real）。据此判断"请求的单位是否真的生效"。
+    """
+    text = label.strip()
+    if "(" in text:
+        return text.split("(", 1)[0].strip()
+    return "real"
+
+
 @mcp.tool()
 @per_tool_mutex
 def turbocharts_convert(
     raw_path: str,
-    output_path: str,
-    chart_type: str,
+    output_path: str = "",
+    chart_type: str = "",
     csv_path: str = "",
     linename: str = "",
     dependency: str = "",
@@ -611,8 +428,9 @@ def turbocharts_convert(
 
     Args:
         raw_path: 输入的 ADS RAW 文件路径（必填）。
-        output_path: 输出的图像文件路径，支持 PNG/JPG/BMP/SVG（必填）；父目录会自动创建。
-        chart_type: 转换类型，如 "SP"、"HB"、"XDB"（必填，且要与 RAW 的 Plotname 一致）。
+        output_path: 输出的图像文件路径，支持 PNG/JPG/BMP/SVG；留空则落到默认产物目录
+                    （<result_dir>/turbocharts_convert_<时间戳>.png）。父目录会自动创建。
+        chart_type: 转换类型，如 "SP"、"HB"、"XDB"；留空默认 "SP"（建议传，需与 RAW 的 Plotname 一致）。
         csv_path: 可选，同时导出的 CSV 文件路径（多曲线拆分时在其文件名后加曲线后缀）。
         linename: 可选，绘制线段名，格式 单位_线段名（如说明里的 "db_s[1,1]"、"real_delayS[1,1]"），
                   多条用 & 分隔。
@@ -645,6 +463,8 @@ def turbocharts_convert(
         return error_response("FILE_NOT_FOUND", str(e))
 
     chart_type = (chart_type or "").strip() or "SP"
+    if not (output_path or "").strip():
+        output_path = default_result_path("turbocharts_convert", ".png")
 
     _logger.info("turbocharts_convert raw=%s img=%s type=%s linename=%s csv=%s dep=%s ac=%s",
                  Path(raw_file).name, Path(output_path).name, chart_type,
@@ -671,11 +491,46 @@ def turbocharts_convert(
                 return error_response("INVALID_PATH", err)
 
     # ── 第 0.1 步：linename 校验（语法 + 变量存在性）──
-    raw_info = _parse_raw_header(raw_file)
-    if raw_info.get("warning"):
-        warnings.append(raw_info["warning"])
-    datasets = raw_info.get("datasets") or []
-    known_vars = [v["name"] for d in datasets for v in d.get("variables", [])]
+    # 变量存在性以引擎 --curve-info 为准（与 list_result_curves 同一事实源），
+    # 不再手写解析 RAW（手写解析有 HB 多 sweep 读不全 / 64KB 截断的盲区）。
+    engine_curves = _engine_curve_info(raw_file)
+    # 引擎返回 {"依赖": [{"曲线名": ["单位"]}]}（2026-11-16 实测，JSON 走 stderr）；
+    # 提取每个 dict 的 key（曲线名）做存在性校验，否则拼错的曲线名直接送引擎，
+    # SP 段错误 / HB 出空图且 rc=0。
+    known_vars = sorted({
+        name
+        for entries in (engine_curves or {}).values()
+        for entry in entries
+        for name in entry
+    })
+
+    # ── 不传 linename ⇒ 按引擎 --curve-info 的清单自动组图 ──
+    # 不能交给引擎自己挑：实测（2026-11-16）SP 不传 linename 会画成
+    # dB(S11)/dB(S12)/dB(S21)/dB(S22) 四条，单位由引擎定、返回里无从对账；
+    # HB 更是只画一张空图且不产 CSV。所以在这里用同一事实源（--curve-info）决定画什么。
+    # 依赖也一并定下（引擎只认一个 --dependcy，取清单里的第一个键）。
+    if not (linename or "").strip() and engine_curves:
+        first_dep = next(iter(engine_curves))
+        picked: list[str] = []
+        seen: set[str] = set()
+        for entry in engine_curves[first_dep]:
+            for name, units in entry.items():
+                unit = _default_unit(units, chart_type)
+                if not unit:
+                    continue
+                curve = f"{unit}_{name}"
+                if curve not in seen:
+                    seen.add(curve)
+                    picked.append(curve)
+        if picked:
+            linename = "&".join(picked)
+            if not (dependency or "").strip():
+                dependency = first_dep
+            warnings.append(
+                f"未传 linename：已按引擎 --curve-info 自动组图 —— "
+                f"依赖 {first_dep!r}、曲线 {linename}"
+                f"（默认单位按 chart 类型选取：HB→dBm、SP→db）。要换单位请显式传 linename。"
+            )
 
     curves, syntax_errors, missing_errors, name_warnings = _validate_linename(
         linename, chart_type, known_vars, raw_name=Path(raw_file).name)
@@ -793,6 +648,22 @@ def turbocharts_convert(
                 warnings.append(
                     f"{Path(target_csv).name}：只有表头、0 行数据（{labels[1:] or ['未知量']}）——"
                     "该曲线在此 RAW 中无数据，图片大概率是空的。"
+                )
+            # ── 单位回退检测（唯一能自动发现"画错图"的地方）──
+            # 引擎对不支持的「单位×chart」组合会**静默**退回别的量：rc=0、success=true、
+            # 图有内容、CSV 有数据，但表头已变成别的单位。实测（2026-11-16）：
+            #   type=HB 请求 db/phase/imag/mag/VSWR/APS/MAS/MV/PSS → 产物表头全是 dBm(Out1)；
+            #   只有 dBm_ 与 real_ 出真图。SP 无此问题（11 种里 10 种各出不同表头）。
+            # 所以这里不信调用方、也不信 --curve-info，只信**产物表头**。
+            requested_units = {c.split("_", 1)[0].lower() for c in group if "_" in c}
+            actual_units = {_label_unit(x).lower() for x in labels[1:]}
+            missing_units = requested_units - actual_units
+            if missing_units and actual_units:
+                warnings.append(
+                    f"{Path(target_csv).name}：请求的单位 {sorted(missing_units)} 未出现在产物表头 "
+                    f"{labels[1:]} 中 —— 引擎在 type={chart_type} 下把该单位静默回退了，"
+                    f"图上画的是回退后的量（引擎 --curve-info 声明的支持列表与此不符）。"
+                    f"请核对数据是否符合预期。"
                 )
 
     # 图片完整性自检：CSV 拆分调用若误用同一 --img，会把多曲线图覆盖成单曲线图

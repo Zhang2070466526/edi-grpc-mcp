@@ -12,7 +12,6 @@
 
 from __future__ import annotations
 
-import warnings
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -74,6 +73,9 @@ def env(tmp_path, monkeypatch):
         return SimpleNamespace(returncode=0, stderr="", stdout="")
 
     monkeypatch.setattr(cr, "run_turbocharts", _run)
+    # 默认不真调引擎 --curve-info（否则每个用例多一条命令，干扰 commands 断言）；
+    # 需要 known_vars 非空的用例再单独 monkeypatch 覆盖。
+    monkeypatch.setattr(cr, "_engine_curve_info", lambda p: None)
     return SimpleNamespace(raw=raw, sp_raw=sp_raw, tmp=tmp_path, commands=commands)
 
 
@@ -108,17 +110,30 @@ def test_unknown_prefix_rejected(env):
     assert resp["error_code"] == "INVALID_LINENAME"
 
 
-def test_missing_variable_reports_curve_not_found(env):
+def test_mag_prefix_recognized(env):
+    """引擎 --curve-info 返回 `mag` 可用单位（SP 下出独立幅度图），convert 必须认 mag_。"""
+    resp = cr.turbocharts_convert(
+        raw_path=str(env.sp_raw), output_path=str(env.tmp / "o.png"), chart_type="SP",
+        linename="mag_S[1,1]")
+    assert resp["success"] is True
+    assert "INVALID_LINENAME" not in resp.get("error_code", "")
+
+
+def test_missing_variable_reports_curve_not_found(env, monkeypatch):
+    monkeypatch.setattr(cr, "_engine_curve_info",
+                        lambda p: {"freq": [{"Out1": ["dBm"]}, {"Out2": ["dBm"]}]})
     resp = cr.turbocharts_convert(
         raw_path=str(env.raw), output_path=str(env.tmp / "o.png"), chart_type="HB",
         linename="dBm_Out9")
     assert resp["error_code"] == "CURVE_NOT_FOUND"
     assert "Out1" in resp["message"]
-    assert resp["details"]["known_variables"] == ["Out1", "Out2", "freq"]
+    assert resp["details"]["known_variables"] == ["Out1", "Out2"]
     assert env.commands == []
 
 
-def test_case_mismatch_warns_with_raw_name(env):
+def test_case_mismatch_warns_with_raw_name(env, monkeypatch):
+    monkeypatch.setattr(cr, "_engine_curve_info",
+                        lambda p: {"freq": [{"Out1": ["dBm"]}, {"Out2": ["dBm"]}]})
     resp = cr.turbocharts_convert(
         raw_path=str(env.raw), output_path=str(env.tmp / "o.png"), chart_type="HB",
         linename="dBm_out1")
@@ -151,6 +166,100 @@ def test_csv_labels_read_back(env):
     assert resp["curve_labels"][str(env.tmp / "o.csv")] == ["freq", "dBm(Out1)"]
     assert resp["csv_generated"] is True
     assert resp["curves"] == ["dBm_Out1"]
+
+
+def test_unit_fallback_detected_via_csv_header(env):
+    """请求 phase_Out1 但引擎回退成 dBm(Out1) ⇒ warnings 必须点名。
+
+    2026-11-16 实测：HB 下 db/phase/imag/mag/VSWR/APS/MAS/MV/PSS 全部静默回退成 dBm，
+    rc=0 且 success=True、图有内容，**只有产物 CSV 表头能看出真相**。
+    """
+    resp = cr.turbocharts_convert(
+        raw_path=str(env.raw), output_path=str(env.tmp / "o.png"), chart_type="HB",
+        csv_path=str(env.tmp / "o.csv"), linename="phase_Out1")
+    assert resp["success"] is True
+    hits = [w for w in resp["warnings"] if "回退" in w and "phase" in w]
+    assert hits, f"应报单位回退，实际 warnings={resp['warnings']}"
+    assert "dBm(Out1)" in hits[0], "要点名实际产物表头"
+
+
+def test_no_fallback_warning_when_unit_matches(env):
+    """请求 dBm_Out1 且表头就是 dBm(Out1) ⇒ 不该有回退告警（避免狼来了）。"""
+    resp = cr.turbocharts_convert(
+        raw_path=str(env.raw), output_path=str(env.tmp / "o.png"), chart_type="HB",
+        csv_path=str(env.tmp / "o.csv"), linename="dBm_Out1")
+    assert not [w for w in (resp.get("warnings") or []) if "回退" in w]
+
+
+def test_label_unit_maps_csv_header():
+    """CSV 列名 → 单位前缀的反推规则（保留引擎原始写法，比对时才 lower）。"""
+    assert cr._label_unit("dBm(Out1)") == "dBm"
+    assert cr._label_unit("dB(S11)") == "dB"        # 引擎表头就是大写 B
+    assert cr._label_unit("phase(S11)") == "phase"
+    assert cr._label_unit("VSWR(1)") == "VSWR"
+    assert cr._label_unit("mag(S11)") == "mag"
+    assert cr._label_unit("S11") == "real"          # 裸变量名等价 real
+    assert cr._label_unit("Out1") == "real"
+
+
+def test_list_result_curves_includes_unit_notes(tmp_path, monkeypatch):
+    """list_result_curves 要带 unit_notes：--curve-info 声明的能力与绘图实现不符。"""
+    raw = tmp_path / "hb.raw"
+    raw.write_text(HB_RAW, encoding="utf-8")
+    monkeypatch.setattr(cr, "_engine_curve_info",
+                        lambda p: {"freq": [{"Out1": ["dBm", "real"]}]})
+    resp = cr.list_result_curves(str(raw))
+    notes = " ".join(resp.get("unit_notes") or [])
+    assert "HB" in notes and "回退" in notes, notes
+    assert "csv_path" in notes, "要指向 turbocharts_convert 的自检路径"
+    assert resp["curves"] == {"freq": [{"Out1": ["dBm", "real"]}]}, "curves 必须原样透传引擎"
+
+
+def test_auto_compose_curves_when_linename_missing(env, monkeypatch):
+    """不传 linename ⇒ 用 `--curve-info` 的清单自动组图，不交给引擎自己挑。
+
+    实测（2026-11-16）：SP 不传 linename 时引擎会把 dB(S11)/dB(S12)/dB(S21)/dB(S22)
+    一股脑画上、单位由引擎定且返回里无从对账；HB 更是只画一张空图。
+    """
+    monkeypatch.setattr(cr, "_engine_curve_info", lambda p: {
+        "freq": [{"S[1,1]": ["db", "dBm", "phase"]}, {"S[1,2]": ["db", "dBm"]}]})
+    resp = cr.turbocharts_convert(
+        raw_path=str(env.sp_raw), output_path=str(env.tmp / "o.png"), chart_type="SP")
+    assert resp["success"] is True
+    assert _linenames(env.commands)[0] == "db_S[1,1]&db_S[1,2]"
+    cmd = env.commands[0]
+    assert cmd[cmd.index("--dependcy") + 1] == "freq", "依赖也要自动定下来"
+    assert any("自动组图" in w for w in resp["warnings"]), resp["warnings"]
+
+
+def test_auto_compose_uses_dbm_for_hb(env, monkeypatch):
+    """HB 自动组图默认 dBm（实测只有 dBm_/real_ 是真图）。"""
+    monkeypatch.setattr(cr, "_engine_curve_info", lambda p: {
+        "freq": [{"Out1": ["db", "dBm", "phase", "real", "imag", "mag"]},
+                 {"Out2": ["db", "dBm", "phase", "real", "imag", "mag"]}]})
+    resp = cr.turbocharts_convert(
+        raw_path=str(env.raw), output_path=str(env.tmp / "o.png"), chart_type="HB")
+    assert resp["success"] is True
+    assert _linenames(env.commands)[0] == "dBm_Out1&dBm_Out2"
+
+
+def test_auto_compose_keeps_explicit_linename(env, monkeypatch):
+    """显式传了 linename ⇒ 不受自动组图影响。"""
+    monkeypatch.setattr(cr, "_engine_curve_info", lambda p: {"freq": [{"Out1": ["dBm"]}]})
+    resp = cr.turbocharts_convert(
+        raw_path=str(env.raw), output_path=str(env.tmp / "o.png"), chart_type="HB",
+        linename="real_Out1")
+    assert resp["success"] is True
+    assert _linenames(env.commands)[0] == "real_Out1"
+    assert not [w for w in (resp.get("warnings") or []) if "自动组图" in w]
+
+
+def test_default_unit_priority():
+    """默认单位优先级：HB→dBm，SP→db（大小写不敏感，返回引擎原始写法）。"""
+    assert cr._default_unit(["db", "dBm", "real"], "HB") == "dBm"
+    assert cr._default_unit(["dB", "dBm"], "SP") == "dB"
+    assert cr._default_unit(["real"], "HB") == "real"
+    assert cr._default_unit([], "SP") is None
 
 
 def test_missing_csv_warns(env, monkeypatch):
@@ -240,27 +349,73 @@ def test_vswr_split_still_works(tmp_path, monkeypatch):
     assert "VSWR_S[1,1]" in names
 
 
-# ── suggested_curves 按 plot 类型分派 ───────────────────────
+# ── 引擎 --curve-info 原生曲线探测 ─────────────────────────
 
-def test_suggest_curves_hb_excludes_phase(tmp_path):
-    raw = tmp_path / "hb.raw"
-    raw.write_text(HB_RAW, encoding="utf-8")
-    resp = cr.list_result_curves(str(raw))
-    ds = resp["datasets"][0]
-    assert ds["plot_type"] == "HB"
-    assert all(not c.startswith("phase_") for c in ds["suggested_curves"])
-    assert "dBm_Out1" in ds["suggested_curves"] and "real_Out2" in ds["suggested_curves"]
-    assert any("HB" in n for n in ds["curve_notes"])
+def test_engine_curve_info_parses_json(monkeypatch):
+    proc = SimpleNamespace(stdout='{"freq": ["S[1,1]", "nf(1)"]}', stderr="")
+    monkeypatch.setattr(cr, "run_turbocharts", lambda *a, **k: proc)
+    assert cr._engine_curve_info("C:/x.raw") == {"freq": ["S[1,1]", "nf(1)"]}
 
 
-def test_suggest_curves_sp_includes_phase_and_vswr(tmp_path):
+def test_engine_curve_info_reads_stderr_when_stdout_empty(monkeypatch):
+    proc = SimpleNamespace(stdout="", stderr='{"freq": ["Out1"]}')
+    monkeypatch.setattr(cr, "run_turbocharts", lambda *a, **k: proc)
+    assert cr._engine_curve_info("C:/x.raw") == {"freq": ["Out1"]}
+
+
+def test_engine_curve_info_returns_none_on_non_json(monkeypatch):
+    proc = SimpleNamespace(stdout="", stderr="some progress line")
+    monkeypatch.setattr(cr, "run_turbocharts", lambda *a, **k: proc)
+    assert cr._engine_curve_info("C:/x.raw") is None
+
+
+def test_engine_curve_info_returns_none_on_exe_error(monkeypatch):
+    def boom(*a, **k):
+        raise OSError("exe not found")
+    monkeypatch.setattr(cr, "run_turbocharts", boom)
+    assert cr._engine_curve_info("C:/x.raw") is None
+
+
+def test_list_result_curves_passthrough_engine_units(tmp_path, monkeypatch):
+    """引擎已直接返回带单位的结构，工具原样透传（不再补单位）。"""
     raw = tmp_path / "sp.raw"
     raw.write_text(SP_RAW, encoding="utf-8")
-    ds = cr.list_result_curves(str(raw))["datasets"][0]
-    assert ds["plot_type"] == "SP"
-    assert "phase_S[2,1]" in ds["suggested_curves"]
-    assert "VSWR_S[1,1]" in ds["suggested_curves"]      # i == j
-    assert "VSWR_S[2,1]" not in ds["suggested_curves"]  # i != j 不给
+    monkeypatch.setattr(cr, "_engine_curve_info",
+                        lambda p: {"freq": [{"S[2,1]": ["db", "dBm"]}, {"nf(1)": ["real"]}]})
+    resp = cr.list_result_curves(str(raw))
+    assert resp["success"] is True
+    assert resp["chart_type"] == "SP"
+    assert resp["curves"] == {
+        "freq": [
+            {"S[2,1]": ["db", "dBm"]},
+            {"nf(1)": ["real"]},
+        ]
+    }
+    assert "datasets" not in resp and "engine_curves" not in resp  # 不再返回手写解析产物
+
+
+def test_list_result_curves_hb_passthrough(tmp_path, monkeypatch):
+    """引擎直接给带单位结构（HB 只给 dBm/real），工具原样透传。"""
+    raw = tmp_path / "hb.raw"
+    raw.write_text(HB_RAW, encoding="utf-8")
+    monkeypatch.setattr(cr, "_engine_curve_info",
+                        lambda p: {"freq": [{"Out1": ["dBm", "real"]}],
+                                   "mix_1": [{"Out1": ["dBm", "real"]}]})
+    resp = cr.list_result_curves(str(raw))
+    assert resp["chart_type"] == "HB"
+    assert resp["curves"] == {
+        "freq": [{"Out1": ["dBm", "real"]}],
+        "mix_1": [{"Out1": ["dBm", "real"]}],
+    }
+
+
+def test_list_result_curves_fails_when_engine_unavailable(tmp_path, monkeypatch):
+    raw = tmp_path / "sp.raw"
+    raw.write_text(SP_RAW, encoding="utf-8")
+    monkeypatch.setattr(cr, "_engine_curve_info", lambda p: None)
+    resp = cr.list_result_curves(str(raw))
+    assert resp["success"] is False
+    assert resp["error_code"] == "CURVE_INFO_FAILED"
 
 
 # ── Resource：引擎自带说明（edi://reference/turbocharts-guide）──
@@ -306,20 +461,6 @@ def test_turbocharts_timeout_returns_error(env, monkeypatch):
     assert resp["error_code"] == "TOOL_TIMEOUT"
 
 
-def test_nf_regex_has_no_nested_set_warning():
-    r"""回归：nf 变量正则曾写 `[[(]` / `[\])]`（疑似嵌套字符类）⇒ FutureWarning
-    「Possible nested set」，Python 3.13+ 会变硬错误。现改显式转义，识别行为不变。
-    """
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", FutureWarning)
-        for name in ("nf", "NF", "nfmin", "nf(1)", "nf[2]", "nf[12]"):
-            curves, _ = cr._suggest_curves(name, "real", "")
-            assert curves == [f"real_{name}"], name
-        # 非噪声系数变量走通用分支（方括号归一成圆括号）
-        for name, expected in (("nfx", "real_nfx"), ("nf1", "real_nf1"),
-                               ("nf[abc]", "real_nf(abc)")):
-            curves, _ = cr._suggest_curves(name, "real", "")
-            assert curves == [expected], name
 # ── command_runs：每次子进程调用逐条回传（2026-09-29 需求）──────────
 
 def test_command_runs_records_image_and_each_csv_call(env):

@@ -21,7 +21,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from servers.eda.config import TURBOCHARTS_PATH
-from servers.utils import build_artifact, build_file_link, error_response, per_tool_mutex
+from servers.utils import (build_artifact, build_file_link, default_result_path,
+                           error_response, per_tool_mutex)
 from servers.turbocharts.config import engine_failures, engine_report, record_run, run_turbocharts
 from servers.turbocharts.convert_raw import detect_chart_type
 from servers import mcp
@@ -32,7 +33,7 @@ from servers import mcp
 def compare_simulation_results(
     result_paths: list[str],
     curve: str,
-    output_path: str,
+    output_path: str = "",
     chart_type: str = "",
     labels: list[str] | None = None,
     dependency: str = "freq",
@@ -48,7 +49,7 @@ def compare_simulation_results(
     Args:
         result_paths: RAW 文件路径列表（2-8 个）。
         curve: 曲线名，如 "DB_S[2,1]"。
-        output_path: 对比图输出路径。
+        output_path: 对比图输出路径；留空则落到默认产物目录（<result_dir>/compare_simulation_results_<时间戳>.png）。
         chart_type: 图表类型 SP / HB / XDB；默认空 = 自动从 RAW 的 Plotname 推断
             （必须与数据一致：HB 数据传 "SP" 会白跑）。
         labels: 每个结果文件的标签，默认使用文件名。
@@ -112,6 +113,8 @@ def compare_simulation_results(
                  Path(csv_path).name if csv_path else "(none)")
 
     # 规范化输出路径
+    if not (output_path or "").strip():
+        output_path = default_result_path("compare_simulation_results", ".png")
     output_path = str(Path(output_path).expanduser().resolve())
     if csv_path:
         csv_path = str(Path(csv_path).expanduser().resolve())
@@ -164,7 +167,7 @@ def compare_simulation_results(
                     f"无法从 {rp} 的 CSV 解析出数据（chart_type={chart_type!r}、曲线名 "
                     f"{curve!r} 与 RAW 不匹配时会这样"
                     f"{_own_type_hint(file_types, rp, chart_type)}；"
-                    "先用 list_result_curves 取 suggested_curves）",
+                    "先用 list_result_curves 查曲线名）",
                     **(_notes_detail(notes)),
                 )
             raw_curves.append((x_vals, y_vals))

@@ -59,6 +59,9 @@ def _mock_engine(tmp_path, monkeypatch, stderr_text: str = ENGINE_STDERR):
         return SimpleNamespace(returncode=0, stdout="", stderr=stderr_text)
 
     monkeypatch.setattr(cr, "run_turbocharts", _run)
+    # --curve-info 是 convert 内部的变量存在性校验调用，不进 command_runs / 日志；
+    # 这里 mock 掉，避免干扰 calls 计数（本测试只关心 img/csv 两趟引擎原文落盘）。
+    monkeypatch.setattr(cr, "_engine_curve_info", lambda p: None)
     return raw, calls
 
 

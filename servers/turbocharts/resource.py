@@ -29,7 +29,7 @@ def guide_path() -> Path:
     name="Turbocharts RAW Guide",
     title="Turbocharts RAW 转图像说明",
     description="引擎自带《RAW 转图像工具使用说明》原文：命令行参数（--raw/--img/--type/--csv/"
-                "--linename/--dependcy/--ac）、--linename 的单位与线段名写法（db、phase、real、"
+                "--linename/--dependcy/--ac/--curve-info）、--linename 的单位与线段名写法（db、phase、real、"
                 "vswr、aps、af、时延 delays）、各使用示例。调用 turbocharts_convert 前读本资源。",
     mime_type="text/plain",
 )

@@ -3,13 +3,13 @@ RAW 转图像工具 - 用户使用说明
 本工具用于将 RAW 文件转换为常见图像格式，并支持可选的 CSV 数据导出。您只需通过命令行参数指定输入文件、输出路径及转换类型，即可快速完成转换。
 
 命令格式
-RawConverter --raw <raw_path> --img <image_path> --type <image_type> [--csv <csv_path>] [--linename <line_name>]
+RawConverter --raw <raw_path> --img <image_path> --type <image_type> [--csv <csv_path>] [--linename <line_name>] [--curve-info]
 
 必需参数
 参数	说明	示例
 --raw	输入的 RAW 文件路径（须包含文件名）	--raw "D:/data/sample.raw"
 --img	输出的图像文件路径（支持常见格式如 PNG、JPG 等）	--img "D:/output/result.png"
---type	图像转换类型，决定如何处理 RAW 数据（具体支持的类型由程序内部定义，例如 "SP" "HB"和"XDB"）	--type ”SP“
+--type	图像转换类型，决定如何处理 RAW 数据（具体支持的类型由程序内部定义，例如 "SP" "HB"和"XDB"）	--type "SP"
 
 可选参数
 参数	说明	示例
@@ -17,6 +17,7 @@ RawConverter --raw <raw_path> --img <image_path> --type <image_type> [--csv <csv
 --linename	绘制线段名称。	--linename "db_s[1,1]"  --linename "real_delayS[1,1]"   _前是单位（PS：常用单位db、phase、real(实数),另vswr，aps(附加移相)，af（幅度波动）） 后边是绘制线段名称（PS：时延的线段名称为delays[2,1]）
 --dependcy  依赖
 --ac        精度计算
+--curve-info	仅输出 RAW 文件的依赖与可用曲线信息（JSON 结构见文末），不画图	--curve-info
 
 //ac="ac_type#bit#data#nv_type#nv_value"
 ac 字符串中 必须包含这些 即#分割的5组字符串
@@ -57,3 +58,30 @@ turbocharts_app.exe --raw "C:/Users/crb/Desktop/中文路径测试/result_SW.raw
 
 HB绘制两个结果图
 turbocharts_app.exe --raw "C:/Users/crb/Desktop/中文路径测试/result_SW.raw" --img "C:/Users/crb/Desktop/中文路径测试/history/hb_Out1_Out2.png" --type HB --linename "dBm_Out1&dBm_Out2"
+
+
+
+--curve-info 仅输出RAW文件中的依赖与可用曲线信息
+
+使用示例
+turbocharts_app.exe --raw "E:/test/result.raw" --curve-info
+
+//--curve-info输出json结构
+{
+  "<依赖名称>": [
+    {"<曲线名称1>":["db", "dBm", ...]},
+    {"<曲线名称2>":["db", "dBm", ...]},
+  ],
+  ...
+}
+
+绘制时曲线名、依赖名都需要。
+只能选择JSON中存在的依赖；曲线必须属于所选依赖。
+曲线名称必须精确传递。后续调用 --linename 时，应使用 <单位>_<JSON 中的曲线名称>。
+依赖名称必须精确传递。后续调用 --dependcy 时，应原样使用 JSON 的键。
+
+<单位>_<曲线名>
+通用单位：db,dBm,phase,real,imag,mag
+S专属：VSWR，APS，MAS，MV，PSS
+
+real_delay特殊拼接： real_delayS[2,1]
