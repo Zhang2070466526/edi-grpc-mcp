@@ -7,7 +7,6 @@ update_simulation_component      按实例名更新参数（自动识别类型�
 delete_simulation_component      按实例名删除器件（EDI 直接执行）
 replace_port_component           替换端口器件类型（TermG↔P_nToneG）
 set_component_active_state       确定性设置 NORMAL/DISABLED/SHORTED
-generate_schematic_from_netlist  从网表追加或重建 main 原理图
 replace_schematic_from_file      从 .ep 文件整体替换原理图
 attach_out_component             为器件引脚挂载 Out 器件并自动连线
 
@@ -872,7 +871,7 @@ def set_component_active_state(
 # 7. generate_schematic_from_netlist
 # ═══════════════════════════════════════════════════════════
 
-@mcp.tool()
+# 已下架（2026-11-17）：不再注册为 MCP 工具，函数体保留供内部调用/后续恢复。
 def generate_schematic_from_netlist(
         project_path: str,
         netlist_path: str,

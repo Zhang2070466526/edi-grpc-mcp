@@ -62,6 +62,7 @@ else:
 REPORT_EXPORTER_PATH = str(_SIM_TOOL_DIR / "simulation_report" / "Report_Exporter.exe")
 DRAWTOOL_PATH = str(_SIM_TOOL_DIR / "simulation_report" / "drawtool.exe")
 TR_SIMULATOR_PATH = str(_SIM_TOOL_DIR / "tr_simulation" / "TR_Simulator.exe")
+NETLIST_PATHFINDER_PATH = str(_SIM_TOOL_DIR / "tr_simulation" / "Netlist_Pathfinder.exe")
 MIXER_SIMULATION_PATH = str(_SIM_TOOL_DIR / "mixer_simulation" / "mixer_simulation.exe")
 
 # ADS 安装目录兜底候选（最后一级：显式 ads_path / EDI_ADS_PATH / config.ini 都拿不到时才用）

@@ -40,7 +40,6 @@ simulation_components.py — 仿真器件（10 工具）
     replace_port_component           替换端口器件类型（TermG↔P_nToneG）
     delete_simulation_component      按实例名删除器件
     set_component_active_state       确定性设置 NORMAL/DISABLED/SHORTED
-    generate_schematic_from_netlist  从网表生成原理图（清空需双重确认）
     replace_schematic_from_file      从 .ep 文件整体替换原理图
     attach_out_component             为器件引脚挂载 Out 器件
 
@@ -113,7 +112,6 @@ from servers.eda.simulation_components import (  # noqa: F401
     replace_port_component,
     delete_simulation_component,
     set_component_active_state,
-    generate_schematic_from_netlist,
     replace_schematic_from_file,
     attach_out_component,
 )

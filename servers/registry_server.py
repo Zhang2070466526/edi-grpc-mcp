@@ -74,7 +74,7 @@ _INTERNAL_TOOLS: frozenset[str] = frozenset({
     # 仿真器件
     "create_simulation_component", "update_simulation_component",
     "replace_port_component", "delete_simulation_component",
-    "set_component_active_state", "generate_schematic_from_netlist",
+    "set_component_active_state",
     "replace_schematic_from_file", "attach_out_component",
     "update_schematic_components_transform",
     # 网表/截图/CSV
@@ -88,8 +88,8 @@ _INTERNAL_TOOLS: frozenset[str] = frozenset({
     # 工作区 / 原理图扩展
     "create_workspace", "switch_workspace", "get_current_workspace",
     "list_ideal_components", "add_ideal_component", "clear_schematic", "add_wire",
-    # 独立仿真 exe（TR 收发链路 / 混频链路，需提权 + ADS）
-    "run_tr_simulation", "run_mixer_simulation",
+    # 独立 exe 工具（由 EDI 安装目录提供）：TR/混频需提权 + ADS，网表寻路纯本地但同属 EDI 组件
+    "run_tr_simulation", "run_mixer_simulation", "find_netlist_paths",
     # 其它 exe 工具 + EDI 启动/日志诊断
     "draw_chart", "export_simulation_report", "turbocharts_convert",
     "get_service_logs", "launch_edi",

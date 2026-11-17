@@ -78,6 +78,11 @@ _EXAMPLES: dict[str, Any] = {
                    "freq_pout": 30, "pwr_pout": -20}],
         "indicators": "输出增益,噪声系数,IP1dB,移相误差RMS,衰减误差RMS",
     },
+    "find_netlist_paths": {
+        "netlist_path": "C:/Users/<user>/EDI-Workspace/projects/<工程>/netlist.log",
+        "ep_path": "C:/Users/<user>/EDI-Workspace/projects/<工程>/schematics/main/schematic.ep",
+        "pairs": [{"input": 1, "output": 2}, {"input": 2, "output": 1}],
+    },
     # ── 微波本地计算 ────────────────────────────────────────────
     "filter_order_lowpass": {
         "f_p_ghz": 1.0,
@@ -262,11 +267,13 @@ _KEYWORD_AMBIGUOUS_RATIO = 1.5  # top1 领先不足 1.5 倍 → 不替调用方�
 #: （实测："微带线宽" 会先命中 design_wilkinson，因为它的描述写了"输出各级微带线宽"），
 #: 所以把最常用的一批做成显式路由；未命中再走通用打分兜底。
 _KEYWORD_ROUTES: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
+    (("导出网表", "网表导出", "取网表"), ("export_project_netlist",)),
     (("滤波器阶数", "阶数估计", "几阶", "要几阶"), ("filter_order_lowpass", "filter_order_highpass", "filter_order_bandstop")),
     (("微带线宽", "线宽", "阻抗计算", "传输线", "微带"), ("calculate_transline",)),
     (("功分器", "威尔金森", "wilkinson", "隔离电阻", "功分"), ("design_wilkinson", "wilkinson_marchand_order")),
     (("混频", "变频", "混频器", "本振", "镜像抑制"), ("run_mixer_simulation",)),
     (("噪声系数", "tr仿真", "收发链路", "p-1db", "抗烧毁"), ("run_tr_simulation",)),
+    (("寻路", "信号路径", "开关状态", "开关bits", "netlist", "路径分析"), ("find_netlist_paths",)),
     (("s参数", "sparameter", "曲线", "画图", "raw"), ("list_result_curves", "turbocharts_convert")),
     (("报告", "pdf", "docx", "交付"), ("export_simulation_report", "run_mixer_simulation")),
     (("查器件", "型号", "封装", "器件参数", "成本"), ("search_public_models", "search_personal_models", "get_components_static_params")),
@@ -330,9 +337,7 @@ def _keyword_match(query: str, tools: dict[str, Any],
         elif q in doc:
             score += _KEYWORD_PHRASE_BONUS * 0.5
         for term in terms:
-            if term in name_l:
-                score += _KEYWORD_DESC_BONUS
-            elif term in desc:
+            if term in name_l or term in desc:
                 score += _KEYWORD_DESC_BONUS
             elif term in doc:
                 score += _KEYWORD_DOC_BONUS
@@ -374,6 +379,30 @@ def _build_detail(tool: Any, key: str) -> dict[str, Any]:
         "example_source": source,
         "notes": notes,
     }
+
+
+def _keyword_result(key: str, hits: list[tuple[float, str]], tools: dict[str, Any]) -> dict[str, Any]:
+    """能力关键词命中的响应：候选列表 + （分差够大时）最匹配工具的完整说明。"""
+    body: dict[str, Any] = {
+        "success": True,
+        "matched_by": "keyword",
+        "query": key,
+        "candidates": [
+            {"name": n, "score": round(s, 1),
+             "summary": (tools[n].description or "").strip()}
+            for s, n in hits
+        ],
+    }
+    # 分差太小说明「这个词组在多个工具里都合理」→ 不替调用方拍板，只给候选
+    ambiguous = len(hits) > 1 and hits[0][0] < hits[1][0] * _KEYWORD_AMBIGUOUS_RATIO
+    if ambiguous:
+        body["hint"] = ("多个工具都与该能力相关，未替你选定：先看 candidates 的 summary 选一个，"
+                        "再 describe_tool(candidates[].name) 拿参数与示例。")
+    else:
+        body["detail"] = _build_detail(tools[hits[0][1]], hits[0][1])
+        body["hint"] = (f"按能力关键词命中 {len(hits)} 个工具，detail 是最匹配的那个；"
+                        "换工具就把 candidates[].name 传给 describe_tool。")
+    return body
 
 
 @mcp.tool()
@@ -419,11 +448,16 @@ def describe_tool(name: str = "") -> dict:
     if tool is not None:
         return _build_detail(tool, key)
 
-    # 精确名没命中：名字命中（拼错/前缀）优先，其次能力关键词，最后相似名建议
+    # 精确名没命中：能力词直连优先，其次名字命中（拼错/前缀），再其次通用打分，最后相似名建议
     hits = _keyword_match(key, tools)
 
-    # 只有「名字里真的含这个串」才算名字命中（拼错/前缀）；
-    # 直连表命中的 10 分不能走这条，否则 3 个同分工具会被随便挑一个当答案。
+    # 能力词命中直连表：直接给「候选 + 最匹配工具的完整说明」。
+    # 不能让它走下面两条捷径，否则 netlist / wilkinson 这类词会被缩成「名字最像的那一个工具」，
+    # 同类工具（netlist → 寻路 / 导出 / 仿真）就不给候选了，甚至落到 TOOL_NOT_FOUND。
+    if _route_hits(key, tools) and hits:
+        return _keyword_result(key, hits, tools)
+
+    # 只有「名字里真的含这个串」才算名字命中（拼错/前缀）
     if hits and _norm(key) in _norm(hits[0][1]):
         top = hits[0][1]
         return {
@@ -449,26 +483,7 @@ def describe_tool(name: str = "") -> dict:
         return resp
 
     if hits:
-        body: dict[str, Any] = {
-            "success": True,
-            "matched_by": "keyword",
-            "query": key,
-            "candidates": [
-                {"name": n, "score": round(s, 1),
-                 "summary": (tools[n].description or "").strip()}
-                for s, n in hits
-            ],
-        }
-        # 分差太小说明「这个词组在多个工具里都合理」→ 不替调用方拍板，只给候选
-        ambiguous = len(hits) > 1 and hits[0][0] < hits[1][0] * _KEYWORD_AMBIGUOUS_RATIO
-        if ambiguous:
-            body["hint"] = ("多个工具都与该能力相关，未替你选定：先看 candidates 的 summary 选一个，"
-                            "再 describe_tool(candidates[].name) 拿参数与示例。")
-        else:
-            body["detail"] = _build_detail(tools[hits[0][1]], hits[0][1])
-            body["hint"] = (f"按能力关键词命中 {len(hits)} 个工具，detail 是最匹配的那个；"
-                            "换工具就把 candidates[].name 传给 describe_tool。")
-        return body
+        return _keyword_result(key, hits, tools)
 
     resp = error_response(
         "TOOL_NOT_FOUND",

@@ -565,8 +565,7 @@ class TestToolCount:
         assert "copy_image_to_workspace" not in tools
         # All 7 sim component tools should be present
         for name in ["create_simulation_component", "update_simulation_component",
-                     "delete_simulation_component", "set_component_active_state",
-                     "generate_schematic_from_netlist"]:
+                     "delete_simulation_component", "set_component_active_state"]:
             assert name in tools, f"Missing tool: {name}"
 
     def test_no_upsert_registered(self):

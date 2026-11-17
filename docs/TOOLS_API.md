@@ -2253,18 +2253,6 @@ replace_port_component(project_path: str, target_instance_name: str, replacement
 | `parameters` | dict | 否 | None | 可选参数字典 |
 | `timeout_seconds` | int | 否 | 300 | 最长等待秒数 |
 
-### `generate_schematic_from_netlist`
-
-```python
-from servers.eda.simulation_components import generate_schematic_from_netlist
-
-generate_schematic_from_netlist(project_path: str, netlist_path: str, clear_before_import: bool = False, confirm_clear: bool = False, timeout_seconds: int = 300) -> dict
-```
-
-从网表文件导入生成 main 原理图。默认追加模式。`clear_before_import=true` 会清空原理图，必须同时传 `confirm_clear=true` 确认。
-
----
-
 ### `attach_out_component`
 
 ```python
@@ -2506,6 +2494,44 @@ draw_chart(series: list, image_path: str, chart_title: str = "", x_axis_title: s
 返回：`{"success": True, "image_path": "...", "message": "...", "artifacts": [...], "links": {"image": {...}}}`。
 
 ⚠️ `drawtool.exe` 带管理员权限清单，启动会请求 UAC（服务以管理员运行时不会弹，否则会卡在 UAC）。
+
+---
+
+### `find_netlist_paths`
+
+```python
+from servers.simulation_tool import find_netlist_paths
+
+find_netlist_paths(netlist_path: str, ep_path: str, pairs: list, max_paths: int = 10000,
+                   max_states: int = 1000000, timeout: int = 30, encoding: str = "auto") -> dict
+```
+
+寻路：给定网表 + 原理图 + 有向端口对，枚举每个端口对的全部信号路径，并给出每条路径上每个开关的目标 Bits（`required_bits`）。纯本地计算，不需要 EDI 运行 / ADS / gRPC，输入只读。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `netlist_path` | str | 是 | — | 网表文件路径（netlist.log） |
+| `ep_path` | str | 是 | — | 对应的 schematic.ep 路径 |
+| `pairs` | list | 是 | — | 有向端口对 `[{input, output}]`，正整数且 input≠output |
+| `max_paths` | int | 否 | 10000 | 每端口对最多路径数，0 不限 |
+| `max_states` | int | 否 | 1000000 | 每端口对搜索边数预算，0 不限 |
+| `timeout` | int | 否 | 30 | 每端口对搜索时间预算（秒），0 不限 |
+| `encoding` | str | 否 | auto | 源文件编码（auto=先 UTF-8/BOM 再 GB18030） |
+
+返回：
+```python
+{"success": True, "message": "寻路完成：2 个端口对，共 2 条路径",
+ "summary": {"ports": [1, 2],
+             "pairs": [{"input_port": 1, "output_port": 2, "status": "ok", "complete": True, "path_count": 1}],
+             "total_paths": 2},
+ "result": {...exe 完整 JSON（netlist_path/ep_path/ports/results/errors）...}}
+```
+
+`success` 只看退出码 0（搜索完整且无状态错误）；某端口对 `incomplete`（complete=false）或某路径 `configuration_error` 时，需看 `summary` 各对状态与 `result.errors`。每条路径含 `switch_settings`（每个开关的 `required_bits` 目标状态）。
+
+> **限制：拓扑 ≠ 物理。** 这是拓扑寻路，不是完整射频物理模型：放大器只允许 index 0→1；开关、功分器、电桥只允许公共端 ↔ 某一支路；**其余多端口器件（含混频器）按双向直通处理，不区分 RF/LO/IF，不判断频率转换、隔离度、增益、频段或路径是否独占**。所以「某条路径存在」不等于该路径在物理上可用。`switch_settings` 只含 EP `genl_type=27` 的开关；`Bits` 存在不代表器件是开关 —— 移相器/衰减器的 Bits 不由寻路决定，保持原值。另：`ep_path` 必须与该网表同工程（实测用错工程返回 `METADATA_MISSING`，不会静默给错路径）；`--timeout` 不含文件解析与 JSON 序列化耗时。器件规则全表见仓库 `servers/simulation_tool/Netlist_Pathfinder使用说明.md`。
+
+错误码：`INVALID_PARAMETERS`（pairs/预算不合法、`--encoding` 无效）、`FILE_NOT_FOUND`（网表或 EP 不存在）、`PATHFINDER_FAILED`（exe 未输出合法 JSON）、`TOOL_TIMEOUT`（子进程超时，retryable）、`EXE_NOT_FOUND`（安装目录缺 `Netlist_Pathfinder.exe`）、`EXE_NEEDS_ELEVATION`（WinError 740，服务需提权启动）。
 
 ---
 

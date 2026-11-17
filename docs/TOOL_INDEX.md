@@ -7,7 +7,7 @@
 - `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
 - `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
 - `add_wire` — 连接指定工程内两个器件的指定引脚，按需创建或合并网段并保存。
-- `analyze_image` — 调用视觉模型分析本地图片内容，返回结构化文字结果 —— ⚠️ 结果可能编造（实测把电路原理图认成加法器），只作粗看、不得作为工程结论。
+- `analyze_image` — 调用视觉模型分析本地图片内容，返回结构化文字结果 —— ⚠️ 结果可能编造（实测把电路原理图认成加法器），只作粗看、不得作为工程结论。(仅开发使用)
 - `analyze_mixer_spur` — 混频杂散分析：枚举 m×源频 ± n×LO 的杂散组合，判断是否落入目标输出频带。
 - `analyze_variables` — 分析工程中的变量定义和引用关系。
 - `attach_out_component` — 为目标器件引脚挂载一个 Out 器件，并自动连线。
@@ -52,7 +52,7 @@
 - `filter_order_bandstop` — 带阻阶数估算：阻带是 f_s1~f_s2 这一段，返回阶数与陷波零点。低通用 filter_order_lowpass、高通用 filter_order_highpass。
 - `filter_order_highpass` — 高通阶数估算：通带自 f_p 向上、阻带在 f_p 之下，返回阶数与传输零点。低通用 filter_order_lowpass、带阻用 filter_order_bandstop。
 - `filter_order_lowpass` — 低通阶数估算：通带到 f_p、阻带在 f_p 之上，返回阶数与传输零点。高通用 filter_order_highpass、带阻用 filter_order_bandstop。
-- `generate_schematic_from_netlist` — 将网表文件导入工程生成 main 原理图。
+- `find_netlist_paths` — 寻路：给定网表 + 原理图 + 有向端口对，枚举每个端口对的全部信号路径，并给出每条路径上每个开关的目标 Bits。
 - `get_components_static_params` — 查询器件的固有参数（重量、尺寸、封装、所属厂商、成本等）。
 - `get_current_workspace` — 查询程序当前实际加载的工作区目录。
 - `get_hfss_analysis_status` — 查询 HFSS 异步仿真状态（默认只读本地，不访问 AEDT）。

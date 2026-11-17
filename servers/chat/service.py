@@ -43,7 +43,6 @@ from servers.eda.simulation_components import (  # noqa: E402
     get_simulation_component_schema, list_simulation_components,
     create_simulation_component, update_simulation_component,
     delete_simulation_component, set_component_active_state,
-    generate_schematic_from_netlist,
     replace_port_component,
     replace_schematic_from_file,
 )
@@ -125,10 +124,6 @@ _CHAT_TOOL_DESCRIPTIONS: dict[str, str] = {
     ),
     "set_component_active_state": (
         "确定性设置器件状态为 NORMAL、DISABLED 或 SHORTED，不是状态切换"
-    ),
-    "generate_schematic_from_netlist": (
-        "从网表追加或重建 main 原理图；"
-        "clear_before_import=true 会清空原理图，必须同时确认"
     ),
     "update_simulation_component": (
         "按实例名更新器件参数。SP/HB/XDB 支持校验，其他类型参数原样发送"
@@ -564,9 +559,6 @@ class ChatService:
                             if name == "close_edi_project" and not args.get("need_save"):
                                 continue
                             destructive.append(tc)
-                        elif name == "generate_schematic_from_netlist":
-                            if args.get("clear_before_import"):
-                                destructive.append(tc)
                     if destructive:
                         if len(tool_calls) > 1:
                             return ChatResponse(
@@ -585,7 +577,7 @@ class ChatService:
                                                 reply=f"参数校验失败: {validation_result.get('error', {}).get('detail', '')}",
                                                 context=self._build_context(session))
                         # 清空原理图：Chat 层补 confirm_clear=True，不信任模型传入
-                        if tool_name in ("generate_schematic_from_netlist", "clear_schematic"):
+                        if tool_name == "clear_schematic":
                             validation_result["confirm_clear"] = True
                         pending = _create_pending(tool_name, validation_result)
                         session.pending_action = pending
@@ -735,7 +727,6 @@ class ChatService:
             "list_schematic_components", "get_schematic_component_info",
             "create_simulation_component", "update_simulation_component",
             "delete_simulation_component", "set_component_active_state",
-            "generate_schematic_from_netlist",
             "replace_models_from_csv",
             "replace_port_component", "attach_out_component",
             "replace_schematic_from_file",
@@ -926,7 +917,6 @@ _TOOL_LABELS: dict[str, str] = {
     "update_simulation_component": "更新器件",
     "delete_simulation_component": "删除器件",
     "set_component_active_state": "设置状态",
-    "generate_schematic_from_netlist": "生成原理图",
     "replace_port_component": "替换端口",
     "attach_out_component": "挂载Out器件",
     "replace_schematic_from_file": "替换原理图",

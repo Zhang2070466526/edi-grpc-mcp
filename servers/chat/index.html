@@ -242,7 +242,7 @@ const TOOL_ZH = {
     list_eda_tasks:"仿真任务列表",list_result_curves:"RAW曲线列表",analyze_image:"分析图片",
     create_simulation_component:"创建仿真器件",update_simulation_component:"更新仿真器件",
     delete_simulation_component:"删除器件",set_component_active_state:"设置器件状态",
-    get_simulation_component_schema:"控件参数",generate_schematic_from_netlist:"网表生成原理图",attach_out_component:"挂载Out器件",replace_schematic_from_file:"替换原理图",
+    get_simulation_component_schema:"控件参数",attach_out_component:"挂载Out器件",replace_schematic_from_file:"替换原理图",
     cst_solve_async:"CST求解",cst_solve_query:"CST求解查询",cst_export_snp:"CST导出S参数",cst_export_farfield:"CST导出远场方向图",cst_export_farfield_query:"CST导出远场查询",
     open_document:"打开文档",get_components_static_params:"器件固有参数",
 };
@@ -285,7 +285,7 @@ let foldedCats = JSON.parse(localStorage.getItem("eda_folded_cats") || "[]");
 function catFor(name) {
     if (["list_epp_projects","open_edi_project","close_edi_project","get_project_summary","analyze_variables"].includes(name)) return "工程";
     if (["list_schematic_components","get_schematic_component_info","list_simulation_components","get_simulation_component_schema"].includes(name)) return "器件查询";
-    if (["create_simulation_component","update_simulation_component","delete_simulation_component","set_component_active_state","generate_schematic_from_netlist","replace_port_component","attach_out_component","replace_schematic_from_file"].includes(name)) return "器件管理";
+    if (["create_simulation_component","update_simulation_component","delete_simulation_component","set_component_active_state","replace_port_component","attach_out_component","replace_schematic_from_file"].includes(name)) return "器件管理";
     if (["start_simulation_async","get_simulation_async_status","get_simulation_async_result","list_eda_tasks","simulate_netlist","simulate_netlist_with_ads"].includes(name)) return "仿真";
     if (["export_project_netlist","capture_schematic","list_result_curves"].includes(name)) return "分析导出";
     if (["turbocharts_convert","compare_simulation_results"].includes(name)) return "图表";

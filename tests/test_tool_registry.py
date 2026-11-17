@@ -25,7 +25,7 @@ def test_all_tools_registered():
         "get_simulation_component_schema",
         "list_simulation_components", "create_simulation_component",
         "update_simulation_component", "delete_simulation_component",
-        "generate_schematic_from_netlist", "set_component_active_state",
+        "set_component_active_state",
         "replace_port_component", "attach_out_component",
         "replace_schematic_from_file", "update_schematic_components_transform",
         "list_schematic_components", "get_schematic_component_info",
@@ -60,6 +60,7 @@ def test_all_tools_registered():
         "run_mixer_simulation",
         "analyze_mixer_spur", "calculate_rf_dynamic_range",
         "draw_chart",
+        "find_netlist_paths",
         "describe_tool",
     ]
     assert len(tools) == len(required), f"expected {len(required)} tools, got {len(tools)} ({sorted(tools)})"

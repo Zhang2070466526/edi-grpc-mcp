@@ -730,7 +730,6 @@ Chat 工具调用日志对路径做脱敏（只记文件名），不暴露用户
 |---|---|
 | `delete_simulation_component` / `replace_models_from_csv` / `replace_port_component` | 无条件确认 |
 | `close_edi_project` | `need_save=true` 时确认 |
-| `generate_schematic_from_netlist` | `clear_before_import=true` 时确认 |
 
 Chat 层拦截 → 保存 `PendingAction` → 展示操作摘要 → 用户明确回复「确认」才执行 → 一次确认执行一次，5 分钟过期 → 执行时用原始保存参数（防模型篡改）。
 
@@ -748,7 +747,7 @@ Chat 层拦截 → 保存 `PendingAction` → 展示操作摘要 → 用户明�
   - `2` = 只保留「内部工具 + 无依赖计算工具」（白名单），其余（ANSYS/CST/LASPCEM/图片/文档等）全下架；
   - `3` = 下架软 IP（design_chip）+ LASPCEM 电磁仿真工具（其余含内部 gRPC 工具保留）。
 - 名单：`servers/registry_server.py` 里的几个 `frozenset`：
-  - `_INTERNAL_TOOLS` —— 依赖 EDI gRPC(50055) 的工具 + 独立仿真 exe 工具 + 配套查询/诊断工具（约 50 个）。
+  - `_INTERNAL_TOOLS` —— 依赖 EDI gRPC(50055) 的工具 + 由 EDI 安装目录提供的独立 exe 工具（TR / 混频 / 绘图 / 报告 / 网表寻路）+ 配套查询/诊断工具（约 51 个）。
   - `_CALC_TOOLS` —— 无依赖的本地纯计算工具（微波计算 + 射频链路计算，9 个）。mode 2 时与内部工具一起保留。
   - `_MODE3_TOOLS` —— 软 IP（design_chip）+ LASPCEM 电磁仿真工具（约 12 个）。mode 3 时下架。
   - `_INTERNAL_PROMPTS` —— 引导调用这些工具的 7 个 prompt。
@@ -788,7 +787,6 @@ Chat 层拦截 → 保存 `PendingAction` → 展示操作摘要 → 用户明�
 | `update_simulation_component` | UPDATE(15) | **三路类型推断**（见下），无条件执行完整校验 + wire 转换 |
 | `delete_simulation_component` | DELETE(12) | 不做本地预检查，直接由 EDI 按 instance_name 执行 |
 | `set_component_active_state` | SET_ACTIVE_STATE(14) | 状态规范化 `.strip().upper()`，确定性设置（幂等） |
-| `generate_schematic_from_netlist` | GENERATE(13) | 双重确认：`clear_before_import=true` 必须同时 `confirm_clear=true` |
 | `replace_port_component` | REPLACE_PORT_COMPONENT(16) | TermG/P_nToneG 替换，保留连线，Chat 层需确认 |
 | `attach_out_component` | ATTACH_OUT_COMPONENT(17) | 自动判断引脚朝向 → 计算放置位置 → 顺时针四方向检测重叠 → 器件+网线同一撤销组 |
 | `list_simulation_components` | — | 本地读 + wire→public 映射 |
@@ -939,7 +937,6 @@ else:                                 # 两者都没有
 | `update_simulation_component` | 修改器件参数 | list（instance_name）+ schema（校验） | — |
 | `delete_simulation_component` | 删除不需要的器件 | list（instance_name） | — |
 | `set_component_active_state` | 仿真时临时禁用/短路器件（不改参数） | list（instance_name） | — |
-| `generate_schematic_from_netlist` | 从网表快速重建/追加原理图 | export_project_netlist（netlist 文件） | — |
 | `replace_port_component` | 端口类型切换（TermG↔P_nToneG）保留连线 | list（instance_name） | — |
 | `attach_out_component` | 给器件引脚挂 Out 器件观察输出 | list（instance_name） | — |
 | `replace_schematic_from_file` | 用现成 .ep 文件整体替换原理图 | 现成 .ep 文件 | — |
@@ -960,7 +957,7 @@ else:                                 # 两者都没有
 
 | 工具 | 动机 | 依赖（输入来自） | 被依赖（输出供） |
 |---|---|---|---|
-| `export_project_netlist` | 查看/导出工程网表 | open_edi_project | simulate_netlist / generate_schematic_from_netlist |
+| `export_project_netlist` | 查看/导出工程网表 | open_edi_project | simulate_netlist |
 | `capture_schematic` | 截图原理图供分析/报告 | open_edi_project | 报告、show_image |
 | `export_schematic_components_to_csv` | 生成模型替换用的器件 CSV | project_path | replace_models_from_csv |
 | `get_signal_chain` | 理解信号从源到负载 | 网表 | simulate_anti_burnout 前置 |
