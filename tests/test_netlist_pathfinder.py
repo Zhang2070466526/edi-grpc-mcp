@@ -2,8 +2,18 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+
+import pytest
 
 from servers.simulation_tool import netlist_pathfinder as np
+
+
+@pytest.fixture(autouse=True)
+def _isolate_output_dir(tmp_path, monkeypatch):
+    """默认产物目录换成 tmp —— 否则每个用例都会往真实的 %TEMP%/mcp_result 里写文件。"""
+    monkeypatch.setattr(np, "default_result_path",
+                        lambda name, ext: str(tmp_path / f"{name}_auto{ext}"))
 
 
 def _files(tmp_path):
@@ -132,6 +142,56 @@ def test_timeout_is_retryable(tmp_path, monkeypatch):
     monkeypatch.setattr(np, "run_exe", boom)
     r = np.find_netlist_paths(n, e, [{"input": 1, "output": 2}])
     assert r["error_code"] == "TOOL_TIMEOUT" and r["retryable"] is True
+
+
+def test_output_written_to_default_dir(tmp_path, monkeypatch):
+    """不传 output_path → 落 default_result_path（默认产物目录）并回传该路径。"""
+    n, e = _files(tmp_path)
+    monkeypatch.setattr(np, "run_exe", _stub_run(_RESULT))
+    r = np.find_netlist_paths(n, e, [{"input": 1, "output": 2}])
+    out = Path(r["output_path"])
+    assert out.name == "find_netlist_paths_auto.json"
+    assert json.loads(out.read_text(encoding="utf-8")) == _RESULT
+
+
+def test_output_explicit_path(tmp_path, monkeypatch):
+    n, e = _files(tmp_path)
+    monkeypatch.setattr(np, "run_exe", _stub_run(_RESULT))
+    out = tmp_path / "sub" / "r.json"
+    r = np.find_netlist_paths(n, e, [{"input": 1, "output": 2}], output_path=str(out))
+    assert Path(r["output_path"]) == out.resolve()
+    assert json.loads(out.read_text(encoding="utf-8")) == _RESULT
+
+
+def test_output_path_must_be_file(tmp_path, monkeypatch):
+    n, e = _files(tmp_path)
+    monkeypatch.setattr(np, "run_exe", _stub_run(_RESULT))
+    r = np.find_netlist_paths(n, e, [{"input": 1, "output": 2}], output_path=str(tmp_path))
+    assert r["error_code"] == "INVALID_PARAMETERS"
+
+
+def test_output_write_failure_is_structured(tmp_path, monkeypatch):
+    n, e = _files(tmp_path)
+    blocker = tmp_path / "blocker"
+    blocker.write_text("x", encoding="utf-8")          # 父路径是文件 → mkdir 必失败
+    monkeypatch.setattr(np, "run_exe", _stub_run(_RESULT))
+    r = np.find_netlist_paths(n, e, [{"input": 1, "output": 2}],
+                              output_path=str(blocker / "r.json"))
+    assert r["error_code"] == "WRITE_FAILED"
+
+
+def test_failure_result_still_written(tmp_path, monkeypatch):
+    """rc=1（如位宽不足）也要落盘：results 里的部分路径与 errors 是排障依据。"""
+    n, e = _files(tmp_path)
+    res = {"ports": [1, 2],
+           "results": [{"input_port": 1, "output_port": 2, "status": "configuration_error",
+                        "complete": True, "path_count": 1, "paths": [], "errors": []}],
+           "errors": []}
+    monkeypatch.setattr(np, "run_exe", _stub_run(res, rc=1))
+    out = tmp_path / "bad.json"
+    r = np.find_netlist_paths(n, e, [{"input": 1, "output": 2}], output_path=str(out))
+    assert r["success"] is False
+    assert json.loads(out.read_text(encoding="utf-8")) == res
 
 
 def test_exe_needs_elevation(tmp_path, monkeypatch):

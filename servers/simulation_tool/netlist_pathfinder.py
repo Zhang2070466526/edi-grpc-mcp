@@ -16,7 +16,9 @@ stdout 单行 UTF-8 JSON：{"netlist_path","ep_path","ports","results","errors"}
 
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 from typing import Any
 
 from servers import mcp
@@ -25,7 +27,12 @@ from servers.simulation_tool.config import (
     ExeNeedsElevation,
     run_exe,
 )
-from servers.utils import error_response, per_tool_mutex, require_file
+from servers.utils import (
+    default_result_path,
+    error_response,
+    per_tool_mutex,
+    require_file,
+)
 
 _logger = logging.getLogger("simulation_tool.netlist_pathfinder")
 
@@ -58,6 +65,7 @@ def find_netlist_paths(
     max_states: int = 1000000,
     timeout: int = 30,
     encoding: str = "auto",
+    output_path: str = "",
 ) -> dict[str, Any]:
     """寻路：给定网表 + 原理图 + 有向端口对，枚举每个端口对的全部信号路径，并给出每条路径上每个开关的目标 Bits。
 
@@ -76,9 +84,12 @@ def find_netlist_paths(
         max_states: 每个端口对搜索边数预算，0 不限，默认 1000000。
         timeout: 每个端口对搜索时间预算（秒），0 不限，默认 30；不含文件解析和 JSON 序列化。
         encoding: 源文件编码，默认 auto（先 UTF-8/BOM，失败再 GB18030）。
+        output_path: 结果 JSON 落盘路径；留空则落到默认产物目录
+            （`MCP_RESULT_DIR`，未配置时 `%TEMP%/mcp_result`）下的
+            `find_netlist_paths_<时间戳>.json`。父目录不存在会自动创建。
 
     Returns:
-        {"success": True, "message": "...",
+        {"success": True, "message": "...", "output_path": "<结果 JSON 绝对路径>",
          "summary": {"ports": [...], "pairs": [{input_port, output_port, status, complete, path_count}, ...],
                      "total_paths": N},
          "result": {...exe 完整 JSON（netlist_path/ep_path/ports/results/errors）...}}
@@ -149,6 +160,22 @@ def find_netlist_paths(
             stdout=run["stdout"], stderr=run["stderr"], return_code=run["returncode"],
         )
 
+    # 结果落盘：默认写默认产物目录（MCP_RESULT_DIR，未配时 %TEMP%/mcp_result）。
+    # 无论 rc=0/1 都写 —— rc=1 时 results 里常带部分路径与逐层 errors，排障要靠这份原文。
+    target = (output_path or "").strip()
+    if target:
+        if Path(target).expanduser().is_dir():
+            return error_response("INVALID_PARAMETERS",
+                                  f"output_path 是目录，需要文件路径: {target}")
+        target = str(Path(target).expanduser().resolve())
+    else:
+        target = default_result_path("find_netlist_paths", ".json")
+    try:
+        Path(target).parent.mkdir(parents=True, exist_ok=True)
+        Path(target).write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    except OSError as exc:
+        return error_response("WRITE_FAILED", f"结果写入失败: {exc}", output_path=target)
+
     results = data.get("results") or []
     summary = [
         {"input_port": r.get("input_port"), "output_port": r.get("output_port"),
@@ -179,6 +206,6 @@ def find_netlist_paths(
                             "（要求位宽不足等，原因见该路径 errors）")
             if errs:
                 message += f"；{len(errs)} 条顶层错误"
-    return {"success": ok, "message": message,
+    return {"success": ok, "message": message, "output_path": target,
             "summary": {"ports": data.get("ports"), "pairs": summary, "total_paths": total_paths},
             "result": data}
