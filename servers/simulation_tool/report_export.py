@@ -25,7 +25,7 @@ _logger = logging.getLogger("simulation_tool.report_export")
 
 
 def _absolutize_images(report: dict) -> dict:
-    """把 report 里的图片路径统一转成绝对路径。
+    r"""把 report 里的图片路径统一转成绝对路径。
 
     exe 的规则是「JSON 文件里的相对路径按 JSON 所在目录解析」，而本工具把 JSON 写在临时
     目录 ⇒ 相对路径必然找不到图片（实测 `FileNotFoundError: 图片不存在：…\Temp\edi_report_xx\…`）。

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 
 from servers.laspcem import async_solve as A
@@ -154,6 +155,10 @@ def test_query_reports_phase_and_progress(tmp_path, monkeypatch):
     sem = _sem(tmp_path)
     base = tmp_path / "p"
     (base / "1_Result").mkdir(parents=True)
+    # 事件同步取代「睡固定 1.3 s + 猜轮询窗口」：机器一忙（并行跑 CST/套件）那 1.5 s 的
+    # solving 窗口会被压扁，轮询抓不到就假失败（2026-11-17 实测：全量 242 s 时 1 failed，
+    # 单跑/静置重跑均通过）。现在求解函数一直挂在 solving 直到测试取样完成。
+    sampled = threading.Event()
 
     def fake_solve(*a, **k):
         # 日志必须在**任务开始之后**产生：`solve_progress` 现在按任务 started_at 过滤，
@@ -162,7 +167,7 @@ def test_query_reports_phase_and_progress(tmp_path, monkeypatch):
         (base / "1_Result" / "Prog.log").write_text("Iter1 mesh\nIter6: Solving\n", encoding="utf-8")
         for i in (1, 2):
             (base / "1_Result" / f"HOFEM_adapt_itr{i}.log").write_text("x", encoding="utf-8")
-        time.sleep(1.3)
+        sampled.wait(timeout=15)      # 等测试把这一帧取走再结束，不靠竞速
         return {"success": True}
 
     monkeypatch.setattr(A, "export_laspcem_snp", lambda *a, **k: {"success": True})
@@ -171,17 +176,20 @@ def test_query_reports_phase_and_progress(tmp_path, monkeypatch):
     monkeypatch.setattr(A, "_cached_progress",
                         lambda sem, ttl=2.0, since=0.0: A.solve_progress(sem, since=since))
     r = A.run_laspcem_solve_async(sem, then_export=True)
-    # 单 worker 可能排队：轮询到 "solving" 那一刻取样（求解 1.5 s，足够取到）
+    # 单 worker 可能排队：轮询到 "solving" 那一刻取样（求解会一直挂在 solving 等我们）
     sample = None
-    deadline = time.time() + 3
+    q: dict = {}
+    deadline = time.time() + 15
     while time.time() < deadline:
         q = A.laspcem_solve_query(r["task_id"])
         if q.get("phase") == "solving" and q.get("adapt_iterations"):
             sample = q
+            sampled.set()            # 放行求解线程
             break
         if q.get("completed"):
             break
         time.sleep(0.02)
+    sampled.set()                    # 兜底：无论断言是否通过都放行，避免 worker 挂死
     assert sample is not None, q
     q = sample
     assert q["completed"] is False

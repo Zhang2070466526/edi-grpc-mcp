@@ -71,7 +71,7 @@ def test_report_rejects_missing_schematic(tmp_path):
 
 
 def test_report_absolutizes_relative_image_paths(tmp_path, monkeypatch):
-    """回归（2026-10-09）：exe 按「JSON 文件所在目录」解析相对图片路径，而本工具把 JSON
+    r"""回归（2026-10-09）：exe 按「JSON 文件所在目录」解析相对图片路径，而本工具把 JSON
     写在临时目录 ⇒ 相对路径必然找不到图（实测 FileNotFoundError: 图片不存在：…\Temp\…）。
     这里断言「送给 exe 的 JSON 里图片路径已经全部是绝对路径」。
     """
