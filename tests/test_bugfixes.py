@@ -240,6 +240,10 @@ def test_vswr_split_removes_consecutive_ampersand_and_passes_ac(tmp_path, monkey
         return SimpleNamespace(returncode=0, stderr="", stdout="")
 
     monkeypatch.setattr(cr, "run_turbocharts", _run)
+    monkeypatch.setattr(cr, "_engine_curve_info", lambda p: {
+        "freq": [{"S[1,1]": ["db", "VSWR"]}, {"S[1,2]": ["db", "VSWR"]},
+                 {"S[2,1]": ["db", "VSWR"]}, {"S[2,2]": ["db", "VSWR"]}],
+    })
     cr.turbocharts_convert(
         raw_path=str(raw), output_path=str(tmp_path / "out.png"), chart_type="SP",
         csv_path=str(tmp_path / "out.csv"),

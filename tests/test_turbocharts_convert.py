@@ -73,9 +73,12 @@ def env(tmp_path, monkeypatch):
         return SimpleNamespace(returncode=0, stderr="", stdout="")
 
     monkeypatch.setattr(cr, "run_turbocharts", _run)
-    # 默认不真调引擎 --curve-info（否则每个用例多一条命令，干扰 commands 断言）；
-    # 需要 known_vars 非空的用例再单独 monkeypatch 覆盖。
-    monkeypatch.setattr(cr, "_engine_curve_info", lambda p: None)
+    # 默认不真调引擎 --curve-info，但返回一份假的曲线清单让存在性校验能跑
+    # （引擎解析失败时工具会提前返回，所以 mock 不能给 None）。
+    monkeypatch.setattr(cr, "_engine_curve_info", lambda p: {
+        "freq": [{"Out1": ["dBm", "real"]}, {"Out2": ["dBm", "real"]},
+                 {"S[1,1]": ["db", "dBm"]}, {"S[2,1]": ["db", "dBm"]}],
+    })
     return SimpleNamespace(raw=raw, sp_raw=sp_raw, tmp=tmp_path, commands=commands)
 
 
@@ -226,23 +229,23 @@ def test_unit_notes_only_for_auto_compose(env):
 
 def test_chart_type_autodetect_tells_user(env):
     """不传 chart_type 时必须交代「类型是怎么来的」（推断成功 / 识别不出 / 解析失败三种）。"""
-    orig = cr.list_result_curves
+    orig = cr._resolve_curves
     try:
-        cr.list_result_curves = lambda p: {"success": True, "chart_type": "HB",
-                                          "curves": {"freq": [{"Out1": ["dBm"]}]}, "unit_notes": []}
+        cr._resolve_curves = lambda p: {"chart_type": "HB",
+                                        "curves": {"freq": [{"Out1": ["dBm"]}]}, "unit_notes": []}
         r = cr.turbocharts_convert(raw_path=str(env.raw), output_path=str(env.tmp / "e.png"))
         assert any("推断为 HB" in w for w in (r.get("warnings") or [])), r.get("warnings")
 
-        cr.list_result_curves = lambda p: {"success": True, "chart_type": "",
-                                          "curves": {"freq": [{"Out1": ["dBm"]}]}, "unit_notes": []}
+        cr._resolve_curves = lambda p: {"chart_type": "",
+                                        "curves": {"freq": [{"Out1": ["dBm"]}]}, "unit_notes": []}
         r2 = cr.turbocharts_convert(raw_path=str(env.raw), output_path=str(env.tmp / "f.png"))
         assert any("没有可识别的 Plotname" in w for w in (r2.get("warnings") or [])), r2.get("warnings")
 
-        cr.list_result_curves = lambda p: {"success": False, "error_code": "CURVE_INFO_FAILED"}
+        cr._resolve_curves = lambda p: {"error_code": "CURVE_INFO_FAILED"}
         r3 = cr.turbocharts_convert(raw_path=str(env.raw), output_path=str(env.tmp / "g.png"))
         assert any("解析失败" in w for w in (r3.get("warnings") or [])), r3.get("warnings")
     finally:
-        cr.list_result_curves = orig
+        cr._resolve_curves = orig
 
 
 def test_label_unit_maps_csv_header():
@@ -391,6 +394,9 @@ def test_vswr_split_still_works(tmp_path, monkeypatch):
         commands.append(list(cmd)),
         SimpleNamespace(returncode=0, stderr="", stdout=""),
     )[1])
+    monkeypatch.setattr(cr, "_engine_curve_info", lambda p: {
+        "freq": [{"S[1,1]": ["dBm", "VSWR"]}, {"S[2,1]": ["dBm", "VSWR"]}],
+    })
 
     cr.turbocharts_convert(
         raw_path=str(raw), output_path=str(tmp_path / "o.png"), chart_type="SP",
