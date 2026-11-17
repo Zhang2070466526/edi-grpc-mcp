@@ -67,7 +67,7 @@ def find_netlist_paths(
     encoding: str = "auto",
     output_path: str = "",
 ) -> dict[str, Any]:
-    """寻路：给定网表 + 原理图 + 有向端口对，枚举每个端口对的全部信号路径，并给出每条路径上每个开关的目标 Bits。
+    """寻路（仅限 TR 收发链路，不支持混频链路）：给定网表 + 原理图 + 有向端口对，枚举每个端口对的全部信号路径，并给出每条路径上每个开关的目标 Bits。
 
     用法："找出 1 到 2 端口之间的所有信号路径和开关状态"、"这个 TR 组件收发路径上开关要怎么设"
 
@@ -101,9 +101,11 @@ def find_netlist_paths(
         configuration_error 时，仍需看 summary 各对的 status/complete 与 result.errors。
 
     限制（拓扑 ≠ 物理）：
-        这是拓扑寻路，不是完整射频物理模型。混频器等「其余多端口器件」按双向直通处理，
-        不区分 RF/LO/IF，不判断频率转换、隔离度、增益、频段或路径独占（因此某条路径
-        「存在」不等于该路径在物理上可用）。switch_settings 只含 EP genl_type=27 的开关；
+        这是拓扑寻路，不是完整射频物理模型，且只面向 TR 链路——混频链路不支持：
+        混频器等「其余多端口器件」按双向直通处理，不区分 RF/LO/IF，不判断频率转换、
+        隔离度、增益、频段或路径独占（因此某条路径「存在」不等于该路径在物理上可用，
+        混频链路的上下变频/镜像等指标请用 run_mixer_simulation）。switch_settings 只含
+        EP genl_type=27 的开关；
         Bits 存在不代表器件是开关，移相器/衰减器的 Bits 不由寻路决定，保持原值。
         器件连通规则全表见仓库 servers/simulation_tool/Netlist_Pathfinder使用说明.md。
     """
