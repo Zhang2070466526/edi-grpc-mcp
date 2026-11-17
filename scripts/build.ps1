@@ -53,32 +53,18 @@ $topFiles = @(Get-ChildItem $distDir -Recurse -File | Sort-Object Length -Descen
 # ── [6/8] 生成配置和启动脚本 ──
 Write-Host "[6/8] Generating config + launcher..." -ForegroundColor Yellow
 $envContent = @"
-# EDI gRPC MCP configuration - edit paths for this computer
 EDA_GRPC_SERVER=127.0.0.1:50055
-# EDI exe path: leave empty to auto-detect (EDI.exe > EDA-PMDS.exe > CAIS.exe)
 EDI_PATH=
-# TurboCharts path: leave empty to auto-detect (turbocharts_app.exe > TurboCharts.exe)
-TURBOCHARTS_PATH=
-# Default artifacts dir: leave empty to use system temp dir (%TEMP%/mcp_result)
 MCP_RESULT_DIR=
 MCP_TRANSPORT=streamable-http
 MCP_PORT=50026
-# 0 = all tools; 1 = hide internal (EDI gRPC + standalone exe + diagnostics); 2 = keep only internal + no-dependency calculators; 3 = hide soft IP + LASPCEM
 MCP_HIDE_INTERNAL_TOOLS=0
-# Listen address: 127.0.0.1 = this machine only; 0.0.0.0 = all interfaces (remote).
-# NOTE: the .bat launchers pass --host explicitly (start_local=127.0.0.1, start_remote=0.0.0.0), which overrides this.
 MCP_BIND_HOST=127.0.0.1
-# Extra allowed Host headers (comma-separated) for addresses auto-detection misses (e.g. reverse-proxy domain)
 MCP_EXTRA_ALLOWED_HOSTS=
-# Process whitelist default hardcoded in servers/settings.py (hermes_cli.main,edi-agent-service.exe);
-# remote mode auto-ignores it. Override/clear here only if needed.
-# Source-process probe when whitelist is off (local empty / remote auto-ignored). Keep 1 = only audit trail when no auth.
 MCP_PROBE_ENABLED=1
-# Optional: image vision analysis (enabled when all three are configured)
 VISION_API_KEY=
 VISION_BASE_URL=
 VISION_MODEL=
-# Optional: Chat AI (LLM multi-round tool calling). Leave empty to disable.
 LLM_API_KEY=
 LLM_BASE_URL=
 LLM_MODEL=

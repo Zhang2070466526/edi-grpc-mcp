@@ -39,8 +39,6 @@ ENV_TEMPLATE = """# EDI gRPC MCP configuration - edit paths for this computer
 EDA_GRPC_SERVER=127.0.0.1:50055
 # EDI exe path: leave empty to auto-detect (EDI.exe > EDA-PMDS.exe > CAIS.exe)
 EDI_PATH=
-# TurboCharts path: leave empty to auto-detect (turbocharts_app.exe > TurboCharts.exe)
-TURBOCHARTS_PATH=
 MCP_TRANSPORT=streamable-http
 MCP_PORT={port}
 # Listen address: 127.0.0.1 = this machine only; 0.0.0.0 = all interfaces (remote).

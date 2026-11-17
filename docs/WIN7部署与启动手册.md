@@ -179,7 +179,6 @@ dir /s /b C:\edi-mcp\*.dll C:\edi-mcp\*.pyd C:\edi-mcp\*.exe | find /c /v ""
 |---|---|---|
 | `EDA_GRPC_SERVER` | `127.0.0.1:50055` | EDI gRPC 地址；同机就保持默认 |
 | `EDI_PATH` | 空 | EDI 客户端 exe 路径。**留空=自动探测**（`EDI.exe` > `EDA-PMDS.exe` > `CAIS.exe`）；装在非默认位置或探测报错时才填绝对路径 |
-| `TURBOCHARTS_PATH` | 空 | 同上，自动探测 `turbocharts_app.exe` > `TurboCharts.exe` |
 | `MCP_TRANSPORT` | `streamable-http` | 保持默认；`stdio` 用于被别的程序当子进程拉起的用法 |
 | `MCP_PORT` | `50026` | 服务端口（默认 50026；改端口后请手动访问新端口） |
 | `MCP_ALLOWED_PROCESSES` | `hermes_cli.main,edi-agent-service.exe`（**写死在代码 settings.py，`.env`/dist 无需再填**） | **进程白名单**（仅本机模式生效）：**精确匹配**（整词命令行 token / exe 文件名 / 完整路径，**不做裸子串**）。**默认 `hermes_cli.main,edi-agent-service.exe`，置空=关闭白名单**；**远程模式（`--host 0.0.0.0`）自动忽略**。客户端换名字后不同步改 → 调用被拒 |
