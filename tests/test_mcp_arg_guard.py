@@ -17,8 +17,26 @@ from servers import mcp
 
 
 def _call(name: str, arguments: dict) -> dict:
-    """走真实 ToolManager 路径（与 MCP 客户端调用一致）。"""
-    return asyncio.run(mcp._tool_manager.call_tool(name, arguments))
+    """走真实 ToolManager 路径（与 MCP 客户端调用一致）。
+
+    2026-11-17：失败信封改为 ``CallToolResult(isError=True)``（正文 JSON 同时放在
+    ``structuredContent`` 与 ``content[0].text``），成功路径仍返回 (content, structured)
+    二元组。这里统一解回业务 dict，断言继续针对业务字段而不是传输形态。
+    """
+    r = asyncio.run(mcp._tool_manager.call_tool(name, arguments))
+    if isinstance(r, dict):
+        return r
+    if isinstance(r, tuple) and len(r) == 2 and isinstance(r[1], dict):
+        return r[1]
+    structured = getattr(r, "structuredContent", None)
+    if isinstance(structured, dict):
+        return structured
+    for item in getattr(r, "content", []) or []:
+        text = getattr(item, "text", "")
+        if text:
+            import json
+            return json.loads(text)
+    return {}
 
 
 # ── ① 缺参 ───────────────────────────────────────────────────
@@ -96,3 +114,30 @@ def test_hints_registered_in_chat_dictionary(code):
     from servers.chat.service import ERROR_CODES
 
     assert code in ERROR_CODES
+
+
+# ── ⑥ 失败必须在协议层标错（2026-11-17）──────────────────────
+
+def test_failed_envelope_sets_iserror():
+    """失败信封必须同时是 isError=True —— 否则客户端把失败当成功结果渲染。"""
+    r = asyncio.run(mcp._tool_manager.call_tool("open_edi_project", {}))
+    assert not isinstance(r, dict), "失败必须回 CallToolResult(isError=True)，不能是普通 dict"
+    assert r.isError is True
+    assert isinstance(r.structuredContent, dict)
+    assert r.structuredContent["error_code"] == "MISSING_REQUIRED_ARGUMENT"
+    assert "MISSING_REQUIRED_ARGUMENT" in r.content[0].text
+
+
+def test_unknown_argument_key_is_rejected():
+    """参数名写错不能被静默忽略。
+
+    曾经 `describe_tool(query="寻路")` 校验通过 → 按空 name 执行 → 返回全部 101 个工具，
+    agent 以为「关键词检索得到 101 个候选」。
+    """
+    r = asyncio.run(mcp._tool_manager.call_tool("describe_tool", {"query": "寻路"}))
+    assert r.isError is True
+    body = r.structuredContent
+    assert body["error_code"] == "INVALID_PARAMETERS"
+    assert body["unexpected"] == {"query": None}
+    assert body["accepted"] == ["name"]
+    assert body["tool"] == "describe_tool"

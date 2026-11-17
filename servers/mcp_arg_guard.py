@@ -29,7 +29,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from servers import mcp
+from servers import _as_error_result, mcp
 from servers.utils import error_response
 
 #: 用实例反查具体类，避免依赖 SDK 内部的模块路径（不同版本搬过家）
@@ -109,6 +109,37 @@ def _build_envelope(tool_name: str, arguments: dict, model: Any,
     return resp
 
 
+def _unexpected_envelope(tool_name: str, arguments: dict, fields: list[str]) -> dict[str, Any]:
+    """参数名不认识时直接拒绝，而不是静默忽略。
+
+    为什么要有它（2026-11-17 实测）：pydantic 的 arg_model 默认 ``extra="ignore"``，
+    所以 ``describe_tool(query="寻路")``、``describe_tool(tool_name="x")`` 这类把参数名
+    写错的调用会**校验通过**，工具按空 name 执行 → 返回全部 101 个工具；agent 于是
+    以为「关键词检索得到 101 个候选」，把全量列表当成检索结果用。
+
+    这里把未知键挑出来拒绝，并给出最近似的正确参数名（同 _build_envelope 的 unexpected）。
+    """
+    unexpected: dict[str, str | None] = {}
+    for key in arguments:
+        if key in fields:
+            continue
+        close = difflib.get_close_matches(key, fields, n=1, cutoff=0.6)
+        unexpected[key] = close[0] if close else None
+
+    resp = error_response(
+        "INVALID_PARAMETERS",
+        "无法识别的参数：" + "、".join(
+            (f"{k} → 是否想传 {v}？" if v else k) for k, v in unexpected.items()),
+        hint=f'参数说明与可抄示例：describe_tool("{tool_name}")',
+    )
+    resp["tool"] = tool_name
+    resp["unexpected"] = unexpected
+    resp["received"] = sorted(arguments)
+    resp["accepted"] = sorted(fields)
+    resp["next_actions"] = [{"tool": "describe_tool", "arguments": {"name": tool_name}}]
+    return resp
+
+
 async def _guarded_call_tool(self, name: str, arguments: dict[str, Any],
                              context: Any = None, convert_result: bool = False) -> Any:
     """包装 ToolManager.call_tool：校验失败回统一信封，否则转原调用。"""
@@ -123,10 +154,14 @@ async def _guarded_call_tool(self, name: str, arguments: dict[str, Any],
     if tool is not None and isinstance(arguments, dict):
         model = getattr(getattr(tool, "fn_metadata", None), "arg_model", None)
         if model is not None:
+            fields = list(getattr(model, "model_fields", {}) or {})
             try:
                 model.model_validate(arguments)
             except ValidationError as exc:
-                return _build_envelope(tool.name or name, arguments, model, exc)
+                return _as_error_result(_build_envelope(tool.name or name, arguments, model, exc))
+            # 校验通过但带了模型里没声明的键 ⇒ 参数名写错，不能静默吞掉（2026-11-17）
+            if any(key not in fields for key in arguments):
+                return _as_error_result(_unexpected_envelope(tool.name or name, arguments, fields))
     return await _ORIG_CALL_TOOL(self, name, arguments, context, convert_result)
 
 

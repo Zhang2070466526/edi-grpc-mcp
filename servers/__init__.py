@@ -78,20 +78,52 @@ anyio.to_thread 会复制 context（Host 推导的contextvar 传得进线程）�
 """
 
 import asyncio
+import json
 
 import anyio
+from mcp import types as _mcp_types
 from mcp.server.fastmcp.tools import base as _tb
 
 _orig_run = _tb.Tool.run
 
 
-async def _offloading_run(self, arguments, context=None, convert_result=False):
-    """monkeypatch Tool.run：同步工具整段丢 anyio.to_thread，防冻结事件循环。"""
-    if self.is_async:
-        return await _orig_run(self, arguments, context, convert_result)
-    return await anyio.to_thread.run_sync(
-        lambda: asyncio.run(_orig_run(self, arguments, context, convert_result))
+def _as_error_result(payload: dict) -> _mcp_types.CallToolResult:
+    """把失败的统一信封转成 isError=True 的 CallToolResult。
+
+    为什么要有它（2026-11-17 实测）：工具失败时返回的是普通 dict，SDK 在
+    lowlevel/server.py 里一律 `isError=False` 包装（只有抛异常才是 isError=True）。
+    于是 MCP 客户端把「文件不存在」「工具名不存在」这类失败当成功结果渲染，
+    模型也不会据此自查参数。这里统一在协议层标错，正文 JSON 原样保留
+    （content 文本 + structuredContent 双份，客户端读哪个都不丢信息）。
+    """
+    return _mcp_types.CallToolResult(
+        content=[_mcp_types.TextContent(
+            type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))],
+        structuredContent=payload,
+        isError=True,
     )
+
+
+async def _offloading_run(self, arguments, context=None, convert_result=False):
+    """monkeypatch Tool.run：同步工具整段丢 anyio.to_thread，防冻结事件循环。
+
+    同时承担两件事（2026-11-17 新增）：
+      1. 失败信封（`success=False`）→ `isError=True`，见 _as_error_result；
+      2. convert_result 由本函数在判定之后统一调用，保证成功路径与原 SDK 行为等价。
+    """
+    if self.is_async:
+        result = await _orig_run(self, arguments, context, False)
+    else:
+        result = await anyio.to_thread.run_sync(
+            lambda: asyncio.run(_orig_run(self, arguments, context, False))
+        )
+
+    if isinstance(result, dict) and result.get("success") is False:
+        return _as_error_result(result)
+
+    if convert_result:
+        return self.fn_metadata.convert_result(result)
+    return result
 
 
 _tb.Tool.run = _offloading_run

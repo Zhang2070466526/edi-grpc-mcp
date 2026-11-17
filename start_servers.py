@@ -81,6 +81,7 @@ from servers.utils import (
     tcp_port_open,
 )
 from servers.process_guard import ProcessProbeMiddleware, ProcessWhitelistMiddleware
+from servers.protocol_compat import ProtocolCompatMiddleware
 import servers.registry_server  # — 触发工具注册
 
 # ── 运行时状态 ──
@@ -374,6 +375,10 @@ def _run_http_server(port: int, host: str = "127.0.0.1") -> None:
 
     # 构建 Starlette app（访问控制仅由进程白名单 MCP_ALLOWED_PROCESSES 负责）
     starlette_app = mcp.streamable_http_app()
+
+    # 协议兼容补丁（2026-11-17）：GET /mcp → 快速 405、未知 JSON-RPC 方法 → -32601。
+    # 必须最先 add（= 最内层），让进程白名单/探针仍在它外面先拦一道。
+    starlette_app.add_middleware(ProtocolCompatMiddleware)
 
     # 请求上下文中间件：产物链接按请求 Host 推导（放在白名单/探针内层）
     starlette_app.add_middleware(RequestBaseURLMiddleware, allowed_bases=allowed_bases)

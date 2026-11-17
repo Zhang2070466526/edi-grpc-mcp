@@ -199,6 +199,83 @@ def _hide_internal_tools() -> None:
 
 _hide_internal_tools()
 
+
+# ── 工具 annotations：给客户端的「只读 / 破坏性」安全标签 ────────────────────
+# 为什么要有它（2026-11-17 实测）：MCP 客户端（Claude Desktop / Cursor / VS Code）
+# 靠 annotations 决定「调用前是否弹确认」「列表里是否标红」，它们**不解析** description
+# 里的 ⚠️ 文字。当时 101 个工具的 annotations 全为空 ⇒ clear_schematic 和
+# get_service_status 在客户端眼里完全一样，唯一的拦截点没了。
+# 分类口径：readOnlyHint = 不修改工程、不写文件、不启停进程；
+#           destructiveHint = 会删除/覆盖已有数据、或不可逆改变工程状态。
+# 名单显式列出（不用名字前缀猜），新增工具时请同步这里。
+_READONLY_TOOLS: frozenset[str] = frozenset({
+    "analyze_image", "analyze_mixer_spur", "batch_query_component",
+    "calculate_rf_dynamic_range", "calculate_transline",
+    "cst_export_farfield_query", "cst_export_snp_query", "cst_get_model_info",
+    "cst_list_results", "cst_solve_query", "cst_task_list", "describe_tool",
+    "design_wilkinson", "fetch_artifact",
+    "filter_order_bandpass", "filter_order_bandstop", "filter_order_highpass",
+    "filter_order_lowpass", "get_components_static_params", "get_current_workspace",
+    "get_hfss_analysis_status", "get_hfss_project_info", "get_laspcem_setup",
+    "get_model_category_params", "get_project_summary",
+    "get_schematic_component_info", "get_service_logs", "get_service_status",
+    "get_signal_chain", "get_simulation_async_result", "get_simulation_async_status",
+    "get_simulation_component_schema", "laspcem_solve_query", "laspcem_task_list",
+    "list_eda_tasks", "list_epp_projects", "list_ideal_components",
+    "list_result_curves", "list_schematic_components",
+    "list_simulation_components", "open_document", "search_personal_models",
+    "search_public_models", "show_image", "wilkinson_marchand_order",
+})
+
+#: 会删除/覆盖已有数据、或不可逆改变工程状态的工具 ⇒ destructiveHint=True。
+#: 比「描述里带 ⚠️ 的 9 个」多两个：close_laspcem_project（未保存改动会丢）、
+#: laspcem_task_cancel（终止运行中的求解）—— 语义破坏但当初没打 ⚠️。
+_DESTRUCTIVE_TOOLS: frozenset[str] = frozenset({
+    "clear_schematic", "close_edi_project", "close_hfss_project",
+    "close_laspcem_project", "cst_task_cancel", "delete_simulation_component",
+    "laspcem_task_cancel", "replace_models_from_csv", "replace_port_component",
+    "replace_schematic_from_file", "switch_workspace",
+})
+
+#: 破坏性工具的中文短名（客户端列表里显示这个，不显示英文工具名）。其余工具 title=name。
+_TOOL_TITLES: dict[str, str] = {
+    "clear_schematic": "清空原理图",
+    "close_edi_project": "关闭 EDI 工程",
+    "close_hfss_project": "关闭 AEDT 工程",
+    "close_laspcem_project": "关闭 LASPCEM 工程",
+    "cst_task_cancel": "取消 CST 任务",
+    "delete_simulation_component": "删除器件",
+    "laspcem_task_cancel": "取消 LASPCEM 任务",
+    "replace_models_from_csv": "批量替换模型",
+    "replace_port_component": "替换端口器件",
+    "replace_schematic_from_file": "整图替换原理图",
+    "switch_workspace": "设置工作区",
+}
+
+
+def _apply_tool_annotations() -> None:
+    """给每个工具补 annotations（在 _hide_internal_tools 之后调用，只处理留下的工具）。
+
+    idempotentHint 只在「重复执行结果一致」时才置 True：只读查询、清空/删除/关闭这类
+    幂等破坏性操作给 True；新建/添加/跑仿真这类重复执行会产生新对象或新任务的一律 False
+    （客户端据此决定超时后能否安全自动重试，不能乱承诺）。
+    """
+    from mcp.types import ToolAnnotations
+
+    for name, tool in mcp._tool_manager._tools.items():
+        readonly = name in _READONLY_TOOLS
+        destructive = (not readonly) and (name in _DESTRUCTIVE_TOOLS)
+        tool.annotations = ToolAnnotations(
+            title=_TOOL_TITLES.get(name, name),
+            readOnlyHint=readonly,
+            destructiveHint=destructive,
+            idempotentHint=readonly or destructive,
+            openWorldHint=False,  # 全部是本机 EDA 工具，不访问外部世界
+        )
+
+
+_apply_tool_annotations()
+
 # Web 路由
 from servers.chat.routes import ui_page, health_check, chat_endpoint, tool_list, upload_file  # noqa: E402
 from servers.multimodal_vision import serve_image  # noqa: E402
