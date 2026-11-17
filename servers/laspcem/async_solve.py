@@ -361,7 +361,7 @@ def run_laspcem_solve_async(
         stall_seconds: 卡死判定（求解器还在但日志/工程/CPU 这么久没进展 ⇒ SOLVE_STALLED）；0 = 关闭。
         then_export: 求解完成后自动导出 sNp（服务端执行，结果在 `export_result`）。
         then_report: 求解完成后自动建报告（结果在 `report_result`）。
-        export_path: 指定 sNp 输出路径（留空按端口数自动命名）。
+        export_path: 指定 sNp 输出路径；留空落到默认产物目录（<result_dir>/export_laspcem_snp_<时间戳>.sNp，实际后缀按端口数 .s2p/.s4p）。
         report_name: 报告名，默认 Sparameter_1。
         port_count: 报告曲线端口数；0 = 自动（按 sNp 后缀推断，兜底 2）。
 

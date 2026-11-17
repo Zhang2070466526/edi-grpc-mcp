@@ -1913,7 +1913,7 @@ run_laspcem_solve_async(sem_path: string, setup_name: string = "", timeout_secon
 | `stall_seconds` | integer | 否 | 卡死判定（求解器还在但日志/工程/CPU 这么久没进展 ⇒ SOLVE_STALLED）；0 = 关闭。 |
 | `then_export` | boolean | 否 | 求解完成后自动导出 sNp（服务端执行，结果在 `export_result`）。 |
 | `then_report` | boolean | 否 | 求解完成后自动建报告（结果在 `report_result`）。 |
-| `export_path` | string | 否 | 指定 sNp 输出路径（留空按端口数自动命名）。 |
+| `export_path` | string | 否 | 指定 sNp 输出路径；留空落到默认产物目录（`<result_dir>/export_laspcem_snp_<时间戳>.sNp`，实际后缀按端口数 .s2p/.s4p）。 |
 | `report_name` | string | 否 | 报告名，默认 Sparameter_1。 |
 | `port_count` | integer | 否 | 报告曲线端口数；0 = 自动（按 sNp 后缀推断，兜底 2）。 |
 
@@ -2503,7 +2503,8 @@ draw_chart(series: list, image_path: str, chart_title: str = "", x_axis_title: s
 from servers.simulation_tool import find_netlist_paths
 
 find_netlist_paths(netlist_path: str, ep_path: str, pairs: list, max_paths: int = 10000,
-                   max_states: int = 1000000, timeout: int = 30, encoding: str = "auto") -> dict
+                   max_states: int = 1000000, timeout: int = 30, encoding: str = "auto",
+                   output_path: str = "") -> dict
 ```
 
 寻路：给定网表 + 原理图 + 有向端口对，枚举每个端口对的全部信号路径，并给出每条路径上每个开关的目标 Bits（`required_bits`）。纯本地计算，不需要 EDI 运行 / ADS / gRPC，输入只读。
@@ -2517,10 +2518,12 @@ find_netlist_paths(netlist_path: str, ep_path: str, pairs: list, max_paths: int 
 | `max_states` | int | 否 | 1000000 | 每端口对搜索边数预算，0 不限 |
 | `timeout` | int | 否 | 30 | 每端口对搜索时间预算（秒），0 不限 |
 | `encoding` | str | 否 | auto | 源文件编码（auto=先 UTF-8/BOM 再 GB18030） |
+| `output_path` | str | 否 | — | 结果 JSON 落盘路径；**留空则写默认产物目录**（`MCP_RESULT_DIR`，未配时 `%TEMP%/mcp_result`）下的 `find_netlist_paths_<时间戳>.json`，父目录自动创建 |
 
 返回：
 ```python
 {"success": True, "message": "寻路完成：2 个端口对，共 2 条路径",
+ "output_path": "C:/Users/<user>/AppData/Local/Temp/mcp_result/find_netlist_paths_20261117_152222_420.json",
  "summary": {"ports": [1, 2],
              "pairs": [{"input_port": 1, "output_port": 2, "status": "ok", "complete": True, "path_count": 1}],
              "total_paths": 2},
@@ -2531,7 +2534,9 @@ find_netlist_paths(netlist_path: str, ep_path: str, pairs: list, max_paths: int 
 
 > **限制：拓扑 ≠ 物理。** 这是拓扑寻路，不是完整射频物理模型：放大器只允许 index 0→1；开关、功分器、电桥只允许公共端 ↔ 某一支路；**其余多端口器件（含混频器）按双向直通处理，不区分 RF/LO/IF，不判断频率转换、隔离度、增益、频段或路径是否独占**。所以「某条路径存在」不等于该路径在物理上可用。`switch_settings` 只含 EP `genl_type=27` 的开关；`Bits` 存在不代表器件是开关 —— 移相器/衰减器的 Bits 不由寻路决定，保持原值。另：`ep_path` 必须与该网表同工程（实测用错工程返回 `METADATA_MISSING`，不会静默给错路径）；`--timeout` 不含文件解析与 JSON 序列化耗时。器件规则全表见仓库 `servers/simulation_tool/Netlist_Pathfinder使用说明.md`。
 
-错误码：`INVALID_PARAMETERS`（pairs/预算不合法、`--encoding` 无效）、`FILE_NOT_FOUND`（网表或 EP 不存在）、`PATHFINDER_FAILED`（exe 未输出合法 JSON）、`TOOL_TIMEOUT`（子进程超时，retryable）、`EXE_NOT_FOUND`（安装目录缺 `Netlist_Pathfinder.exe`）、`EXE_NEEDS_ELEVATION`（WinError 740，服务需提权启动）。
+错误码：`INVALID_PARAMETERS`（pairs/预算不合法、`--encoding` 无效、`output_path` 传了目录）、`FILE_NOT_FOUND`（网表或 EP 不存在）、`PATHFINDER_FAILED`（exe 未输出合法 JSON）、`TOOL_TIMEOUT`（子进程超时，retryable）、`EXE_NOT_FOUND`（安装目录缺 `Netlist_Pathfinder.exe`）、`EXE_NEEDS_ELEVATION`（WinError 740，服务需提权启动）、`WRITE_FAILED`（结果 JSON 写盘失败，响应里带 `output_path`）。
+
+**落盘**：每次调用都会把 exe 的完整 JSON 写一份到 `output_path`（默认产物目录），`success=false` 也写 —— rc=1 时 `results` 里常带部分路径与逐层 `errors`，排障要看原文。返回里的 `result` 与文件内容完全一致。
 
 ---
 
