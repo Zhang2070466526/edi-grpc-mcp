@@ -363,6 +363,7 @@ def list_schematic_components(
         timeout_seconds: int = 60,
         summary_only: bool = False,
         limit: int = 50,
+        offset: int = 0,
         include_transform: bool = False,
 ) -> dict[str, Any]:
     """通过 gRPC 查询原理图全部器件（含完整参数），比本地文件读取更实时。
@@ -384,6 +385,8 @@ def list_schematic_components(
         summary_only: True 时每项只保留标量字段（instance_name/component_type/active_state/state），
             裁掉 parameters 大头，省上下文；include_transform=True 时几何字段仍会保留。
         limit: 只返回前 N 个器件，默认 50；0 = 全部。截断时 details.truncated=true。
+        offset: 从第几个器件开始返回，默认 0；配合 limit 翻页（details.total 是总数）。
+            例：limit=50, offset=50 取第二页。
         include_transform: True 时给返回的每个器件补 position / rotation_deg /
             mirrored_horizontal / mirrored_vertical / pins（值来自 GET_SCHEMATIC_COMPONENT_INFO）。
             代价：按器件数逐个发 gRPC（N 个器件 = N 次），器件多时明显变慢。默认 False。
@@ -391,9 +394,12 @@ def list_schematic_components(
     Returns:
         gRPC 统一返回结构（业务字段在 details 中）：
         {"success": True, "status": "SUCCEEDED",
-         "details": {"component_count": 5, "components": [
+         "details": {"component_count": 5, "total": 5, "offset": 0, "limit": 50,
+                    "returned": 5, "truncated": False, "components": [
              {"instance_name": "R1", "component_type": "R",
               "active_state": 0, "state": "NORMAL", "parameters": {...}}, ...]}}
+        分页字段：total（器件总数）/ offset / limit / returned（本页条数）/
+        truncated（本页之后还有没有）；component_count 保持原含义（总数）。
         include_transform=True 时每项另有 position/rotation_deg/mirrored_*/pins；个别器件
         取几何失败不影响整体，失败项进 details.transform_errors（[{instance_name, message}]）。
     """
@@ -401,14 +407,26 @@ def list_schematic_components(
     if result.get("success"):
         comps = result.get("details", {}).get("components")
         if isinstance(comps, list):
+            total = len(comps)
             if summary_only:
                 comps = [{k: v for k, v in c.items() if not isinstance(v, (dict, list))}
                          if isinstance(c, dict) else c for c in comps]
-            if limit and limit > 0 and len(comps) > limit:
-                comps = comps[:limit]
-                result["details"]["returned"] = limit
-                result["details"]["truncated"] = True
-            # 几何补齐放在截断之后：只给真正返回的这批器件发请求
+            # 分页（2026-11-17，ENV-1）：先按 offset 跳过，再按 limit 截断。
+            # 原先只有 limit ⇒ 只能看前 50 个，第 51 个以后根本取不到（要么 limit=0 全量爆上下文）。
+            offset_eff = max(0, int(offset or 0))
+            page = comps[offset_eff:]
+            if limit and limit > 0 and len(page) > limit:
+                page = page[:limit]
+            details = result.setdefault("details", {})
+            details.update({
+                "total": total,
+                "offset": offset_eff,
+                "limit": limit,
+                "returned": len(page),
+                "truncated": (offset_eff + len(page)) < total,
+            })
+            comps = page
+            # 几何补齐放在分页之后：只给真正返回的这批器件发请求
             if include_transform:
                 errors: list[dict[str, Any]] = []
                 for comp in comps:

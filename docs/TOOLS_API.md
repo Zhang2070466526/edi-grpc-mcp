@@ -146,7 +146,7 @@ close_edi_project(project_path: str, need_save: bool = False, timeout_seconds: i
 ```python
 from servers.eda.project_manage import list_schematic_components
 
-list_schematic_components(project_path: str, timeout_seconds: int = 60) -> dict
+list_schematic_components(project_path: str, timeout_seconds: int = 60, summary_only: bool = False, limit: int = 50, offset: int = 0, include_transform: bool = False) -> dict
 ```
 
 通过 gRPC 查询原理图全部器件（含完整参数），比本地文件读取更实时，能看到 EDI 未保存的修改和运行态（active_state/state）。
@@ -155,6 +155,10 @@ list_schematic_components(project_path: str, timeout_seconds: int = 60) -> dict
 |---|---|---|---|---|
 | `project_path` | str | 是 | — | `.epp` 文件绝对路径 |
 | `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
+| `summary_only` | bool | 否 | False | 每项只留标量字段（instance_name/component_type/active_state/state），裁掉 parameters |
+| `limit` | int | 否 | 50 | 每页条数；0 = 全部 |
+| `offset` | int | 否 | 0 | 从第几个器件开始返回，配合 limit 翻页 |
+| `include_transform` | bool | 否 | False | 补 position/rotation_deg/mirrored_*/pins（按器件数发 gRPC，慢） |
 
 返回（gRPC 统一结构，业务字段在 `details` 中）：
 ```python
@@ -162,7 +166,8 @@ list_schematic_components(project_path: str, timeout_seconds: int = 60) -> dict
     "success": True,
     "status": "SUCCEEDED",
     "details": {
-        "component_count": 5,
+        "component_count": 5, "total": 5, "offset": 0, "limit": 50,
+        "returned": 5, "truncated": False,
         "components": [
             {"instance_name": "R1", "component_type": "R",
              "general_type": "", "sub_type": "",
@@ -1116,7 +1121,7 @@ get_hfss_analysis_status(task_id: str, refresh_from_aedt: bool = False) -> dict
 
 ## CST 电磁仿真（13 个）
 
-> ⚠️ 本节只收录 5 个。另有 **8 个 CST 工具尚未补本文档**：`cst_open_project` / `cst_get_model_info` / `cst_list_results` / `cst_plot_farfield` / `cst_export_snp_async` / `cst_export_snp_query` / `cst_task_list` / `cst_task_cancel`（参数/返回见运行中服务的 `tools/list`）。
+> 本节覆盖全部 13 个 CST 工具。
 
 ### `cst_solve_async`
 
@@ -1202,6 +1207,116 @@ cst_export_farfield_query(task_id: str) -> dict
 返回（完成）：`{"success": true, "completed": true, "status": "SUCCEEDED", "farfield_txts": ["C:/.../farfield (...).txt"]}`；运行中 `{"success": true, "completed": false, "status": "RUNNING"}`；失败 `{"success": false, "error_code": "CST_EXPORT_FARFIELD_FAILED"}`。
 
 ---
+
+### `cst_open_project`
+
+打开并保存 CST 模型（= 解包归档文件），不求解。
+
+```python
+cst_open_project(model_path: string) -> dict
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `model_path` | string | 是 | .cst 模型文件绝对路径（归档文件也行）。 |
+
+example: `{"model_path": "<string>"}`
+
+### `cst_get_model_info`
+
+只读查看 CST 模型状态：是否已解、是否解包、端口数、远场监视器有无。
+
+```python
+cst_get_model_info(model_path: string) -> dict
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `model_path` | string | 是 | .cst 模型文件绝对路径。 |
+
+example: `{"model_path": "<string>"}`
+
+### `cst_list_results`
+
+列出 CST 模型结果树里的全部条目（S 参数 / 远场等）与监视器。
+
+```python
+cst_list_results(model_path: string) -> dict
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `model_path` | string | 是 | .cst 模型文件绝对路径。 |
+
+example: `{"model_path": "<string>"}`
+
+### `cst_plot_farfield`
+
+把 CST 远场 ASCII .txt 画成方向图（极坐标切面 + 直角曲线各一张 PNG）。
+
+```python
+cst_plot_farfield(txt_path: string, cut: string = "phi=0", output_dir: string = "") -> dict
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `txt_path` | string | 是 | 远场 txt 绝对路径（cst_export_farfield 返回的 farfield_txts 之一）。 |
+| `cut` | string | 否 | 切面，格式 phi=0 或 theta=0（默认 phi=0）。 |
+| `output_dir` | string | 否 | 图片输出目录；空则落到默认产物目录（<result_dir>/cst_plot_farfield_<时间戳>/）。 |
+
+example: `{"txt_path": "<string>"}`
+
+### `cst_export_snp_async`
+
+异步提交 CST 的 S 参数导出，立即返回 task_id，用 cst_export_snp_query 取结果。想一步到位用同步版 cst_export_snp。
+
+```python
+cst_export_snp_async(model_path: string, output_dir: string = "", port_count: any = null) -> dict
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `model_path` | string | 是 | .cst 模型文件绝对路径（需已求解，存在 S 参数结果）。 |
+| `output_dir` | string | 否 | 导出目录；空则落到默认产物目录（<result_dir>/cst_export_snp_<时间戳>/）。 |
+| `port_count` | any | 否 | 端口数（None 则自动从结果推断）。 |
+
+example: `{"model_path": "<string>"}`
+
+### `cst_export_snp_query`
+
+查询 CST 的 S 参数导出任务进度（配合 cst_export_snp_async 的 task_id）。求解任务用 cst_solve_query。
+
+```python
+cst_export_snp_query(task_id: string) -> dict
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `task_id` | string | 是 | cst_export_snp_async 返回的 task_id。 |
+
+example: `{"task_id": "<string>"}`
+
+### `cst_task_list`
+
+列出当前所有 CST 异步任务（求解 / 导出）及状态。
+
+```python
+cst_task_list() -> dict
+```
+
+### `cst_task_cancel`
+
+⚠️ 取消一个 CST 异步任务（会终止运行中的求解）。
+
+```python
+cst_task_cancel(task_id: string) -> dict
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `task_id` | string | 是 | cst_task_list 或各 cst_*_async 返回的 task_id。 |
+
+example: `{"task_id": "<string>"}`
 
 ## LASPCEM 电磁仿真（11 个）
 
@@ -1781,6 +1896,64 @@ calculate_rf_dynamic_range(noise_figure_db: float, input_p1dbm: float, bandwidth
 实测锚点：NF=2 dB、P1dB=−20 dBm、BW=100 MHz、SNR=10 dB、target=60 dB → **−92 / −82 / 62 dB，margin 2 dB，达标**。
 
 ---
+
+### `run_laspcem_solve_async`
+
+提交 LASPCEM 求解任务（异步，立即返回 task_id）
+
+```python
+run_laspcem_solve_async(sem_path: string, setup_name: string = "", timeout_seconds: integer = 7200, stall_seconds: integer = 900, then_export: boolean = false, then_report: boolean = false, export_path: string = "", report_name: string = "Sparameter_1", port_count: integer = 0) -> dict
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `sem_path` | string | 是 | `.sem` 工程绝对路径。 |
+| `setup_name` | string | 否 | 求解 setup 名；留空自动探测。传错名字会**立刻**返回 SETUP_NOT_FOUND（不进队列）。 |
+| `timeout_seconds` | integer | 否 | 求解超时（后台线程内生效）。 |
+| `stall_seconds` | integer | 否 | 卡死判定（求解器还在但日志/工程/CPU 这么久没进展 ⇒ SOLVE_STALLED）；0 = 关闭。 |
+| `then_export` | boolean | 否 | 求解完成后自动导出 sNp（服务端执行，结果在 `export_result`）。 |
+| `then_report` | boolean | 否 | 求解完成后自动建报告（结果在 `report_result`）。 |
+| `export_path` | string | 否 | 指定 sNp 输出路径（留空按端口数自动命名）。 |
+| `report_name` | string | 否 | 报告名，默认 Sparameter_1。 |
+| `port_count` | integer | 否 | 报告曲线端口数；0 = 自动（按 sNp 后缀推断，兜底 2）。 |
+
+example: `{"sem_path": "<string>"}`
+
+### `laspcem_solve_query`
+
+查询 LASPCEM 求解任务（配合 run_laspcem_solve_async 的 task_id）。
+
+```python
+laspcem_solve_query(task_id: string) -> dict
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `task_id` | string | 是 | run_laspcem_solve_async 返回的 task_id。 |
+
+example: `{"task_id": "<string>"}`
+
+### `laspcem_task_list`
+
+列出 LASPCEM 后台任务（含 operation=solve、phase、steps、状态与耗时）。
+
+```python
+laspcem_task_list() -> dict
+```
+
+### `laspcem_task_cancel`
+
+取消 LASPCEM 求解任务（求解/导出/建报告 任一阶段都能取消）。
+
+```python
+laspcem_task_cancel(task_id: string) -> dict
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `task_id` | string | 是 | run_laspcem_solve_async 返回的 task_id。 |
+
+example: `{"task_id": "<string>"}`
 
 ## 图表（3 个）
 
