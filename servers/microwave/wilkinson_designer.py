@@ -20,6 +20,11 @@ import sys
 
 from servers.microwave.transline import Microstrip, P, MM, MICRON
 
+# 相对带宽上限保护。两种钳位（T_n_M<=1 时带宽趋于无限 / 求出的 fbw 超过上限）共用这一个
+# 常数：2026-11-18 之前两处分别写 1.8 与 1.95，导致请求 9.20 dB 与 9.21 dB 之间带宽跳
+# 15 个百分点、且更严的请求拿到更窄带宽（非单调）。
+_MAX_FBW = 1.95
+
 
 # ============================================================================
 # Part 1: Chebyshev 多项式与多级阻抗变换器综合
@@ -350,23 +355,53 @@ def design_wilkinson(h_mm, er, f0_GHz, n_sections, z0=50.0, fbw=None, ripple_db=
     if not isinstance(n_sections, int) or isinstance(n_sections, bool) or n_sections < 1:
         raise ValueError(f"n_sections 必须是 >=1 的整数（当前 {n_sections!r}）")
     # ---- 1. 确定带宽 ----
+    warnings: list[str] = []
     if fbw is None:
         if ripple_db is None:
             ripple_db = 20.0
+        requested_ripple_db = ripple_db
         # 回波损耗 -> 反射系数幅值
         Gamma_m = 10 ** (-ripple_db / 20)
         # 偶模阻抗比 R = 2（等功分：Z0 -> Z0/2）
         Gamma_dc = 0.5 * math.log(2)
         T_n_M = abs(Gamma_dc / Gamma_m)
+        clamp_kind = ""
         if T_n_M <= 1.0:
-            fbw = 1.8  # 带宽上限保护
+            # 请求优于该拓扑的可实现下限（偶模 2:1 变换器的 DC 失配 ≈9.2 dB）：
+            # 等波纹解不存在、带宽趋于无限 → 取与下面同一个上限
+            fbw = _MAX_FBW
+            clamp_kind = "floor"
         else:
             M = _solve_chebyshev_arg(n_sections, T_n_M)
             theta_m = math.acos(1 / M)
             fbw = 2 - 4 * theta_m / math.pi
-            if fbw > 1.95:
-                fbw = 1.95
+            if fbw > _MAX_FBW:
+                requested_fbw = fbw  # 截断前的请求带宽，仅用于告警文案
+                fbw = _MAX_FBW
+                clamp_kind = "bandwidth"
+        if clamp_kind:
+            # 按钳位后的 fbw 回写实际 ripple_db，避免返回「fbw 与 ripple_db 自相矛盾」却仍 success
+            theta_m = math.pi / 2 * (1 - fbw / 2)
+            M = 1 / math.cos(theta_m)
+            Gamma_m = abs(Gamma_dc / chebyshev_poly(n_sections, M))
+            ripple_db = -20 * math.log10(Gamma_m)
+            if clamp_kind == "floor":
+                floor_db = -20 * math.log10(Gamma_dc)
+                warnings.append(
+                    f"请求的最差回波损耗 {requested_ripple_db:.2f} dB 优于该拓扑下限"
+                    f"（DC 失配约 {floor_db:.2f} dB，等波纹解不存在）：带宽趋于无限，"
+                    f"已取上限 fbw={fbw * 100:.1f}%，实际最差回波损耗 {ripple_db:.2f} dB"
+                    f"（优于请求 {requested_ripple_db:.2f} dB）")
+            else:
+                warnings.append(
+                    f"请求对应的带宽超过上限：fbw 已由 {requested_fbw * 100:.0f}% 截断到 "
+                    f"{fbw * 100:.1f}%，实际最差回波损耗 {ripple_db:.2f} dB"
+                    f"（优于请求 {requested_ripple_db:.2f} dB）")
     else:
+        if ripple_db is not None:
+            warnings.append(
+                f"同时给了 fbw={fbw:g} 与 ripple_db={ripple_db:g} dB：已按 fbw 计算，"
+                f"请求的 ripple_db 被忽略（实际最差回波损耗见返回值）")
         # 由带宽反推回波损耗
         theta_m = math.pi / 2 * (1 - fbw / 2)
         M = 1 / math.cos(theta_m)
@@ -414,6 +449,7 @@ def design_wilkinson(h_mm, er, f0_GHz, n_sections, z0=50.0, fbw=None, ripple_db=
         'z0': z0,
         'fbw': fbw,
         'ripple_db': ripple_db,
+        'warnings': warnings,
         'lambda0_mm': lambda0_mm,
         'arm_z_lines': arm_z_lines,
         'sections': sections,
@@ -445,6 +481,11 @@ def print_results(result):
     print(f"│  最小回波损耗(估)  : {result['ripple_db']:.1f} dB", " " * 40, "│", sep="")
     print("└───────────────────────────────────────────────────────────────────┘")
     print()
+
+    for _w in result.get('warnings') or []:
+        print(f"  [警告] {_w}")
+    if result.get('warnings'):
+        print()
 
     print("┌─ 每臂各级传输线阻抗 ───────────────────────────────────────────────┐")
     print(f"│  {'节号':>4}  {'阻抗 Z_arm (Ω)':>14}  {'位置':<16}                    │")

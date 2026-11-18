@@ -221,11 +221,16 @@ def design_wilkinson(
         n_sections: 级数（每臂四分之一波长节数，>=1）。
         z0: 端口阻抗 ohm，默认 50。
         fbw: 相对带宽（如 1.0=100%），与 ripple_db 二选一；都不传则按默认回波损耗 20dB。
-        ripple_db: 通带最小回波损耗 dB（Chebyshev 等波纹）。
+        ripple_db: 通带最小回波损耗 dB（Chebyshev 等波纹）；与 fbw 同时给时以 fbw 为准。
 
     Returns:
-        {"success": True, "sections": [{"width_mm":..., "length_mm":..., "resistor_ohm":...}],
-         "arm_impedance_ohm": [...], ...}
+        {"success": True, "sections": [{"section", "z_arm", "width_mm", "length_mm", "eeff"}],
+         "arm_z_lines": [...], "isolation_resistors": [...], "lambda0_mm": ...,
+         "fbw": ..., "ripple_db": ..., "warnings": [...]}
+
+        ripple_db 是**模型算出的带内最差回波损耗**（小反射近似，实测与精确级联链偏差
+        0.2~0.5 dB），不是回显入参。warnings 非空表示参数被自动钳位或互斥参数被忽略，
+        必须转告用户：`fbw` 与 `ripple_db` 同时给时**以 fbw 为准**。
     """
     if (err := _require_positive(h_mm, "h_mm")) is not None:
         return err

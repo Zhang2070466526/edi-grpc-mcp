@@ -73,3 +73,55 @@ def test_transline_width_z0_roundtrip():
         back = calculate_transline(transline_type="microstrip", er=ER, freq=F, h=H,
                                    width=w)["z0"]
         assert math.isclose(back, z0, rel_tol=1e-3), (z0, w, back)
+
+
+def test_wilkinson_ripple_clamp_rewrites_actual_value():
+    """MW-3：请求优于拓扑下限（偶模 DC 失配 ≈9.2 dB）时，fbw 取上限并回写实际回波损耗。
+
+    改前：静默钳到 1.8（180%）且 ripple_db 仍回显 9.0，输出自相矛盾。
+    """
+    d = design_wilkinson(h_mm=H, er=ER, f0_ghz=F, n_sections=2, ripple_db=9.0)
+    assert d["success"] is True
+    assert d["fbw"] == 1.95
+    assert d["warnings"], "钳位时必须给出 warnings"
+    assert "下限" in d["warnings"][0]
+    # 必须是模型算出的实际值（优于请求），不能回显入参
+    assert d["ripple_db"] > 9.0
+    assert math.isclose(d["ripple_db"], 9.2309, abs_tol=1e-3), d["ripple_db"]
+
+
+def test_wilkinson_bandwidth_clamp_is_monotonic():
+    """两种钳位必须共用同一个上限：请求越严，带宽不得变宽。
+
+    改前 9.20 dB → fbw=1.80、9.21 dB → fbw=1.95，0.01 dB 的步进跳 15 个百分点且非单调。
+    """
+    bw = [design_wilkinson(h_mm=H, er=ER, f0_ghz=F, n_sections=2, ripple_db=r)["fbw"]
+          for r in (9.0, 9.19, 9.21, 9.25, 12.0, 20.0)]
+    assert bw == sorted(bw, reverse=True), bw
+
+
+def test_wilkinson_bandwidth_clamp_message_differs_from_floor():
+    """「带宽撞上限」与「请求优于下限」是两种钳位，告警文案不能混用。
+
+    改前统一写「超出可实现范围」，但 9.25 dB 在 fbw≈1.97 时是有解的，被截的只是带宽。
+    """
+    d = design_wilkinson(h_mm=H, er=ER, f0_ghz=F, n_sections=4, ripple_db=9.25)
+    assert d["fbw"] == 1.95
+    assert d["warnings"] and "截断" in d["warnings"][0], d["warnings"]
+    assert d["ripple_db"] > 9.25
+
+
+def test_wilkinson_both_fbw_and_ripple_warns():
+    """同时给 fbw 与 ripple_db：以 fbw 为准，但必须告警（否则与 MW-3 同类的静默失真）。"""
+    d = design_wilkinson(h_mm=H, er=ER, f0_ghz=F, n_sections=2, fbw=1.0, ripple_db=30.0)
+    assert d["fbw"] == 1.0
+    assert any("被忽略" in w for w in d["warnings"]), d["warnings"]
+    assert d["ripple_db"] < 30.0  # 实际远低于请求，必须显式告知用户
+
+
+def test_wilkinson_no_warning_when_no_clamp():
+    """正常参数（默认 20dB 回波损耗）不得触发钳位告警。"""
+    d = design_wilkinson(h_mm=H, er=ER, f0_ghz=F, n_sections=2)
+    assert d["success"] is True
+    assert d["warnings"] == []
+    assert math.isclose(d["ripple_db"], 20.0, abs_tol=1e-6)
