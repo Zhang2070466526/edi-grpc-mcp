@@ -816,7 +816,6 @@ else:                                 # 两者都没有
 - `get_simulation_async_status` / `get_simulation_async_result`：读 `_sim_tasks` 内存注册表
 - `list_eda_tasks`：列出当前异步任务，按状态过滤
 - `simulate_netlist`：校验 `netlist_path` 存在 → `call_grpc(SIMULATE_NETLIST)` → EDI 复制网表到临时目录 → 执行 ADS → 复制 `result.raw` 到 `history/` → 清理临时目录
-- `simulate_netlist_with_ads`：直接调 ADS 仿真控制器（`CALL_SIMULATION_CONTROLLER`）
 - `simulate_anti_burnout`：对具备抗烧毁数据的器件执行输入功率仿真和风险评估
 
 ### 4.4 导出与模型 / 软 IP
@@ -858,7 +857,8 @@ else:                                 # 两者都没有
 |---|---|---|
 | `launch_aedt` | COM | 已运行返回状态；否则 subprocess 启动 → 轮询 COM 就绪 |
 | `open_hfss_project` | COM | 清理失效锁 → COM 附着 OpenProject / subprocess 启动 |
-| `close_hfss_project` | COM + 进程 | COM `CloseProject`（可选 Save）→ 附着失败退 `taskkill`（WM_CLOSE）→ 10s 未退 `/F`；`force` 直接 `/F`，返回 `scope`（managed=只自己起的 / all=机器上所有） |
+| `close_hfss_project` | COM | 只走 COM `CloseProject`（可选 Save），**不杀进程**；成败按事后核对 `open_projects`/锁判定；`COM_UNAVAILABLE`/`AEDT_NOT_RUNNING`/`MULTI_INSTANCE_UNSUPPORTED` 明确分错，硬杀入口交给 `quit_aedt(force=True)` |
+| `quit_aedt` | COM + 进程 | 退出 AEDT 程序：COM `QuitApplication` → `WM_CLOSE` → 仍不退 `STILL_RUNNING`；`force=True` 需配 `confirm=True` 才 `taskkill /F`（`scope=all`），有工程打开时 `data_loss_risk=true` |
 | `get_hfss_project_info` | COM | 读 GetProjectList / GetActiveProject / GetActiveDesign |
 | `start_hfss_analysis_async` | COM | `hfss_runner.submit(require_idle=True)` 忙则拒绝 |
 | `get_hfss_analysis_status` | 内存 | 读 hfss_runner.snapshot，可选 refresh_from_aedt |
@@ -950,7 +950,6 @@ else:                                 # 两者都没有
 | `get_simulation_async_result` | 取最终结果和完整日志 | start（task_id） | list_result_curves / 报告 |
 | `list_eda_tasks` | 看有哪些仿真在跑/排队 | — | LLM 判断仿真状态 |
 | `simulate_netlist` | 不打开工程直接仿真网表 | export_project_netlist（netlist 文件） | list_result_curves / 报告 |
-| `simulate_netlist_with_ads` | 直接调 ADS 控制器 | export_project_netlist（netlist 文件） | — |
 | `simulate_anti_burnout` | 评估器件抗烧毁风险 | 已打开工程 | LLM 判断抗烧毁风险 |
 
 #### 导出与分析

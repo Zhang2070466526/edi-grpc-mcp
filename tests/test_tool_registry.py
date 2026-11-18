@@ -11,7 +11,7 @@ def test_all_tools_registered():
     required = [
         "list_epp_projects", "create_project", "open_edi_project", "close_edi_project",
         "get_project_summary",
-        "simulate_netlist", "simulate_netlist_with_ads",
+        "simulate_netlist",
         "simulate_anti_burnout",
         "compare_simulation_results",
         "start_simulation_async", "get_simulation_async_status", "get_simulation_async_result",
@@ -38,7 +38,8 @@ def test_all_tools_registered():
         "design_schematic_topology",
         "export_schematic_components_to_csv",
         "design_chip",
-        "open_hfss_project", "close_hfss_project", "launch_aedt", "get_hfss_project_info",
+        "open_hfss_project", "close_hfss_project", "launch_aedt", "quit_aedt",
+        "get_hfss_project_info",
         "launch_laspcem", "open_laspcem_project", "import_aedt_as_sem",
         "run_laspcem_solve_async", "laspcem_solve_query",
         "laspcem_task_cancel", "laspcem_task_list",
@@ -107,10 +108,10 @@ def test_mcp_only_tools_are_expected():
     mcp_only = mcp_tools - chat_tools
     expected = {
         "simulate_netlist",           # 需要本地网表文件
-        "simulate_netlist_with_ads",  # 需要 ADS 安装
         "open_hfss_project",          # ANSYS COM 依赖
         "close_hfss_project",
         "launch_aedt",
+        "quit_aedt",
         "get_hfss_project_info",
         "start_hfss_analysis_async",
         "get_hfss_analysis_status",

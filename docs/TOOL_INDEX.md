@@ -18,7 +18,7 @@
 - `capture_schematic` — 截取工程原理图为图片。
 - `clear_schematic` — 清空工程原理图中的全部器件和网段并保存（破坏性操作）。
 - `close_edi_project` — ⚠️ 关闭当前 .epp 工程（未保存改动会丢）。打开用 open_edi_project；只是想看状态用 get_project_summary。
-- `close_hfss_project` — ⚠️ 关闭 AEDT 项目（未保存改动会丢；force 会强杀进程）。
+- `close_hfss_project` — 关闭 AEDT **工程**（File → Close Project）：不退出 AEDT、绝不杀进程。
 - `close_laspcem_project` — 关闭在 LASPCEM 中打开某个 .sem 的 GUI 实例（等价于关窗口）。
 - `compare_simulation_results` — 比较多个 RAW 仿真结果文件中的同一条曲线并生成对比图。
 - `create_project` — 创建新的 EDI 工程（不显示创建向导，也不自动打开）。
@@ -85,6 +85,7 @@
 - `open_edi_project` — 打开 .epp 工程（会切换 EDI 当前工程；同目录需有 schematics/main/schematic.ep）。关闭用 close_edi_project。
 - `open_hfss_project` — 启动 AEDT 并打开 .aedt 项目（COM 附着优先，subprocess 单次启动兜底）。
 - `open_laspcem_project` — 在 LASPCEM 中打开 .sem 工程文件。
+- `quit_aedt` — 退出 AEDT **程序**（关掉整个 AEDT 窗口、收掉进程）：不是关工程。
 - `replace_models_from_csv` — ⚠️ 按 CSV 批量替换工程元件模型（影响面大，建议先 get_project_summary 核对）。
 - `replace_port_component` — ⚠️ 将原理图中的端口器件替换为另一种类型（会改变端口）。
 - `replace_schematic_from_file` — ⚠️ 从 .ep 文件整体替换原理图（整图覆盖，原内容丢失）。
@@ -97,7 +98,6 @@
 - `show_image` — 读取本地图片，返回标准 MCP ImageContent 和本地路径。
 - `simulate_anti_burnout` — 对工程原理图中具备抗烧毁数据的器件执行输入功率仿真和抗烧毁风险评估。
 - `simulate_netlist` — 仿真指定 netlist.log 文件，不需打开 .epp 工程。返回 RAW 结果+日志。
-- `simulate_netlist_with_ads` — 调用 ADS 仿真控制器（经 EDI gRPC 转发）。
 - `start_hfss_analysis_async` — 异步启动 HFSS Setup 仿真，立即返回 task_id。
 - `start_simulation_async` — 启动异步仿真，立即返回 task_id 供 get_simulation_async_status 查进度；仿真日志在结果查询的 ads_output 字段。
 - `switch_workspace` — ⚠️ 设置下次启动时的工作区（不是立即切换，当前保持不变）。

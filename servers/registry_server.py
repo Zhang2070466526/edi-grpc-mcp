@@ -69,7 +69,7 @@ _INTERNAL_TOOLS: frozenset[str] = frozenset({
     "list_schematic_components", "get_schematic_component_info",
     "get_components_static_params", "batch_query_component",
     # 仿真
-    "simulate_netlist", "simulate_netlist_with_ads", "simulate_anti_burnout",
+    "simulate_netlist", "simulate_anti_burnout",
     "start_simulation_async",
     # 仿真器件
     "create_simulation_component", "update_simulation_component",
@@ -232,6 +232,7 @@ _READONLY_TOOLS: frozenset[str] = frozenset({
 #: laspcem_task_cancel（终止运行中的求解）—— 语义破坏但当初没打 ⚠️。
 _DESTRUCTIVE_TOOLS: frozenset[str] = frozenset({
     "clear_schematic", "close_edi_project", "close_hfss_project",
+    "quit_aedt",
     "close_laspcem_project", "cst_task_cancel", "delete_simulation_component",
     "laspcem_task_cancel", "replace_models_from_csv", "replace_port_component",
     "replace_schematic_from_file", "switch_workspace",
@@ -242,6 +243,7 @@ _TOOL_TITLES: dict[str, str] = {
     "clear_schematic": "清空原理图",
     "close_edi_project": "关闭 EDI 工程",
     "close_hfss_project": "关闭 AEDT 工程",
+    "quit_aedt": "退出 AEDT 程序",
     "close_laspcem_project": "关闭 LASPCEM 工程",
     "cst_task_cancel": "取消 CST 任务",
     "delete_simulation_component": "删除器件",

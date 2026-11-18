@@ -101,17 +101,24 @@ def trim_tool_descriptions(mcp) -> int:
     """把每个工具的 description 从全文 docstring 截成第一段摘要。
 
     FastMCP 默认把 ``fn.__doc__`` 整段塞进 tools/list 的 description（含 用法/Args/Returns），
-    导致 LLM 工具选择上下文膨胀、语义搜索噪声大。这里只保留首行摘要，全文仍留在
-    ``tool.fn.__doc__`` 供人类查看，不丢失信息。
+    导致 LLM 工具选择上下文膨胀、语义搜索噪声大。这里只保留**第一段**（空行分隔），
+    全文仍留在 ``tool.fn.__doc__`` 供人类查看，不丢失信息。
+
+    ⚠️ 多行第一段要 ``dedent``：docstring 里的缩进会原样带进 description，
+    在 tools/list 里显示成参差不齐的缩进块（2026-11-18 实测 `close_hfss_project`）。
     """
     trimmed = 0
     tools = registered_tools(mcp)
     for tool in tools:
         fn = getattr(tool, "fn", None)
-        doc = (getattr(fn, "__doc__", "") or "").strip()
-        if not doc:
+        doc = getattr(fn, "__doc__", "") or ""
+        if not doc.strip():
             continue
-        first = doc.split("\n\n", 1)[0].strip()
+        # 逐行 strip 再拼：docstring 首行（紧跟 `"""` 那行）没有缩进，`textwrap.dedent`
+        # 的公共前缀会算成空、对后续行无效，于是 description 里带着参差缩进（2026-11-18 实测）。
+        first = "\n".join(line.strip()
+                          for line in doc.replace("\r\n", "\n").split("\n\n", 1)[0].split("\n")
+                          if line.strip())
         if first and first != tool.description:
             tool.description = first
             trimmed += 1

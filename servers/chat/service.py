@@ -91,9 +91,9 @@ _DESTRUCTIVE_CHAT_TOOLS = {
 # ---------------------------------------------------------------------------
 _CHAT_EXCLUDED_TOOLS = {
     "simulate_netlist",          # 需要本地网表文件
-    "simulate_netlist_with_ads", # 需要 ADS 安装
     "open_hfss_project",         # ANSYS COM 依赖
     "close_hfss_project",
+    "quit_aedt",
     "launch_aedt",
     "get_hfss_project_info",
     "start_hfss_analysis_async",

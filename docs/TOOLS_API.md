@@ -474,24 +474,6 @@ simulate_netlist(netlist_path: str, timeout_seconds: int = 600) -> dict
 
 ---
 
-### `simulate_netlist_with_ads`
-
-```python
-from servers.eda.simulation import simulate_netlist_with_ads
-
-simulate_netlist_with_ads(netlist_path: str, ads_path: str = "", timeout_seconds: int = 120) -> dict
-```
-
-直接调用 ADS 仿真控制器处理网表。
-
-| 参数 | 类型 | 必填 | 默认 | 说明 |
-|---|---|---|---|---|
-| `netlist_path` | str | 是 | — | 网表文件路径 |
-| `ads_path` | str | 否 | "" | ADS 安装路径。**留空则由 MCP 本侧探测后转发**（`EDI_ADS_PATH` → EDI `config.ini` 的 `[ads] hpeesof_dir` → glob 取版本号最高）；探测不到直接返回 `ADS_NOT_FOUND`，不会把空串丢给 EDI 服务端去回落硬编码的 `.../ADS2020` |
-| `timeout_seconds` | int | 否 | 120 | 最长等待秒数 |
-
----
-
 ### `simulate_anti_burnout`
 
 ```python
@@ -1034,19 +1016,53 @@ open_hfss_project(project_path: str, aedt_path: str = "", timeout_seconds: int =
 ```python
 from servers.ansys.project_manage import close_hfss_project
 
-close_hfss_project(project_name: str = "", project_path: str = "", save_before_close: bool = False, force: bool = False) -> dict
+close_hfss_project(project_name: str = "", project_path: str = "", save_before_close: bool = False) -> dict
 ```
 
-关闭 AEDT 项目，三级兜底：COM `CloseProject` → `taskkill`（WM_CLOSE）→ `taskkill /F`。COM 只关指定项目；COM 附着失败才退进程级（会关掉它名下所有项目）。`force=True` 直接 /F 硬杀：MCP 记录到自己启动的 AEDT 时只终止那一批（`scope="managed"`），没记录时终止机器上所有 `ansysedt.exe`（`scope="all"`，含手动开的实例）。
+关闭 AEDT **工程**（File → Close Project）：不退出 AEDT、绝不杀进程。
+用于「关掉这个工程、AEDT 还要继续用别的工程」/「只释放某个工程的占用或锁」/「关闭前按 COM 语义保存」。
+要退出 AEDT 程序用 `quit_aedt`；要硬杀进程用 `quit_aedt(force=True, confirm=True)`；要打开工程用 `open_hfss_project`。
+不传 `project_name` 时关**当前活动工程**。
+
+关键语义：
+- **成败判据是事后核对**（`CloseProject` 后再看 `GetProjectList()` / 锁文件），不是 COM 有没有抛异常：AEDT 收尾阶段抛 `DISP_E_EXCEPTION` 时工程往往已关掉，此时返回 `success=true` + `closed_despite_exception=true`。
+- `project_name` 不在已打开列表 → `NO_SUCH_PROJECT`；`COM 附着失败` → `COM_UNAVAILABLE`；AEDT 没跑 → `AEDT_NOT_RUNNING`；≥2 个 AEDT 实例 → `MULTI_INSTANCE_UNSUPPORTED`；COM 30s 不返回 → `AEDT_NOT_RESPONDING`。
+- `project_path` 为空时用 COM 的 `GetPath()` 回填，用于只读检测与锁清理。
+- 工程文件只读时 `readonly_project_file=true` + `warnings` 要求转告用户（AEDT 保存会弹「写入文件失败」框）。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `project_name` | str | 否 | "" | 项目名，为空关闭活动项目 |
-| `project_path` | str | 否 | "" | 项目路径，用于清理锁文件 |
-| `save_before_close` | bool | 否 | False | 关闭前保存 |
-| `force` | bool | 否 | False | True 跳过 COM/WM_CLOSE 直接 `taskkill /F`；作用范围见返回的 `scope`（managed=只自己起的，all=机器上所有） |
+| `project_path` | str | 否 | "" | 项目路径，用于只读检测与锁清理 |
+| `save_before_close` | bool | 否 | False | 关闭前保存（只读工程跳过并告警） |
 
-返回：`{"success": true, "method": "com", "project_closed": true, "message": "已关闭: demo"}`；失败 `{"success": false, "message": "..."}`。
+返回：`{"success": true, "method": "com", "project_closed": true, "message": "已关闭: demo", "open_projects_after": [], "readonly_project_file": false, "lock_path": "...", "lock_exists_after": false, "warnings": []}`
+
+### `quit_aedt`
+
+```python
+from servers.ansys.project_manage import quit_aedt
+
+quit_aedt(force: bool = False, confirm: bool = False, timeout_seconds: int = 30) -> dict
+```
+
+退出 AEDT **程序**（关掉整个 AEDT 窗口、收掉进程）：不是关工程。
+用于「工程已关、AEDT 停在空窗口要收掉」/「释放 AEDT 的内存或许可证」/「实例卡死（未响应）且内容可丢弃」。
+只关某个工程用 `close_hfss_project`（进程保留）；硬杀必须 `force=True`+`confirm=True`（会终止机器上**所有** ansysedt.exe）。
+
+**`confirm` 有两个用处**：① `force=True` 必须配 `confirm=True`；② 目标实例**不是本服务启动的**（用户手开/别的工具开）时默认回 `CONFIRM_REQUIRED`（附 PID、`open_projects`），要 `confirm=True` 才退 —— 避免替别人关掉他正在用的 AEDT。本服务自己启动的实例无需确认。
+
+顺序：COM `QuitApplication` → 给主窗发 `WM_CLOSE`（等同点 X）→ 只剩 `-Embedding` 辅助进程时**自动清理**（无窗口、无工程，`method` 会带 `+helper_cleanup`）→ 仍不退出回 `STILL_RUNNING`（**不自己硬杀**）。
+
+`force=True`（需 `confirm`）走 `taskkill /F`，会**多轮重试**（`-Embedding` 会以新 PID 再生）；若服务的令牌权限不足会明确回 `PERMISSION_DENIED` + `pids_left`（提示以管理员运行服务或手工结束），而不是笼统的 `KILL_FAILED`。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `force` | bool | 否 | False | True = 直接 `taskkill /F`；**必须同时传 `confirm=True`**，否则回 `CONFIRM_REQUIRED` |
+| `confirm` | bool | 否 | False | 二次确认闸门：`force=True` 或「目标 AEDT 不是本服务启动的」时必须为 True |
+| `timeout_seconds` | int | 否 | 30 | 等 AEDT 退出的秒数（5–120） |
+
+返回：`{"success": true, "status": "quit", "method": "com", "pids_before": [12345], "pids_after": [], "open_projects_before": [], "data_loss_risk": false, "warnings": []}`
 
 ### `launch_aedt`
 
@@ -1684,9 +1700,19 @@ design_wilkinson(h_mm: float, er: float, f0_ghz: float, n_sections: int,
 
 实测（独立节点法 S 参数解算复核）：臂阻抗 **Chebyshev 综合正确**（`n=2` 在 f0 恰好 −20.04 dB、`n=3` 在 f0 精确零点；`n=1` 回经典值 70.7 Ω / 100 Ω）。
 
-⚠️ **两个已知缺陷（未修，详见 `审查报告.md` §十四）**：
-1. **`MW-1` 隔离电阻方向错**：`n ≥ 2` 用启发式拟合，取值**朝输出端单调递减**（正确倾向应递增）。实测 `n=2` 带内最差隔离 **−13.30 dB**（数值最优 ≈ −20.97 dB）；`n=4/5/6/10` 一律同向递减 ⇒ 系统性偏差，n≥2 的隔离电阻值**不可直接采用**。
-2. **`MW-3` 波纹钳位静默失真**：`ripple_db ≤ 9.2` 时 `fbw` 被静默钳到 **1.8（=180% 带宽）**、臂阻抗退化成 `[72.4, 70.7, 69.1]`，而返回仍 `success: true` ⇒ 设计输出不可用但不报错。
+返回键：`success / h_mm / er / f0_GHz / n_sections / z0 / fbw / ripple_db / warnings / lambda0_mm / arm_z_lines / sections[{section,z_arm,width_mm,length_mm,eeff}] / isolation_resistors`。
+
+`ripple_db` 是**模型算出的带内最差回波损耗**（小反射近似；与精确等波纹级联链独立复核偏差 0.2~0.5 dB —— 窄带高回波损耗时偏乐观 ≤0.5 dB，钳位分支偏保守 ≈0.3 dB），**不是回显入参**。
+
+⚠️ **参数自动钳位（2026-11-18 起显式告警，不再静默）**：两种钳位共用同一上限 `fbw=1.95`：
+
+1. 请求优于该拓扑下限（偶模 2:1 变换器 DC 失配 ≈9.2 dB，等波纹解不存在）→ 带宽趋于无限，取上限并回写实际 RL；
+2. 请求带宽超过 195% → 截断到 195% 并回写实际 RL。
+
+`fbw` 与 `ripple_db` 同时给时**以 `fbw` 为准**，并在 `warnings` 里说明 `ripple_db` 被忽略。两种情况 `warnings` 都非空，agent 必须转告用户，不能只报 `success: true`。
+
+⚠️ **一个已知缺陷（未修，详见 `审查报告.md` §十四）**：
+**`MW-1` 隔离电阻方向错**：`n ≥ 2` 用启发式拟合，取值**朝输出端单调递减**（正确倾向应递增）。实测 `n=2` 带内最差隔离 **−13.30 dB**（数值最优 ≈ −20.97 dB）；`n=4/5/6/10` 一律同向递减 ⇒ 系统性偏差，n≥2 的隔离电阻值**不可直接采用**。
 
 ---
 

@@ -50,10 +50,6 @@ MCP_EXTRA_ALLOWED_HOSTS=
 # remote mode auto-ignores it. Override/clear here only if needed.
 # Source-process probe when whitelist is off (local empty / remote auto-ignored). Keep 1 = only audit trail when no auth.
 MCP_PROBE_ENABLED=1
-# Optional: image vision analysis (enabled when all three are configured)
-VISION_API_KEY=
-VISION_BASE_URL=
-VISION_MODEL=
 # Optional: Chat AI (LLM multi-round tool calling). Leave empty to disable.
 LLM_API_KEY=
 LLM_BASE_URL=
