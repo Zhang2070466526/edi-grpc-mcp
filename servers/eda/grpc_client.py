@@ -68,23 +68,19 @@ def get_cached_channel(target: str) -> grpc.Channel | None:
 
 
 def _get_channel(target: str) -> grpc.Channel:
-    """获取缓存的 gRPC channel，不健康时关闭并重建。
+    """获取缓存的 gRPC channel。
 
     由 _channel_lock 串行化；复用模块级 _channel_cache，避免每次调用重新 TCP 握手。
+    不做 per-call 健康探测（2026-11-18 移除）：channel_ready_future 探测在 EDI 离线时
+    每次白等 2s，而重建 channel 是冗余的 —— 实测（桩 gRPC 服务模拟 EDI 上下线）：
+
+    * EDI 离线：缓存的 channel 首次调用约 2s 走到 TRANSIENT_FAILURE 后返回
+      GRPC_UNAVAILABLE，之后同一 channel 上的调用立即失败（0.015s → 0.000s）；
+    * EDI 恢复：channel 自己重连，实测服务起来后 0.19s 即恢复可用，无需外部干预
+      （对照：失败时立即摘掉缓存 channel 只快 0.19s，不值得为它加失败分支）。
     """
     with _channel_lock:
         ch = _channel_cache.get(target)
-        if ch is not None:
-            # 健康检查：channel 可能因 EDI 重启而断开
-            try:
-                grpc.channel_ready_future(ch).result(timeout=2)
-            except (grpc.FutureTimeoutError, grpc.RpcError):
-                _logger.warning("grpc channel unhealthy, reconnecting %s", target)
-                try:
-                    ch.close()
-                except Exception:
-                    pass  # close 失败也不影响后续重建
-                ch = None
         if ch is None:
             ch = grpc.insecure_channel(target, options=_CHANNEL_OPTIONS)
             _channel_cache[target] = ch

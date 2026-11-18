@@ -133,6 +133,48 @@ class TestGrpcStubBehavior:
             assert "simulation" not in r["message"].lower()
 
 
+class TestChannelCache:
+    """channel 复用语义（2026-11-18 移除 per-call 健康探测后锁住）。"""
+
+    def test_channel_is_reused_and_not_probed_per_call(self, monkeypatch):
+        """同一 target 只建一个 channel；且不得再出现 per-call 的 channel_ready_future 探测。
+
+        探测在 EDI 离线时每次白等 2s；实测 gRPC 自身会在服务恢复后 0.19s 重连，
+        不需要外部探测+重建。本用例若红，说明有人把探测加回来了。
+        """
+        import grpc
+
+        from servers.eda import grpc_client as gc
+
+        created = []
+
+        class FakeChannel:
+            def close(self):
+                pass
+
+        def fake_insecure(target, options=None):
+            created.append(target)
+            return FakeChannel()
+
+        def no_probe(*args, **kwargs):
+            raise AssertionError("per-call channel_ready_future 探测不应再出现")
+
+        monkeypatch.setattr(grpc, "insecure_channel", fake_insecure)
+        monkeypatch.setattr(grpc, "channel_ready_future", no_probe)
+        monkeypatch.setattr(gc, "_channel_cache", {})
+
+        chans = [gc._get_channel("127.0.0.1:1") for _ in range(3)]
+        assert chans[0] is chans[1] is chans[2]
+        assert created == ["127.0.0.1:1"]
+
+    def test_get_cached_channel_does_not_create(self, monkeypatch):
+        """get_cached_channel 是只读诊断接口：没建过就返回 None，不能顺手建一个。"""
+        from servers.eda import grpc_client as gc
+
+        monkeypatch.setattr(gc, "_channel_cache", {})
+        assert gc.get_cached_channel("127.0.0.1:1") is None
+
+
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__, "-v", "-p", "no:cacheprovider"])

@@ -56,7 +56,6 @@ def _normalize_pairs(pairs: list[dict]) -> tuple[list[tuple[int, int]], dict | N
 
 
 @mcp.tool()
-@per_tool_mutex
 def find_netlist_paths(
     netlist_path: str,
     ep_path: str,
@@ -124,6 +123,22 @@ def find_netlist_paths(
         if isinstance(v, bool) or not isinstance(v, int) or v < 0:
             return error_response("INVALID_PARAMETERS", f"{label} 必须是非负整数")
 
+    return _find_netlist_paths_exec(
+        netlist, ep, pair_list, max_paths, max_states, timeout, encoding, output_path,
+    )
+
+
+@per_tool_mutex
+def _find_netlist_paths_exec(
+    netlist: str,
+    ep: str,
+    pair_list: list[tuple[int, int]],
+    max_paths: int,
+    max_states: int,
+    timeout: int,
+    encoding: str,
+    output_path: str,
+) -> dict[str, Any]:
     args = [
         "--netlist", netlist,
         "--ep", ep,

@@ -215,3 +215,38 @@ def test_exe_not_found(tmp_path, monkeypatch):
     monkeypatch.setattr(np, "run_exe", boom)
     r = np.find_netlist_paths(n, e, [{"input": 1, "output": 2}])
     assert r["error_code"] == "EXE_NOT_FOUND"
+
+
+def test_invalid_args_fail_fast_while_another_call_holds_the_lock(tmp_path, monkeypatch):
+    """互斥锁只该包住子进程：别人正在跑寻路时，参数非法的调用必须立刻返回而不是排队。
+
+    2026-11-18 把 ``@per_tool_mutex`` 从工具函数挪到 ``_find_netlist_paths_exec`` 就是为了
+    这个；挪回去会让本用例在 dt < 0.5s 处变红。
+    """
+    import threading
+    import time
+
+    n, e = _files(tmp_path)
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_run(exe_path, args, timeout_seconds):
+        started.set()
+        release.wait(10)
+        return {"returncode": 0, "stdout": "{}", "stderr": "", "json": _RESULT,
+                "json_error": ""}
+
+    monkeypatch.setattr(np, "run_exe", slow_run)
+    holder = threading.Thread(
+        target=lambda: np.find_netlist_paths(n, e, [{"input": 1, "output": 2}]), daemon=True)
+    holder.start()
+    assert started.wait(5), "第一个调用没能进入子进程阶段"
+
+    t = time.monotonic()
+    r = np.find_netlist_paths(str(tmp_path / "missing.log"), e, [{"input": 1, "output": 2}])
+    dt = time.monotonic() - t
+
+    release.set()
+    holder.join(10)
+    assert r["error_code"] == "FILE_NOT_FOUND"
+    assert dt < 0.5, f"非法参数被锁住排了 {dt:.2f}s"
