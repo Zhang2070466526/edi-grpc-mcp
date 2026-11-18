@@ -177,11 +177,17 @@ def get_project_lock_path(project_path: str) -> Path:
 
 
 def read_project_lock_pid(lock_path: Path) -> int | None:
-    """读取 .aedt.lock 文件中的 DesktopProcessID。"""
+    """读取 .aedt.lock 文件中的 DesktopProcessID。
+
+    ⚠️ 真实锁文件那一行是**带制表符缩进**的（`\\tDesktopProcessID=19164`，AEDT 2020 实测），
+    所以必须 `strip()` 后再匹配 —— 2026-11-18 发现原来用 `startswith` 直接比对，
+    对真实锁永远返回 None（导致「锁在用中」判定一直失效）。
+    """
     if not lock_path.is_file():
         return None
     try:
         for line in lock_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            line = line.strip()
             if line.startswith("DesktopProcessID="):
                 return int(line.split("=", 1)[1].strip())
     except Exception:
