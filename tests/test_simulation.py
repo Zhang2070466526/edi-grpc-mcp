@@ -298,71 +298,14 @@ class TestResultSuccessSemantics:
                 _sim_tasks.pop(tid, None)
 
 
-def test_simulate_netlist_with_ads_resolves_ads_path(tmp_path, monkeypatch):
-    """`ads_path` 留空时必须**在本侧探测**再转发，不能把空串丢给 EDI 服务端。
-
-    2026-11-16 复核：服务端自己探不到会回退成硬编码
-    `C:/Program Files/Keysight/ADS2020`，而机器装的是 `ADS2020_update2`
-    ⇒ 报「Can not find ...ADS2020」，`ads_output` 为空、`success=false`（三次调用全失败）。
-    """
+def test_simulate_netlist_missing_netlist(tmp_path):
+    """网表文件不存在时回 NETLIST_NOT_FOUND（提示先生成网表），而非通用 FILE_NOT_FOUND。"""
     import servers.eda.simulation as S
 
-    netlist = tmp_path / "netlist.log"
-    netlist.write_text("netlist content\n", encoding="utf-8")
-    captured: dict = {}
-
-    def fake_call_grpc(task_type, payload, timeout, **kw):
-        captured["payload"] = payload
-        return {"success": True, "task_id": "t1"}
-
-    monkeypatch.setattr(S, "call_grpc", fake_call_grpc)
-    monkeypatch.setattr(S, "detect_ads_path",
-                        lambda: r"C:\Program Files\Keysight\ADS2020_update2")
-
-    r = S.simulate_netlist_with_ads(str(netlist))
-    assert r["success"] is True
-    assert captured["payload"]["ads_path"].endswith("ADS2020_update2"), captured["payload"]
-
-
-def test_simulate_netlist_with_ads_normalizes_explicit_path(tmp_path, monkeypatch):
-    """显式传混合斜杠（agent 常拼 `C:/Program Files\\Keysight/ADS2020_update2`）也要规范化。"""
-    import servers.eda.simulation as S
-
-    netlist = tmp_path / "netlist.log"
-    netlist.write_text("netlist content\n", encoding="utf-8")
-    captured: dict = {}
-
-    def fake_call_grpc(task_type, payload, timeout, **kw):
-        captured["payload"] = payload
-        return {"success": True, "task_id": "t2"}
-
-    monkeypatch.setattr(S, "call_grpc", fake_call_grpc)
-    # 探测不该被用到：显式路径优先
-    monkeypatch.setattr(S, "detect_ads_path",
-                        lambda: (_ for _ in ()).throw(AssertionError("不该走探测")))
-
-    r = S.simulate_netlist_with_ads(
-        str(netlist), ads_path=r"C:/Program Files\Keysight/ADS2020_update2")
-    assert r["success"] is True
-    sent = captured["payload"]["ads_path"]
-    assert "/" not in sent, sent                       # 混合斜杠已被统一
-    assert sent.endswith("ADS2020_update2"), sent
-
-
-def test_simulate_netlist_with_ads_missing_ads(tmp_path, monkeypatch):
-    """探测失败（ADS 未装）时返回明确错误，而不是把空串丢给 EDI 服务端回落硬编码路径。"""
-    import servers.eda.simulation as S
-
-    netlist = tmp_path / "netlist.log"
-    netlist.write_text("netlist content\n", encoding="utf-8")
-
-    monkeypatch.setattr(S, "detect_ads_path", lambda: "")
-    monkeypatch.setattr(S, "call_grpc",
-                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("不该调 gRPC")))
-
-    r = S.simulate_netlist_with_ads(str(netlist))
+    r = S.simulate_netlist(str(tmp_path / "nope.log"))
     assert r["success"] is False
-    assert r["error_code"] == "ADS_NOT_FOUND"
+    assert r["error_code"] == "NETLIST_NOT_FOUND"
+    assert "export_project_netlist" in r["hint"]
 
 
 if __name__ == "__main__":

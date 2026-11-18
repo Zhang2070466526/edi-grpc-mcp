@@ -23,13 +23,12 @@ project_manage.py — 工程管理（10 工具）
     get_components_static_params  查询器件固有参数（重量/尺寸/封装/厂商/成本）
     batch_query_component         按器件型号列表批量查询模型信息
 
-simulation.py — 仿真（7 工具，默认异步）
+simulation.py — 仿真（6 工具，默认异步）
     start_simulation_async        启动异步仿真，返回 task_id
     get_simulation_async_status   查询异步仿真进度和日志
     get_simulation_async_result   获取异步仿真最终结果
     list_eda_tasks                列出异步仿真任务
     simulate_netlist              仿真网表文件
-    simulate_netlist_with_ads     ADS 仿真控制器
     simulate_anti_burnout         抗烧毁仿真与风险评估
 
 simulation_components.py — 仿真器件（10 工具）
@@ -95,7 +94,6 @@ from servers.eda.project_manage import (  # noqa: F401
 # -- 仿真 --
 from servers.eda.simulation import (  # noqa: F401
     simulate_netlist,
-    simulate_netlist_with_ads,
     simulate_anti_burnout,
     start_simulation_async,
     get_simulation_async_status,

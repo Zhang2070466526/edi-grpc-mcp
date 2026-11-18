@@ -504,7 +504,6 @@ service ExternalCall {
 | MODEL_REPLACE | 根据 CSV 替换模型 | `project_path`、`csv_path` |
 | CAPTURE_SCHEMATIC | 截取原理图 | `project_path`、`img_path` |
 | CLOSE_PROJECT | 关闭工程 | `project_path`、`need_save` |
-| CALL_SIMULATION_CONTROLLER | 调用仿真控制器 | `netlist_path`、`ads_path` |
 | SEARCH_SOFT_IP_CATEGORIES | 查询软 IP 分类 | 无业务参数 |
 | SEARCH_PUBLIC_SOFT_IP_MODELS | 查询公共软 IP 模型 | `filters` |
 | SEARCH_PERSONAL_SOFT_IP_MODELS | 查询个人软 IP 模型 | `filters` |

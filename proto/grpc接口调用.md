@@ -47,7 +47,6 @@ enum EventType {
   MODEL_REPLACE = 6;
   CAPTURE_SCHEMATIC = 7;
   CLOSE_PROJECT = 8;
-  CALL_SIMULATION_CONTROLLER = 9;
   SIMULATE_NETLIST = 10;
   CREATE_SIMULATION_COMPONENT = 11;
   DELETE_SIMULATION_COMPONENT = 12;
@@ -98,7 +97,6 @@ enum EventType {
 - `MODEL_REPLACE`：按 CSV 执行模型替换。
 - `CAPTURE_SCHEMATIC`：截图保存原理图图片。
 - `CLOSE_PROJECT`：关闭工程，可选择是否保存工程。
-- `CALL_SIMULATION_CONTROLLER`：直接调用 ADS 仿真器。
 - `SIMULATE_NETLIST`：仿真指定的 `netlist.log`，返回 RAW 结果和仿真器输出日志。
 - `CREATE_SIMULATION_COMPONENT`：按 `component_type` 通过器件工厂新增器件，使用工厂默认参数。
 - `DELETE_SIMULATION_COMPONENT`：按器件实例名删除原理图上的通用器件。
@@ -207,17 +205,6 @@ enum EventType {
 ```
 
 `need_save` 表示关闭工程前是否保存。
-
-### CALL_SIMULATION_CONTROLLER
-
-```json
-{
-  "netlist_path": "C:/path/to/netlist.log",
-  "ads_path": "C:/Keysight/ADS"
-}
-```
-
-
 
 ### CREATE_SIMULATION_COMPONENT
 
@@ -1091,7 +1078,6 @@ enum ResultStatus {
 - `CAPTURE_SCHEMATIC`：`project_path`、`img_path`
 - `CLOSE_PROJECT`：`project_path`、`need_save`
 - `LOG_EVENT`：`level`、`source`、`text`
-- `CALL_SIMULATION_CONTROLLER`：`netlist_path`、`ads_path`
 - `SIMULATE_NETLIST`：`netlist_path`、`result_path`、`ads_output`
 - `CREATE_SIMULATION_COMPONENT`：`project_path`、`component_type`、`action`、`instance_name`
 - `UPDATE_SIMULATION_COMPONENT`：`project_path`、`instance_name`
