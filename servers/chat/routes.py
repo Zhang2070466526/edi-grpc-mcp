@@ -24,8 +24,10 @@ from servers.utils import registered_tools
 import sys as _sys
 if getattr(_sys, "frozen", False):
     _CLIENT_HTML_PATH = Path(_sys._MEIPASS) / "servers" / "chat" / "index.html"
+    _TOOL_BROWSER_HTML_PATH = Path(_sys._MEIPASS) / "servers" / "chat" / "tool_browser.html"
 else:
     _CLIENT_HTML_PATH = Path(__file__).resolve().parent / "index.html"
+    _TOOL_BROWSER_HTML_PATH = Path(__file__).resolve().parent / "tool_browser.html"
 
 
 async def _check_tcp(endpoint: str) -> bool:
@@ -59,6 +61,92 @@ async def tool_list(request: Request):
     tools = [{"name": t.name, "description": t.description or ""}
              for t in registered_tools(mcp)]
     return JSONResponse(tools)
+
+
+# ── 工具浏览器（按领域分组可视化）──
+
+#: 工具两级归类（模块前缀 → 一级「引擎/通信方式」、二级「领域/模块」）。
+#: 一级把所有走 EDI gRPC 通信的工具收在一起；新增工具落在这些模块下自动归类，无需手维护。
+_TOOL_CLASSIFY: list[tuple[str, str, str]] = [
+    # ── EDI · gRPC 通信（直接 call_grpc）──
+    ("servers.eda.project_manage", "EDI · gRPC", "工程管理"),
+    ("servers.eda.simulation", "EDI · gRPC", "仿真"),
+    ("servers.eda.simulation_components", "EDI · gRPC", "仿真器件"),
+    ("servers.eda.design_export", "EDI · gRPC", "导出与分析"),
+    ("servers.eda.signal_chain", "EDI · gRPC", "信号链"),
+    ("servers.eda.model_replace", "EDI · gRPC", "模型替换"),
+    ("servers.eda.model_library", "EDI · gRPC", "模型库"),
+    ("servers.eda.soft_ip", "EDI · gRPC", "软 IP"),
+    ("servers.eda.edi_launcher", "EDI · gRPC", "启动/诊断"),
+    ("servers.eda.workspace_ops", "EDI · gRPC", "工作区"),
+    ("servers.eda.schematic_ops", "EDI · gRPC", "原理图扩展"),
+    # ── 独立仿真 exe（subprocess，非直接 gRPC）──
+    ("servers.simulation_tool", "独立仿真工具", "仿真/报告"),
+    # ── 其它引擎 ──
+    ("servers.ansys", "ANSYS HFSS", "ANSYS HFSS"),
+    ("servers.cst", "CST", "CST"),
+    ("servers.laspcem", "LASPCEM", "LASPCEM"),
+    # ── 本地纯计算 ──
+    ("servers.microwave", "本地纯计算", "微波计算"),
+    ("servers.rf_analysis", "本地纯计算", "射频链路"),
+    # ── 图表/图片/文档 ──
+    ("servers.turbocharts", "图表/图片/文档", "图表"),
+    ("servers.multimodal_vision", "图表/图片/文档", "图片/文档"),
+    # ── 自描述 ──
+    ("servers.describe_tool", "自描述", "工具查询"),
+]
+
+#: 一级分组的展示顺序
+_GROUP_ORDER: list[str] = [
+    "EDI · gRPC", "独立仿真工具", "ANSYS HFSS", "CST", "LASPCEM",
+    "本地纯计算", "图表/图片/文档", "自描述",
+]
+
+
+def _classify(module: str) -> tuple[str, str]:
+    """返回 (一级分组, 二级领域)；匹配不到回「其他」。"""
+    for prefix, group, domain in _TOOL_CLASSIFY:
+        if module == prefix or module.startswith(prefix + "."):
+            return group, domain
+    return "其他", "其他"
+
+
+async def tool_browser_page(request: Request):
+    """GET /tools — 工具浏览器页面（按领域分组，点击看用法）。"""
+    if _TOOL_BROWSER_HTML_PATH.is_file():
+        return HTMLResponse(_TOOL_BROWSER_HTML_PATH.read_text(encoding="utf-8"))
+    return HTMLResponse("<h2>tool_browser.html not found</h2>", status_code=404)
+
+
+async def tool_browser_api(request: Request):
+    """GET /tools/grouped — 按「引擎 → 领域」两级分组的工具（name/description/usage/标注）。"""
+    groups: dict[str, dict[str, list[dict]]] = {}
+    for t in registered_tools(mcp):
+        fn = getattr(t, "fn", None)
+        ann = getattr(t, "annotations", None)
+        group, domain = _classify(getattr(fn, "__module__", "") or "")
+        groups.setdefault(group, {}).setdefault(domain, []).append({
+            "name": t.name,
+            "description": (t.description or "").strip(),
+            "usage": (getattr(fn, "__doc__", "") or "").strip(),
+            "readonly": bool(getattr(ann, "readOnlyHint", False)),
+            "destructive": bool(getattr(ann, "destructiveHint", False)),
+        })
+
+    def _order(group: str) -> int:
+        return _GROUP_ORDER.index(group) if group in _GROUP_ORDER else len(_GROUP_ORDER)
+
+    result = [
+        {
+            "group": g,
+            "domains": [
+                {"domain": d, "tools": sorted(items, key=lambda x: x["name"])}
+                for d, items in sorted(domains.items())
+            ],
+        }
+        for g, domains in sorted(groups.items(), key=lambda kv: _order(kv[0]))
+    ]
+    return JSONResponse({"total": len(registered_tools(mcp)), "groups": result})
 
 
 # ── 健康检查 ──

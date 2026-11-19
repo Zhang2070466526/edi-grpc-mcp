@@ -279,7 +279,10 @@ def _apply_tool_annotations() -> None:
 _apply_tool_annotations()
 
 # Web 路由
-from servers.chat.routes import ui_page, health_check, chat_endpoint, tool_list, upload_file  # noqa: E402
+from servers.chat.routes import (  # noqa: E402
+    ui_page, health_check, chat_endpoint, tool_list, upload_file,
+    tool_browser_page, tool_browser_api,
+)
 from servers.multimodal_vision import serve_image  # noqa: E402
 from servers.multimodal_vision import serve_document  # noqa: E402
 
@@ -325,6 +328,8 @@ mcp.custom_route("/ui", methods=["GET"])(ui_page)
 mcp.custom_route("/health", methods=["GET"])(health_check)
 mcp.custom_route("/chat", methods=["POST"])(chat_endpoint)
 mcp.custom_route("/tools/list", methods=["GET"])(tool_list)
+mcp.custom_route("/tools", methods=["GET"])(tool_browser_page)
+mcp.custom_route("/tools/grouped", methods=["GET"])(tool_browser_api)
 mcp.custom_route("/images/{token}", methods=["GET"])(serve_image)
 mcp.custom_route("/documents/{token}", methods=["GET"])(serve_document)
 mcp.custom_route("/upload", methods=["POST"])(upload_file)

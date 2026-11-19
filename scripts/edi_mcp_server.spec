@@ -33,6 +33,7 @@ a = Analysis(
     binaries=_msvc_dlls + _scipy_binaries,
     datas=_scipy_datas + [
         (str(root / 'servers' / 'chat' / 'index.html'), 'servers/chat'),
+        (str(root / 'servers' / 'chat' / 'tool_browser.html'), 'servers/chat'),
         (str(root / 'servers' / 'eda' / 'simulation_component_catalog.json'), 'servers/eda'),
         (str(root / 'servers' / 'cst' / 'cst_worker.py'), 'servers/cst'),
         (str(root / 'servers' / 'turbocharts' / 'RAW 转图像工具使用说明.txt'), 'servers/turbocharts'),

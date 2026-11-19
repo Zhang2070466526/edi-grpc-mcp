@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDI MCP 工具浏览器</title>
+<style>
+  :root {
+    --bg: #fafafa; --card: #fff; --border: #e5e7eb;
+    --text: #1f2937; --muted: #6b7280; --mono: #111827;
+    --accent: #2563eb; --danger: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.55 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }
+  header { position: sticky; top: 0; z-index: 20; background: #fff; border-bottom: 1px solid var(--border);
+           padding: 12px 24px; }
+  header h1 { margin: 0 0 10px; font-size: 16px; font-weight: 600; }
+  .bar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  #search { width: 100%; max-width: 440px; padding: 6px 12px; border: 1px solid var(--border);
+            border-radius: 6px; font-size: 13px; }
+  #search:focus { outline: none; border-color: var(--accent); }
+  #stats { color: var(--muted); font-size: 13px; }
+  #stats b { color: var(--text); font-weight: 600; }
+  .pagelink { color: var(--accent); text-decoration: none; font-size: 13px; font-weight: 500; }
+  .pagelink:hover { text-decoration: underline; }
+  #foldAll { padding: 5px 12px; border: 1px solid var(--border); border-radius: 6px;
+             background: #fff; color: var(--text); cursor: pointer; font-size: 12.5px; }
+  #foldAll:hover { background: #f3f4f6; }
+
+  /* 分布条形图 */
+  .dist { background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+          padding: 12px 16px; margin-bottom: 16px; }
+  .drow { display: grid; grid-template-columns: 150px 1fr 64px; gap: 12px; align-items: center; margin: 6px 0; }
+  .dname { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dbar { background: #eef0f3; border-radius: 4px; height: 16px; overflow: hidden; display: flex; }
+  .dbar span { display: block; height: 100%; }
+  .dcnt { font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .dcnt b { color: var(--text); }
+  .legend { display: flex; flex-wrap: wrap; gap: 5px 12px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+  .legend .li { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--muted); }
+  .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+  main { padding: 16px 24px 40px; width: 100%; }
+  .layout { display: grid; grid-template-columns: 260px 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+
+  /* 左侧导航 */
+  .nav { background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+         padding: 8px; position: sticky; top: 80px; max-height: calc(100vh - 100px); overflow-y: auto; }
+  .nav a { display: block; padding: 5px 10px; border-radius: 5px; cursor: pointer;
+           text-decoration: none; color: var(--text); font-size: 13px; }
+  .nav a:hover { background: #f3f4f6; }
+  .nav a.on { background: #eef2ff; color: var(--accent); }
+  .nav a .cnt { float: right; color: var(--muted); font-size: 12px; }
+  .nav a.lv1 { font-weight: 600; margin-top: 6px; }
+  .nav a.lv2 { padding-left: 24px; }
+  .nav a.lv0 { border-bottom: 1px solid var(--border); margin-bottom: 4px; padding-bottom: 8px; }
+  .nav a .arrow { color: var(--muted); font-size: 10px; margin-right: 2px; }
+  .lv2s.folded { display: none; }
+
+  /* 右侧清单 */
+  .content { background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+             padding: 16px 18px; min-height: 400px; }
+  .content h2 { margin: 0 0 2px; font-size: 15px; font-weight: 600; }
+  .crumb { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  .gsec { margin-bottom: 18px; }
+  .gsec > h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+  .dsec { margin-left: 12px; margin-bottom: 12px; }
+  .dsec > h4 { margin: 0 0 6px; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; }
+  .dsec > h4 .arrow { font-size: 10px; margin-right: 2px; color: var(--muted); }
+  .dtools { margin-left: 12px; }
+  .dtools.folded { display: none; }
+  .tools { display: flex; flex-direction: column; gap: 5px; }
+  .tool { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .tool > button { width: 100%; text-align: left; background: none; border: 0; cursor: pointer;
+                   padding: 7px 11px; display: flex; align-items: baseline; gap: 10px; }
+  .tool > button:hover { background: #f9fafb; }
+  .tool .name { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; font-weight: 600;
+                color: var(--mono); white-space: nowrap; }
+  .tool .desc { color: var(--muted); font-size: 12.5px; flex: 1; overflow: hidden;
+                text-overflow: ellipsis; white-space: nowrap; }
+  .tool .warn { color: var(--danger); font-size: 11px; font-weight: 600; flex-shrink: 0; }
+  .usage { display: none; border-top: 1px dashed var(--border); padding: 9px 13px; background: #fbfcfe; }
+  .tool.open .usage { display: block; }
+  .usage pre { margin: 0; white-space: pre-wrap; word-break: break-word;
+               font-family: ui-monospace, Consolas, monospace; font-size: 12px;
+               color: var(--mono); line-height: 1.5; }
+  .empty { color: var(--muted); text-align: center; padding: 50px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>EDI MCP 工具浏览器</h1>
+  <div class="bar">
+    <a href="/ui" class="pagelink">← Chat 聊天</a>
+    <input id="search" placeholder="搜索工具名 / 描述…">
+    <span id="stats"></span>
+    <button id="foldAll" onclick="toggleAllFold()">全部折叠</button>
+  </div>
+</header>
+<main id="root"><div class="empty">加载中…</div></main>
+
+<script>
+const root = document.getElementById('root');
+const searchEl = document.getElementById('search');
+let data = null;
+let selected = '';       // 选中领域（'' = 全部）
+let foldedGroups = new Set();   // 折叠的引擎分组（左侧）
+let foldedDomains = new Set();  // 折叠的领域（右侧）
+let domainColors = {};   // 领域 → 颜色（分布图堆叠段用）
+
+const DOMAIN_COLORS = ['#3b82f6','#8b5cf6','#ec4899','#ef4444','#f59e0b','#84cc16',
+  '#10b981','#14b8a6','#06b6d4','#6366f1','#a855f7','#d946ef','#f43f5e','#fb923c',
+  '#a3e635','#34d399','#22d3ee','#818cf8','#c084fc','#f472b6','#fb7185','#2dd4bf'];
+
+async function load() {
+  try {
+    const resp = await fetch('/tools/grouped');
+    data = await resp.json();
+    let ci = 0;
+    for (const g of data.groups) for (const d of g.domains)
+      if (!(d.domain in domainColors)) domainColors[d.domain] = DOMAIN_COLORS[ci++ % DOMAIN_COLORS.length];
+    render();
+  } catch (e) { root.innerHTML = `<div class="empty">加载失败：${esc(e.message)}</div>`; }
+}
+
+function q() { return searchEl.value.trim().toLowerCase(); }
+function match(t) { return !q() || t.name.toLowerCase().includes(q()) || (t.description||'').toLowerCase().includes(q()); }
+
+function filteredGroups() {
+  const out = [];
+  for (const g of data.groups) {
+    const doms = g.domains.map(d => ({...d, tools: d.tools.filter(match)}))
+      .filter(d => d.tools.length)
+      .sort((a, b) => b.tools.length - a.tools.length);   // 领域按工具数量降序
+    if (doms.length) out.push({...g, domains: doms});
+  }
+  // 引擎分组也按总工具数降序（「全部工具」视图 + 左侧导航一致）
+  return out.sort((a, b) =>
+    b.domains.reduce((x, d) => x + d.tools.length, 0) - a.domains.reduce((x, d) => x + d.tools.length, 0));
+}
+
+function render() {
+  if (!data) return;
+  const fg = filteredGroups();
+  const total = fg.reduce((s,g)=>s+g.domains.reduce((x,d)=>x+d.tools.length,0),0);
+  const dangerous = fg.reduce((s,g)=>s+g.domains.reduce((x,d)=>x+d.tools.filter(t=>t.destructive).length,0),0);
+  const readonly = fg.reduce((s,g)=>s+g.domains.reduce((x,d)=>x+d.tools.filter(t=>t.readonly).length,0),0);
+  const domainCount = fg.reduce((s,g)=>s+g.domains.length,0);
+  document.getElementById('stats').innerHTML =
+    `共 <b>${total}</b> 工具 · <b>${fg.length}</b> 引擎 · <b>${domainCount}</b> 领域 · ` +
+    `⚠️ <b style="color:var(--danger)">${dangerous}</b> 破坏(${(dangerous/total*100).toFixed(0)}%) · ` +
+    `<b style="color:var(--readonly)">${readonly}</b> 只读(${(readonly/total*100).toFixed(0)}%)`;
+  const allFolded = fg.every(g => foldedGroups.has(g.group)) &&
+                    fg.every(g => g.domains.every(d => foldedDomains.has(d.domain)));
+  document.getElementById('foldAll').textContent = allFolded ? '全部展开' : '全部折叠';
+
+  let content = '';
+  if (selected) {
+    let selGroup = '', tools = [];
+    for (const g of fg) for (const d of g.domains) if (d.domain === selected) { selGroup = g.group; tools = d.tools; }
+    content = `<div class="crumb">${esc(selGroup)} / ${esc(selected)}（${tools.length}）</div>` + toolsHTML(tools);
+  } else {
+    content = fg.map(g => `
+      <section class="gsec">
+        <h3>${esc(g.group)}</h3>
+        ${g.domains.map(d => `
+          <section class="dsec">
+            <h4 onclick="toggleDomain('${esc(d.domain)}')">
+              <span class="arrow">${foldedDomains.has(d.domain)?'▸':'▾'}</span>${esc(d.domain)}（${d.tools.length}）
+            </h4>
+            <div class="dtools ${foldedDomains.has(d.domain)?'folded':''}">${toolsHTML(d.tools)}</div>
+          </section>`).join('')}
+      </section>`).join('');
+  }
+
+  const sortedGroups = fg.slice().sort((a,b) =>
+    b.domains.reduce((x,d)=>x+d.tools.length,0) - a.domains.reduce((x,d)=>x+d.tools.length,0));
+  const legendDomains = sortedGroups.flatMap(g => g.domains.map(d => d.domain));
+
+  root.innerHTML = `
+    <div class="dist">
+      ${sortedGroups.map(g => {
+        const n = g.domains.reduce((x,d)=>x+d.tools.length,0);
+        return `<div class="drow">
+          <span class="dname" title="${g.domains.map(d=>`${d.domain} ${d.tools.length}`).join(' · ')}">${esc(g.group)}</span>
+          <span class="dbar">
+            ${g.domains.map(d => `<span style="width:${(d.tools.length/total*100).toFixed(2)}%;background:${domainColors[d.domain]}" title="${esc(d.domain)} · ${d.tools.length}"></span>`).join('')}
+          </span>
+          <span class="dcnt"><b>${n}</b> ${(n/total*100).toFixed(0)}%</span>
+        </div>`;
+      }).join('')}
+      <div class="legend">
+        ${legendDomains.map(d => `<span class="li"><i style="background:${domainColors[d]}"></i>${esc(d)}</span>`).join('')}
+      </div>
+    </div>
+    <div class="layout">
+      <aside class="nav">
+        <a class="lv0 ${selected===''?'on':''}" onclick="select('')">全部工具 <span class="cnt">${total}</span></a>
+        ${fg.map(g => `
+          <a class="lv1" onclick="toggleGroup('${esc(g.group)}')">
+            <span class="arrow">${foldedGroups.has(g.group)?'▸':'▾'}</span>${esc(g.group)}
+          </a>
+          <div class="lv2s ${foldedGroups.has(g.group)?'folded':''}">
+            ${g.domains.map(d => `
+              <a class="lv2 ${selected===d.domain?'on':''}" onclick="select('${esc(d.domain)}')">${esc(d.domain)} <span class="cnt">${d.tools.length}</span></a>`).join('')}
+          </div>
+        `).join('')}
+      </aside>
+      <section class="content">
+        <h2>${selected ? esc(selected) : '全部工具'}</h2>
+        ${content}
+      </section>
+    </div>`;
+}
+
+function toolsHTML(tools) {
+  return `<div class="tools">` + tools.map(t => `
+    <div class="tool" data-name="${esc(t.name)}">
+      <button onclick="toggle('${esc(t.name)}')">
+        <span class="name">${esc(t.name)}</span>
+        <span class="desc">${esc(t.description||'')}</span>
+        ${t.destructive ? '<span class="warn">⚠️</span>' : ''}
+      </button>
+      <div class="usage"><pre>${esc(t.usage||'（无 docstring）')}</pre></div>
+    </div>`).join('') + '</div>';
+}
+
+function select(d) { selected = d; render(); }
+function toggleGroup(g) {
+  foldedGroups.has(g) ? foldedGroups.delete(g) : foldedGroups.add(g);
+  render();
+}
+function toggleDomain(d) {
+  foldedDomains.has(d) ? foldedDomains.delete(d) : foldedDomains.add(d);
+  render();
+}
+function toggleAllFold() {
+  const fg = filteredGroups();
+  const allGroups = fg.map(g => g.group);
+  const allDomains = fg.flatMap(g => g.domains.map(d => d.domain));
+  const allFolded = foldedGroups.size >= allGroups.length && foldedDomains.size >= allDomains.length;
+  if (allFolded) { foldedGroups.clear(); foldedDomains.clear(); }
+  else { foldedGroups = new Set(allGroups); foldedDomains = new Set(allDomains); }
+  render();
+}
+function toggle(name) {
+  const el = root.querySelector(`.tool[data-name="${name}"]`);
+  if (el) el.classList.toggle('open');
+}
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+searchEl.addEventListener('input', render);
+load();
+</script>
+</body>
+</html>
