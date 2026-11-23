@@ -344,82 +344,94 @@ def open_hfss_project(
                                   project_name=project_name, project_path=resolved,
                                   method="com", com_error=result.get("error"))
 
-        # AEDT 未运行，单次启动
-        try:
-            proc = subprocess.Popen([str(exe_path), resolved], cwd=str(exe_path.parent))
+        # AEDT 未运行，单次启动 + 轮询确认（含自锁清理 + 收尾核对）
+        return _open_via_subprocess(exe_path, resolved, project_name, timeout_seconds, t0, lock_info)
+
+
+def _open_via_subprocess(exe_path: Path, resolved: str, project_name: str,
+                         timeout_seconds: int, t0: float,
+                         lock_info: dict[str, Any]) -> dict[str, Any]:
+    """AEDT 未运行时：subprocess 单次启动，轮询确认工程打开。
+
+    含「自己锁自己」自锁清理（最多一次）+ 截止后的收尾核对（5×5s），
+    避免刚要开出来就被判 OPEN_TIMEOUT 假失败。
+    """
+    global _LAST_PID
+
+    try:
+        proc = subprocess.Popen([str(exe_path), resolved], cwd=str(exe_path.parent))
+        _LAST_PID = proc.pid
+        _register_launched(proc)
+        logger.info("Launched AEDT PID=%d for %s", proc.pid, project_name)
+    except Exception as exc:
+        logger.exception("AEDT launch failed")
+        return error_response("LAUNCH_FAILED", str(exc))
+
+    deadline = time.monotonic() + timeout_seconds
+    self_lock_retried = False
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            return error_response("PROCESS_EXITED", f"AEDT 进程已退出，退出码: {proc.returncode}",
+                                  aedt_running=False, project_opened=False, **lock_info)
+        # 启动 30s 还没开出来、且锁是「自己锁自己」→ 清一次锁再继续等（最多一次）
+        if not self_lock_retried and time.monotonic() - t0 > 30:
+            again = _clear_self_lock(resolved)
+            if again:
+                self_lock_retried = True
+                lock_info["self_lock_removed"] = again
+                logger.warning("启动后检测到自锁，已清理并继续等待：%s", resolved)
+        ok_rd, state, _rd_err = _call_with_timeout(query_desktop_state, 5.0)
+        if ok_rd and state["connected"] and project_name in state["projects"]:
+            _OPEN_PROJECT_PATHS[project_name] = resolved
+            return {
+                "success": True, "status": "opened",
+                "aedt_running": True, "project_opened": True, "verified": True,
+                "project_name": project_name, "project_path": resolved,
+                "method": "subprocess", "pid": proc.pid,
+                "duration_s": round(time.monotonic() - t0, 1),
+                "message": f"AEDT 已启动，工程已打开: {project_name}",
+                **lock_info,
+            }
+        time.sleep(1)
+
+    # 收尾再核：AEDT 常在截止后一段时间才把工程挂进 open_projects（2026-11-18 实测
+    # 129.5s/246s 都假失败过），按 5×5s 给足，避免刚要开出来就被判失败。
+    for _ in range(5):
+        ok_g, st_g, _err_g = _call_with_timeout(query_desktop_state, 5.0)
+        if ok_g and st_g["connected"] and project_name in st_g["projects"]:
             _LAST_PID = proc.pid
-            _register_launched(proc)
-            logger.info("Launched AEDT PID=%d for %s", proc.pid, project_name)
-        except Exception as exc:
-            logger.exception("AEDT launch failed")
-            return error_response("LAUNCH_FAILED", str(exc))
+            _OPEN_PROJECT_PATHS[project_name] = resolved
+            elapsed = round(time.monotonic() - t0, 1)
+            return {
+                "success": True, "status": "opened_after_timeout",
+                "project_opened": True, "verified": True,
+                "project_name": project_name, "project_path": resolved,
+                "method": "subprocess", "pid": proc.pid, "duration_s": elapsed,
+                "message": f"工程已打开（耗时 {elapsed}s，超过 {timeout_seconds}s 等待窗口，"
+                           f"收尾核对确认 open_projects 里有它）",
+                "warnings": [
+                    f"超过 timeout_seconds={timeout_seconds}s 才打开：慢机器建议直接给 180–300s"
+                ],
+                **lock_info,
+            }
+        time.sleep(5)
 
-        deadline = time.monotonic() + timeout_seconds
-        self_lock_retried = False
-        while time.monotonic() < deadline:
-            if proc.poll() is not None:
-                return error_response("PROCESS_EXITED", f"AEDT 进程已退出，退出码: {proc.returncode}",
-                                      aedt_running=False, project_opened=False, **lock_info)
-            # 启动 30s 还没开出来、且锁是「自己锁自己」→ 清一次锁再继续等（最多一次）
-            if not self_lock_retried and time.monotonic() - t0 > 30:
-                again = _clear_self_lock(resolved)
-                if again:
-                    self_lock_retried = True
-                    lock_info["self_lock_removed"] = again
-                    logger.warning("启动后检测到自锁，已清理并继续等待：%s", resolved)
-            ok_rd, state, _rd_err = _call_with_timeout(query_desktop_state, 5.0)
-            if ok_rd and state["connected"] and project_name in state["projects"]:
-                _OPEN_PROJECT_PATHS[project_name] = resolved
-                return {
-                    "success": True, "status": "opened",
-                    "aedt_running": True, "project_opened": True, "verified": True,
-                    "project_name": project_name, "project_path": resolved,
-                    "method": "subprocess", "pid": proc.pid,
-                    "duration_s": round(time.monotonic() - t0, 1),
-                    "message": f"AEDT 已启动，工程已打开: {project_name}",
-                    **lock_info,
-                }
-            time.sleep(1)
-
-        # 收尾再核：AEDT 常在截止后一段时间才把工程挂进 open_projects
-        # 2026-11-18 实测两次：129.5s（窗口 120s）、>246s（窗口 240s）→ 都给过 OPEN_TIMEOUT 假失败。
-        # 收尾窗口按 5 次 × 5s = 25s 给足，避免"刚要开出来就被判失败"。
-        for _ in range(5):
-            ok_g, st_g, _err_g = _call_with_timeout(query_desktop_state, 5.0)
-            if ok_g and st_g["connected"] and project_name in st_g["projects"]:
-                _LAST_PID = proc.pid
-                _OPEN_PROJECT_PATHS[project_name] = resolved
-                elapsed = round(time.monotonic() - t0, 1)
-                return {
-                    "success": True, "status": "opened_after_timeout",
-                    "project_opened": True, "verified": True,
-                    "project_name": project_name, "project_path": resolved,
-                    "method": "subprocess", "pid": proc.pid, "duration_s": elapsed,
-                    "message": f"工程已打开（耗时 {elapsed}s，超过 {timeout_seconds}s 等待窗口，"
-                               f"收尾核对确认 open_projects 里有它）",
-                    "warnings": [
-                        f"超过 timeout_seconds={timeout_seconds}s 才打开：慢机器建议直接给 180–300s"
-                    ],
-                    **lock_info,
-                }
-            time.sleep(5)
-
-        # 起得来但没确认打开：不能再报 success（2026-11-18 实测会误导 agent）
-        lock_now = get_project_lock_path(resolved)
-        return error_response(
-            "OPEN_TIMEOUT",
-            f"AEDT 已启动（PID {proc.pid}），{timeout_seconds}s 内未确认工程打开"
-            f"（open_projects 里没有 {project_name}）",
-            hint="看一眼 AEDT 窗口：①「Project … is locked and cannot be opened」= 自锁，"
-                 "重试一次即可（工具会自动清）；②「read only」= 去掉文件只读属性；"
-                 "③（未响应）= 关掉该实例重开",
-            aedt_running=aedt_is_running(), project_opened=False, verified=False,
-            project_name=project_name, project_path=resolved, method="subprocess", pid=proc.pid,
-            duration_s=round(time.monotonic() - t0, 1),
-            lock_present=lock_now.is_file(),
-            lock_pid=read_project_lock_pid(lock_now) if lock_now.is_file() else None,
-            **lock_info,
-        )
+    # 起得来但没确认打开：不能再报 success（2026-11-18 实测会误导 agent）
+    lock_now = get_project_lock_path(resolved)
+    return error_response(
+        "OPEN_TIMEOUT",
+        f"AEDT 已启动（PID {proc.pid}），{timeout_seconds}s 内未确认工程打开"
+        f"（open_projects 里没有 {project_name}）",
+        hint="看一眼 AEDT 窗口：①「Project … is locked and cannot be opened」= 自锁，"
+             "重试一次即可（工具会自动清）；②「read only」= 去掉文件只读属性；"
+             "③（未响应）= 关掉该实例重开",
+        aedt_running=aedt_is_running(), project_opened=False, verified=False,
+        project_name=project_name, project_path=resolved, method="subprocess", pid=proc.pid,
+        duration_s=round(time.monotonic() - t0, 1),
+        lock_present=lock_now.is_file(),
+        lock_pid=read_project_lock_pid(lock_now) if lock_now.is_file() else None,
+        **lock_info,
+    )
 
 
 def _taskkill(pid: int) -> tuple[bool, str]:
@@ -734,128 +746,136 @@ def _com_close_project(project_name: str, save_before_close: bool,
     """
     try:
         with com_session():
-            # ── 阶段 1：附着（失败可兜底到进程级）──
+            # 阶段 1：附着（失败可兜底到进程级）
             try:
                 _, desktop = _attach_aedt()
                 names = list(desktop.GetProjectList())
             except Exception as exc:                # noqa: BLE001 —— 附着失败才允许兜底硬杀
                 logger.exception("COM attach failed, fallback to process kill: %s", exc)
                 return None
-
-            # ── 阶段 2：已附着成功，这里任何失败都返回错误，不升级为硬杀 ──
-            target = ""
-            warnings: list[str] = []
-            readonly = _is_file_readonly(lock_path)
-            if readonly:
-                # 只读是「需要用户确认」的信息：无论 save_before_close 是什么都要报给调用方，
-                # 让 agent 转告用户（否则用户不知道这个工程的改动根本写不回去）。
-                warnings.append(_readonly_warning(lock_path))
-            if lock_path and not Path(lock_path).is_file():
-                # 工程未落盘（从未保存过）或路径写错：锁清理只能按传入路径推断，先讲明白
-                warnings.append(
-                    f"project_path 指向的文件不存在：{lock_path}"
-                    f"（工程可能从未保存；锁清理按该路径推断，可能无效）")
-            try:
-                # 为空时关闭活动项目（而非 GetProjectList 的第一个，顺序不保证活动项目在首位）
-                if project_name.strip():
-                    target = project_name.strip()
-                    if target.casefold() not in {n.casefold() for n in names}:
-                        # 名字写错 / 工程早已关闭：别让 CloseProject 抛异常后被 hint 引向 force
-                        return error_response(
-                            "NO_SUCH_PROJECT",
-                            f"AEDT 当前没有名为 {target} 的工程；已打开：{names or '（无）'}",
-                            hint="先用 get_hfss_project_info 看 open_projects 确认拼写；"
-                                 "名字对了才谈关闭 —— 别用 quit_aedt(force=true) 兜，"
-                                 "它会终止该 AEDT 名下所有工程",
-                            open_projects=names,
-                            readonly_project_file=readonly,
-                            warnings=warnings,
-                        )
-                else:
-                    target = ""
-                    try:
-                        active = desktop.GetActiveProject()
-                        if active is not None:
-                            target = active.GetName()
-                    except Exception:
-                        pass
-                    if not target:
-                        target = names[0] if names else ""
-                if not target:
-                    return error_response("NO_PROJECT_TO_CLOSE", "没有可关闭的项目")
-
-                # 工程不是本服务打开的（GUI 手开 / 第三方进程开）→ 从 COM 补出真实路径，
-                # 否则只读检测与锁清理都失效（2026-11-18 真机：关闭成功但 lock_path=null）
-                if not lock_path:
-                    lock_path = _backfill_lock_path(desktop, target) or ""
-                    if lock_path:
-                        readonly = _is_file_readonly(lock_path)
-                        if readonly:
-                            warnings.append(_readonly_warning(lock_path))
-
-                if save_before_close:
-                    if not readonly:
-                        try:
-                            proj = desktop.SetActiveProject(target)
-                            if proj is not None:
-                                proj.Save()
-                        except Exception:
-                            pass
-                    # readonly 时跳过 Save：原因已在上面的 warnings 里说明（保存必失败并弹框）
-
-                desktop.CloseProject(target)
-                names_after = list(desktop.GetProjectList())
-                closed = target.casefold() not in {n.casefold() for n in names_after}
-                return _close_result(target, closed, names_after, lock_path, warnings, readonly)
-            except Exception as exc:                # noqa: BLE001 —— 已附着，记录后交给调用方决定是否 force
-                logger.exception("CloseProject failed (attached OK): %s", exc)
-                # 关键：AEDT 常在**收尾阶段**抛 DISP_E_EXCEPTION，此时项目其实已经关掉了
-                # （2026-11-18 实测：返回 CLOSE_FAILED，但 open_projects 已不含 target、锁也没了）。
-                # 判据必须是「事后核对」，不是「调用有没有抛异常」。
-                names_after = None
-                try:
-                    names_after = list(desktop.GetProjectList())
-                except Exception:                   # noqa: BLE001 —— 核对也失败，只能退回报错
-                    pass
-                if names_after is not None and target.casefold() not in {n.casefold() for n in names_after}:
-                    result = _close_result(target, True, names_after, lock_path, warnings, readonly)
-                    result.update({
-                        "closed_despite_exception": True,
-                        "message": f"已关闭: {target}（COM 收尾阶段抛异常，按事后核对判定为成功）",
-                        "warning": f"{type(exc).__name__}: {exc}",
-                    })
-                    return result
-
-                # 事后核对也确认没关掉，才是真的失败；再查一次弹框说明原因
-                dialogs = _aedt_modal_dialogs()
-                if dialogs:
-                    msg = (
-                        f"COM 已连通但关闭项目失败：{exc}。"
-                        f"检测到 AEDT 上有 {len(dialogs)} 个对话框窗口正等待处理：{dialogs} —— "
-                        f"很可能就是「是否保存改动」的确认框；请在 AEDT 窗口里处理掉它，再重试关闭"
-                    )
-                else:
-                    msg = (
-                        f"COM 已连通但关闭项目失败：{exc}，且事后核对确认项目仍打开"
-                        f"（open_projects 仍含 {target}）。未检测到标准对话框窗口 —— "
-                        f"AEDT 的 Qt 自绘对话框可能漏检，请人工看一眼 AEDT 窗口有没有待处理提示"
-                    )
-                return error_response(
-                    "CLOSE_FAILED",
-                    msg,
-                    hint="先在 AEDT 窗口里处理掉任何等待确认的对话框，再重试；"
-                         "quit_aedt(force=true) 会终止该 AEDT 名下**所有**工程（含正在用的其它工程），"
-                         "只在确认改动可丢弃时使用",
-                    attached=True,
-                    modal_dialogs=dialogs,
-                    open_projects_after=names_after,
-                    readonly_project_file=readonly,
-                    **_lock_state(lock_path),
-                    warnings=warnings,
-                )
+            # 阶段 2：已附着成功，这里任何失败都返回错误，不升级为硬杀
+            return _com_close_attached(desktop, names, project_name, save_before_close, lock_path)
     except Exception as exc:                     # noqa: BLE001 —— com_session 内部异常才兜底
         logger.exception("com_session failed, fallback to process kill: %s", exc)
         return None
+
+
+def _com_close_attached(desktop: Any, names: list[str], project_name: str,
+                        save_before_close: bool, lock_path: str) -> dict[str, Any]:
+    """已附着成功后关闭指定项目：名字校验 → 可选 Save → CloseProject → 事后核对。
+
+    成败判据是「事后核对」（GetProjectList 看 target 还在不在），不是 COM 有没有抛异常：
+    AEDT 常在收尾阶段抛 DISP_E_EXCEPTION，此时项目其实已关。
+    """
+    target = ""
+    warnings: list[str] = []
+    readonly = _is_file_readonly(lock_path)
+    if readonly:
+        # 只读是「需要用户确认」的信息：无论 save_before_close 是什么都要报给调用方，
+        # 让 agent 转告用户（否则用户不知道这个工程的改动根本写不回去）。
+        warnings.append(_readonly_warning(lock_path))
+    if lock_path and not Path(lock_path).is_file():
+        # 工程未落盘（从未保存过）或路径写错：锁清理只能按传入路径推断，先讲明白
+        warnings.append(
+            f"project_path 指向的文件不存在：{lock_path}"
+            f"（工程可能从未保存；锁清理按该路径推断，可能无效）")
+    try:
+        # 为空时关闭活动项目（而非 GetProjectList 的第一个，顺序不保证活动项目在首位）
+        if project_name.strip():
+            target = project_name.strip()
+            if target.casefold() not in {n.casefold() for n in names}:
+                # 名字写错 / 工程早已关闭：别让 CloseProject 抛异常后被 hint 引向 force
+                return error_response(
+                    "NO_SUCH_PROJECT",
+                    f"AEDT 当前没有名为 {target} 的工程；已打开：{names or '（无）'}",
+                    hint="先用 get_hfss_project_info 看 open_projects 确认拼写；"
+                         "名字对了才谈关闭 —— 别用 quit_aedt(force=true) 兜，"
+                         "它会终止该 AEDT 名下所有工程",
+                    open_projects=names,
+                    readonly_project_file=readonly,
+                    warnings=warnings,
+                )
+        else:
+            target = ""
+            try:
+                active = desktop.GetActiveProject()
+                if active is not None:
+                    target = active.GetName()
+            except Exception:
+                pass
+            if not target:
+                target = names[0] if names else ""
+        if not target:
+            return error_response("NO_PROJECT_TO_CLOSE", "没有可关闭的项目")
+
+        # 工程不是本服务打开的（GUI 手开 / 第三方进程开）→ 从 COM 补出真实路径，
+        # 否则只读检测与锁清理都失效（2026-11-18 真机：关闭成功但 lock_path=null）
+        if not lock_path:
+            lock_path = _backfill_lock_path(desktop, target) or ""
+            if lock_path:
+                readonly = _is_file_readonly(lock_path)
+                if readonly:
+                    warnings.append(_readonly_warning(lock_path))
+
+        if save_before_close:
+            if not readonly:
+                try:
+                    proj = desktop.SetActiveProject(target)
+                    if proj is not None:
+                        proj.Save()
+                except Exception:
+                    pass
+            # readonly 时跳过 Save：原因已在上面的 warnings 里说明（保存必失败并弹框）
+
+        desktop.CloseProject(target)
+        names_after = list(desktop.GetProjectList())
+        closed = target.casefold() not in {n.casefold() for n in names_after}
+        return _close_result(target, closed, names_after, lock_path, warnings, readonly)
+    except Exception as exc:                    # noqa: BLE001 —— 已附着，记录后交给调用方决定是否 force
+        logger.exception("CloseProject failed (attached OK): %s", exc)
+        # 事后核对：AEDT 收尾抛 DISP_E_EXCEPTION 时项目往往已关（2026-11-18 实测），
+        # 判据必须是 GetProjectList 的结果，不是调用有没有抛异常。
+        names_after = None
+        try:
+            names_after = list(desktop.GetProjectList())
+        except Exception:                       # noqa: BLE001 —— 核对也失败，只能退回报错
+            pass
+        if names_after is not None and target.casefold() not in {n.casefold() for n in names_after}:
+            result = _close_result(target, True, names_after, lock_path, warnings, readonly)
+            result.update({
+                "closed_despite_exception": True,
+                "message": f"已关闭: {target}（COM 收尾阶段抛异常，按事后核对判定为成功）",
+                "warning": f"{type(exc).__name__}: {exc}",
+            })
+            return result
+
+        # 事后核对也确认没关掉，才是真的失败；再查一次弹框说明原因
+        dialogs = _aedt_modal_dialogs()
+        if dialogs:
+            msg = (
+                f"COM 已连通但关闭项目失败：{exc}。"
+                f"检测到 AEDT 上有 {len(dialogs)} 个对话框窗口正等待处理：{dialogs} —— "
+                f"很可能就是「是否保存改动」的确认框；请在 AEDT 窗口里处理掉它，再重试关闭"
+            )
+        else:
+            msg = (
+                f"COM 已连通但关闭项目失败：{exc}，且事后核对确认项目仍打开"
+                f"（open_projects 仍含 {target}）。未检测到标准对话框窗口 —— "
+                f"AEDT 的 Qt 自绘对话框可能漏检，请人工看一眼 AEDT 窗口有没有待处理提示"
+            )
+        return error_response(
+            "CLOSE_FAILED",
+            msg,
+            hint="先在 AEDT 窗口里处理掉任何等待确认的对话框，再重试；"
+                 "quit_aedt(force=true) 会终止该 AEDT 名下**所有**工程（含正在用的其它工程），"
+                 "只在确认改动可丢弃时使用",
+            attached=True,
+            modal_dialogs=dialogs,
+            open_projects_after=names_after,
+            readonly_project_file=readonly,
+            **_lock_state(lock_path),
+            warnings=warnings,
+        )
 
 
 @mcp.tool()
@@ -931,6 +951,94 @@ def close_hfss_project(
         aedt_running=True, project_name=project_name)
 
 
+def _quit_ok(method: str, pids_before: list[int], open_projects: list[str] | None,
+             warnings: list[str], t0: float) -> dict[str, Any]:
+    """退出成功的统一返回体（force 之外的正常退出路径复用）。"""
+    return {"success": True, "status": "quit", "method": method,
+            "aedt_running": False,
+            "pids_before": pids_before, "pids_after": [],
+            "open_projects_before": open_projects,
+            "data_loss_risk": bool(open_projects),
+            "warnings": warnings,
+            "message": f"AEDT 已退出（{method}）",
+            "duration_s": round(time.monotonic() - t0, 1)}
+
+
+def _quit_aedt_force(pids_before: list[int], open_projects: list[str] | None,
+                     warnings: list[str], t0: float) -> dict[str, Any]:
+    """force 分支：整机硬杀（显式逃生口，scope=all，会连非 MCP 启动的实例一起关）。"""
+    result = _kill_aedt_processes(pids_before)
+    result.update({
+        "status": "killed",
+        "pids_before": pids_before,
+        "pids_after": get_aedt_pids(),
+        "open_projects_before": open_projects,
+        "data_loss_risk": bool(open_projects),
+        "warnings": warnings,
+        "duration_s": round(time.monotonic() - t0, 1),
+    })
+    return result
+
+
+def _quit_aedt_graceful(ok_state: bool, pids_before: list[int], timeout_seconds: int,
+                        open_projects: list[str] | None, warnings: list[str],
+                        t0: float) -> dict[str, Any]:
+    """非 force 的优雅退出：COM QuitApplication → WM_CLOSE → 清理 -Embedding 残留。
+
+    顺序：先 COM 优雅退出（等同点 X），仍不退再发 WM_CLOSE；最后只剩 -Embedding
+    辅助进程时直接清理（无窗口、无工程，杀它不丢数据）。仍不退回 STILL_RUNNING。
+    """
+    method = ""
+    if ok_state:
+        def _com_quit() -> None:
+            with com_session():
+                _app, desktop = _attach_aedt()
+                desktop.QuitApplication()
+
+        okq, _v, qerr = _call_with_timeout(_com_quit, _COM_CLOSE_TIMEOUT)
+        if okq:
+            method = "com"
+        else:
+            warnings.append(f"COM QuitApplication 失败：{qerr}")
+
+    if not (method and _wait_no_aedt(min(timeout_seconds, 20))):
+        sent = _post_wm_close_to_aedt(get_aedt_pids() or pids_before)
+        if sent:
+            method = "wm_close"
+            warnings.append(f"COM 退出未完成，已向 {sent} 个 AEDT 窗口发送 WM_CLOSE")
+        _wait_no_aedt(min(timeout_seconds, 20))
+
+    pids_after = get_aedt_pids()
+
+    # 只剩 -Embedding 辅助进程 → 直接清理（2026-11-18 实测：COM 退出带走启动器、
+    # 但 -Embedding 留着；它没窗口，WM_CLOSE 无效）。
+    if pids_after and len(_embedding_pids(pids_after)) == len(pids_after):
+        helper_res = _kill_aedt_processes(pids_after)
+        method = f"{method}+helper_cleanup" if method else "helper_cleanup"
+        warnings.append(f"启动器已退出，残留 -Embedding 辅助进程 {pids_after} 已自动清理")
+        pids_after = get_aedt_pids()
+        if not pids_after:
+            return _quit_ok(method, pids_before, open_projects, warnings, t0) \
+                if helper_res.get("success") else helper_res
+
+    if not pids_after:
+        return _quit_ok(method or "none", pids_before, open_projects, warnings, t0)
+
+    return error_response(
+        "STILL_RUNNING",
+        f"AEDT 仍在运行（PID {pids_after}），{timeout_seconds}s 内没退出",
+        hint="窗口可能弹了「是否保存」确认框或正在求解：先人工处理窗口再重试；"
+             "确认改动可丢弃时才用 quit_aedt(force=true)（会 taskkill /F，关掉该实例所有工程）",
+        method=method or "none",
+        pids_before=pids_before,
+        pids_after=pids_after,
+        open_projects_before=open_projects,
+        data_loss_risk=bool(open_projects),
+        warnings=warnings,
+        duration_s=round(time.monotonic() - t0, 1),
+    )
+
+
 @mcp.tool()
 def quit_aedt(force: bool = False, confirm: bool = False,
               timeout_seconds: int = 30) -> dict[str, Any]:
@@ -988,39 +1096,14 @@ def quit_aedt(force: bool = False, confirm: bool = False,
             f"AEDT 里还有 {len(open_projects)} 个打开的工程 {open_projects}：退出会连带关闭，"
             f"未保存的改动会丢 —— **请把这条转告用户确认**")
 
-    def _quit_ok(method_: str) -> dict[str, Any]:
-        """退出成功的统一返回体（两处复用，别各写一份）。"""
-        return {"success": True, "status": "quit", "method": method_,
-                "aedt_running": False,
-                "pids_before": pids_before, "pids_after": [],
-                "open_projects_before": open_projects,
-                "data_loss_risk": bool(open_projects),
-                "warnings": warnings,
-                "message": f"AEDT 已退出（{method_}）",
-                "duration_s": round(time.monotonic() - t0, 1)}
-
-    # 不是本服务启动的实例（用户手开 / 别的工具开）→ 未经确认不许退。
-    # 注意顺序：多实例先拒（那是硬冲突），单实例才谈"要不要确认"。
-
-    # ── force：整机硬杀（显式逃生口）──
+    # force：整机硬杀（显式逃生口）；多实例先拒（硬冲突），单实例才谈「要不要确认」
     if force:
-        result = _kill_aedt_processes(pids_before)
-        result.update({
-            "status": "killed",
-            "pids_before": pids_before,
-            "pids_after": get_aedt_pids(),
-            "open_projects_before": open_projects,
-            "data_loss_risk": bool(open_projects),
-            "warnings": warnings,
-            "duration_s": round(time.monotonic() - t0, 1),
-        })
-        return result
+        return _quit_aedt_force(pids_before, open_projects, warnings, t0)
 
     guard = _instance_guard("退出 AEDT")
     if guard is not None:
         return guard
 
-    # 单实例、且不是本服务启动的（用户手开 / 别的工具开）→ 未经确认不许退
     if not _is_managed_aedt(pids_before) and not confirm:
         return error_response(
             "CONFIRM_REQUIRED",
@@ -1032,57 +1115,8 @@ def quit_aedt(force: bool = False, confirm: bool = False,
             open_projects=open_projects,
             managed=False)
 
-    method = ""
-    # ── 1) COM 优雅退出 ──
-    if ok_state:
-        def _com_quit() -> None:
-            with com_session():
-                _app, desktop = _attach_aedt()
-                desktop.QuitApplication()
-
-        okq, _v, qerr = _call_with_timeout(_com_quit, _COM_CLOSE_TIMEOUT)
-        if okq:
-            method = "com"
-        else:
-            warnings.append(f"COM QuitApplication 失败：{qerr}")
-
-    if not (method and _wait_no_aedt(min(timeout_seconds, 20))):
-        # ── 2) 窗口级 WM_CLOSE（等同点 X，不会丢未保存内容）──
-        sent = _post_wm_close_to_aedt(get_aedt_pids() or pids_before)
-        if sent:
-            method = "wm_close"
-            warnings.append(f"COM 退出未完成，已向 {sent} 个 AEDT 窗口发送 WM_CLOSE")
-        _wait_no_aedt(min(timeout_seconds, 20))
-
-    pids_after = get_aedt_pids()
-
-    # ── 3) 只剩 `-Embedding` 辅助进程 → 直接清理（无窗口、无工程，杀它不丢数据）──
-    # 2026-11-18 实测：COM 退出会带走启动器，但 `-Embedding` 留着；它没有窗口，
-    # WM_CLOSE 无效 → 旧逻辑报 STILL_RUNNING 让人手工处理。
-    if pids_after and len(_embedding_pids(pids_after)) == len(pids_after):
-        helper_res = _kill_aedt_processes(pids_after)
-        method = f"{method}+helper_cleanup" if method else "helper_cleanup"
-        warnings.append(f"启动器已退出，残留 -Embedding 辅助进程 {pids_after} 已自动清理")
-        pids_after = get_aedt_pids()
-        if not pids_after:
-            return _quit_ok(method) if helper_res.get("success") else helper_res
-
-    if not pids_after:
-        return _quit_ok(method or "none")
-
-    return error_response(
-        "STILL_RUNNING",
-        f"AEDT 仍在运行（PID {pids_after}），{timeout_seconds}s 内没退出",
-        hint="窗口可能弹了「是否保存」确认框或正在求解：先人工处理窗口再重试；"
-             "确认改动可丢弃时才用 quit_aedt(force=true)（会 taskkill /F，关掉该实例所有工程）",
-        method=method or "none",
-        pids_before=pids_before,
-        pids_after=pids_after,
-        open_projects_before=open_projects,
-        data_loss_risk=bool(open_projects),
-        warnings=warnings,
-        duration_s=round(time.monotonic() - t0, 1),
-    )
+    return _quit_aedt_graceful(ok_state, pids_before, timeout_seconds,
+                               open_projects, warnings, t0)
 
 
 @mcp.tool()

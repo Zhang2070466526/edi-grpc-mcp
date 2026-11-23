@@ -335,26 +335,14 @@ def _solve_chebyshev_arg(n, target):
     return (low + high) / 2
 
 
-def design_wilkinson(h_mm, er, f0_GHz, n_sections, z0=50.0, fbw=None, ripple_db=None):
-    """
-    设计多级威尔金森功分器。
+def _determine_bandwidth(n_sections, fbw, ripple_db):
+    """确定 fbw 与 ripple_db（互推 + 钳位 + 告警）。
 
-    参数：
-        h_mm       : 基板厚度 (mm)
-        er         : 相对介电常数
-        f0_GHz     : 中心频率 (GHz)
-        n_sections : 级数（每臂的四分之一波长节数）
-        z0         : 端口阻抗 (Ω)，默认 50
-        fbw        : 相对带宽（fractional bandwidth），如 1.0 = 100%
-                     若为 None，则根据 ripple_db 自动计算
-        ripple_db  : 通带最小回波损耗 (dB)，默认 20 dB（Chebyshev 等波纹）
-
-    返回：
-        dict 包含所有设计结果
+    fbw 为空时由 ripple_db 推出（默认 20 dB）；ripple_db 低于拓扑可实现下限
+    （偶模 2:1 变换器 DC 失配 ≈9.2 dB）或带宽超上限时钳到 _MAX_FBW，并回写实际
+    ripple_db + 告警。fbw 与 ripple_db 同时给时以 fbw 为准、忽略 ripple_db 并告警。
+    返回 (fbw, ripple_db, warnings)。
     """
-    if not isinstance(n_sections, int) or isinstance(n_sections, bool) or n_sections < 1:
-        raise ValueError(f"n_sections 必须是 >=1 的整数（当前 {n_sections!r}）")
-    # ---- 1. 确定带宽 ----
     warnings: list[str] = []
     if fbw is None:
         if ripple_db is None:
@@ -409,6 +397,30 @@ def design_wilkinson(h_mm, er, f0_GHz, n_sections, z0=50.0, fbw=None, ripple_db=
         Gamma_dc = 0.5 * math.log(2)
         Gamma_m = abs(Gamma_dc / T_n_M)
         ripple_db = -20 * math.log10(Gamma_m)
+    return fbw, ripple_db, warnings
+
+
+def design_wilkinson(h_mm, er, f0_GHz, n_sections, z0=50.0, fbw=None, ripple_db=None):
+    """
+    设计多级威尔金森功分器。
+
+    参数：
+        h_mm       : 基板厚度 (mm)
+        er         : 相对介电常数
+        f0_GHz     : 中心频率 (GHz)
+        n_sections : 级数（每臂的四分之一波长节数）
+        z0         : 端口阻抗 (Ω)，默认 50
+        fbw        : 相对带宽（fractional bandwidth），如 1.0 = 100%
+                     若为 None，则根据 ripple_db 自动计算
+        ripple_db  : 通带最小回波损耗 (dB)，默认 20 dB（Chebyshev 等波纹）
+
+    返回：
+        dict 包含所有设计结果
+    """
+    if not isinstance(n_sections, int) or isinstance(n_sections, bool) or n_sections < 1:
+        raise ValueError(f"n_sections 必须是 >=1 的整数（当前 {n_sections!r}）")
+    # ---- 1. 确定带宽（互推 + 钳位 + 告警）----
+    fbw, ripple_db, warnings = _determine_bandwidth(n_sections, fbw, ripple_db)
 
     # ---- 2. 偶模等效 Chebyshev 变换器 ----
     # 公共端 Z0 -> 等效负载 Z0/2（两臂并联）
