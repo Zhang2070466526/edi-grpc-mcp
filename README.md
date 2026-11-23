@@ -222,7 +222,7 @@ edi-grpc-mcp/
 │   │   │                               #     全局 _EDA_LOCK 串行锁，增量 ads_output 收集
 │   │   │                               #     _terminal_result() 统一返回结构
 │   │   ├── project_manage.py           #     工程管理：扫描/创建/打开/关闭/元件/概述/变量分析/静态参数 (10 工具)
-│   │   ├── simulation.py               #     仿真引擎：异步/网表/ADS 控制器/抗烧毁 (7 工具)
+│   │   ├── simulation.py               #     仿真引擎：异步/网表/抗烧毁 (6 工具)
 │   │   │                               #     ThreadPoolExecutor(1) 串行执行，最多 8 个排队任务
 │   │   ├── simulation_components.py    #     仿真器件管理：10 工具（含 Out 挂载）
 │   │   │                               #     11 步参数校验管线 + wire↔public 名称映射
@@ -242,10 +242,10 @@ edi-grpc-mcp/
 │   │   ├── convert_raw.py              #     RAW→曲线图+CSV，VSWR 自动拆分，曲线查询
 │   │   └── compare_results.py          #     多 RAW 对比叠图 (Matplotlib), alignment 校验
 │   │
-│   ├── ansys/                          #   ANSYS HFSS 工具 (6 个, COM 附着)
+│   ├── ansys/                          #   ANSYS HFSS 工具 (7 个, COM 附着)
 │   │   ├── __init__.py                 #     公共 API re-export
 │   │   ├── config.py                   #     进程检测 / COM 附着 (多 ProgID 回退) / 锁文件管理
-│   │   ├── project_manage.py           #     工程打开/关闭 + AEDT 启动 + 信息查询 (4 工具)
+│   │   ├── project_manage.py           #     工程打开/关闭/退出 + AEDT 启动 + 信息查询 (5 工具)
 │   │   └── run_analysis.py             #     异步仿真（复用 TaskRunner 单 worker 队列）, outcome_known 追踪
 │   │
 │   ├── cst/                            #   CST 电磁仿真工具 (13 个)

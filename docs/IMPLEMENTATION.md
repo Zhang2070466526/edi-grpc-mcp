@@ -83,17 +83,19 @@
 
 ### 1.1 通信类型总览
 
-每个 MCP 工具按底层通信方式分为 7 种实现类型：
+每个 MCP 工具按底层通信方式分为 9 种实现类型：
 
 | 类型 | 工具数 | 核心实现 | 说明 |
 |---|---|---|---|
-| gRPC 远程调用 | 43 | `servers/eda/grpc_client.py` | 操作 EDI 工程/器件，统一走 `call_grpc()` |
-| 本地文件读取 | 7 | `servers/eda/project_reader.py` | 直接读 `.epp` 工程磁盘文件 / EDI 日志，不经 gRPC |
-| 内存服务 | 4 | `simulation.py` / `grpc_client.py` | 读运行时状态（任务注册表、通道状态） |
-| subprocess 命令行 | 4 | `turbocharts/config.py` 等 | 调 `turbocharts_app.exe`、启动 EDI |
-| COM / CST 接口 | 19 | `ansys/config.py` / `cst/cst_api.py` | ANSYS 6 个走 COM，CST 13 个走官方 API |
-| 图片 / 文档 | 3 | `multimodal_vision/` | 视觉分析、文档预览 |
-| 本地纯计算 | 6 | `microwave/` | 传输线阻抗/线宽、功分器设计、滤波器阶数评估（高通/低通/带阻）、功分器/巴伦节数，纯数值解算无外部依赖 |
+| gRPC 远程调用 | 35 | `servers/eda/grpc_client.py` | 操作 EDI 工程/器件/模型，统一走 `call_grpc()` |
+| 本地文件读取 | 7 | `servers/eda/project_reader.py` | 读 `.epp` 工程磁盘文件 / 网表 / EDI 日志 / 参数目录，不经 gRPC |
+| 内存服务 | 5 | `simulation.py` / `describe_tool.py` | 读运行时状态（任务注册表、通道状态、工具注册表） |
+| subprocess 命令行 | 9 | `turbocharts/` / `simulation_tool/` | 调 `turbocharts_app.exe`、独立仿真 exe、启动 EDI |
+| COM（ANSYS HFSS） | 7 | `ansys/config.py` | AEDT 工程开关/退出/仿真走 COM |
+| CST 官方 API | 13 | `cst/cst_api.py` | 求解 / 导出 / 结果查询 |
+| LASPCEM | 12 | `laspcem/` | GUI 内嵌 Python + subprocess |
+| 图片 / 文档 | 4 | `multimodal_vision/` | 视觉分析、图片显示、文档预览 |
+| 本地纯计算 | 9 | `microwave/` · `rf_analysis/` | 传输线 / 功分器 / 滤波器阶数 / 混频杂散 / 动态范围，纯数值解算 |
 
 ### 1.2 gRPC 异步调用模型
 

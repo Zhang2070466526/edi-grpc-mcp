@@ -17,7 +17,7 @@ from servers.eda.project_manage import list_epp_projects
 ## 目录
 
 - **[工程管理（10 个）](#工程管理10个)**：创建 / 扫描 / 打开 / 关闭工程、查询器件、分析变量
-- **[仿真（7 个）](#仿真7个)**：同步 / 异步仿真、网表仿真、抗烧毁评估、任务查询
+- **[仿真（6 个）](#仿真6个)**：同步 / 异步仿真、网表仿真、抗烧毁评估、任务查询
 - **[导出与分析（4 个）](#导出与分析4个)**：导出网表、截图原理图、器件 CSV、信号链路追踪
 - **[模型库 / 原理图库（6 个）](#模型库--原理图库6个)**：模型替换、模型分类/查询/搜索、性能器件放置、拓扑设计
 - **[软 IP（1 个）](#软ip1个)**：按设计描述下载芯片模型
@@ -26,7 +26,7 @@ from servers.eda.project_manage import list_epp_projects
 - **[工作区（3 个）](#工作区3个)**：创建 / 切换 / 查询当前工作区
 - **[原理图扩展（5 个）](#原理图扩展5个)**：内置器件、清空原理图、连线、批量器件变换
 - **[启动 / 诊断（3 个）](#启动--诊断3个)**：启动 EDI、服务诊断、日志读取
-- **[ANSYS HFSS（6 个）](#ansys-hfss6个)**：AEDT 工程开关、HFSS 异步仿真
+- **[ANSYS HFSS（7 个）](#ansys-hfss7个)**：AEDT 工程开关、退出、HFSS 异步仿真
 - **[CST 电磁仿真（13 个）](#cst电磁仿真13个)**：异步求解 .cst、导出 S 参数 / 远场方向图
 - **[LASPCEM 电磁仿真（11 个）](#laspcem电磁仿真11个)**：启动 LASPCEM、打开 .sem 工程、aedt 转 sem、异步求解（可带导出/建报告后处理）、任务查询与取消、同步导出 S 参数 / 建报告、读取求解设置
 - **[图表（3 个）](#图表3个)**：RAW 曲线解析、转图、结果对比
@@ -346,7 +346,7 @@ analyze_variables(project_path: str) -> dict
 
 ---
 
-## 仿真（7 个）
+## 仿真（6 个）
 
 
 ### `start_simulation_async`
@@ -991,7 +991,7 @@ get_service_logs(lines: int = 50, keyword: str = "", level: str = "") -> dict
 
 ---
 
-## ANSYS HFSS（6 个）
+## ANSYS HFSS（7 个）
 
 ### `open_hfss_project`
 

@@ -49,13 +49,13 @@ servers/
     project_reader.py     # ProjectReader + S-expression 解析器
     grpc_client.py        # gRPC 通信层（FetchEvent → PerformAction）
     project_manage.py     # 工程管理（10 工具）
-    simulation.py         # 仿真（7 工具）
+    simulation.py         # 仿真（6 工具）
     simulation_components.py  # 仿真器件（10 工具）
     simulation_component_catalog.json  # 参数目录 v2.0
     design_export.py      # 网表/截图/CSV（3 工具）
     signal_chain.py       # 信号链路追踪（1 工具）
     model_replace.py      # 模型替换（1 工具）
-    model_library.py      # 模型库 + 原理图库 + 拓扑设计（6 工具）
+    model_library.py      # 模型库 + 原理图库 + 拓扑设计（5 工具）
     soft_ip.py            # 按描述下载芯片模型（1 工具）
     edi_launcher.py       # 启动 EDI + 服务诊断（3 工具）
     workspace_ops.py      # 工作区：创建/切换/查询（3 工具）
@@ -64,7 +64,7 @@ servers/
     config.py             # run_turbocharts（信号量串行）
     convert_raw.py        # RAW 转图 + 曲线查询（2 工具）
     compare_results.py    # 仿真对比（1 工具）
-  ansys/                  # ANSYS HFSS 工具（6 个）
+  ansys/                  # ANSYS HFSS 工具（7 个）
     config.py             # 进程检测/COM 附着/锁文件
     project_manage.py     # 工程打开/关闭/启动/信息
     run_analysis.py       # 异步仿真
@@ -73,7 +73,7 @@ servers/
     cst_api.py            # 安装检测/API 加载/会话管理
     simulate.py           # 仿真求解（异步，一次性会话）
     result_export.py      # 结果导出（S 参数 / 远场方向图）
-  microwave/              # 微波无源电路计算（6 个，本地纯计算）
+  microwave/              # 微波无源电路计算（7 个，本地纯计算）
     tools.py              # 封装 calculate_transline / design_wilkinson
     transline.py          # 4 线型特性阻抗/线宽
     wilkinson_designer.py # 多级威尔金森功分器

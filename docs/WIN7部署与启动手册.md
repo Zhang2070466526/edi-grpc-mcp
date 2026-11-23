@@ -182,7 +182,6 @@ dir /s /b C:\edi-mcp\*.dll C:\edi-mcp\*.pyd C:\edi-mcp\*.exe | find /c /v ""
 | `MCP_TRANSPORT` | `streamable-http` | 保持默认；`stdio` 用于被别的程序当子进程拉起的用法 |
 | `MCP_PORT` | `50026` | 服务端口（默认 50026；改端口后请手动访问新端口） |
 | `MCP_ALLOWED_PROCESSES` | `hermes_cli.main,edi-agent-service.exe`（**写死在代码 settings.py，`.env`/dist 无需再填**） | **进程白名单**（仅本机模式生效）：**精确匹配**（整词命令行 token / exe 文件名 / 完整路径，**不做裸子串**）。**默认 `hermes_cli.main,edi-agent-service.exe`，置空=关闭白名单**；**远程模式（`--host 0.0.0.0`）自动忽略**。客户端换名字后不同步改 → 调用被拒 |
-| `VISION_API_KEY` / `VISION_BASE_URL` / `VISION_MODEL` | 空 | 三个都填才启用图片视觉分析 |
 | `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` | 空 | 填了才启用 `/chat` 多轮工具调用 |
 
 `.env` 是 UTF-8/ASCII 文本，记事本可改，但**别存成 UTF-16**（另存为选 ANSI / UTF-8）。**改完重启服务生效。**

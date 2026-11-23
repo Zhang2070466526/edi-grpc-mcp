@@ -813,7 +813,7 @@ https://api.deepseek.com/chat/completions
 |---|---|---|
 | 中 | TR_Simulator | validate已通过；继续验证simulate报告输出、退出码和日志 |
 | 高 | 仿真助手 | 验证 chat SSE、confirm JSON、用户会话隔离及删除后访问 |
-| 中 | gRPC | OPEN/VIEW/CAPTURE/CLOSE已通过；继续定位SIMULATE失败和MODEL_REPLACE下载失败，补测仿真控制器 |
+| 中 | gRPC | OPEN/VIEW/CAPTURE/CLOSE已通过；继续定位SIMULATE失败和MODEL_REPLACE下载失败 |
 | 中 | turbocharts | 主流程已验证；补测缺参、错误RAW、错误曲线名及帮助参数返回码 |
 | 中 | 模型覆盖 | 验证 cancel-overwrite 和非所属用户权限 |
 | 中 | 管理员用户管理 | 使用一次性账号验证强制删除及关联数据处理 |
