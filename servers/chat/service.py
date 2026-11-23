@@ -30,34 +30,17 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ---------------------------------------------------------------------------
-# 工具函数（直接导入，不走 MCP 装饰器开销）
+# 工具函数：模块 import 触发 @mcp.tool 注册；个别函数直接调用（绕过 MCP 装饰器开销）
 # ---------------------------------------------------------------------------
-from servers.eda.project_manage import (  # noqa: E402
-    open_edi_project, close_edi_project,
-    list_epp_projects,
-    list_schematic_components, get_schematic_component_info,
-    get_project_summary,
-    analyze_variables,
-)
-from servers.eda.simulation_components import (  # noqa: E402
-    get_simulation_component_schema, list_simulation_components,
-    create_simulation_component, update_simulation_component,
-    delete_simulation_component, set_component_active_state,
-    replace_port_component,
-    replace_schematic_from_file,
-)
-from servers.eda.simulation import (  # noqa: E402
-    start_simulation_async, get_simulation_async_status, get_simulation_async_result,
-    list_eda_tasks,
-)
-from servers.eda.design_export import (  # noqa: E402
-    export_project_netlist, capture_schematic,
-)
-from servers.eda.model_replace import replace_models_from_csv  # noqa: E402
-from servers.eda.edi_launcher import launch_edi  # noqa: E402
-from servers.turbocharts.compare_results import compare_simulation_results  # noqa: E402
-from servers.turbocharts.convert_raw import turbocharts_convert, list_result_curves  # noqa: E402
-from servers.multimodal_vision import show_image, analyze_image, open_document, register_image_url  # noqa: E402
+import servers.eda.project_manage  # noqa: E402
+import servers.eda.simulation_components  # noqa: E402
+from servers.eda.simulation import get_simulation_async_status  # noqa: E402
+import servers.eda.design_export  # noqa: E402
+import servers.eda.model_replace  # noqa: E402
+import servers.eda.edi_launcher  # noqa: E402
+import servers.turbocharts.compare_results  # noqa: E402
+import servers.turbocharts.convert_raw  # noqa: E402, F401
+from servers.multimodal_vision import register_image_url  # noqa: E402
 from servers.settings import get_settings  # noqa: E402
 from servers.metrics import record_tool_call  # noqa: E402
 

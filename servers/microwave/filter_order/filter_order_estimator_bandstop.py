@@ -778,7 +778,7 @@ if __name__ == '__main__':
         max_notches=4,
     )
 
-    print(f"\n[最小阶解]")
+    print("\n[最小阶解]")
     print(f"  原型阶数 N = {result['N']}")
     print(f"  有限传输零点对数 m = {result['notches']} (deg(P)=2m={result['k']})")
     if result['notches'] > 0:

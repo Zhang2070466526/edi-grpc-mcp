@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import tempfile
+import uuid as _uuid
 from pathlib import Path
 
 from starlette.requests import Request
@@ -206,9 +208,6 @@ async def chat_endpoint(request: Request):
 
 
 # ── 文件上传 ──
-import tempfile  # noqa: E402
-import uuid as _uuid  # noqa: E402
-
 _MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB 上传上限
 
 

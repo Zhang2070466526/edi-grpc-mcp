@@ -14,7 +14,7 @@
 """
 
 import numpy as np
-from scipy.optimize import minimize, least_squares
+from scipy.optimize import minimize
 import json
 from typing import List, Tuple, Optional, Dict, Any
 
@@ -496,7 +496,7 @@ def estimate_filter_order(f_p1: float, f_p2: float,
         print("=" * 60)
         print("广义切比雪夫带通滤波器 - 阶数与零点估计")
         print("=" * 60)
-        print(f"\n[规范归一化]")
+        print("\n[规范归一化]")
         print(f"  中心频率 f0 = {f0:.6g} Hz")
         print(f"  相对带宽 FBW = {FBW:.6g} ({FBW*100:.2f}%)")
         print(f"  回波损耗 RL = {RL_dB} dB → ε² = {epsilon_sq:.6g}")
@@ -504,7 +504,7 @@ def estimate_filter_order(f_p1: float, f_p2: float,
         if Q_unloaded:
             print(f"  谐振器无载Q = {Q_unloaded}")
             print(f"  归一化损耗系数 d = {1.0/(Q_unloaded*FBW):.6g}")
-        print(f"\n  阻带规范:")
+        print("\n  阻带规范:")
         for i, spec in enumerate(stopband_specs):
             if len(spec) == 2:
                 fs, As = spec
@@ -522,7 +522,7 @@ def estimate_filter_order(f_p1: float, f_p2: float,
     # ---- 阶数下界 ----
     N_lower = chebyshev_order_lower_bound(Omega_s, A_s_arr, epsilon_sq)
     if verbose:
-        print(f"\n[阶数下界(无有限零点)]")
+        print("\n[阶数下界(无有限零点)]")
         print(f"  N_lower = {N_lower:.3f} → 取整 {int(np.ceil(N_lower))}")
 
     # ---- 搜索可行解 ----
@@ -683,7 +683,7 @@ def estimate_filter_order(f_p1: float, f_p2: float,
         verify_rows.append((float(freqs[i_w]), float(att_v[i_w]), A_s))
 
     if verbose:
-        print(f"\n[按 k 递增枚举: 每个传输零点数 k 对应的最小阶数 N]")
+        print("\n[按 k 递增枚举: 每个传输零点数 k 对应的最小阶数 N]")
         print("   k    最小N   最差阻带裕量     零点(带通域/GHz)")
         for s in solutions:
             zs = zero_row(s)
@@ -692,13 +692,13 @@ def estimate_filter_order(f_p1: float, f_p2: float,
         if stop_note:
             print(f"  [停止] {stop_note}")
 
-        print(f"\n[最小阶解]")
+        print("\n[最小阶解]")
         print(f"  阶数 N = {best['N']}")
         print(f"  有限传输零点数 k = {best['k']}")
         if best['k'] > 0:
             print(f"  零点位置(归一化低通 Ω): {np.round(best['zeros_lowpass'], 4).tolist()}")
             print(f"  零点位置(带通域 Hz):    {[round(z, 4) for z in zero_row(best)]}")
-        print(f"\n[阻带细网格复核(401点/带)]")
+        print("\n[阻带细网格复核(401点/带)]")
         for (fw, aw, As) in verify_rows:
             ok = "✓" if aw >= As else "✗"
             print(f"  最坏点 f={fw:.6g}Hz | 要求 ≥ {As} dB | 实际 {aw:.2f} dB | {ok}")

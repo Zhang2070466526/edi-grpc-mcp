@@ -23,7 +23,7 @@ import numpy as np
 from servers.eda.config import TURBOCHARTS_PATH
 from servers.utils import (build_artifact, build_file_link, default_result_path,
                            error_response, per_tool_mutex)
-from servers.turbocharts.config import engine_failures, engine_report, record_run, run_turbocharts
+from servers.turbocharts.config import engine_report, record_run, run_turbocharts
 from servers.turbocharts.convert_raw import detect_chart_type
 from servers import mcp
 

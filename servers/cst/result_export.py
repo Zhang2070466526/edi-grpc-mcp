@@ -72,8 +72,7 @@ def cst_export_snp(
 
     注意：归档（未解包）的 .cst 读不了结果树，需先用 cst_open_project 解包。
 
-    本工具走同步串行队列：CST 正忙（有求解/导出在跑或排队）时立即返回 CST_BUSY，
-    不排队；需要排队请用 cst_export_snp_async。
+    本工具走同步串行队列：CST 正忙（有求解/导出在跑或排队）时立即返回 CST_BUSY，不排队；需要排队请用 cst_export_snp_async。
 
     Args:
         model_path: .cst 模型文件绝对路径（需已求解，存在 S 参数结果）。

@@ -8,7 +8,6 @@ fetch_artifact        — 把任意产物文件（.snp/.raw/图/报告）注册�
 from __future__ import annotations
 
 import hashlib
-import logging
 import mimetypes
 import os
 from pathlib import Path

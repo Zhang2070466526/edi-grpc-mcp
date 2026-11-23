@@ -27,7 +27,6 @@
 """
 import numpy as np
 from scipy.optimize import minimize
-from typing import List, Tuple, Optional, Dict, Any
 
 
 def lowpass_normalize(f_p, f_array):
@@ -406,7 +405,7 @@ def estimate_lowpass_filter_order(f_p, stopband_specs, RL_dB=-20.0,
         verify_rows.append((float(freqs[i_w]), float(att_v[i_w]), A_s))
 
     if verbose:
-        print(f"\n  m(notch)  最小N  最差阻带裕量   零点(GHz)")
+        print("\n  m(notch)  最小N  最差阻带裕量   零点(GHz)")
         for s in solutions:
             zs = notch_row(s)
             zs_str = ", ".join(f"{z/1e9:.4f}" for z in zs) if zs else "—"

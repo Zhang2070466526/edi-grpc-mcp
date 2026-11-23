@@ -14,7 +14,7 @@ validators.py  共享校验（路径/扩展名/Pillow）
 
 from servers.multimodal_vision.image_display import show_image, register_image_url, serve_image
 from servers.multimodal_vision.vision_analyzer import analyze_image
-from servers.multimodal_vision.document import open_document, serve_document, register_document_url, fetch_artifact
+from servers.multimodal_vision.document import open_document, serve_document, fetch_artifact
 
 __all__ = [
     "show_image", "analyze_image",
