@@ -97,7 +97,7 @@
 - `run_tr_simulation` — 跑 TR 收发链路仿真（纯链路：增益/噪声/P−1dB，不含混频器与变频）。有混频/本振/镜像指标请用 run_mixer_simulation。
 - `search_personal_models` — 个人模型库检索（自己导入的件）：按子类列出型号与参数。官方件在公共库，用 search_public_models。
 - `search_public_models` — 公共模型库检索（官方件）：按子类列出型号与参数。自己导入的件在个人库，用 search_personal_models。
-- `set_component_active_state` — 确定性设置器件状态为 NORMAL、DISABLED 或 SHORTED。
+- `set_component_active_state` — 确定性设置器件状态为 NORMAL(激活状态)、DISABLED(禁用状态) 或 SHORTED(短路状态)。
 - `show_image` — 读取本地图片，返回标准 MCP ImageContent 和本地路径。
 - `simulate_anti_burnout` — 对工程原理图中具备抗烧毁数据的器件执行输入功率仿真和抗烧毁风险评估。
 - `simulate_netlist` — 仿真指定 netlist.log 文件，不需打开 .epp 工程。返回 RAW 结果+日志。
@@ -223,7 +223,7 @@
 - `run_tr_simulation` — 跑 TR 收发链路仿真（纯链路：增益/噪声/P−1dB，不含混频器与变频）。有混频/本振/镜像指标请用 run_mixer_simulation。
 - `search_personal_models` — 个人模型库检索（自己导入的件）：按子类列出型号与参数。官方件在公共库，用 search_public_models。
 - `search_public_models` — 公共模型库检索（官方件）：按子类列出型号与参数。自己导入的件在个人库，用 search_personal_models。
-- `set_component_active_state` — 确定性设置器件状态为 NORMAL、DISABLED 或 SHORTED。
+- `set_component_active_state` — 确定性设置器件状态为 NORMAL(激活状态)、DISABLED(禁用状态) 或 SHORTED(短路状态)。
 - `simulate_anti_burnout` — 对工程原理图中具备抗烧毁数据的器件执行输入功率仿真和抗烧毁风险评估。
 - `simulate_netlist` — 仿真指定 netlist.log 文件，不需打开 .epp 工程。返回 RAW 结果+日志。
 - `start_simulation_async` — 启动异步仿真，立即返回 task_id 供 get_simulation_async_status 查进度；仿真日志在结果查询的 ads_output 字段。
@@ -316,7 +316,7 @@
 - `run_tr_simulation` — 跑 TR 收发链路仿真（纯链路：增益/噪声/P−1dB，不含混频器与变频）。有混频/本振/镜像指标请用 run_mixer_simulation。
 - `search_personal_models` — 个人模型库检索（自己导入的件）：按子类列出型号与参数。官方件在公共库，用 search_public_models。
 - `search_public_models` — 公共模型库检索（官方件）：按子类列出型号与参数。自己导入的件在个人库，用 search_personal_models。
-- `set_component_active_state` — 确定性设置器件状态为 NORMAL、DISABLED 或 SHORTED。
+- `set_component_active_state` — 确定性设置器件状态为 NORMAL(激活状态)、DISABLED(禁用状态) 或 SHORTED(短路状态)。
 - `show_image` — 读取本地图片，返回标准 MCP ImageContent 和本地路径。
 - `simulate_anti_burnout` — 对工程原理图中具备抗烧毁数据的器件执行输入功率仿真和抗烧毁风险评估。
 - `simulate_netlist` — 仿真指定 netlist.log 文件，不需打开 .epp 工程。返回 RAW 结果+日志。
@@ -422,7 +422,7 @@
 - `run_tr_simulation` — 跑 TR 收发链路仿真（纯链路：增益/噪声/P−1dB，不含混频器与变频）。有混频/本振/镜像指标请用 run_mixer_simulation。
 - `search_personal_models` — 个人模型库检索（自己导入的件）：按子类列出型号与参数。官方件在公共库，用 search_public_models。
 - `search_public_models` — 公共模型库检索（官方件）：按子类列出型号与参数。自己导入的件在个人库，用 search_personal_models。
-- `set_component_active_state` — 确定性设置器件状态为 NORMAL、DISABLED 或 SHORTED。
+- `set_component_active_state` — 确定性设置器件状态为 NORMAL(激活状态)、DISABLED(禁用状态) 或 SHORTED(短路状态)。
 - `show_image` — 读取本地图片，返回标准 MCP ImageContent 和本地路径。
 - `simulate_anti_burnout` — 对工程原理图中具备抗烧毁数据的器件执行输入功率仿真和抗烧毁风险评估。
 - `simulate_netlist` — 仿真指定 netlist.log 文件，不需打开 .epp 工程。返回 RAW 结果+日志。

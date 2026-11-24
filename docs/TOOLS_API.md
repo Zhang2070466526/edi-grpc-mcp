@@ -2267,7 +2267,7 @@ from servers.eda.simulation_components import set_component_active_state
 set_component_active_state(project_path: str, instance_name: str, state: str, timeout_seconds: int = 120) -> dict
 ```
 
-确定性设置器件状态。state 接受 NORMAL / DISABLED / SHORTED（大小写不敏感）。不是状态切换，重复调用具有幂等性。
+确定性设置器件状态为 NORMAL(激活状态)、DISABLED(禁用状态) 或 SHORTED(短路状态)。state 接受 NORMAL / DISABLED / SHORTED（大小写不敏感）。不是状态切换，重复调用具有幂等性。
 
 ### `replace_port_component`
 

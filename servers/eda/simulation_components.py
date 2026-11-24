@@ -611,7 +611,7 @@ def set_component_active_state(
         state: str,
         timeout_seconds: int = 120,
 ) -> dict[str, Any]:
-    """确定性设置器件状态为 NORMAL、DISABLED 或 SHORTED。
+    """确定性设置器件状态为 NORMAL(激活状态)、DISABLED(禁用状态) 或 SHORTED(短路状态)。
 
     这不是状态切换，而是直接设置目标状态，因此重复调用具有幂等性：
     DISABLED → 再设置 DISABLED → 仍然是 DISABLED。
