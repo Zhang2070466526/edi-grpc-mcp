@@ -57,6 +57,8 @@ enum EventType {
   DESIGN_SCHEMATIC_TOPOLOGY = 47;
   DESIGN_SOFT_IP = 48;
   UPDATE_SCHEMATIC_COMPONENTS_TRANSFORM = 64;
+  // 68：当前工作区概要（epp 工程列表 + 本地性能模型概述），payload 为空对象
+  GET_CURRENT_WORKSPACE_SUMMARY = 68;
 }
 
 enum ResultStatus {

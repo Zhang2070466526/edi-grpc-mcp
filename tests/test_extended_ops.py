@@ -48,6 +48,49 @@ def test_get_current_workspace_path_payload(monkeypatch, fake_caller):
     assert calls[-1][1] == {}
 
 
+def test_get_current_workspace_summary_payload(monkeypatch, fake_caller):
+    """概要与路径查询一样是空 payload，任务类型必须是 68。"""
+    from servers.eda import workspace_ops as wo
+    ecserver_pb2, calls, _fake = fake_caller
+    monkeypatch.setattr(wo, "call_grpc", _fake)
+    wo.get_current_workspace_summary()
+    assert calls[-1][0] == ecserver_pb2.GET_CURRENT_WORKSPACE_SUMMARY == 68
+    assert calls[-1][1] == {}
+
+
+def test_get_current_workspace_summary_flattens_models(monkeypatch):
+    """models 按子类型分组 → models_flat 摊平成 类型/uuid/名称，并给出两个计数。"""
+    from servers.eda import workspace_ops as wo
+
+    def _fake(task_type, payload, timeout, max_timeout_seconds=300):
+        return {"success": True, "status": "SUCCEEDED", "details": {
+            "workspace_path": "D:/ws",
+            "epp_files": ["D:/ws/a.epp", "D:/ws/b.epp"],
+            "models": {
+                "放大器": [{"uuid": "u1", "name": "MAAD_011047"}],
+                "衰减器": [{"uuid": "u2", "name": "ATT-1"}, {"uuid": "u3", "name": "ATT-2"}],
+                "结构异常": "not-a-list",
+            },
+        }}
+
+    monkeypatch.setattr(wo, "call_grpc", _fake)
+    details = wo.get_current_workspace_summary()["details"]
+    assert details["epp_count"] == 2
+    assert details["model_count"] == 3
+    assert {"sub_type": "放大器", "uuid": "u1", "name": "MAAD_011047"} in details["models_flat"]
+    # 原始分组结构不动，异常分支只跳过不抛错
+    assert details["models"]["结构异常"] == "not-a-list"
+
+
+def test_get_current_workspace_summary_without_details_untouched(monkeypatch):
+    """失败响应（无 details）不能被整形改写成半成品。"""
+    from servers.eda import workspace_ops as wo
+    monkeypatch.setattr(wo, "call_grpc",
+                        lambda *a, **k: {"success": False, "message": "EDI 未连接"})
+    r = wo.get_current_workspace_summary()
+    assert r["success"] is False and "details" not in r
+
+
 # ── 模型库（性能器件放置）──────────────────────────
 
 def test_add_performance_component_payload(monkeypatch, fake_caller):

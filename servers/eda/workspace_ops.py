@@ -86,3 +86,64 @@ def get_current_workspace_path(timeout_seconds: int = 60) -> dict[str, Any]:
         timeout_seconds,
         max_timeout_seconds=300,
     )
+
+
+def _flatten_models(models: Any) -> list[dict[str, Any]]:
+    """把服务端「子类型 → [{uuid, name}]」的模型字典摊平成 [{sub_type, uuid, name}]。
+
+    服务端只返回 config.ini 的 sub_types 里能匹配到名称的性能模型，因此这里不做过滤；
+    结构不符（非 dict / 值非 list）时跳过，不抛错，避免整形把有效结果变成失败。
+    """
+    flat: list[dict[str, Any]] = []
+    if not isinstance(models, dict):
+        return flat
+    for sub_type, items in models.items():
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            flat.append({
+                "sub_type": sub_type,
+                "uuid": item.get("uuid"),
+                "name": item.get("name"),
+            })
+    return flat
+
+
+@mcp.tool()
+def get_current_workspace_summary(timeout_seconds: int = 60) -> dict[str, Any]:
+    """获取当前工作区概要：工程列表与本地性能模型（uuid / 子类型 / 型号）。
+
+    用法："当前工作区有哪些工程"、"列出工作区里的性能模型"、"这个工作区里都放了什么"
+
+    不需要 project_path，也不需要打开工程。只读查询，不修改任何状态，但需要 EDI 在线（走 gRPC）。
+    返回的 models 以子类型名称为键；另有 models_flat 把「子类型 + uuid + 型号名称」摊平成列表，
+    逐个取模型信息时用它更省事。
+
+    Args:
+        timeout_seconds: 最长等待秒数，默认 60。
+
+    Returns:
+        gRPC 统一返回结构，业务字段在 details 中：
+        {"details": {"workspace_path": "D:/EDI/data/EDI-Workspace",
+                     "epp_files": ["D:/.../a.epp"],
+                     "models": {"<子类型>": [{"uuid": "...", "name": "..."}]},
+                     "epp_count": 1,
+                     "models_flat": [{"sub_type": "...", "uuid": "...", "name": "..."}],
+                     "model_count": 1}}
+    """
+    result = call_grpc(
+        ecserver_pb2.GET_CURRENT_WORKSPACE_SUMMARY,
+        {},
+        timeout_seconds,
+        max_timeout_seconds=300,
+    )
+    details = result.get("details") if isinstance(result, dict) else None
+    if isinstance(details, dict):
+        epp_files = details.get("epp_files")
+        flat = _flatten_models(details.get("models"))
+        details["epp_count"] = len(epp_files) if isinstance(epp_files, list) else 0
+        details["models_flat"] = flat
+        details["model_count"] = len(flat)
+    return result
