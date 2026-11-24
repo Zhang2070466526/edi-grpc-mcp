@@ -146,19 +146,18 @@ close_edi_project(project_path: str, need_save: bool = False, timeout_seconds: i
 ```python
 from servers.eda.project_manage import list_schematic_components
 
-list_schematic_components(project_path: str, timeout_seconds: int = 60, summary_only: bool = False, limit: int = 50, offset: int = 0, include_transform: bool = False) -> dict
+list_schematic_components(project_path: str, timeout_seconds: int = 60, summary_only: bool = False, limit: int = 50, offset: int = 0) -> dict
 ```
 
-通过 gRPC 查询原理图全部器件（含完整参数），比本地文件读取更实时，能看到 EDI 未保存的修改和运行态（active_state/state）。
+列出当前原理图上存在的所有器件及器件对应参数，参数包括器件属性和位置几何信息（电阻值、位置坐标、引脚索引和引脚相对坐标、旋转角度、水平/垂直镜像等），比本地文件读取更实时，能看到 EDI 未保存的修改和运行态（active_state/state）。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `project_path` | str | 是 | — | `.epp` 文件绝对路径 |
 | `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
-| `summary_only` | bool | 否 | False | 每项只留标量字段（instance_name/component_type/active_state/state），裁掉 parameters |
+| `summary_only` | bool | 否 | False | 每项只留标量字段（instance_name/component_type/active_state/state），裁掉 parameters 等 dict/list 大头 |
 | `limit` | int | 否 | 50 | 每页条数；0 = 全部 |
 | `offset` | int | 否 | 0 | 从第几个器件开始返回，配合 limit 翻页 |
-| `include_transform` | bool | 否 | False | 补 position/rotation_deg/mirrored_*/pins（按器件数发 gRPC，慢） |
 
 返回（gRPC 统一结构，业务字段在 `details` 中）：
 ```python

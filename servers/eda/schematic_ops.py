@@ -198,8 +198,8 @@ def update_schematic_components_transform(
     坐标口径（实测）：position 是原理图场景坐标，与 get_schematic_component_info 返回的
     position 同一套，不是毫米也不是截图像素；落位按工程网格吸附——请求 y=120 实际会落到
     125。以返回的 position 为准，别拿请求值当结果，否则会误判成"没生效"。
-    取现值用 get_schematic_component_info，或 list_schematic_components(include_transform=True)
-    一次带出（列表接口默认不返回几何）。
+    取现值用 get_schematic_component_info，或 list_schematic_components 一次带出
+    （列表接口同步返回几何）。
 
     限制与副作用（均实测）：
         - 目标为 InsertText 时整批拒绝：文本框不能用本工具挪。

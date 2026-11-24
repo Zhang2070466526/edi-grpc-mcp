@@ -18,7 +18,7 @@ project_manage.py — 工程管理（10 工具）
     close_edi_project             关闭已打开的工程
     get_project_summary           工程概览（元数据/原理图/仿真配置）
     analyze_variables             分析变量定义和引用关系
-    list_schematic_components     查询原理图全部器件（gRPC，含完整参数）
+    list_schematic_components     查询原理图全部器件（gRPC，含完整参数与几何）
     get_schematic_component_info  按实例名查询器件完整信息
     get_components_static_params  查询器件固有参数（重量/尺寸/封装/厂商/成本）
     batch_query_component         按器件型号列表批量查询模型信息

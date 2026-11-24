@@ -6,7 +6,7 @@ open_edi_project              打开 .epp 工程，等待返回成功或失败
 close_edi_project             关闭已打开的工程，可选择是否保存
 get_project_summary           工程概览（元数据、原理图、仿真配置）
 analyze_variables             分析变量定义、引用和 Sweep 配置
-list_schematic_components     查询原理图全部器件（gRPC，含完整参数）
+list_schematic_components     查询原理图全部器件（gRPC，含完整参数与几何）
 get_schematic_component_info  按实例名查询器件完整信息（gRPC）
 get_components_static_params  查询器件固有参数（重量/尺寸/封装/厂商/成本）
 batch_query_component         按器件型号列表批量查询模型信息
@@ -364,33 +364,25 @@ def list_schematic_components(
         summary_only: bool = False,
         limit: int = 50,
         offset: int = 0,
-        include_transform: bool = False,
 ) -> dict[str, Any]:
-    """通过 gRPC 查询原理图全部器件（含完整参数），比本地文件读取更实时。
+    """列出当前原理图上存在的所有器件及器件对应参数，参数包括器件属性和位置几何信息，
+    例如，电阻R的电阻值和位置坐标、引脚索引和引脚相对坐标、旋转角度、水平还是垂直镜像。
 
     用法："列出这个工程原理图上的所有器件"、"查看原理图器件"、"把每个器件的位置和旋转角都列出来"
 
-    定位：gRPC 实时读取当前工程全部器件（含 Var/Sweep 等）。需要分页/过滤/只取器件标识
-    用 list_simulation_components（本地磁盘）。
-
-    几何字段不在本接口的默认返回里：position / rotation_deg / mirrored_horizontal /
-    mirrored_vertical / pins 只有 get_schematic_component_info 才给。要给
-    update_schematic_components_transform 准备输入（对齐、等间距、整组旋转）时，
-    传 include_transform=True 一次带出几何，避免逐器件再查一遍。
+    定位：gRPC 实时读取当前工程全部器件（含 Var/Sweep 等），属性与几何信息（position /
+    rotation_deg / mirrored_horizontal / mirrored_vertical / pins）同步返回，不需要再逐器件
+    调 get_schematic_component_info 补几何。需要分页/过滤/只取器件标识用
+    list_simulation_components（本地磁盘）。
 
     Args:
         project_path: .epp 工程文件绝对路径。
-        timeout_seconds: 单次调用的最长等待秒数，默认 60；include_transform=True 时是
-            每个器件补几何那一次调用的超时。
+        timeout_seconds: 单次调用的最长等待秒数，默认 60。
         summary_only: True 时每项只保留标量字段（instance_name/component_type/active_state/state），
-            裁掉 parameters 大头，省上下文；include_transform=True 时几何字段仍会保留。
+            裁掉 parameters 等 dict/list 大头，省上下文。
         limit: 只返回前 N 个器件，默认 50；0 = 全部。截断时 details.truncated=true。
         offset: 从第几个器件开始返回，默认 0；配合 limit 翻页（details.total 是总数）。
             例：limit=50, offset=50 取第二页。
-        include_transform: True 时给返回的每个器件补 position / rotation_deg /
-            mirrored_horizontal / mirrored_vertical / pins（值来自 GET_SCHEMATIC_COMPONENT_INFO）。
-            代价：按器件数逐个发 gRPC（N 个器件 = N 次），器件多时明显变慢。默认 False。
-
     Returns:
         gRPC 统一返回结构（业务字段在 details 中）：
         {"success": True, "status": "SUCCEEDED",
@@ -400,8 +392,7 @@ def list_schematic_components(
               "active_state": 0, "state": "NORMAL", "parameters": {...}}, ...]}}
         分页字段：total（器件总数）/ offset / limit / returned（本页条数）/
         truncated（本页之后还有没有）；component_count 保持原含义（总数）。
-        include_transform=True 时每项另有 position/rotation_deg/mirrored_*/pins；个别器件
-        取几何失败不影响整体，失败项进 details.transform_errors（[{instance_name, message}]）。
+        每项含属性（parameters 等）与几何（position / rotation_deg / mirrored_* / pins）。
     """
     result = call_project_grpc(ecserver_pb2.LIST_SCHEMATIC_COMPONENTS, project_path, timeout_seconds)
     if result.get("success"):
@@ -426,29 +417,6 @@ def list_schematic_components(
                 "truncated": (offset_eff + len(page)) < total,
             })
             comps = page
-            # 几何补齐放在分页之后：只给真正返回的这批器件发请求
-            if include_transform:
-                errors: list[dict[str, Any]] = []
-                for comp in comps:
-                    if not isinstance(comp, dict):
-                        continue
-                    name = comp.get("instance_name")
-                    if not name:
-                        continue
-                    info = call_project_grpc(ecserver_pb2.GET_SCHEMATIC_COMPONENT_INFO,
-                                             project_path, timeout_seconds,
-                                             instance_name=name)
-                    one = (info.get("details") or {}).get("component")
-                    if info.get("success") and isinstance(one, dict):
-                        for key in ("uuid", "position", "rotation_deg", "mirrored_horizontal",
-                                    "mirrored_vertical", "pins"):
-                            if key in one:
-                                comp[key] = one[key]
-                    else:
-                        errors.append({"instance_name": name,
-                                       "message": info.get("message") or "取器件几何失败"})
-                if errors:
-                    result["details"]["transform_errors"] = errors
             result["details"]["components"] = comps
         result["message"] = "原理图器件查询成功"
     return result
@@ -465,7 +433,7 @@ def get_schematic_component_info(
     用法："查看 R1 这个器件的参数"、"U1 是什么类型的器件"、"这个器件现在的位置和旋转角是多少"
 
     返回含几何：position / rotation_deg / mirrored_horizontal / mirrored_vertical / pins，可直接作为
-    update_schematic_components_transform 的输入；只要标识和参数用 list_schematic_components。
+    update_schematic_components_transform 的输入；批量列出用 list_schematic_components（同步返回几何）。
 
     Args:
         project_path: .epp 工程文件绝对路径。

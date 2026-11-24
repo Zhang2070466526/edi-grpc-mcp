@@ -83,7 +83,7 @@
 - `list_epp_projects` — 扫描指定文件夹中的 .epp 工程文件，该接口用于扫描工作区外的工程文件，工作区内工程可通过GET_CURRENT_WORKSPACE_SUMMARY获取。
 - `list_ideal_components` — 列出内置器件类型及其简要说明。
 - `list_result_curves` — 调用引擎原生 `--curve-info` 列出 RAW 中可用的「依赖 → 曲线名 + 可用单位」。
-- `list_schematic_components` — 通过 gRPC 查询原理图全部器件（含完整参数），比本地文件读取更实时。
+- `list_schematic_components` — 列出当前原理图上存在的所有器件及器件对应参数，参数包括器件属性和位置几何信息，
 - `list_simulation_components` — 列出已保存工程中的全部器件及参数（含 wire→public 参数名映射，磁盘读已保存工程，不需要edi在线）。
 - `open_document` — 打开本地文档：link 模式生成 10 分钟 HTTP 链接，local 模式用系统默认程序打开。
 - `open_edi_project` — 打开 .epp 工程（会切换 EDI 当前工程；同目录需有 schematics/main/schematic.ep）。关闭用 close_edi_project。
@@ -216,7 +216,7 @@
 - `list_eda_tasks` — 列出当前所有异步仿真任务，可选按状态过滤。不阻塞。
 - `list_ideal_components` — 列出内置器件类型及其简要说明。
 - `list_result_curves` — 调用引擎原生 `--curve-info` 列出 RAW 中可用的「依赖 → 曲线名 + 可用单位」。
-- `list_schematic_components` — 通过 gRPC 查询原理图全部器件（含完整参数），比本地文件读取更实时。
+- `list_schematic_components` — 列出当前原理图上存在的所有器件及器件对应参数，参数包括器件属性和位置几何信息，
 - `open_edi_project` — 打开 .epp 工程（会切换 EDI 当前工程；同目录需有 schematics/main/schematic.ep）。关闭用 close_edi_project。
 - `replace_models_from_csv` — ⚠️ 按 CSV 批量替换工程元件模型（影响面大，建议先 get_project_summary 核对）。
 - `replace_port_component` — ⚠️ 将原理图中的端口器件替换为另一种类型（会改变端口）。
@@ -306,7 +306,7 @@
 - `list_epp_projects` — 扫描指定文件夹中的 .epp 工程文件，该接口用于扫描工作区外的工程文件，工作区内工程可通过GET_CURRENT_WORKSPACE_SUMMARY获取。
 - `list_ideal_components` — 列出内置器件类型及其简要说明。
 - `list_result_curves` — 调用引擎原生 `--curve-info` 列出 RAW 中可用的「依赖 → 曲线名 + 可用单位」。
-- `list_schematic_components` — 通过 gRPC 查询原理图全部器件（含完整参数），比本地文件读取更实时。
+- `list_schematic_components` — 列出当前原理图上存在的所有器件及器件对应参数，参数包括器件属性和位置几何信息，
 - `list_simulation_components` — 列出已保存工程中的全部器件及参数（含 wire→public 参数名映射，磁盘读已保存工程，不需要edi在线）。
 - `open_document` — 打开本地文档：link 模式生成 10 分钟 HTTP 链接，local 模式用系统默认程序打开。
 - `open_edi_project` — 打开 .epp 工程（会切换 EDI 当前工程；同目录需有 schematics/main/schematic.ep）。关闭用 close_edi_project。
@@ -411,7 +411,7 @@
 - `list_epp_projects` — 扫描指定文件夹中的 .epp 工程文件，该接口用于扫描工作区外的工程文件，工作区内工程可通过GET_CURRENT_WORKSPACE_SUMMARY获取。
 - `list_ideal_components` — 列出内置器件类型及其简要说明。
 - `list_result_curves` — 调用引擎原生 `--curve-info` 列出 RAW 中可用的「依赖 → 曲线名 + 可用单位」。
-- `list_schematic_components` — 通过 gRPC 查询原理图全部器件（含完整参数），比本地文件读取更实时。
+- `list_schematic_components` — 列出当前原理图上存在的所有器件及器件对应参数，参数包括器件属性和位置几何信息，
 - `list_simulation_components` — 列出已保存工程中的全部器件及参数（含 wire→public 参数名映射，磁盘读已保存工程，不需要edi在线）。
 - `open_document` — 打开本地文档：link 模式生成 10 分钟 HTTP 链接，local 模式用系统默认程序打开。
 - `open_edi_project` — 打开 .epp 工程（会切换 EDI 当前工程；同目录需有 schematics/main/schematic.ep）。关闭用 close_edi_project。
