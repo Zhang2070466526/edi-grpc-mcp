@@ -45,7 +45,7 @@ EDI MCP 服务：把 EDI / ANSYS HFSS / CST 三个仿真引擎包装成 **101 �
 | 扫工作区有哪些工程 | `list_epp_projects` |
 | 不知道用哪个工具 | `describe_tool("<你的诉求>")` |
 
-## 调用前必读（三个最容易踩的点）
+## 调用前必读（四个最容易踩的点）
 
 1. **参数不确定就先 describe**：MCP 只把 docstring **首行**发给模型，`links`、`stopband_specs`
    这类数组参数的元素结构在 schema 里是空的 —— 只有 `describe_tool` 能给完整字段表和示例。
@@ -53,6 +53,13 @@ EDI MCP 服务：把 EDI / ANSYS HFSS / CST 三个仿真引擎包装成 **101 �
 3. **破坏性工具**（首行带 ⚠️ 的：`clear_schematic`、`delete_component_from_schematic`、
    `load_schematic_from_file`、`replace_schematic_components_from_csv`、`close_edi_project`…）
    调用前先 `get_project_summary` 核对，避免误删/误覆盖。
+4. **`component_type` 同名不同义，禁止跨工具直传**：
+   - `list_ideal_components` → 内置器件类型（110 个，如 `Attenuator`、`AC`），只能喂 `add_ideal_component`；
+   - `list_schematic_components` → 性能件是**型号**（如 `HGC259`），内置/仿真件才是类型名（`TermG`、`SParameter`…）；
+   - `batch_query_component_rf_params` → 只吃型号串。
+   判据：**`component_uuid` 非空 = 性能件**，它的 `component_type` 就是型号，可直接喂型号查询。
+   把内置类型名传进型号查询会返回 `success=true` + `data` 全 `null` + `missing`，**不报错**，
+   不要据此判断"器件没有参数"。
 
 ## 不要做的事（会被 review 打回）
 
