@@ -2277,7 +2277,7 @@ from servers.eda.simulation_components import replace_port_component
 replace_port_component(project_path: str, target_instance_name: str, replacement_component_type: str, parameters: dict | None = None, timeout_seconds: int = 300) -> dict
 ```
 
-替换端口器件类型（TermG ↔ P_nToneG）。服务端保留位置、状态和外部连线。
+替换端口器件类型（TermG ↔ P_nToneG）。如果有多个端口需要替换，应逐一替换，禁止一次同时替换多个端口。端口器件仅有 TermG 和 P_nToneG 两种类型。服务端保留位置、状态和外部连线。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|

@@ -527,7 +527,8 @@ def replace_port_component(
 ) -> dict[str, Any]:
     """⚠️ 将原理图中的端口器件替换为另一种类型（会改变端口）。
 
-    目前仅支持 TermG ↔ P_nToneG 之间的替换。
+    如果有多个端口需要替换，应逐一替换，禁止一次同时替换多个端口。
+    端口器件仅有 TermG 和 P_nToneG 两种类型。目前仅支持 TermG ↔ P_nToneG 之间的替换。
     服务端保留位置、状态和外部连线，生成新实例名。
 
     Args:
