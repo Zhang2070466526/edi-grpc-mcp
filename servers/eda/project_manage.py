@@ -524,10 +524,11 @@ def batch_query_component_rf_params(
         model_name_list: list[str],
         timeout_seconds: int = 60,
 ) -> dict[str, Any]:
-    """按器件型号字符串列表批量查询模型信息，返回对齐到输入顺序的结果。
+    """按器件型号字符串列表批量查询模型的频率、增益、回波损耗、抑制、P-1、Psat、隔离、插损、衰减等信息，返回对齐到输入顺序的结果。
 
     用法：批量查这几个型号的模型信息（如 MAAD_008866）
 
+    传入参数 model_name_list 从 list_schematic_components 中的 component_type 字段获取。
     注意：本工具只接受器件型号串（如 "MAAD_008866"），不接受 UUID；
     按 UUID 查固有参数（重量/尺寸/封装/厂商）用 get_components_static_params。
 
