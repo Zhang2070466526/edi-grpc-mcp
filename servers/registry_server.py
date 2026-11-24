@@ -73,7 +73,7 @@ _INTERNAL_TOOLS: frozenset[str] = frozenset({
     "start_simulation_async",
     # 仿真器件
     "update_simulation_component",
-    "replace_port_component", "delete_simulation_component",
+    "replace_port_component", "delete_component_from_schematic",
     "set_component_active_state",
     "replace_schematic_from_file", "attach_out_component",
     "update_schematic_components_transform",
@@ -235,7 +235,7 @@ _READONLY_TOOLS: frozenset[str] = frozenset({
 _DESTRUCTIVE_TOOLS: frozenset[str] = frozenset({
     "clear_schematic", "close_edi_project", "close_hfss_project",
     "quit_aedt",
-    "close_laspcem_project", "cst_task_cancel", "delete_simulation_component",
+    "close_laspcem_project", "cst_task_cancel", "delete_component_from_schematic",
     "laspcem_task_cancel", "replace_models_from_csv", "replace_port_component",
     "replace_schematic_from_file", "switch_workspace",
 })
@@ -248,7 +248,7 @@ _TOOL_TITLES: dict[str, str] = {
     "quit_aedt": "退出 AEDT 程序",
     "close_laspcem_project": "关闭 LASPCEM 工程",
     "cst_task_cancel": "取消 CST 任务",
-    "delete_simulation_component": "删除器件",
+    "delete_component_from_schematic": "删除器件",
     "laspcem_task_cancel": "取消 LASPCEM 任务",
     "replace_models_from_csv": "批量替换模型",
     "replace_port_component": "替换端口器件",

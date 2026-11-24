@@ -60,7 +60,7 @@ _PENDING_ACTION_TTL = 300      # 待确认操作有效期 5 分钟
 
 # 破坏性工具：Chat 层需用户确认后才执行（仅工具名匹配，参数条件在下方单独处理）
 _DESTRUCTIVE_CHAT_TOOLS = {
-    "delete_simulation_component",
+    "delete_component_from_schematic",
     "replace_models_from_csv",
     "replace_port_component",
     "replace_schematic_from_file",   # 整体替换原理图，无条件确认
@@ -102,7 +102,7 @@ _CHAT_TOOL_DESCRIPTIONS: dict[str, str] = {
         "打开本地文档：link 模式生成临时 HTTP 链接，local 模式系统默认程序打开。"
         "仅用户明确要求时调用，生成报告后不得自动打开"
     ),
-    "delete_simulation_component": (
+    "delete_component_from_schematic": (
         "按实例名删除任意原理图器件及其连接线；删除直接由 EDI 执行"
     ),
     "set_component_active_state": (
@@ -704,7 +704,7 @@ class ChatService:
             "start_simulation_async",
             "list_schematic_components", "get_schematic_component_info",
             "update_simulation_component",
-            "delete_simulation_component", "set_component_active_state",
+            "delete_component_from_schematic", "set_component_active_state",
             "replace_models_from_csv",
             "replace_port_component", "attach_out_component",
             "replace_schematic_from_file",
@@ -891,7 +891,7 @@ _TOOL_LABELS: dict[str, str] = {
     "list_schematic_components": "实时器件列表",
     "get_schematic_component_info": "查器件详情",
     "update_simulation_component": "更新器件",
-    "delete_simulation_component": "删除器件",
+    "delete_component_from_schematic": "删除器件",
     "set_component_active_state": "设置状态",
     "replace_port_component": "替换端口",
     "attach_out_component": "挂载Out器件",
@@ -939,7 +939,7 @@ def _norm_confirmation(text: str) -> str:
 def _create_pending(tool_name: str, args: dict) -> PendingAction:
     """为破坏性操作生成待确认对象（含 action_id 和操作摘要）。"""
     summary = {
-        "delete_simulation_component":
+        "delete_component_from_schematic":
             f"从工程中删除器件 {args.get('instance_name', '?')} 及其连接线",
         "replace_models_from_csv":
             f"使用 {args.get('csv_path', '?')} 批量替换工程模型",
@@ -961,7 +961,7 @@ def _create_pending(tool_name: str, args: dict) -> PendingAction:
 def _confirmation_text(pending: PendingAction) -> str:
     """生成破坏性操作的确认提示文案。"""
     target = {
-        "delete_simulation_component": f"{pending.summary}。此操作无法由 MCP 自动恢复。",
+        "delete_component_from_schematic": f"{pending.summary}。此操作无法由 MCP 自动恢复。",
         "replace_models_from_csv": f"{pending.summary}。此操作将修改工程中的模型。",
         "close_edi_project": f"{pending.summary}。保存后无法撤销。",
         "replace_port_component": f"{pending.summary}。此操作将替换器件并重新连线。",

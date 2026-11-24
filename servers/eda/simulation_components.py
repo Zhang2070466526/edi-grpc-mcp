@@ -2,7 +2,7 @@ r"""仿真器件管理工具 — 工具 API v3，gRPC 协议 v2。
 
 get_simulation_component_schema  查询器件支持的参数、类型、单位和权限
 update_simulation_component      按实例名更新参数（自动识别类型）
-delete_simulation_component      按实例名删除器件（EDI 直接执行）
+delete_component_from_schematic      按实例名删除器件（EDI 直接执行）
 replace_port_component           替换端口器件类型（TermG↔P_nToneG）
 set_component_active_state       确定性设置 NORMAL/DISABLED/SHORTED
 replace_schematic_from_file      从 .ep 文件整体替换原理图
@@ -570,11 +570,11 @@ def replace_port_component(
 
 
 # ═══════════════════════════════════════════════════════════
-# 6. delete_simulation_component
+# 6. delete_component_from_schematic
 # ═══════════════════════════════════════════════════════════
 
 @mcp.tool()
-def delete_simulation_component(
+def delete_component_from_schematic(
         project_path: str,
         instance_name: str,
         timeout_seconds: int = 120,

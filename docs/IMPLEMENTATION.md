@@ -729,7 +729,7 @@ Chat 工具调用日志对路径做脱敏（只记文件名），不暴露用户
 
 | 工具 | 确认条件 |
 |---|---|
-| `delete_simulation_component` / `replace_models_from_csv` / `replace_port_component` | 无条件确认 |
+| `delete_component_from_schematic` / `replace_models_from_csv` / `replace_port_component` | 无条件确认 |
 | `close_edi_project` | `need_save=true` 时确认 |
 
 Chat 层拦截 → 保存 `PendingAction` → 展示操作摘要 → 用户明确回复「确认」才执行 → 一次确认执行一次，5 分钟过期 → 执行时用原始保存参数（防模型篡改）。
@@ -785,7 +785,7 @@ Chat 层拦截 → 保存 `PendingAction` → 展示操作摘要 → 用户明�
 | 工具 | EventType | 关键实现 |
 |---|---|---|
 | `update_simulation_component` | UPDATE(15) | **三路类型推断**（见下），无条件执行完整校验 + wire 转换 |
-| `delete_simulation_component` | DELETE(12) | 不做本地预检查，直接由 EDI 按 instance_name 执行 |
+| `delete_component_from_schematic` | DELETE(12) | 不做本地预检查，直接由 EDI 按 instance_name 执行 |
 | `set_component_active_state` | SET_ACTIVE_STATE(14) | 状态规范化 `.strip().upper()`，确定性设置（幂等） |
 | `replace_port_component` | REPLACE_PORT_COMPONENT(16) | TermG/P_nToneG 替换，保留连线，Chat 层需确认 |
 | `attach_out_component` | ATTACH_OUT_COMPONENT(17) | 自动判断引脚朝向 → 计算放置位置 → 顺时针四方向检测重叠 → 器件+网线同一撤销组 |
@@ -933,7 +933,7 @@ else:                                 # 两者都没有
 |---|---|---|---|
 | `get_simulation_component_schema` | AI 不知道器件支持哪些参数/单位/权限 | —（读 catalog） | create/update 参数校验 |
 | `update_simulation_component` | 修改器件参数 | list_schematic_components（instance_name）+ schema（校验） | — |
-| `delete_simulation_component` | 删除不需要的器件 | list_schematic_components（instance_name） | — |
+| `delete_component_from_schematic` | 删除不需要的器件 | list_schematic_components（instance_name） | — |
 | `set_component_active_state` | 仿真时临时禁用/短路器件（不改参数） | list_schematic_components（instance_name） | — |
 | `replace_port_component` | 端口类型切换（TermG↔P_nToneG）保留连线 | list_schematic_components（instance_name） | — |
 | `attach_out_component` | 给器件引脚挂 Out 器件观察输出 | list_schematic_components（instance_name） | — |

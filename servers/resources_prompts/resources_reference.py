@@ -39,7 +39,7 @@ def resource_operation_guide() -> str:
         "- 查询工程时优先使用 `get_project_summary`。\n"
         "- 创建或修改仿真器件前先查询参数 Schema。\n"
         "- `TIMEOUT` 或 `STREAM_DISCONNECTED` 后禁止自动重试创建或导入。\n"
-        "- `delete_simulation_component` 按实例名精确删除，删除前先确认目标。\n"
+        "- `delete_component_from_schematic` 按实例名精确删除，删除前先确认目标。\n"
         "- `set_component_active_state` 是确定性设置，不是状态切换。\n"
         "- `clear_before_import=true` 必须获得用户明确确认，同时传 `confirm_clear=true`。\n"
         "- `show_image` 使用原生 MCP ImageContent 返回图片，不复制文件，不输出 MEDIA 文本。\n"

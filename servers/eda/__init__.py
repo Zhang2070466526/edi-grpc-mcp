@@ -35,7 +35,7 @@ simulation_components.py — 仿真器件（8 工具）
     get_simulation_component_schema  查询器件参数 schema 和权限
     update_simulation_component      按实例名更新参数（三路类型推断）
     replace_port_component           替换端口器件类型（TermG↔P_nToneG）
-    delete_simulation_component      按实例名删除器件
+    delete_component_from_schematic      按实例名删除器件
     set_component_active_state       确定性设置 NORMAL/DISABLED/SHORTED
     replace_schematic_from_file      从 .ep 文件整体替换原理图
     attach_out_component             为器件引脚挂载 Out 器件
@@ -104,7 +104,7 @@ from servers.eda.simulation_components import (  # noqa: F401
     get_simulation_component_schema,
     update_simulation_component,
     replace_port_component,
-    delete_simulation_component,
+    delete_component_from_schematic,
     set_component_active_state,
     replace_schematic_from_file,
     attach_out_component,

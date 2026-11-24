@@ -481,7 +481,7 @@ class TestToolCount:
         # 已移除 copy_image_to_workspace
         assert "copy_image_to_workspace" not in tools
         # All 7 sim component tools should be present
-        for name in ["update_simulation_component", "delete_simulation_component",
+        for name in ["update_simulation_component", "delete_component_from_schematic",
                      "set_component_active_state"]:
             assert name in tools, f"Missing tool: {name}"
 
@@ -581,18 +581,18 @@ class TestGrpcPayloads:
             assert result["error_code"] == "COMPONENT_TYPE_REQUIRED"
 
     def test_delete_enum_and_payload(self):
-        from servers.eda.simulation_components import delete_simulation_component
+        from servers.eda.simulation_components import delete_component_from_schematic
         with patch("servers.eda.simulation_components.call_project_grpc",
                    return_value=_MOCK_GRPC_OK) as mock:
-            delete_simulation_component("C:/test.epp", "R1")
+            delete_component_from_schematic("C:/test.epp", "R1")
             assert mock.call_args.args[0] == ecserver_pb2.DELETE_SIMULATION_COMPONENT
             assert mock.call_args.args[1] == "C:/test.epp"
             assert mock.call_args.kwargs["instance_name"] == "R1"
 
     def test_delete_empty_name_rejected(self):
-        from servers.eda.simulation_components import delete_simulation_component
+        from servers.eda.simulation_components import delete_component_from_schematic
         with _VALIDATE_PATCH:
-            result = delete_simulation_component("C:/test.epp", "")
+            result = delete_component_from_schematic("C:/test.epp", "")
             assert result["success"] is False
             assert result["error_code"] == "EMPTY_INSTANCE_NAME"
 

@@ -40,7 +40,7 @@
 - `cst_solve_query` — 查询 CST 求解任务进度（配合 cst_solve_async 拿到的 task_id）。S 参数导出任务用 cst_export_snp_query。
 - `cst_task_cancel` — ⚠️ 取消一个 CST 异步任务（会终止运行中的求解）。
 - `cst_task_list` — 列出当前所有 CST 异步任务（求解 / 导出）及状态。
-- `delete_simulation_component` — ⚠️ 按实例名删除原理图器件及其连接线（不可恢复）。
+- `delete_component_from_schematic` — ⚠️ 按实例名删除原理图器件及其连接线（不可恢复）。
 - `describe_tool` — 查工具参数/示例，或按能力关键词找工具（留空 name=列全部）；先查它，别猜也别读源码。
 - `design_chip` — 用户输入指标来设计cst天线模型（中心频率），hfss带通滤波器（中心频率，相对带宽）、低通滤波器（截止频率）负载（中心频率）等电路指标，获取相应的模型文件。
 - `design_schematic_topology` — 用户输入指标来设计电路拓扑（收发组件、滤波器、天线等），自动创建并打开新工程。
@@ -186,7 +186,7 @@
 - `compare_simulation_results` — 比较多个 RAW 仿真结果文件中的同一条曲线并生成对比图。
 - `create_project` — 创建新的 EDI 工程（不显示创建向导，也不自动打开）。
 - `create_workspace` — 创建一个新的工作区，不自动切换。
-- `delete_simulation_component` — ⚠️ 按实例名删除原理图器件及其连接线（不可恢复）。
+- `delete_component_from_schematic` — ⚠️ 按实例名删除原理图器件及其连接线（不可恢复）。
 - `describe_tool` — 查工具参数/示例，或按能力关键词找工具（留空 name=列全部）；先查它，别猜也别读源码。
 - `design_chip` — 用户输入指标来设计cst天线模型（中心频率），hfss带通滤波器（中心频率，相对带宽）、低通滤波器（截止频率）负载（中心频率）等电路指标，获取相应的模型文件。
 - `design_schematic_topology` — 用户输入指标来设计电路拓扑（收发组件、滤波器、天线等），自动创建并打开新工程。
@@ -270,7 +270,7 @@
 - `cst_solve_query` — 查询 CST 求解任务进度（配合 cst_solve_async 拿到的 task_id）。S 参数导出任务用 cst_export_snp_query。
 - `cst_task_cancel` — ⚠️ 取消一个 CST 异步任务（会终止运行中的求解）。
 - `cst_task_list` — 列出当前所有 CST 异步任务（求解 / 导出）及状态。
-- `delete_simulation_component` — ⚠️ 按实例名删除原理图器件及其连接线（不可恢复）。
+- `delete_component_from_schematic` — ⚠️ 按实例名删除原理图器件及其连接线（不可恢复）。
 - `describe_tool` — 查工具参数/示例，或按能力关键词找工具（留空 name=列全部）；先查它，别猜也别读源码。
 - `design_schematic_topology` — 用户输入指标来设计电路拓扑（收发组件、滤波器、天线等），自动创建并打开新工程。
 - `design_wilkinson` — 设计多级威尔金森功分器，输出各级微带线宽、线长和隔离电阻。
@@ -365,7 +365,7 @@
 - `cst_solve_query` — 查询 CST 求解任务进度（配合 cst_solve_async 拿到的 task_id）。S 参数导出任务用 cst_export_snp_query。
 - `cst_task_cancel` — ⚠️ 取消一个 CST 异步任务（会终止运行中的求解）。
 - `cst_task_list` — 列出当前所有 CST 异步任务（求解 / 导出）及状态。
-- `delete_simulation_component` — ⚠️ 按实例名删除原理图器件及其连接线（不可恢复）。
+- `delete_component_from_schematic` — ⚠️ 按实例名删除原理图器件及其连接线（不可恢复）。
 - `describe_tool` — 查工具参数/示例，或按能力关键词找工具（留空 name=列全部）；先查它，别猜也别读源码。
 - `design_chip` — 用户输入指标来设计cst天线模型（中心频率），hfss带通滤波器（中心频率，相对带宽）、低通滤波器（截止频率）负载（中心频率）等电路指标，获取相应的模型文件。
 - `design_schematic_topology` — 用户输入指标来设计电路拓扑（收发组件、滤波器、天线等），自动创建并打开新工程。
