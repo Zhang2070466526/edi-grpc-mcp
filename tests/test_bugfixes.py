@@ -410,15 +410,24 @@ def test_batch_query_component_alignment(monkeypatch):
 def test_find_port_pid(monkeypatch):
     import psutil
     import start_servers as ss
-    fake = SimpleNamespace(
-        status=psutil.CONN_LISTEN,
-        laddr=SimpleNamespace(port=50026),
-        pid=1234,
-    )
+    fake = SimpleNamespace(status=psutil.CONN_LISTEN, laddr=SimpleNamespace(port=50026), pid=1234)
     monkeypatch.setattr(psutil, "net_connections", lambda kind: [fake])
     assert ss._find_port_pid(50026) == 1234
+    # psutil 空 + netstat 也无结果 → None（netstat 兜底要一起 mock，否则会查到本机真实占用）
     monkeypatch.setattr(psutil, "net_connections", lambda kind: [])
+    monkeypatch.setattr(ss.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout=""))
     assert ss._find_port_pid(50026) is None
+
+
+def test_find_port_pid_netstat_fallback(monkeypatch):
+    """回归：psutil 拿不到别的进程 pid（None）时，回退 netstat -ano 解析 PID。"""
+    import psutil
+    import start_servers as ss
+    fake = SimpleNamespace(status=psutil.CONN_LISTEN, laddr=SimpleNamespace(port=50026), pid=None)
+    monkeypatch.setattr(psutil, "net_connections", lambda kind: [fake])
+    netstat_out = "  TCP    0.0.0.0:50026          0.0.0.0:0              LISTENING       36432\n"
+    monkeypatch.setattr(ss.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout=netstat_out))
+    assert ss._find_port_pid(50026) == 36432
 
 
 def test_kill_port_process(monkeypatch):

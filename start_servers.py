@@ -29,6 +29,7 @@ import logging
 import os
 import signal
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -243,15 +244,38 @@ async def ready_check(request):
 
 
 def _find_port_pid(port: int) -> int | None:
-    """查找监听指定端口的进程 PID，找不到返回 None。"""
+    """查找监听指定端口的进程 PID，找不到返回 None。
+
+    psutil 在 Windows 非管理员下常拿不到「别的进程」连接的 pid（返回 None），
+    此时回退 netstat -ano 解析 PID（netstat 不受该权限限制）。
+    """
+    # 1) psutil 优先（快）；pid=None 的跳过，交给 netstat 兜底
     try:
         import psutil
         for conn in psutil.net_connections(kind="inet"):
             if (conn.status == psutil.CONN_LISTEN
-                    and conn.laddr and conn.laddr.port == port):
+                    and conn.laddr and conn.laddr.port == port
+                    and conn.pid is not None):
                 return conn.pid
     except (psutil.AccessDenied, OSError):
         pass
+    # 2) netstat 兜底（Windows）
+    if sys.platform == "win32":
+        try:
+            out = subprocess.run(
+                ["netstat", "-ano", "-p", "TCP"],
+                capture_output=True, text=True, timeout=10, check=False, errors="replace",
+            ).stdout
+            for line in out.splitlines():
+                parts = line.split()
+                # 形如: TCP  0.0.0.0:50026  0.0.0.0:0  LISTENING  36432
+                if len(parts) >= 5 and parts[1].endswith(f":{port}") and parts[3] == "LISTENING":
+                    try:
+                        return int(parts[4])
+                    except ValueError:
+                        continue
+        except (OSError, subprocess.TimeoutExpired):
+            pass
     return None
 
 
