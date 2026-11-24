@@ -1,7 +1,7 @@
 """9 个新增 gRPC 工具（枚举 27~35）的 payload 构造与校验回归测试。
 
 覆盖：
-  workspace_ops.py   create_workspace / switch_workspace / get_current_workspace
+  workspace_ops.py   create_workspace / switch_workspace / get_current_workspace_path
   model_library.py   add_performance_component
   schematic_ops.py   list_ideal_components / add_ideal_component / clear_schematic / add_wire
 所有测试 mock call_grpc，不访问真实 EDI。
@@ -39,11 +39,11 @@ def test_switch_workspace_payload(monkeypatch, fake_caller, tmp_path):
     assert calls[-1][1] == {"path": str(tmp_path)}
 
 
-def test_get_current_workspace_payload(monkeypatch, fake_caller):
+def test_get_current_workspace_path_payload(monkeypatch, fake_caller):
     from servers.eda import workspace_ops as wo
     ecserver_pb2, calls, _fake = fake_caller
     monkeypatch.setattr(wo, "call_grpc", _fake)
-    wo.get_current_workspace()
+    wo.get_current_workspace_path()
     assert calls[-1][0] == ecserver_pb2.GET_CURRENT_WORKSPACE
     assert calls[-1][1] == {}
 

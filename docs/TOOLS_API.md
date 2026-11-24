@@ -799,7 +799,7 @@ from servers.eda.workspace_ops import switch_workspace
 switch_workspace(path: str, timeout_seconds: int = 60) -> dict
 ```
 
-设置下次启动程序时使用的工作区，当前工作区保持不变。仅保存最近使用的工作区路径，下次启动生效。
+立即切换当前工作区，当前正在进行的任务要及时关闭保存，避免丢失。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
@@ -808,15 +808,15 @@ switch_workspace(path: str, timeout_seconds: int = 60) -> dict
 
 ---
 
-### `get_current_workspace`
+### `get_current_workspace_path`
 
 ```python
-from servers.eda.workspace_ops import get_current_workspace
+from servers.eda.workspace_ops import get_current_workspace_path
 
-get_current_workspace(timeout_seconds: int = 60) -> dict
+get_current_workspace_path(timeout_seconds: int = 60) -> dict
 ```
 
-查询程序当前实际加载的工作区目录。只读查询，不修改状态。若调用了 `switch_workspace` 但尚未重启，仍返回当前工作区（不是下次启动的路径）。成功时 `details` 含 `workspace_path`。
+查询程序当前实际加载的工作区目录。只读查询，不修改状态。`switch_workspace` 立即生效，本工具返回的就是切换后的当前工作区。成功时 `details` 含 `workspace_path`。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|

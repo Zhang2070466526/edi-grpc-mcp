@@ -843,7 +843,7 @@ else:                                 # 两者都没有
 | `add_ideal_component` | ADD_IDEAL_COMPONENT(32) | `component_type` 非空 + `position` 校验 |
 | `clear_schematic` | CLEAR_SCHEMATIC(33) | `confirm_clear=true` 双重确认 |
 | `add_wire` | ADD_WIRE(34) | 5 字段必填 + `pin_index` 0~2147483647 |
-| `get_current_workspace` | GET_CURRENT_WORKSPACE(35) | 无业务参数 |
+| `get_current_workspace_path` | GET_CURRENT_WORKSPACE(35) | 无业务参数 |
 
 ### 4.6 图表
 
@@ -981,8 +981,8 @@ else:                                 # 两者都没有
 
 | 工具 | 动机 | 依赖（输入来自） | 被依赖（输出供） |
 |---|---|---|---|
-| `create_workspace` / `switch_workspace` | 新建/切换工作区 | — | get_current_workspace |
-| `get_current_workspace` | 确定当前工作区（唯一事实来源） | — | edi://projects Resource |
+| `create_workspace` / `switch_workspace` | 新建/切换工作区 | — | get_current_workspace_path |
+| `get_current_workspace_path` | 确定当前工作区（唯一事实来源） | — | edi://projects Resource |
 | `list_ideal_components` | 知道有哪些内置器件 | — | add_ideal_component |
 | `add_ideal_component` | 按坐标放内置器件 | list_ideal_components | — |
 | `clear_schematic` | 清空原理图重建 | 工程路径 | — |

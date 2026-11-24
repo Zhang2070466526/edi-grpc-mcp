@@ -32,7 +32,7 @@ def test_all_tools_registered():
         "get_components_static_params", "batch_query_component",
         "get_model_category_params", "search_public_models", "search_personal_models",
         "list_ideal_components", "create_workspace", "switch_workspace",
-        "get_current_workspace",
+        "get_current_workspace_path",
         "add_performance_component",
         "add_ideal_component", "clear_schematic", "add_wire",
         "design_schematic_topology",

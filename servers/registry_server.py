@@ -86,7 +86,7 @@ _INTERNAL_TOOLS: frozenset[str] = frozenset({
     "search_public_models", "search_personal_models",
     "add_performance_component", "design_schematic_topology", "design_chip",
     # 工作区 / 原理图扩展
-    "create_workspace", "switch_workspace", "get_current_workspace",
+    "create_workspace", "switch_workspace", "get_current_workspace_path",
     "list_ideal_components", "add_ideal_component", "clear_schematic", "add_wire",
     # 独立 exe 工具（由 EDI 安装目录提供）：TR/混频需提权 + ADS，网表寻路纯本地但同属 EDI 组件
     "run_tr_simulation", "run_mixer_simulation", "find_netlist_paths",
@@ -215,7 +215,7 @@ _READONLY_TOOLS: frozenset[str] = frozenset({
     "cst_list_results", "cst_solve_query", "cst_task_list", "describe_tool",
     "design_wilkinson", "fetch_artifact",
     "filter_order_bandpass", "filter_order_bandstop", "filter_order_highpass",
-    "filter_order_lowpass", "get_components_static_params", "get_current_workspace",
+    "filter_order_lowpass", "get_components_static_params", "get_current_workspace_path",
     "get_hfss_analysis_status", "get_hfss_project_info", "get_laspcem_setup",
     "get_model_category_params", "get_project_summary",
     "get_schematic_component_info", "get_service_logs", "get_service_status",
@@ -251,7 +251,7 @@ _TOOL_TITLES: dict[str, str] = {
     "replace_models_from_csv": "批量替换模型",
     "replace_port_component": "替换端口器件",
     "replace_schematic_from_file": "整图替换原理图",
-    "switch_workspace": "设置工作区",
+    "switch_workspace": "切换工作区",
 }
 
 

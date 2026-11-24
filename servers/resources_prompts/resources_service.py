@@ -17,7 +17,7 @@ from servers import mcp, __version__ as SERVER_VERSION
 from servers.eda.config import EDA_GRPC_SERVER
 from servers.eda.grpc_client import get_cached_channel, is_queue_busy
 from servers.eda.project_manage import list_epp_projects
-from servers.eda.workspace_ops import get_current_workspace
+from servers.eda.workspace_ops import get_current_workspace_path
 from servers.utils import registered_tools
 
 
@@ -83,7 +83,7 @@ def _current_workspace() -> str:
     不再本地猜测 ~/EDI-Workspace/projects，也不读 projects_dir 配置：
     接口返回什么目录，就用什么目录当工作区。
     """
-    result = get_current_workspace()
+    result = get_current_workspace_path()
     if not result.get("success"):
         return ""
     return (result.get("details") or {}).get("workspace_path", "")

@@ -52,12 +52,9 @@ def create_workspace(path: str, timeout_seconds: int = 60) -> dict[str, Any]:
 
 @mcp.tool()
 def switch_workspace(path: str, timeout_seconds: int = 60) -> dict[str, Any]:
-    """⚠️ 设置下次启动时的工作区（不是立即切换，当前保持不变）。
+    """⚠️ 立即切换当前工作区，当前正在进行的任务要及时关闭保存，避免丢失。
 
     用法："把工作区切换到 D:/EDI-Workspace-New"
-
-    仅保存最近使用的工作区路径，下次启动程序时生效，不关闭工程、不自动重启、
-    不弹出窗口。目标必须是已存在且兼容的工作区。
 
     Args:
         path: 工作区目录绝对路径（非空字符串）。
@@ -70,13 +67,12 @@ def switch_workspace(path: str, timeout_seconds: int = 60) -> dict[str, Any]:
 
 
 @mcp.tool()
-def get_current_workspace(timeout_seconds: int = 60) -> dict[str, Any]:
+def get_current_workspace_path(timeout_seconds: int = 60) -> dict[str, Any]:
     """查询程序当前实际加载的工作区目录。
 
     用法："当前 EDI 工作区是哪个目录"、"获取当前工作区路径"
 
-    只读查询，不修改任何状态。如果此前调用了 switch_workspace 但尚未重启程序，
-    本工具仍返回当前工作区，而不是下次启动将使用的路径。
+    只读查询，不修改任何状态。switch_workspace 立即生效，本工具返回的就是切换后的当前工作区。
 
     Args:
         timeout_seconds: 最长等待秒数，默认 60。

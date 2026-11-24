@@ -58,7 +58,7 @@
 - `filter_order_lowpass` — 低通阶数估算：通带到 f_p、阻带在 f_p 之上，返回阶数与传输零点。高通用 filter_order_highpass、带阻用 filter_order_bandstop。
 - `find_netlist_paths` — 寻路（仅限 TR 收发链路，不支持混频链路）：给定网表 + 原理图 + 有向端口对，枚举每个端口对的全部信号路径，并给出每条路径上每个开关的目标 Bits。
 - `get_components_static_params` — 查询器件的固有参数（重量、尺寸、封装、所属厂商、成本等）。
-- `get_current_workspace` — 查询程序当前实际加载的工作区目录。
+- `get_current_workspace_path` — 查询程序当前实际加载的工作区目录。
 - `get_hfss_analysis_status` — 查询 HFSS 异步仿真状态（默认只读本地，不访问 AEDT）。
 - `get_hfss_project_info` — 查询当前 AEDT 打开的项目和活动设计（纯查询，不启动 AEDT）。
 - `get_laspcem_setup` — 读取 .sem 工程当前配置的求解设置参数（cem.EditSolution 那套键，约 64 个）。
@@ -104,7 +104,7 @@
 - `simulate_netlist` — 仿真指定 netlist.log 文件，不需打开 .epp 工程。返回 RAW 结果+日志。
 - `start_hfss_analysis_async` — 异步启动 HFSS Setup 仿真，立即返回 task_id。
 - `start_simulation_async` — 启动异步仿真，立即返回 task_id 供 get_simulation_async_status 查进度；仿真日志在结果查询的 ads_output 字段。
-- `switch_workspace` — ⚠️ 设置下次启动时的工作区（不是立即切换，当前保持不变）。
+- `switch_workspace` — ⚠️ 立即切换当前工作区，当前正在进行的任务要及时关闭保存，避免丢失。
 - `turbocharts_convert` — ADS RAW 转曲线图+CSV（SP/HB/XDB）；linename 为「单位_线段名」，多条用 & 分隔。返回含引擎原始输出（stderr/command_runs/engine_report）与 log_path（原文已落盘）；**回复时必须把引擎原文与 warnings 原样转述给用户，不得只回一句 message**。
 - `update_schematic_components_transform` — 批量设置原理图器件的位置、旋转角度和镜像状态（对齐/挪位/批量旋转镜像；坐标为场景值，按 12.5 网格吸附）。
 - `update_simulation_component` — 按实例名更新器件参数。
@@ -204,7 +204,7 @@
 - `filter_order_lowpass` — 低通阶数估算：通带到 f_p、阻带在 f_p 之上，返回阶数与传输零点。高通用 filter_order_highpass、带阻用 filter_order_bandstop。
 - `find_netlist_paths` — 寻路（仅限 TR 收发链路，不支持混频链路）：给定网表 + 原理图 + 有向端口对，枚举每个端口对的全部信号路径，并给出每条路径上每个开关的目标 Bits。
 - `get_components_static_params` — 查询器件的固有参数（重量、尺寸、封装、所属厂商、成本等）。
-- `get_current_workspace` — 查询程序当前实际加载的工作区目录。
+- `get_current_workspace_path` — 查询程序当前实际加载的工作区目录。
 - `get_model_category_params` — 获取模型管理模块的全部子类及对应参数列表。
 - `get_schematic_component_info` — 通过 gRPC 按实例名查询单个器件的完整信息。
 - `get_service_logs` — 读取 EDI 服务端日志，检查运行异常（含 ERROR/WARN/异常堆栈分析）。
@@ -229,7 +229,7 @@
 - `simulate_anti_burnout` — 对工程原理图中具备抗烧毁数据的器件执行输入功率仿真和抗烧毁风险评估。
 - `simulate_netlist` — 仿真指定 netlist.log 文件，不需打开 .epp 工程。返回 RAW 结果+日志。
 - `start_simulation_async` — 启动异步仿真，立即返回 task_id 供 get_simulation_async_status 查进度；仿真日志在结果查询的 ads_output 字段。
-- `switch_workspace` — ⚠️ 设置下次启动时的工作区（不是立即切换，当前保持不变）。
+- `switch_workspace` — ⚠️ 立即切换当前工作区，当前正在进行的任务要及时关闭保存，避免丢失。
 - `turbocharts_convert` — ADS RAW 转曲线图+CSV（SP/HB/XDB）；linename 为「单位_线段名」，多条用 & 分隔。返回含引擎原始输出（stderr/command_runs/engine_report）与 log_path（原文已落盘）；**回复时必须把引擎原文与 warnings 原样转述给用户，不得只回一句 message**。
 - `update_schematic_components_transform` — 批量设置原理图器件的位置、旋转角度和镜像状态（对齐/挪位/批量旋转镜像；坐标为场景值，按 12.5 网格吸附）。
 - `update_simulation_component` — 按实例名更新器件参数。
@@ -288,7 +288,7 @@
 - `filter_order_lowpass` — 低通阶数估算：通带到 f_p、阻带在 f_p 之上，返回阶数与传输零点。高通用 filter_order_highpass、带阻用 filter_order_bandstop。
 - `find_netlist_paths` — 寻路（仅限 TR 收发链路，不支持混频链路）：给定网表 + 原理图 + 有向端口对，枚举每个端口对的全部信号路径，并给出每条路径上每个开关的目标 Bits。
 - `get_components_static_params` — 查询器件的固有参数（重量、尺寸、封装、所属厂商、成本等）。
-- `get_current_workspace` — 查询程序当前实际加载的工作区目录。
+- `get_current_workspace_path` — 查询程序当前实际加载的工作区目录。
 - `get_hfss_analysis_status` — 查询 HFSS 异步仿真状态（默认只读本地，不访问 AEDT）。
 - `get_hfss_project_info` — 查询当前 AEDT 打开的项目和活动设计（纯查询，不启动 AEDT）。
 - `get_model_category_params` — 获取模型管理模块的全部子类及对应参数列表。
@@ -325,7 +325,7 @@
 - `simulate_netlist` — 仿真指定 netlist.log 文件，不需打开 .epp 工程。返回 RAW 结果+日志。
 - `start_hfss_analysis_async` — 异步启动 HFSS Setup 仿真，立即返回 task_id。
 - `start_simulation_async` — 启动异步仿真，立即返回 task_id 供 get_simulation_async_status 查进度；仿真日志在结果查询的 ads_output 字段。
-- `switch_workspace` — ⚠️ 设置下次启动时的工作区（不是立即切换，当前保持不变）。
+- `switch_workspace` — ⚠️ 立即切换当前工作区，当前正在进行的任务要及时关闭保存，避免丢失。
 - `turbocharts_convert` — ADS RAW 转曲线图+CSV（SP/HB/XDB）；linename 为「单位_线段名」，多条用 & 分隔。返回含引擎原始输出（stderr/command_runs/engine_report）与 log_path（原文已落盘）；**回复时必须把引擎原文与 warnings 原样转述给用户，不得只回一句 message**。
 - `update_schematic_components_transform` — 批量设置原理图器件的位置、旋转角度和镜像状态（对齐/挪位/批量旋转镜像；坐标为场景值，按 12.5 网格吸附）。
 - `update_simulation_component` — 按实例名更新器件参数。
@@ -386,7 +386,7 @@
 - `filter_order_lowpass` — 低通阶数估算：通带到 f_p、阻带在 f_p 之上，返回阶数与传输零点。高通用 filter_order_highpass、带阻用 filter_order_bandstop。
 - `find_netlist_paths` — 寻路（仅限 TR 收发链路，不支持混频链路）：给定网表 + 原理图 + 有向端口对，枚举每个端口对的全部信号路径，并给出每条路径上每个开关的目标 Bits。
 - `get_components_static_params` — 查询器件的固有参数（重量、尺寸、封装、所属厂商、成本等）。
-- `get_current_workspace` — 查询程序当前实际加载的工作区目录。
+- `get_current_workspace_path` — 查询程序当前实际加载的工作区目录。
 - `get_hfss_analysis_status` — 查询 HFSS 异步仿真状态（默认只读本地，不访问 AEDT）。
 - `get_hfss_project_info` — 查询当前 AEDT 打开的项目和活动设计（纯查询，不启动 AEDT）。
 - `get_laspcem_setup` — 读取 .sem 工程当前配置的求解设置参数（cem.EditSolution 那套键，约 64 个）。
@@ -432,7 +432,7 @@
 - `simulate_netlist` — 仿真指定 netlist.log 文件，不需打开 .epp 工程。返回 RAW 结果+日志。
 - `start_hfss_analysis_async` — 异步启动 HFSS Setup 仿真，立即返回 task_id。
 - `start_simulation_async` — 启动异步仿真，立即返回 task_id 供 get_simulation_async_status 查进度；仿真日志在结果查询的 ads_output 字段。
-- `switch_workspace` — ⚠️ 设置下次启动时的工作区（不是立即切换，当前保持不变）。
+- `switch_workspace` — ⚠️ 立即切换当前工作区，当前正在进行的任务要及时关闭保存，避免丢失。
 - `turbocharts_convert` — ADS RAW 转曲线图+CSV（SP/HB/XDB）；linename 为「单位_线段名」，多条用 & 分隔。返回含引擎原始输出（stderr/command_runs/engine_report）与 log_path（原文已落盘）；**回复时必须把引擎原文与 warnings 原样转述给用户，不得只回一句 message**。
 - `update_schematic_components_transform` — 批量设置原理图器件的位置、旋转角度和镜像状态（对齐/挪位/批量旋转镜像；坐标为场景值，按 12.5 网格吸附）。
 - `update_simulation_component` — 按实例名更新器件参数。

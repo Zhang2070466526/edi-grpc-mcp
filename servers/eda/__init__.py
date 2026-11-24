@@ -67,8 +67,8 @@ edi_launcher.py — 启动/诊断（3 工具）
 
 workspace_ops.py — 工作区（3 工具）
     create_workspace                       创建工作区（不自动切换）
-    switch_workspace                       设置下次启动使用的工作区
-    get_current_workspace                  查询当前实际加载的工作区目录
+    switch_workspace                       立即切换当前工作区
+    get_current_workspace_path                  查询当前实际加载的工作区目录
 
 schematic_ops.py — 原理图扩展操作（4 工具）
     list_ideal_components     列出内置器件类型及说明
@@ -152,7 +152,7 @@ from servers.eda.edi_launcher import (  # noqa: F401
 from servers.eda.workspace_ops import (  # noqa: F401
     create_workspace,
     switch_workspace,
-    get_current_workspace,
+    get_current_workspace_path,
 )
 
 # -- 原理图扩展操作 --
