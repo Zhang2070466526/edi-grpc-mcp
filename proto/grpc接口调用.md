@@ -47,6 +47,7 @@ enum EventType {
   MODEL_REPLACE = 6;
   CAPTURE_SCHEMATIC = 7;
   CLOSE_PROJECT = 8;
+  CALL_SIMULATION_CONTROLLER = 9;
   SIMULATE_NETLIST = 10;
   CREATE_SIMULATION_COMPONENT = 11;
   DELETE_SIMULATION_COMPONENT = 12;
@@ -79,13 +80,33 @@ enum EventType {
   SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY = 39;
   EXPORT_SCHEMATIC_COMPONENTS_TO_CSV = 40;
   BATCH_QUERY_COMPONENT = 41;
+  SEARCH_SOFT_IP_CATEGORIES = 42;
   SEARCH_PUBLIC_SOFT_IP_MODELS = 43;
   SEARCH_PERSONAL_SOFT_IP_MODELS = 44;
   DOWNLOAD_SOFT_IP_MODEL = 45;
   UPLOAD_AGENT = 46;
   DESIGN_SCHEMATIC_TOPOLOGY = 47;
   DESIGN_SOFT_IP = 48;
+  GET_SKILL_SYNC_CAPABILITIES = 49;
+  UPLOAD_SKILL_SYNC_OBJECTS = 50;
+  DOWNLOAD_SKILL_SYNC_OBJECT = 51;
+  LIST_SKILL_SYNC_REFS = 52;
+  UPDATE_SKILL_SYNC_REF = 53;
+  AI_ASSISTANT_PERMISSION_CHECK = 54;
+  GET_CURRENT_IDENTITY = 55;
+  LIST_SKILL_SYNC_SKILLS = 56;
+  GET_SKILL_SYNC_SKILL = 57;
+  CHECK_SKILL_SYNC_SKILLS = 58;
+  LIST_PUBLIC_SKILL_SYNC_SKILLS = 59;
+  SEARCH_PUBLIC_SKILL_SYNC_SKILLS = 60;
+  GET_PUBLIC_SKILL_SYNC_SKILL = 61;
+  SEARCH_KNOWLEDGE = 62;
+  GET_KNOWLEDGE_DETAIL = 63;
   UPDATE_SCHEMATIC_COMPONENTS_TRANSFORM = 64;
+  RAG_SEARCH_KNOWLEDGE = 65;
+  SMART_SEARCH_KNOWLEDGE = 66;
+  LIST_KNOWLEDGE_INDEX_CATEGORIES = 67;
+  GET_CURRENT_WORKSPACE_SUMMARY = 68;
 }
 ```
 
@@ -97,6 +118,7 @@ enum EventType {
 - `MODEL_REPLACE`：按 CSV 执行模型替换。
 - `CAPTURE_SCHEMATIC`：截图保存原理图图片。
 - `CLOSE_PROJECT`：关闭工程，可选择是否保存工程。
+- `CALL_SIMULATION_CONTROLLER`：直接调用 ADS 仿真器。
 - `SIMULATE_NETLIST`：仿真指定的 `netlist.log`，返回 RAW 结果和仿真器输出日志。
 - `CREATE_SIMULATION_COMPONENT`：按 `component_type` 通过器件工厂新增器件，使用工厂默认参数。
 - `DELETE_SIMULATION_COMPONENT`：按器件实例名删除原理图上的通用器件。
@@ -124,18 +146,38 @@ enum EventType {
 - `CLEAR_SCHEMATIC`：清空指定工程原理图中的全部器件和网段，并保存工程。
 - `ADD_WIRE`：连接指定工程内两个器件的指定引脚，按需创建或合并网段并保存。
 - `GET_CURRENT_WORKSPACE`：查询程序当前实际加载的工作区目录。
+- `GET_CURRENT_WORKSPACE_SUMMARY`：获取当前工作区的工程 epp 文件列表及本地性能模型概要。
 - `USE_SCHEMATIC_FROM_LIBRARY_CREATE_PROJECT`：从在线原理图库下载内容，在当前工作区创建并打开新工程。
 - `USE_SCHEMATIC_FROM_LIBRARY_IMPORT`：从在线原理图库下载内容，替换指定工程的当前原理图。
 - `SEARCH_SCHEMATIC_FROM_PUBLIC_LIBRARY`：按拓扑描述查询公共原理图库。
 - `SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY`：按拓扑描述查询当前用户的个人原理图库。
 - `EXPORT_SCHEMATIC_COMPONENTS_TO_CSV`：将指定工程原理图中的有效器件信息导出为 CSV。
 - `BATCH_QUERY_COMPONENT`：按器件类型列表批量查询模型信息，原样返回模型服务响应。
+- `SEARCH_SOFT_IP_CATEGORIES`：查询全部软 IP 分类，自动合并分页结果。
 - `SEARCH_PUBLIC_SOFT_IP_MODELS`：查询全部公共软 IP，自动合并分页结果。
 - `SEARCH_PERSONAL_SOFT_IP_MODELS`：查询当前用户的全部个人软 IP，自动合并分页结果。
 - `DOWNLOAD_SOFT_IP_MODEL`：按软 IP UUID 和频率下载 AEDT 模型文件到指定路径。
 - `UPLOAD_AGENT`：将服务端本地的 Agent 记录包上传到 Agent 记录服务。
 - `DESIGN_SCHEMATIC_TOPOLOGY`：智能设计统一入口。按自然语言需求在个人库、公共库中语义检索拓扑，自动生成工程名并在当前工作区创建、打开新工程。
 - `DESIGN_SOFT_IP`：根据设计描述获取公共软 IP 设计模型，补齐可选设计参数后下载。
+- `GET_SKILL_SYNC_CAPABILITIES`：查询个人 skill 同步协议版本和对象大小上限。
+- `UPLOAD_SKILL_SYNC_OBJECTS`：读取服务端本地对象文件，批量上传 blob/tree/commit。
+- `DOWNLOAD_SKILL_SYNC_OBJECT`：按 SHA-256 地址下载对象原始字节到服务端本地路径。
+- `LIST_SKILL_SYNC_REFS`：查询当前用户的 skill 版本引用，支持前缀过滤。
+- `UPDATE_SKILL_SYNC_REF`：使用 CAS 语义创建或更新 skill 版本引用。
+- `AI_ASSISTANT_PERMISSION_CHECK`：将用户输入内容转发给 AI 权限校验服务，判断智能体是否支持该内容。
+- `GET_CURRENT_IDENTITY`：获取当前登录用户的身份标识（`account_id`）。
+- `LIST_SKILL_SYNC_SKILLS`：查询当前用户的 skill 列表，原样转发 REST JSON 响应。
+- `GET_SKILL_SYNC_SKILL`：按 UUID 查询单个 skill，原样转发 REST JSON 响应。
+- `CHECK_SKILL_SYNC_SKILLS`：转发 skill 检查请求并原样返回 REST JSON 响应。
+- `LIST_PUBLIC_SKILL_SYNC_SKILLS`：查询公开 skill 列表，支持公开范围和状态筛选。
+- `SEARCH_PUBLIC_SKILL_SYNC_SKILLS`：搜索公开 skill，支持分页并原样转发搜索条件。
+- `GET_PUBLIC_SKILL_SYNC_SKILL`：按 UUID 查询单个公开 skill 详情。
+- `SEARCH_KNOWLEDGE`：按条件搜索当前用户的知识，原样返回 REST JSON 响应。
+- `GET_KNOWLEDGE_DETAIL`：按知识 UUID 查询本人知识详情，原样返回 REST JSON 响应。
+- `RAG_SEARCH_KNOWLEDGE`：按自然语言进行知识 RAG 相关度检索，原样返回 REST JSON 响应。
+- `SMART_SEARCH_KNOWLEDGE`：按自然语言进行知识智能检索并生成带引用的回答，原样返回 REST JSON 响应。
+- `LIST_KNOWLEDGE_INDEX_CATEGORIES`：查询知识索引分类树，原样转发 HTTP 响应正文。
 ## 4. payload_json 示例
 
 ### OPEN_PROJECT
@@ -205,6 +247,17 @@ enum EventType {
 ```
 
 `need_save` 表示关闭工程前是否保存。
+
+### CALL_SIMULATION_CONTROLLER
+
+```json
+{
+  "netlist_path": "C:/path/to/netlist.log",
+  "ads_path": "C:/Keysight/ADS"
+}
+```
+
+
 
 ### CREATE_SIMULATION_COMPONENT
 
@@ -362,34 +415,6 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 }
 ```
 
-- `sub_type` 与 `filters` **不是必填项**（2026-11-13 实测）：payload 只给 `project_path` + `components` 即可成功；`sub_type` × `filters` 的 24 种组合（缺失 / 空串 / `null` / 数组 / 字符串）全部 `SUCCEEDED`，二者取值不参与业务逻辑，本操作不需要它们。
-- 历史坑（同日实测，勿重复踩）：EDI 某个实例（2026-11-13 15:09 启动的那次）对同一 payload 会 `REJECTED` 报 `sub_type must be a non-empty string`，补上顶层 `sub_type` 后又报 `filters must be an array`；**EDI 进程重启后该报错消失**，同一请求直接成功。遇到这类报错**先怀疑 EDI 进程/版本状态**，不要按字面去 `components` 每项里补 `sub_type`（实测项内补、改名 `subType`/`subtype`、改整数类型均无效）。
-
-旧 EDI 实例（15:09 那次，未带 `sub_type`）的实际返回——该报错在 EDI 重启后已不再出现，保留供排查对照（`project_path` 已脱敏为占位；payload 只含 `project_path` + 合法 `components`）：
-
-```json
-{
-  "success": false,
-  "completed": true,
-  "outcome_known": true,
-  "task_success": false,
-  "hint": "rejected",
-  "client_uuid": "5f1d6cb3-224e-4d6d-958d-e6bf1926ea5f",
-  "task_id": "e839b3ca-0916-4f4d-8d35-bb970d771ce0",
-  "task_type": "UPDATE_SCHEMATIC_COMPONENTS_TRANSFORM",
-  "status": "REJECTED",
-  "message": "sub_type must be a non-empty string",
-  "project_path": "C:/path/to/project.epp",
-  "result_path": "",
-  "ads_output": "",
-  "log_complete": true,
-  "details": {}
-}
-```
-
-- `status: "REJECTED"` 且 `details: {}`：请求在 `PerformAction` 阶段即被打回，未进入业务逻辑，**工程不会被修改**；
-- 当时补上 `sub_type` 后，下一条错误才是 `filters must be an array`；两者齐备才继续校验器件；
-- 若再次出现 `hint=rejected` 且 `message` 提到 `sub_type`/`filters`：先重启 EDI 再重试同一请求（本次即由重启消除），不要改器件字段、也不要在 `components` 里找。
 - `project_path` 必须指向已存在的 `.epp` 文件；服务端复用或打开对应工程，操作工程唯一原理图。
 - `components` 必须为非空数组，可以传入全部器件，也可以只更新其中一部分；未列出的器件不主动修改。
 - 每项至少提供 `uuid` 或 `instance_name`。这里的 `uuid` 是原理图器件实例 UUID，不是模型库的 `component_uuid`；同时提供两者时必须指向同一器件。
@@ -461,7 +486,7 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 
 - 服务端复用已打开的工程；工程未打开时自动打开，并读取工程唯一原理图。
 - 返回原理图上的真实器件，不包含 `InsertText` 文字图元。
-- 每个器件返回 `instance_name`、`component_type`、`general_type`、`sub_type`、`active_state`、`state` 和完整的 `parameters`。
+- `components` 中的每一项与 `GET_SCHEMATIC_COMPONENT_INFO` 的 `component` 结构一致，包含器件身份、状态、完整参数、位置、旋转、镜像及引脚信息。
 - `active_state` 的数值 `0`、`1`、`2` 分别对应 `state` 的 `NORMAL`、`DISABLED`、`SHORTED`；其他数值对应 `UNKNOWN`。
 - `parameters` 保持器件内部 `paramsInfo_` 的完整分组结构，不裁剪字段。
 
@@ -474,8 +499,19 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 }
 ```
 
-- `instance_name` 按原理图器件实例名精确匹配。
-- 返回的 `component` 对象包含列表接口已有的 `instance_name`、`component_type`、`general_type`、`sub_type`、`active_state`、`state` 和完整 `parameters`，并额外返回以下几何信息；列表接口目前没有这些新增字段。
+- `instance_name` 支持单个非空字符串或非空字符串数组，去除首尾空白后按原理图器件实例名精确匹配。
+- 传字符串时保持原有返回格式，成功时返回 `component` 对象。传数组时，成功时返回 `component_count` 和 `components` 数组，结果与请求顺序一致，即使只传一项也返回数组。如果某个实例不存在，本次任务失败，`message` 指明第一个未找到的实例，不返回部分结果。
+
+批量查询请求的 `payload_json` 解码后例如：
+
+```json
+{
+  "project_path": "C:/path/to/project.epp",
+  "instance_name": ["R1", "C1"]
+}
+```
+
+- 单查的 `component` 和列表的 `components[]` 均包含 `instance_name`、`component_type`、`general_type`、`sub_type`、`active_state`、`state`、完整的 `parameters`，以及以下字段。
 
 | 字段 | 含义 |
 | --- | --- |
@@ -658,6 +694,17 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 - 下游请求为 `POST /api/v1/models/manage/batch_query_component/`，请求体字段仍为 `originalid_list`。
 - 下游返回的完整 JSON 对象原样写入最终事件的 `payload_json`，不执行搜索接口的裁剪规则。
 
+### SEARCH_SOFT_IP_CATEGORIES
+
+```json
+{}
+```
+
+- 该任务不接收业务参数，`payload_json` 必须是空 JSON 对象。
+- 服务端以每页 15 条请求 `GET /api/v1/soft-ip-manager/soft-ip-categories/`，并根据 `data.total_pages` 查询全部分页。
+- 成功时合并各页的 `data.results`；gRPC 会删除每个分类及其 `params` 子项中的 `created_time`、`updated_time`，其他字段保持不变。
+- 最终 payload 只返回过滤后的 `results`，以及根据该数组长度计算的 `count`。
+- 任意一页发生网络、HTTP、JSON 解析或业务错误时，任务整体失败，不返回已查询到的部分软 IP 分类；具体原因位于事件 `message`。
 
 ### SEARCH_PUBLIC_SOFT_IP_MODELS
 
@@ -751,6 +798,207 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 - 成功 payload 返回 `status=DESIGN_READY`、`success=true`、最终绝对路径 `save_path`、实际使用的 `freq`，以及存在时的 `bandwidth`；由插值范围补齐参数时还会返对应单位字段。不返回模型名称和模型 ID，对外 `message` 为“软 IP 设计准备完成”。
 - 参数越界不再返回 `DESIGN_UNSUPPORTED`；下载成功时，payload 中的 `freq` 和 `bandwidth` 为实际使用的值，越界参数会显示为对应范围中间值。
 - 智能设计的 `results` 为空时，返回 `status=DESIGN_UNSUPPORTED`、`success=false`，`message` 为“当前暂不具备该设计需求的软 IP 设计能力”。插值范围接口返回错误时，当前实现也统一返回该状态和提示；其他错误返回 `status=DESIGN_PREPARE_FAILED`、`success=false`，`message` 为“软 IP 设计准备失败”。
+
+### GET_SKILL_SYNC_CAPABILITIES
+
+```json
+{}
+```
+
+- 该 REST 请求无请求体，gRPC 层不使用 `payload_json` 中的业务字段。
+- 转发 `GET /api/v1/sync/capabilities`，返回 `hsp_version` 和 `max_object_bytes`。
+- 该 REST 接口可公开访问；当前客户端存在访问令牌时仍会携带 Bearer Token。
+
+### UPLOAD_SKILL_SYNC_OBJECTS
+
+```json
+{
+  "objects": [
+    {
+      "hash": "sha256:<64位小写十六进制>",
+      "type": "blob",
+      "file_path": "D:/skill-sync/objects/skill-md.bin"
+    },
+    {
+      "hash": "sha256:<64位小写十六进制>",
+      "type": "tree",
+      "file_path": "D:/skill-sync/objects/tree.json"
+    }
+  ]
+}
+```
+
+- gRPC 层从 `objects` 数组取出 `hash`、`type`、`file_path`，不校验对象地址、类型、数量或对象结构；这些规则由下游 skill-sync REST 服务决定。
+- `file_path` 是 gRPC 服务端本地文件路径。本地函数读取其原始字节，以 `hash` 作为 multipart part 名、`type` 作为 filename，转发 `POST /api/v1/sync/objects`。
+- 成功 payload 原样返回 `stored` 和 `already_present`。任一本地文件不存在或无法读取时，不发起上传。
+
+### DOWNLOAD_SKILL_SYNC_OBJECT
+
+```json
+{
+  "hash": "sha256:<64位小写十六进制>",
+  "save_path": "D:/skill-sync/download/tree.json"
+}
+```
+
+- 转发 `GET /api/v1/sync/objects/<hash>`，保存二进制原文，不进行 Base64 或 JSON 重新序列化。
+- `save_path` 是完整本地文件路径；父目录必须已存在。
+- 成功 payload 返回 `hash`、`object_type`、`save_path`、`size`；`object_type` 直接来自 REST 响应头 `X-HSP-Object-Type`，gRPC 层不限定其取值。
+
+### LIST_SKILL_SYNC_REFS
+
+```json
+{
+  "prefix": "refs/user/<owner>/HEAD"
+}
+```
+
+- `prefix` 可选；未提供时查询当前用户全部引用。
+- 转发 `GET /api/v1/sync/refs?prefix=<prefix>`，成功 payload 原样返回 `refs` 数组。
+
+### UPDATE_SKILL_SYNC_REF
+
+```json
+{
+  "name": "refs/user/<owner>/HEAD",
+  "from": null,
+  "to": "sha256:<64位小写十六进制>"
+}
+```
+
+- gRPC 层仅用 `name` 组装 URL，将 `from`、`to` 按 JSON 原值写入 REST 请求体，不校验引用名、对象地址或 CAS 业务规则。
+- 转发 `POST /api/v1/sync/refs/<name>`。成功 payload 原样返回 REST JSON，通常包含 `name` 和 `hash`。
+- REST 返回 CAS 冲突时任务失败，payload 原样保留 `actual`。
+
+上述 gRPC 任务只负责本地文件与 HTTP 请求之间的协议转换，不定义 skill-sync 业务规范。请求禁止自动跟随 HTTP 重定向，单次 REST 请求超时为 30 秒，并使用当前登录用户的 Bearer Token（能力查询可不带令牌）。REST 非 2xx 响应会使 gRPC 最终事件返回 `RESULT_STATUS_FAILED`；REST JSON 响应尽量保留在 payload 中。
+
+### LIST_SKILL_SYNC_SKILLS
+
+```json
+{}
+```
+
+- 转发 `GET /api/v1/sync/skills`，不向 REST 请求体添加字段。
+- REST 返回的完整 JSON 对象原样写入最终事件的 `payload_json`。
+
+### GET_SKILL_SYNC_SKILL
+
+```json
+{
+  "uuid": "<skill-uuid>"
+}
+```
+
+- gRPC 层仅取出 `uuid` 用于组装 `GET /api/v1/sync/skills/<uuid>`，不校验 UUID 格式。
+- REST 返回的完整 JSON 对象原样写入最终事件的 `payload_json`。
+
+### CHECK_SKILL_SYNC_SKILLS
+
+```json
+{}
+```
+
+- gRPC 层将整个 `payload_json` 原样作为 JSON 请求体，转发到 `POST /api/v1/sync/skills/check`。
+- gRPC 层不定义、校验或改写检查请求的业务字段。
+- REST 返回的完整 JSON 对象原样写入最终事件的 `payload_json`。
+
+上述三个任务的 gRPC 最终事件固定为 `RESULT_STATUS_SUCCESS`，不根据 HTTP 状态码或 REST 响应中的业务码判定失败。REST 没有返回可解析 JSON 时，payload 中返回调用或解析错误信息，任务状态仍为成功。
+
+### SEARCH_KNOWLEDGE
+
+```json
+{
+  "keyword": "芯片选型",
+  "tag": "封装",
+  "status": ["draft", "published"],
+  "group_id": "5f4e3d2c-1b0a-4987-8654-3210fedcba98",
+  "ordering": "-updated_at",
+  "page": 1,
+  "page_size": 10
+}
+```
+
+- 转发到 `POST /api/v1/knowledge/public/knowledges/search`。
+- `page`、`page_size` 存在时作为 URL 查询参数转发；未提供时由下游使用默认值。
+- 除 `page`、`page_size` 外的其余 `payload_json` 字段原样作为 HTTP JSON 请求体，gRPC 层不校验业务字段。
+
+### GET_KNOWLEDGE_DETAIL
+
+```json
+{
+  "knowledge_uuid": "8a1b2c3d-4e5f-4678-9abc-def012345678"
+}
+```
+
+- gRPC 层取出 `knowledge_uuid` 并转发到 `GET /api/v1/knowledge/public/knowledges/<knowledge_uuid>`。
+- `knowledge_uuid` 在拼接 URL 前进行百分号编码，gRPC 层不校验 UUID 格式。
+
+### RAG_SEARCH_KNOWLEDGE / SMART_SEARCH_KNOWLEDGE
+
+```json
+{
+  "query": "总结一下功分器设计要点",
+  "scope": "all",
+  "group_id": null,
+  "top_k": 5,
+  "threshold": 0.6,
+  "include_content": false
+}
+```
+
+- `RAG_SEARCH_KNOWLEDGE` 转发到 `POST /api/v1/knowledge/knowledges/rag-search`。
+- `SMART_SEARCH_KNOWLEDGE` 转发到 `POST /api/v1/knowledge/knowledges/smart-search`。
+- gRPC 层不校验、补充、删除或改写请求体字段，整个 `payload_json` 原样作为 HTTP JSON 请求体。
+- 两个接口的请求字段相同：`query` 必填；`scope`、`group_id`、`top_k`、`threshold`、`include_content` 可选，具体规则由下游 REST 服务处理。
+
+上述四个知识库任务均使用当前登录用户的 Bearer Token。HTTP 返回的完整 JSON 对象原样写入最终事件的 `payload_json`；gRPC 最终事件固定为 `RESULT_STATUS_SUCCESS`，不根据 HTTP 状态码或响应中的 `code` 判定失败。HTTP 未返回可解析 JSON 时，payload 返回调用或解析错误信息，任务状态仍为成功。
+
+### LIST_KNOWLEDGE_INDEX_CATEGORIES
+
+转发至 `GET /api/v1/knowledge/index-categories`，使用当前登录用户的 Bearer Token，不发送 HTTP 请求体。
+
+```json
+{
+  "category": "device"
+}
+```
+
+`category` 可选，传入时作为 URL 查询参数转发；传 `{}` 时查询全部分类。HTTP 接口支持 `device`、`component`、`antenna`，gRPC 不校验取值。
+
+已受理任务的最终事件固定为 `RESULT_STATUS_SUCCESS`。`payload_json` 直接返回 HTTP 响应正文，包括下游的错误响应；没有收到响应正文时该字段为空，调用错误见事件的 `message`。
+
+### AI_ASSISTANT_PERMISSION_CHECK
+
+```json
+{
+  "content": "下载所有模型"
+}
+```
+
+- gRPC 层将整个 `payload_json` 原样作为 JSON 请求体，转发到 `POST /api/v1/ai_assistant/permission-check/`。
+- `content` 是需要校验的用户输入。gRPC 层不定义其内容规范，不根据 `allowed`、`category` 或 `confidence` 再次判定，仅负责转发。
+- HTTP 接口返回的完整 JSON 对象原样写入最终事件的 `payload_json`，包括 `code`、`message` 和 `data`。`data` 通常包含 `category`、`label`、`confidence`、`probabilities`、`allowed` 和 `safe_threshold`。
+- gRPC 最终事件固定返回 `RESULT_STATUS_SUCCESS`，不根据 HTTP 状态码、响应中的 `code` 或 `allowed` 字段将任务判定为失败。
+
+成功响应示例：
+
+```json
+{
+  "code": 200,
+  "message": "AI 权限校验完成",
+  "data": {
+    "category": "A",
+    "label": "有风险",
+    "confidence": 0.9951690630182722,
+    "probabilities": {
+      "A": 0.9951690630182722,
+      "B": 0.004830936981727684
+    },
+    "allowed": false,
+    "safe_threshold": 0.7
+  }
+}
+```
 
 ### LIST_IDEAL_COMPONENTS
 
@@ -848,6 +1096,29 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 - 如果此前调用了 `SWITCH_WORKSPACE` 但尚未重启，本接口仍返回当前工作区，而不是下次启动将使用的路径。
 - 成功事件的 `payload_json` 包含 `workspace_path`。
 
+### GET_CURRENT_WORKSPACE_SUMMARY
+
+```json
+{}
+```
+
+- `payload_json` 必须是空 JSON 对象，不需要工程路径或其他业务参数。
+- 返回当前工作区的 epp 文件列表和本地模型库概要，不修改任何状态。
+- 成功事件的 `payload_json` 包含：
+  - `workspace_path`：当前工作区目录。
+  - `epp_files`：工作区内全部工程的 `.epp` 文件路径数组。
+  - `models`：以子类型名称为键的对象，值为该类型下的模型数组，每项包含 `uuid` 和 `name`。仅返回能在 `config.ini` 的 `sub_types` 中找到对应名称的模型。
+
+### GET_CURRENT_IDENTITY
+
+```json
+{}
+```
+
+- `payload_json` 必须是空 JSON 对象，不需要工程路径或其他业务参数。
+- 返回当前登录用户的身份标识，不发起网络请求、不修改任何状态。
+- 成功事件的 `payload_json` 包含 `account_id`。
+
 ### ADD_WIRE
 
 ```json
@@ -944,10 +1215,10 @@ AC, BudNF, BudNFdeg, V_1Tone, Options, MeasEqn, Mixer
 ```
 
 - `path` 必须为非空字符串，指向服务端机器上的工作区目录，不是 `.epp` 文件；建议使用绝对路径。
-- 无需 `project_path`，不要求打开工程。直接调用 `GrpcApiManager::createWorkspace` / `switchWorkspace`。
+- 无需 `project_path`，不要求打开工程。创建调用 `GrpcApiManager::createWorkspace`；切换调用 `ControlPanel::switchWorkspaceFromExternalCall`。
 - 创建时沿用原函数校验：路径无效、已有合法工作区或目标目录非空则失败；创建成功不会自动切换工作区。
-- 切换目标必须是已存在且兼容的工作区；仅保存最近使用的工作区路径，下次启动程序时生效，不关闭工程、不自动重启、不弹出窗口。
-- 最终事件 `payload_json` 为 `"{}"`。创建成功提示“工作区创建成功”；切换成功提示“工作区路径已设置，下次启动程序时生效，当前工作区保持不变”。
+- 切换目标必须是已存在且兼容的工作区；切换前默认保存所有可保存的工程（只读工程直接放弃），任一工程保存失败则整次切换失败并返回具体原因；成功后关闭所有工程，在当前进程内重建工作区与主窗口，不重启进程、不弹出窗口。
+- 最终事件 `payload_json` 为 `"{}"`。创建成功提示“工作区创建成功”；切换成功提示“工作区切换中，请稍候”（响应先于重建完成返回）。
 - 参数校验不通过时 `PerformAction` 返回失败；已受理任务执行失败时通过 `RESULT_STATUS_FAILED` 事件的 `message` 返回函数提供的具体原因。
 
 ### REPLACE_PORT_COMPONENT
@@ -1078,6 +1349,7 @@ enum ResultStatus {
 - `CAPTURE_SCHEMATIC`：`project_path`、`img_path`
 - `CLOSE_PROJECT`：`project_path`、`need_save`
 - `LOG_EVENT`：`level`、`source`、`text`
+- `CALL_SIMULATION_CONTROLLER`：`netlist_path`、`ads_path`
 - `SIMULATE_NETLIST`：`netlist_path`、`result_path`、`ads_output`
 - `CREATE_SIMULATION_COMPONENT`：`project_path`、`component_type`、`action`、`instance_name`
 - `UPDATE_SIMULATION_COMPONENT`：`project_path`、`instance_name`
@@ -1087,7 +1359,7 @@ enum ResultStatus {
 - `REPLACE_PORT_COMPONENT`：`project_path`、`target_instance_name`、`old_component_type`、`new_component_type`、`new_instance_name`
 - `ATTACH_OUT_COMPONENT`：`project_path`、`target_instance_name`、可选的 `pin_index`、`out_instance_name`
 - `LIST_SCHEMATIC_COMPONENTS`：`project_path`、`component_count`、`components`
-- `GET_SCHEMATIC_COMPONENT_INFO`：`project_path`、`instance_name`；成功时额外包含 `component`
+- `GET_SCHEMATIC_COMPONENT_INFO`：`project_path`、`instance_name`；成功时，字符串请求额外返回 `component`，数组请求额外返回 `component_count` 和 `components`
 - `LOAD_SCHEMATIC_FROM_FILE`：`project_path`、`schematic_path`、`component_count`、`net_segment_count`
 - `GET_COMPONENTS_STATIC_PARAMS`：上游接口原始响应对象，包含 `code`、`message`、`data`
 - `SIMULATE_ANTI_BURNOUT`：成功时仅包含 `results`；失败时为空对象 `{}`
@@ -1103,16 +1375,27 @@ enum ResultStatus {
 - `CLEAR_SCHEMATIC`：最终事件为 `{}`，清空成功提示或具体失败原因位于 `message`
 - `ADD_WIRE`：最终事件为 `{}`，新增成功、已连接提示或具体失败原因位于 `message`
 - `GET_CURRENT_WORKSPACE`：`workspace_path`，当前实际加载的工作区目录
+- `GET_CURRENT_IDENTITY`：`account_id`，当前登录用户的身份标识
 - `USE_SCHEMATIC_FROM_LIBRARY_CREATE_PROJECT` / `USE_SCHEMATIC_FROM_LIBRARY_IMPORT`：成功返回 `project_path`、`schematic_uuid`、`component_count`、`net_segment_count`；失败返回 `{}`
 - `SEARCH_SCHEMATIC_FROM_PUBLIC_LIBRARY` / `SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY`：成功返回 `count` 和 `results`；每项包含 `id`、`schematic_id`、`name`、`properties`
 - `DESIGN_SCHEMATIC_TOPOLOGY`：始终返回布尔字段 `success`（正常结束为 `true`，其余为 `false`）与业务状态 `status`，`status` 取值为 `DESIGN_COMPLETED`、`NO_SUPPORTED_TOPOLOGY`、`PROJECT_CREATE_FAILED`、`SCHEMATIC_IMPORT_FAILED`、`DESIGN_FAILED`；成功时另有 `project_path`、`schematic_id`、`component_count`、`net_segment_count`，成功与失败均带 `project_name`，原因位于 `message`
 - `EXPORT_SCHEMATIC_COMPONENTS_TO_CSV`：成功返回最终文件路径 `csv_path`；失败返回 `{}`
 - `BATCH_QUERY_COMPONENT`：模型服务返回的完整响应对象，通常包含 `code`、`message`、`data`
+- `SEARCH_SOFT_IP_CATEGORIES`：成功仅返回 `count`、`results`，其中分类和参数项不包含 `created_time`、`updated_time`，`count` 等于合并后的 `results` 数组长度；失败返回 `{}`
 - `SEARCH_PUBLIC_SOFT_IP_MODELS`：成功仅返回 `count`、`results`，每项不包含 `created_time`、`result_download_url`、`updated_time`，`count` 等于合并后的 `results` 数组长度；失败返回 `{}`
 - `SEARCH_PERSONAL_SOFT_IP_MODELS`：成功仅返回 `count`、`results`，每项不包含 `created_time`、`result_download_url`、`updated_time`，`count` 等于合并后的 `results` 数组长度；失败返回 `{}`
 - `DOWNLOAD_SOFT_IP_MODEL`：成功返回最终绝对文件路径 `save_path`；失败返回 `{}`
 - `UPLOAD_AGENT`：成功和失败均返回 `{}`，上传结果或具体失败原因位于 `message`
 - `DESIGN_SOFT_IP`：成功返回 `DESIGN_READY`及最终保存路径和实际设计参数；无匹配模型返回 `DESIGN_UNSUPPORTED`；其他失败返回 `DESIGN_PREPARE_FAILED`
+- `GET_SKILL_SYNC_CAPABILITIES`：`hsp_version`、`max_object_bytes`
+- `UPLOAD_SKILL_SYNC_OBJECTS`：`stored`、`already_present`
+- `DOWNLOAD_SKILL_SYNC_OBJECT`：`hash`、`object_type`、`save_path`、`size`
+- `LIST_SKILL_SYNC_REFS`：`refs`
+- `UPDATE_SKILL_SYNC_REF`：成功时返回 `name`、`hash`；CAS 冲突时失败 payload 保留 `actual`
+- `LIST_SKILL_SYNC_SKILLS` / `GET_SKILL_SYNC_SKILL` / `CHECK_SKILL_SYNC_SKILLS`：任务状态固定为成功，原样返回 REST JSON 响应
+- `SEARCH_KNOWLEDGE` / `GET_KNOWLEDGE_DETAIL` / `RAG_SEARCH_KNOWLEDGE` / `SMART_SEARCH_KNOWLEDGE`：任务状态固定为成功，原样返回知识库 REST 响应
+- `LIST_KNOWLEDGE_INDEX_CATEGORIES`：`category` 可选；任务状态固定为成功，原样返回 HTTP 响应正文
+- `AI_ASSISTANT_PERMISSION_CHECK`：任务状态固定为成功，原样返回权限校验服务的 `code`、`message`、`data`
 - `GENERATE_SCHEMATIC_FROM_NETLIST`：`project_path`、`netlist_path`、`schematic_path`、`clear_before_import`、`symbols_added`、`nets_added`、`lines_added`、`net_points_added`
 
 ## 8. SIMULATE_NETLIST 完整调用示例
@@ -1493,7 +1776,7 @@ enum ResultStatus {
   "event_type": "LIST_SCHEMATIC_COMPONENTS",
   "status": "RESULT_STATUS_SUCCESS",
   "message": "schematic components listed",
-  "payload_json": "{\"project_path\":\"C:/test/project.epp\",\"component_count\":1,\"components\":[{\"instance_name\":\"R1\",\"component_type\":\"R\",\"general_type\":\"\",\"sub_type\":\"\",\"active_state\":0,\"state\":\"NORMAL\",\"parameters\":{\"R\":{\"Value\":\"50\",\"Unit\":\"Ohm\"}}}]}"
+  "payload_json": "{\"project_path\":\"C:/test/project.epp\",\"component_count\":1,\"components\":[{\"instance_name\":\"R1\",\"component_type\":\"R\",\"general_type\":\"\",\"sub_type\":\"\",\"active_state\":0,\"state\":\"NORMAL\",\"parameters\":{\"R\":{\"Value\":\"50\",\"Unit\":\"Ohm\"}},\"uuid\":\"11111111-1111-4111-8111-111111111111\",\"component_uuid\":\"\",\"coordinate_system\":\"schematic_scene\",\"position\":{\"x\":100,\"y\":200},\"rotation_deg\":0,\"mirrored_horizontal\":false,\"mirrored_vertical\":false,\"pins\":[{\"uuid\":\"22222222-2222-4222-8222-222222222222\",\"index\":0,\"position\":{\"x\":80,\"y\":200},\"local_position\":{\"x\":-20,\"y\":0}},{\"uuid\":\"33333333-3333-4333-8333-333333333333\",\"index\":1,\"position\":{\"x\":120,\"y\":200},\"local_position\":{\"x\":20,\"y\":0}}]}]}"
 }
 ```
 
@@ -2110,8 +2393,33 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `40`。请�
 
 `payload_json` 中的实际字段和值以模型服务返回为准。Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `41`。
 
+### 9.31 查询软 IP 分类
 
-### 9.31 查询公共软 IP
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-search-soft-ip-categories-001",
+  "type": "SEARCH_SOFT_IP_CATEGORIES",
+  "payload_json": "{}"
+}
+```
+
+最终成功事件示意：
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-search-soft-ip-categories-001",
+  "event_type": "SEARCH_SOFT_IP_CATEGORIES",
+  "status": "RESULT_STATUS_SUCCESS",
+  "message": "soft IP categories retrieved",
+  "payload_json": "{\"count\":3,\"results\":[...]}"
+}
+```
+
+Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `42`。分页中的任一请求失败时，最终事件状态为 `RESULT_STATUS_FAILED`，`payload_json` 为 `{}`。
+
+### 9.32 查询公共软 IP
 
 ```json
 {
@@ -2137,7 +2445,7 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `40`。请�
 
 Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `43`。分页中的任一请求失败时，最终事件状态为 `RESULT_STATUS_FAILED`，`payload_json` 为 `{}`。
 
-### 9.32 查询个人软 IP
+### 9.33 查询个人软 IP
 
 ```json
 {
@@ -2163,7 +2471,7 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `43`。分�
 
 Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `44`。分页中的任一请求失败时，最终事件状态为 `RESULT_STATUS_FAILED`，`payload_json` 为 `{}`。
 
-### 9.33 下载软 IP AEDT 模型
+### 9.34 下载软 IP AEDT 模型
 
 ```json
 {
@@ -2189,7 +2497,7 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `44`。分�
 
 Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `45`。`PerformAction` 返回成功仅表示任务已受理，最终下载结果通过 `FetchEvent` 获取。
 
-### 9.34 上传 Agent 记录包
+### 9.35 上传 Agent 记录包
 
 ```json
 {
@@ -2215,7 +2523,7 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `45`。`Perf
 
 失败时 `status` 为 `RESULT_STATUS_FAILED`，`message` 为具体失败原因，`payload_json` 为 `{}`。Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `46`。
 
-### 9.35 智能设计统一接口（语义检索并创建工程）
+### 9.36 智能设计统一接口（语义检索并创建工程）
 
 ```json
 {
@@ -2288,7 +2596,7 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `45`。`Perf
 
 `project_name` 始终为服务端生成或清洗后的最终工程目录名，失败时也会携带。Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `47`。原有 4 个接口（`SEARCH_SCHEMATIC_FROM_PUBLIC_LIBRARY`、`SEARCH_SCHEMATIC_FROM_PERSONAL_LIBRARY`、`USE_SCHEMATIC_FROM_LIBRARY_CREATE_PROJECT`、`USE_SCHEMATIC_FROM_LIBRARY_IMPORT`）保持原样可用。
 
-### 9.36 设计并下载公共软 IP 模型
+### 9.37 设计并下载公共软 IP 模型
 
 ```json
 {
@@ -2315,6 +2623,191 @@ Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `45`。`Perf
 无匹配模型时，失败事件的 `payload_json` 为 `{"status":"DESIGN_UNSUPPORTED","success":false,"message":"当前暂不具备该设计需求的软 IP 设计能力"}`。请求参数越界时改用范围中间值继续下载，成功事件的 `payload_json` 返回实际设计参数。其他错误的 `payload_json` 为 `{"status":"DESIGN_PREPARE_FAILED","success":false,"message":"软 IP 设计准备失败"}`。
 
 Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `48`。`PerformAction` 成功仅表示任务已受理，最终结果通过 `FetchEvent` 获取。
+
+### 9.38 个人 skill 同步
+
+以下示例仅展示 `PerformAction` 的 `type` 和 `payload_json`，外层仍需提供与其他任务相同的 `client_uuid` 和唯一 `task_id`。
+
+```json
+{
+  "type": "GET_SKILL_SYNC_CAPABILITIES",
+  "payload_json": "{}"
+}
+```
+
+```json
+{
+  "type": "UPLOAD_SKILL_SYNC_OBJECTS",
+  "payload_json": "{\"objects\":[{\"hash\":\"sha256:<64位小写十六进制>\",\"type\":\"blob\",\"file_path\":\"D:/skill-sync/objects/SKILL.md.bin\"}]}"
+}
+```
+
+```json
+{
+  "type": "DOWNLOAD_SKILL_SYNC_OBJECT",
+  "payload_json": "{\"hash\":\"sha256:<64位小写十六进制>\",\"save_path\":\"D:/skill-sync/download/SKILL.md\"}"
+}
+```
+
+```json
+{
+  "type": "LIST_SKILL_SYNC_REFS",
+  "payload_json": "{\"prefix\":\"refs/user/<owner>/HEAD\"}"
+}
+```
+
+```json
+{
+  "type": "UPDATE_SKILL_SYNC_REF",
+  "payload_json": "{\"name\":\"refs/user/<owner>/HEAD\",\"from\":null,\"to\":\"sha256:<64位小写十六进制>\"}"
+}
+```
+
+Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `49`～`53`。`PerformAction` 仅返回受理结果，最终 REST 转发结果从 `FetchEvent` 读取。
+
+### 9.39 AI 权限校验
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-ai-permission-check-001",
+  "type": "AI_ASSISTANT_PERMISSION_CHECK",
+  "payload_json": "{\"content\":\"下载所有模型\"}"
+}
+```
+
+Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `54`。`PerformAction` 成功仅表示任务已受理，最终权限校验响应从 `FetchEvent` 读取。
+
+### 9.40 skill 查询与检查转发
+
+```json
+{
+  "type": "LIST_SKILL_SYNC_SKILLS",
+  "payload_json": "{}"
+}
+```
+
+```json
+{
+  "type": "GET_SKILL_SYNC_SKILL",
+  "payload_json": "{\"uuid\":\"<skill-uuid>\"}"
+}
+```
+
+```json
+{
+  "type": "CHECK_SKILL_SYNC_SKILLS",
+  "payload_json": "{}"
+}
+```
+
+外层请求仍需提供 `client_uuid` 和唯一 `task_id`。Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `56`、`57`、`58`。`PerformAction` 只返回受理结果，最终 REST 响应从 `FetchEvent` 读取。
+
+### 9.41 公开 skill 查询与搜索转发
+
+#### 查询公开 skill 列表
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-list-public-skills-001",
+  "type": "LIST_PUBLIC_SKILL_SYNC_SKILLS",
+  "payload_json": "{\"scope\":\"public\",\"status\":[\"published\"]}"
+}
+```
+
+- 转发为 `GET /api/v1/sync/public/skills`。
+- `scope` 可选，作为同名查询参数转发。
+- `status` 可选，可传单个字符串或字符串数组；数组会转换为多个同名 `status` 查询参数。
+
+#### 搜索公开 skill
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-search-public-skills-001",
+  "type": "SEARCH_PUBLIC_SKILL_SYNC_SKILLS",
+  "payload_json": "{\"query\":\"eda\",\"page\":1,\"page_size\":10}"
+}
+```
+
+- 转发为 `POST /api/v1/sync/public/skills/search?page=1&page_size=10`。
+- `page` 和 `page_size` 从 `payload_json` 中取出后作为 URL 查询参数，默认值分别为 `1` 和 `10`。
+- 除 `page`、`page_size` 外的其余字段原样作为 HTTP JSON 请求体转发。
+
+#### 查询公开 skill 详情
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-get-public-skill-001",
+  "type": "GET_PUBLIC_SKILL_SYNC_SKILL",
+  "payload_json": "{\"uuid\":\"<skill-uuid>\"}"
+}
+```
+
+- 转发为 `GET /api/v1/sync/public/skills/<uuid>`。
+- `uuid` 从 `payload_json` 读取，并在拼接 URL 前进行百分号编码。
+
+三个任务的 `PerformAction` 成功只表示任务已受理，最终下游 REST JSON 响应会完整写入 `FetchEvent.payload_json`。转发层不根据 HTTP 状态码或响应中的业务码重新判定成败，最终事件状态固定为 `RESULT_STATUS_SUCCESS`。Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `59`、`60`、`61`。
+
+### 9.42 知识搜索与详情查询转发
+
+#### 搜索知识
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-search-knowledge-001",
+  "type": "SEARCH_KNOWLEDGE",
+  "payload_json": "{\"keyword\":\"芯片选型\",\"status\":[\"draft\",\"published\"],\"ordering\":\"-updated_at\",\"page\":1,\"page_size\":10}"
+}
+```
+
+- 转发为 `POST /api/v1/knowledge/public/knowledges/search?page=1&page_size=10`。
+- `page`、`page_size` 转为 URL 查询参数，其余字段原样作为 JSON 请求体。
+
+#### 查询知识详情
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-get-knowledge-detail-001",
+  "type": "GET_KNOWLEDGE_DETAIL",
+  "payload_json": "{\"knowledge_uuid\":\"8a1b2c3d-4e5f-4678-9abc-def012345678\"}"
+}
+```
+
+- 转发为 `GET /api/v1/knowledge/public/knowledges/<knowledge_uuid>`。
+- `knowledge_uuid` 只用于拼接 URL，不发送 HTTP 请求体。
+
+四个任务的 `PerformAction` 成功只表示任务已受理，最终 REST JSON 响应从 `FetchEvent` 读取。最终事件状态固定为 `RESULT_STATUS_SUCCESS`。Postman 需重新导入最新 `ecserver.proto`，也可使用数值 `62`、`63`、`65`、`66`。
+
+#### RAG 相关度检索
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-rag-search-knowledge-001",
+  "type": "RAG_SEARCH_KNOWLEDGE",
+  "payload_json": "{\"query\":\"总结一下功分器设计要点\",\"scope\":\"all\",\"top_k\":5,\"threshold\":0.6,\"include_content\":false}"
+}
+```
+
+- 原样转发为 `POST /api/v1/knowledge/knowledges/rag-search`。
+
+#### 智能检索
+
+```json
+{
+  "client_uuid": "postman-test-client-001",
+  "task_id": "postman-smart-search-knowledge-001",
+  "type": "SMART_SEARCH_KNOWLEDGE",
+  "payload_json": "{\"query\":\"功分器设计时隔离电阻怎么选？\",\"scope\":\"all\",\"top_k\":5,\"threshold\":0.6,\"include_content\":false}"
+}
+```
+
+- 原样转发为 `POST /api/v1/knowledge/knowledges/smart-search`。
 
 ## 10. 网表生成链路完整调用示例
 

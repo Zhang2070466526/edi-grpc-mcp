@@ -155,7 +155,7 @@ list_schematic_components(project_path: str, timeout_seconds: int = 60, summary_
 |---|---|---|---|---|
 | `project_path` | str | 是 | — | `.epp` 文件绝对路径 |
 | `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
-| `summary_only` | bool | 否 | False | 每项只留标量字段（instance_name/component_type/active_state/state），裁掉 parameters 等 dict/list 大头 |
+| `summary_only` | bool | 否 | False | 每项只留标量字段（instance_name/component_type/active_state/state 及 rotation_deg/mirrored_*），裁掉 parameters 与 position/pins；需要坐标或引脚时改用 limit 分页 |
 | `limit` | int | 否 | 50 | 每页条数；0 = 全部 |
 | `offset` | int | 否 | 0 | 从第几个器件开始返回，配合 limit 翻页 |
 
@@ -170,11 +170,20 @@ list_schematic_components(project_path: str, timeout_seconds: int = 60, summary_
         "components": [
             {"instance_name": "R1", "component_type": "R",
              "general_type": "", "sub_type": "",
-             "active_state": 0, "state": "NORMAL", "parameters": {...}}
+             "active_state": 0, "state": "NORMAL",
+             "uuid": "...", "component_uuid": "",
+             "position": {"x": 1125, "y": 412.5},
+             "rotation_deg": 90,
+             "mirrored_horizontal": False, "mirrored_vertical": False,
+             "pins": [{"index": 0, "local_position": {"x": 0, "y": 0},
+                       "position": {"x": 1125, "y": 412.5}, "uuid": "..."}],
+             "parameters": {...}}
         ]
     }
 }
 ```
+
+属性与几何来自同一次 `LIST_SCHEMATIC_COMPONENTS`（不再逐器件补查）。`Var` / `Sweep` / `SParameter` / `HB(XDB)` / 形状类（`EBOND_ShapeJedec`）等非图形器件本来就没有引脚，`pins` 返回 `[]` 属正常，不代表数据缺失；判断几何是否完整看 `position`。
 
 ---
 
@@ -183,15 +192,15 @@ list_schematic_components(project_path: str, timeout_seconds: int = 60, summary_
 ```python
 from servers.eda.project_manage import get_schematic_component_info
 
-get_schematic_component_info(project_path: str, instance_name: str, timeout_seconds: int = 60) -> dict
+get_schematic_component_info(project_path: str, instance_name: str | list[str], timeout_seconds: int = 60) -> dict
 ```
 
-通过 gRPC 按实例名查询单个器件的完整信息（实时，含未保存修改和 active_state/state）。
+按实例名查询器件参数与几何（器件属性 + 位置/旋转/镜像/引脚），实时，含未保存修改和 active_state/state。支持单个名称，也支持名称列表批量查询。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `project_path` | str | 是 | — | `.epp` 文件绝对路径 |
-| `instance_name` | str | 是 | — | 器件实例名（如 "R1"） |
+| `instance_name` | str \| list[str] | 是 | — | 器件实例名（如 "R1"）或实例名列表，取自 list_schematic_components 返回 |
 | `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
 
 返回（gRPC 统一结构，业务字段在 `details` 中）：
@@ -204,11 +213,15 @@ get_schematic_component_info(project_path: str, instance_name: str, timeout_seco
         "component": {
             "instance_name": "R1", "component_type": "R",
             "general_type": "", "sub_type": "",
-            "active_state": 0, "state": "NORMAL", "parameters": {...}
+            "active_state": 0, "state": "NORMAL", "parameters": {...},
+            "position": {"x": 100, "y": 200}, "rotation_deg": 0,
+            "mirrored_horizontal": false, "mirrored_vertical": false, "pins": [...]
         }
     }
 }
 ```
+
+传 `instance_name` 为列表时，`details` 含 `component_count` + `components`（元素结构与 `component` 一致，结果与请求顺序一致）；**任一实例不存在则整批失败**（`message` 会指出是哪个实例）。批量没有分页，每器件约 1.2 KB，一次建议不超过 10–20 个，全量请用 `list_schematic_components` 分页。
 
 ---
 
@@ -248,12 +261,12 @@ get_components_static_params(
 
 ---
 
-### `batch_query_component`
+### `batch_query_component_rf_params`
 
 ```python
-from servers.eda.project_manage import batch_query_component
+from servers.eda.project_manage import batch_query_component_rf_params
 
-batch_query_component(
+batch_query_component_rf_params(
     model_name_list: list[str],
     timeout_seconds: int = 60,
 ) -> dict
@@ -771,7 +784,7 @@ design_chip(description: str, save_path: str, freq: float | None = None, bandwid
 
 ---
 
-## 工作区（3 个）
+## 工作区（4 个）
 
 ### `create_workspace`
 
@@ -823,6 +836,32 @@ get_current_workspace_path(timeout_seconds: int = 60) -> dict
 
 ---
 
+### `get_current_workspace_summary`
+
+```python
+from servers.eda.workspace_ops import get_current_workspace_summary
+
+get_current_workspace_summary(timeout_seconds: int = 60) -> dict
+```
+
+获取当前工作区概要：工作区内全部 `.epp` 工程路径 + 本地性能模型（uuid / 子类型 / 型号名称）。只读查询，不需要 `project_path`，也不需要打开工程，但需要 EDI 在线。
+
+`details` 字段：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `workspace_path` | str | 当前工作区目录 |
+| `epp_files` | list[str] | 工作区内全部 `.epp` 工程文件路径 |
+| `models` | dict | 服务端原样结构：`{子类型名: [{uuid, name}]}`，仅含 `config.ini` 的 `sub_types` 能匹配到名称的性能模型 |
+| `models_flat` | list[dict] | 由 `models` 摊平：`[{sub_type, uuid, name}]`，取单个模型信息时用这个 |
+| `epp_count` / `model_count` | int | 工程数 / 模型数 |
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
+
+---
+
 ## 原理图扩展（5 个）
 
 ### `list_ideal_components`
@@ -849,7 +888,7 @@ from servers.eda.schematic_ops import add_ideal_component
 add_ideal_component(project_path: str, component_type: str, position: dict, timeout_seconds: int = 120) -> dict
 ```
 
-按指定坐标新增内置器件，使用工厂默认参数，不自动排布。严格按场景坐标放置，不做网格吸附、自动排布或重叠避让。`component_type` 区分大小写，支持范围同 `create_simulation_component` 的工厂类型。不接收 `parameters`，后续用 `update_simulation_component` 设参。
+按指定坐标新增内置器件，只放置器件，不修改器件属性。严格按场景坐标放置，不做网格吸附、自动排布或重叠避让。`component_type` 必须是 `list_ideal_components` 接口返回数据中存在的 component_type（区分大小写）。只放置器件、不修改器件属性，后续参数设置用 `update_simulation_component`。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
@@ -2199,36 +2238,6 @@ get_simulation_component_schema(component_type: str, parameter_name: str = "") -
 ```
 
 查询仿真控件支持的参数名、值类型、单位、创建/更新权限和动态参数模式。返回 `schema_version`、`protocol_version`、`parameter_patterns`。创建或修改器件前优先调用。
-
-### `list_simulation_components`
-
-```python
-from servers.eda.simulation_components import list_simulation_components
-
-list_simulation_components(
-    project_path: str,
-    component_type: str = "",
-    name_contains: str = "",
-    schematic_name: str = "",
-    offset: int = 0,
-    limit: int = 100,
-) -> dict
-```
-
-本地读取原理图，列出全部器件（SP/HB/XDB/Var/Sweep/P_nToneG/TermG 等）及其当前参数。
-已知类型做 wire→public 映射；其他类型返回原始 paramsinfo。支持按类型过滤、名称模糊匹配、原理图过滤和分页。`limit=0` 表示返回全部（与 `list_schematic_components` 一致），`limit>0` 时钳到最大 500。
-
-### `create_simulation_component`
-
-```python
-from servers.eda.simulation_components import create_simulation_component
-
-create_simulation_component(project_path: str, component_type: str, timeout_seconds: int = 120) -> dict
-```
-
-新增器件（使用 EDI 器件工厂默认参数）。创建后如需设置参数，根据返回的 `instance_name` 调用 `update_simulation_component`。`component_type` 支持任意 EDI 工厂类型（SParameter / HarmonicBalance / XDB / Sweep / Var 等）。
-
-参数格式：`{"Start": {"value": "1", "unit": "GHz"}, "Pts": {"value": "101"}}`
 
 ### `update_simulation_component`
 

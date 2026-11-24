@@ -323,7 +323,6 @@ if ".." in name or "/" in name or "\\" in name:
 | `list_epp_projects` | 文件夹扫描 | `rglob("*.epp")`，最多 1000 个，返回名称/路径/大小 |
 | `get_project_summary` | metadata + schematics + netlist + RAW | 聚合元数据、原理图列表、元件类型分布、仿真器件配置、最新 RAW |
 | `analyze_variables` | 所有原理图 | 识别 Var 定义 → 找引用 → 列 Sweep 配置 |
-| `list_simulation_components` | 所有原理图 | 支持类型/名称模糊/原理图过滤 + 分页；SP/HB/XDB 做 wire→public 映射 |
 
 ### 1.5 subprocess 命令行
 
@@ -774,9 +773,9 @@ Chat 层拦截 → 保存 `PendingAction` → 展示操作摘要 → 用户明�
 | `open_edi_project` | OPEN_PROJECT(1) | gRPC | `project_path`；已有工程窗口时复用 |
 | `close_edi_project` | CLOSE_PROJECT(8) | gRPC | `project_path`, `need_save` 可选保存 |
 | `list_schematic_components` | LIST_SCHEMATIC_COMPONENTS(18) | gRPC | 返回原理图全部器件及完整参数（比本地读实时） |
-| `get_schematic_component_info` | GET_SCHEMATIC_COMPONENT_INFO(19) | gRPC | `project_path`, `instance_name` 单查器件 |
+| `get_schematic_component_info` | GET_SCHEMATIC_COMPONENT_INFO(19) | gRPC | `project_path`, `instance_name`（单个或列表）查器件参数与几何 |
 | `get_components_static_params` | — | gRPC→MMS | 转发到 `POST /api/v1/components/static-params/`，查重量/尺寸/封装/厂商 |
-| `batch_query_component` | BATCH_QUERY_COMPONENT | gRPC→MMS | 按型号批量查询，按输入顺序对齐、未命中补 null |
+| `batch_query_component_rf_params` | BATCH_QUERY_COMPONENT | gRPC→MMS | 按型号批量查询，按输入顺序对齐、未命中补 null |
 | `list_epp_projects` | — | 本地 | `rglob("*.epp")` 扫描 |
 | `get_project_summary` | — | 本地 | 聚合元数据/原理图/器件/仿真配置/最新 RAW |
 | `analyze_variables` | — | 本地 | Var 定义 + 引用 + Sweep 配置 |
@@ -785,13 +784,11 @@ Chat 层拦截 → 保存 `PendingAction` → 展示操作摘要 → 用户明�
 
 | 工具 | EventType | 关键实现 |
 |---|---|---|
-| `create_simulation_component` | CREATE(11) | **v3 不传 parameters**，用工厂默认值创建，创建后按 `instance_name` 调 update 设参 |
 | `update_simulation_component` | UPDATE(15) | **三路类型推断**（见下），无条件执行完整校验 + wire 转换 |
 | `delete_simulation_component` | DELETE(12) | 不做本地预检查，直接由 EDI 按 instance_name 执行 |
 | `set_component_active_state` | SET_ACTIVE_STATE(14) | 状态规范化 `.strip().upper()`，确定性设置（幂等） |
 | `replace_port_component` | REPLACE_PORT_COMPONENT(16) | TermG/P_nToneG 替换，保留连线，Chat 层需确认 |
 | `attach_out_component` | ATTACH_OUT_COMPONENT(17) | 自动判断引脚朝向 → 计算放置位置 → 顺时针四方向检测重叠 → 器件+网线同一撤销组 |
-| `list_simulation_components` | — | 本地读 + wire→public 映射 |
 | `get_simulation_component_schema` | — | 读 catalog，与 `edi://reference/simulation-components` 同源 |
 | `replace_schematic_from_file` | LOAD_SCHEMATIC_FROM_FILE | 从 .ep 文件整体替换原理图 |
 
@@ -844,6 +841,7 @@ else:                                 # 两者都没有
 | `clear_schematic` | CLEAR_SCHEMATIC(33) | `confirm_clear=true` 双重确认 |
 | `add_wire` | ADD_WIRE(34) | 5 字段必填 + `pin_index` 0~2147483647 |
 | `get_current_workspace_path` | GET_CURRENT_WORKSPACE(35) | 无业务参数 |
+| `get_current_workspace_summary` | GET_CURRENT_WORKSPACE_SUMMARY(68) | 无业务参数；`details` 补 `models_flat` / `epp_count` / `model_count` |
 
 ### 4.6 图表
 
@@ -923,24 +921,22 @@ else:                                 # 两者都没有
 | `open_edi_project` | gRPC 操作要求工程已在 EDI 打开 | `list_epp_projects` | 仿真/器件/截图/网表 |
 | `close_edi_project` | 释放 EDI 资源、落盘保存 | `list_epp_projects` | —（收尾） |
 | `list_schematic_components` | 本地读磁盘看不到 EDI 未保存修改和运行态 | 已打开工程 | LLM 判断器件实时状态 |
-| `get_schematic_component_info` | 按实例名单查器件详情（实时） | `list_schematic_components` | LLM 查器件详情 |
+| `get_schematic_component_info` | 按实例名查器件参数与几何（实时，可传列表） | `list_schematic_components` | LLM 查器件详情 |
 | `get_project_summary` | 一次看全工程概览，避免零散多轮查询 | —（本地读） | LLM 了解全貌、报告 |
 | `analyze_variables` | EDA 参数化设计依赖 Var/Sweep，需理解变量关系 | —（本地读） | LLM 理解参数化设计 |
 | `get_components_static_params` | 查器件物理固有参数（重量/尺寸/封装/厂商） | 选型列表 | LLM 查器件物理属性 |
-| `batch_query_component` | 按型号批量确认模型是否存在（选型前置） | —（型号列表） | 选型时确认型号有效性 |
+| `batch_query_component_rf_params` | 按型号批量确认模型是否存在（选型前置） | —（型号列表） | 选型时确认型号有效性 |
 
 #### 仿真器件
 
 | 工具 | 动机 | 依赖（输入来自） | 被依赖（输出供） |
 |---|---|---|---|
 | `get_simulation_component_schema` | AI 不知道器件支持哪些参数/单位/权限 | —（读 catalog） | create/update 参数校验 |
-| `list_simulation_components` | 本地快速列器件（不占 EDI 槽位） | —（本地读） | update/delete/set_state 提供 instance_name |
-| `create_simulation_component` | 新建仿真器件 | schema（类型） | update（创建后设参） |
-| `update_simulation_component` | 修改器件参数 | list（instance_name）+ schema（校验） | — |
-| `delete_simulation_component` | 删除不需要的器件 | list（instance_name） | — |
-| `set_component_active_state` | 仿真时临时禁用/短路器件（不改参数） | list（instance_name） | — |
-| `replace_port_component` | 端口类型切换（TermG↔P_nToneG）保留连线 | list（instance_name） | — |
-| `attach_out_component` | 给器件引脚挂 Out 器件观察输出 | list（instance_name） | — |
+| `update_simulation_component` | 修改器件参数 | list_schematic_components（instance_name）+ schema（校验） | — |
+| `delete_simulation_component` | 删除不需要的器件 | list_schematic_components（instance_name） | — |
+| `set_component_active_state` | 仿真时临时禁用/短路器件（不改参数） | list_schematic_components（instance_name） | — |
+| `replace_port_component` | 端口类型切换（TermG↔P_nToneG）保留连线 | list_schematic_components（instance_name） | — |
+| `attach_out_component` | 给器件引脚挂 Out 器件观察输出 | list_schematic_components（instance_name） | — |
 | `replace_schematic_from_file` | 用现成 .ep 文件整体替换原理图 | 现成 .ep 文件 | — |
 
 #### 仿真
@@ -1088,7 +1084,7 @@ Prompt 是**可复用工作流模板**，客户端通过 `prompts/list` → `pro
 
 ### 1. `inspect_edi_project` — 工程只读检查
 
-只读查看工程全貌，不改工程、不启动仿真。按 `detail_level` 分档引导 `get_project_summary` → `analyze_variables` → `list_simulation_components`。
+只读查看工程全貌，不改工程、不启动仿真。按 `detail_level` 分档引导 `get_project_summary` → `analyze_variables` → `list_schematic_components`。
 
 ### 2. `run_and_review_simulation` — 仿真执行 + 日志分析
 

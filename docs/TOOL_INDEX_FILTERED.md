@@ -6,16 +6,16 @@
 
 > 所有已注册工具；exe 打包版（frozen）会在此基础上无条件去掉 analyze_image。
 
-共 101 个工具：
+共 100 个工具：
 
-- `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
+- `add_ideal_component` — 按指定坐标新增内置器件，只放置器件，不修改器件属性。
 - `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
 - `add_wire` — 连接指定工程内两个器件的指定引脚，按需创建或合并网段并保存。
 - `analyze_image` — 调用视觉模型分析本地图片内容，返回结构化文字结果 —— ⚠️ 结果可能编造（实测把电路原理图认成加法器），只作粗看、不得作为工程结论。(仅开发使用)
 - `analyze_mixer_spur` — 混频杂散分析：枚举 m×源频 ± n×LO 的杂散组合，判断是否落入目标输出频带。
 - `analyze_variables` — 分析工程中的变量定义和引用关系。
 - `attach_out_component` — 为目标器件引脚挂载一个 Out 器件，并自动连线。
-- `batch_query_component` — 按器件型号字符串列表批量查询模型信息，返回对齐到输入顺序的结果。
+- `batch_query_component_rf_params` — 按器件型号字符串列表批量查询模型信息，返回对齐到输入顺序的结果。
 - `build_laspcem_report` — 给已求解的 .sem 工程建 S 参数网络报告（没求解就返回 SOLVE_REQUIRED）。
 - `calculate_rf_dynamic_range` — 计算射频链路的灵敏度(S)与压缩受限动态范围(DR)。
 - `calculate_transline` — 计算传输线的特性阻抗或线宽（微带 / 带状 / 接地共面波导 / 同轴）。
@@ -26,7 +26,6 @@
 - `close_laspcem_project` — 关闭在 LASPCEM 中打开某个 .sem 的 GUI 实例（等价于关窗口）。
 - `compare_simulation_results` — 比较多个 RAW 仿真结果文件中的同一条曲线并生成对比图。
 - `create_project` — 创建新的 EDI 工程（不显示创建向导，也不自动打开）。
-- `create_simulation_component` — 使用 EDI 器件工厂默认参数创建器件。
 - `create_workspace` — 创建一个新的工作区，不自动切换。
 - `cst_export_farfield` — 导出 CST 模型的远场方向图为 ASCII .txt（自动判断是否已求解）。
 - `cst_export_farfield_query` — 查询远场导出任务：返回进度，完成时附带 farfield_txts。
@@ -59,12 +58,13 @@
 - `find_netlist_paths` — 寻路（仅限 TR 收发链路，不支持混频链路）：给定网表 + 原理图 + 有向端口对，枚举每个端口对的全部信号路径，并给出每条路径上每个开关的目标 Bits。
 - `get_components_static_params` — 查询器件的固有参数（重量、尺寸、封装、所属厂商、成本等）。
 - `get_current_workspace_path` — 查询程序当前实际加载的工作区目录。
+- `get_current_workspace_summary` — 获取当前工作区概要：工程列表与本地性能模型（uuid / 子类型 / 型号）。
 - `get_hfss_analysis_status` — 查询 HFSS 异步仿真状态（默认只读本地，不访问 AEDT）。
 - `get_hfss_project_info` — 查询当前 AEDT 打开的项目和活动设计（纯查询，不启动 AEDT）。
 - `get_laspcem_setup` — 读取 .sem 工程当前配置的求解设置参数（cem.EditSolution 那套键，约 64 个）。
 - `get_model_category_params` — 获取模型管理模块的全部子类及对应参数列表。
 - `get_project_summary` — 获取 .epp 工程概览包括，元数据、原理图位置、最近结果文件位置。注意：该接口只判断有无仿真结果，禁止解析raw文件
-- `get_schematic_component_info` — 通过 gRPC 按实例名查询单个器件的完整信息。
+- `get_schematic_component_info` — 按实例名查询器件参数与几何：支持单个名称或名称列表（批量）。
 - `get_service_logs` — 读取 EDI 服务端日志，检查运行异常（含 ERROR/WARN/异常堆栈分析）。
 - `get_service_status` — 返回 EDI gRPC 通道状态和队列占用信息（只读，不占执行槽位），用于诊断：通道是否健康、是否有任务在排队。
 - `get_signal_chain` — 追踪工程原理图的信号链路（节点接力算法，从源到负载）。
@@ -83,8 +83,7 @@
 - `list_epp_projects` — 扫描指定文件夹中的 .epp 工程文件，该接口用于扫描工作区外的工程文件，工作区内工程可通过GET_CURRENT_WORKSPACE_SUMMARY获取。
 - `list_ideal_components` — 列出内置器件类型及其简要说明。
 - `list_result_curves` — 调用引擎原生 `--curve-info` 列出 RAW 中可用的「依赖 → 曲线名 + 可用单位」。
-- `list_schematic_components` — 列出当前原理图上存在的所有器件及器件对应参数，参数包括器件属性和位置几何信息，
-- `list_simulation_components` — 列出已保存工程中的全部器件及参数（含 wire→public 参数名映射，磁盘读已保存工程，不需要edi在线）。
+- `list_schematic_components` — 列出当前原理图上存在的所有器件及器件对应参数，参数包括器件属性和位置几何信息
 - `open_document` — 打开本地文档：link 模式生成 10 分钟 HTTP 链接，local 模式用系统默认程序打开。
 - `open_edi_project` — 打开 .epp 工程（会切换 EDI 当前工程；同目录需有 schematics/main/schematic.ep）。关闭用 close_edi_project。
 - `open_hfss_project` — 启动 AEDT 并打开 .aedt 项目（COM 附着优先，subprocess 单次启动兜底）。
@@ -114,7 +113,7 @@
 
 > 对外可见面 = 全量 − 内部工具（依赖 EDI gRPC / 独立 exe / 诊断）。
 
-共 51 个工具：
+共 50 个工具：
 
 - `analyze_image` — 调用视觉模型分析本地图片内容，返回结构化文字结果 —— ⚠️ 结果可能编造（实测把电路原理图认成加法器），只作粗看、不得作为工程结论。(仅开发使用)
 - `analyze_mixer_spur` — 混频杂散分析：枚举 m×源频 ± n×LO 的杂散组合，判断是否落入目标输出频带。
@@ -158,7 +157,6 @@
 - `launch_aedt` — 启动 AEDT（不打开项目）。已运行时跳过启动、返回状态（含 COM 就绪）。
 - `launch_laspcem` — 启动 LASPCEM 电磁仿真软件。已运行时返回状态，不重复启动。
 - `list_epp_projects` — 扫描指定文件夹中的 .epp 工程文件，该接口用于扫描工作区外的工程文件，工作区内工程可通过GET_CURRENT_WORKSPACE_SUMMARY获取。
-- `list_simulation_components` — 列出已保存工程中的全部器件及参数（含 wire→public 参数名映射，磁盘读已保存工程，不需要edi在线）。
 - `open_document` — 打开本地文档：link 模式生成 10 分钟 HTTP 链接，local 模式用系统默认程序打开。
 - `open_hfss_project` — 启动 AEDT 并打开 .aedt 项目（COM 附着优先，subprocess 单次启动兜底）。
 - `open_laspcem_project` — 在 LASPCEM 中打开 .sem 工程文件。
@@ -174,12 +172,12 @@
 
 共 60 个工具：
 
-- `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
+- `add_ideal_component` — 按指定坐标新增内置器件，只放置器件，不修改器件属性。
 - `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
 - `add_wire` — 连接指定工程内两个器件的指定引脚，按需创建或合并网段并保存。
 - `analyze_mixer_spur` — 混频杂散分析：枚举 m×源频 ± n×LO 的杂散组合，判断是否落入目标输出频带。
 - `attach_out_component` — 为目标器件引脚挂载一个 Out 器件，并自动连线。
-- `batch_query_component` — 按器件型号字符串列表批量查询模型信息，返回对齐到输入顺序的结果。
+- `batch_query_component_rf_params` — 按器件型号字符串列表批量查询模型信息，返回对齐到输入顺序的结果。
 - `calculate_rf_dynamic_range` — 计算射频链路的灵敏度(S)与压缩受限动态范围(DR)。
 - `calculate_transline` — 计算传输线的特性阻抗或线宽（微带 / 带状 / 接地共面波导 / 同轴）。
 - `capture_schematic` — 截取工程原理图为图片。
@@ -187,7 +185,6 @@
 - `close_edi_project` — ⚠️ 关闭当前 .epp 工程（未保存改动会丢）。打开用 open_edi_project；只是想看状态用 get_project_summary。
 - `compare_simulation_results` — 比较多个 RAW 仿真结果文件中的同一条曲线并生成对比图。
 - `create_project` — 创建新的 EDI 工程（不显示创建向导，也不自动打开）。
-- `create_simulation_component` — 使用 EDI 器件工厂默认参数创建器件。
 - `create_workspace` — 创建一个新的工作区，不自动切换。
 - `delete_simulation_component` — ⚠️ 按实例名删除原理图器件及其连接线（不可恢复）。
 - `describe_tool` — 查工具参数/示例，或按能力关键词找工具（留空 name=列全部）；先查它，别猜也别读源码。
@@ -205,8 +202,9 @@
 - `find_netlist_paths` — 寻路（仅限 TR 收发链路，不支持混频链路）：给定网表 + 原理图 + 有向端口对，枚举每个端口对的全部信号路径，并给出每条路径上每个开关的目标 Bits。
 - `get_components_static_params` — 查询器件的固有参数（重量、尺寸、封装、所属厂商、成本等）。
 - `get_current_workspace_path` — 查询程序当前实际加载的工作区目录。
+- `get_current_workspace_summary` — 获取当前工作区概要：工程列表与本地性能模型（uuid / 子类型 / 型号）。
 - `get_model_category_params` — 获取模型管理模块的全部子类及对应参数列表。
-- `get_schematic_component_info` — 通过 gRPC 按实例名查询单个器件的完整信息。
+- `get_schematic_component_info` — 按实例名查询器件参数与几何：支持单个名称或名称列表（批量）。
 - `get_service_logs` — 读取 EDI 服务端日志，检查运行异常（含 ERROR/WARN/异常堆栈分析）。
 - `get_service_status` — 返回 EDI gRPC 通道状态和队列占用信息（只读，不占执行槽位），用于诊断：通道是否健康、是否有任务在排队。
 - `get_signal_chain` — 追踪工程原理图的信号链路（节点接力算法，从源到负载）。
@@ -216,7 +214,7 @@
 - `list_eda_tasks` — 列出当前所有异步仿真任务，可选按状态过滤。不阻塞。
 - `list_ideal_components` — 列出内置器件类型及其简要说明。
 - `list_result_curves` — 调用引擎原生 `--curve-info` 列出 RAW 中可用的「依赖 → 曲线名 + 可用单位」。
-- `list_schematic_components` — 列出当前原理图上存在的所有器件及器件对应参数，参数包括器件属性和位置几何信息，
+- `list_schematic_components` — 列出当前原理图上存在的所有器件及器件对应参数，参数包括器件属性和位置几何信息
 - `open_edi_project` — 打开 .epp 工程（会切换 EDI 当前工程；同目录需有 schematics/main/schematic.ep）。关闭用 close_edi_project。
 - `replace_models_from_csv` — ⚠️ 按 CSV 批量替换工程元件模型（影响面大，建议先 get_project_summary 核对）。
 - `replace_port_component` — ⚠️ 将原理图中的端口器件替换为另一种类型（会改变端口）。
@@ -239,16 +237,16 @@
 
 > 全量 − design_chip − LASPCEM 电磁仿真工具。
 
-共 89 个工具：
+共 88 个工具：
 
-- `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
+- `add_ideal_component` — 按指定坐标新增内置器件，只放置器件，不修改器件属性。
 - `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
 - `add_wire` — 连接指定工程内两个器件的指定引脚，按需创建或合并网段并保存。
 - `analyze_image` — 调用视觉模型分析本地图片内容，返回结构化文字结果 —— ⚠️ 结果可能编造（实测把电路原理图认成加法器），只作粗看、不得作为工程结论。(仅开发使用)
 - `analyze_mixer_spur` — 混频杂散分析：枚举 m×源频 ± n×LO 的杂散组合，判断是否落入目标输出频带。
 - `analyze_variables` — 分析工程中的变量定义和引用关系。
 - `attach_out_component` — 为目标器件引脚挂载一个 Out 器件，并自动连线。
-- `batch_query_component` — 按器件型号字符串列表批量查询模型信息，返回对齐到输入顺序的结果。
+- `batch_query_component_rf_params` — 按器件型号字符串列表批量查询模型信息，返回对齐到输入顺序的结果。
 - `calculate_rf_dynamic_range` — 计算射频链路的灵敏度(S)与压缩受限动态范围(DR)。
 - `calculate_transline` — 计算传输线的特性阻抗或线宽（微带 / 带状 / 接地共面波导 / 同轴）。
 - `capture_schematic` — 截取工程原理图为图片。
@@ -258,7 +256,6 @@
 - `close_laspcem_project` — 关闭在 LASPCEM 中打开某个 .sem 的 GUI 实例（等价于关窗口）。
 - `compare_simulation_results` — 比较多个 RAW 仿真结果文件中的同一条曲线并生成对比图。
 - `create_project` — 创建新的 EDI 工程（不显示创建向导，也不自动打开）。
-- `create_simulation_component` — 使用 EDI 器件工厂默认参数创建器件。
 - `create_workspace` — 创建一个新的工作区，不自动切换。
 - `cst_export_farfield` — 导出 CST 模型的远场方向图为 ASCII .txt（自动判断是否已求解）。
 - `cst_export_farfield_query` — 查询远场导出任务：返回进度，完成时附带 farfield_txts。
@@ -289,11 +286,12 @@
 - `find_netlist_paths` — 寻路（仅限 TR 收发链路，不支持混频链路）：给定网表 + 原理图 + 有向端口对，枚举每个端口对的全部信号路径，并给出每条路径上每个开关的目标 Bits。
 - `get_components_static_params` — 查询器件的固有参数（重量、尺寸、封装、所属厂商、成本等）。
 - `get_current_workspace_path` — 查询程序当前实际加载的工作区目录。
+- `get_current_workspace_summary` — 获取当前工作区概要：工程列表与本地性能模型（uuid / 子类型 / 型号）。
 - `get_hfss_analysis_status` — 查询 HFSS 异步仿真状态（默认只读本地，不访问 AEDT）。
 - `get_hfss_project_info` — 查询当前 AEDT 打开的项目和活动设计（纯查询，不启动 AEDT）。
 - `get_model_category_params` — 获取模型管理模块的全部子类及对应参数列表。
 - `get_project_summary` — 获取 .epp 工程概览包括，元数据、原理图位置、最近结果文件位置。注意：该接口只判断有无仿真结果，禁止解析raw文件
-- `get_schematic_component_info` — 通过 gRPC 按实例名查询单个器件的完整信息。
+- `get_schematic_component_info` — 按实例名查询器件参数与几何：支持单个名称或名称列表（批量）。
 - `get_service_logs` — 读取 EDI 服务端日志，检查运行异常（含 ERROR/WARN/异常堆栈分析）。
 - `get_service_status` — 返回 EDI gRPC 通道状态和队列占用信息（只读，不占执行槽位），用于诊断：通道是否健康、是否有任务在排队。
 - `get_signal_chain` — 追踪工程原理图的信号链路（节点接力算法，从源到负载）。
@@ -306,8 +304,7 @@
 - `list_epp_projects` — 扫描指定文件夹中的 .epp 工程文件，该接口用于扫描工作区外的工程文件，工作区内工程可通过GET_CURRENT_WORKSPACE_SUMMARY获取。
 - `list_ideal_components` — 列出内置器件类型及其简要说明。
 - `list_result_curves` — 调用引擎原生 `--curve-info` 列出 RAW 中可用的「依赖 → 曲线名 + 可用单位」。
-- `list_schematic_components` — 列出当前原理图上存在的所有器件及器件对应参数，参数包括器件属性和位置几何信息，
-- `list_simulation_components` — 列出已保存工程中的全部器件及参数（含 wire→public 参数名映射，磁盘读已保存工程，不需要edi在线）。
+- `list_schematic_components` — 列出当前原理图上存在的所有器件及器件对应参数，参数包括器件属性和位置几何信息
 - `open_document` — 打开本地文档：link 模式生成 10 分钟 HTTP 链接，local 模式用系统默认程序打开。
 - `open_edi_project` — 打开 .epp 工程（会切换 EDI 当前工程；同目录需有 schematics/main/schematic.ep）。关闭用 close_edi_project。
 - `open_hfss_project` — 启动 AEDT 并打开 .aedt 项目（COM 附着优先，subprocess 单次启动兜底）。
@@ -335,15 +332,15 @@
 
 > 全量 − analyze_image（不暴露第三方图片上传），与 mode 无关。
 
-共 100 个工具：
+共 99 个工具：
 
-- `add_ideal_component` — 按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
+- `add_ideal_component` — 按指定坐标新增内置器件，只放置器件，不修改器件属性。
 - `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
 - `add_wire` — 连接指定工程内两个器件的指定引脚，按需创建或合并网段并保存。
 - `analyze_mixer_spur` — 混频杂散分析：枚举 m×源频 ± n×LO 的杂散组合，判断是否落入目标输出频带。
 - `analyze_variables` — 分析工程中的变量定义和引用关系。
 - `attach_out_component` — 为目标器件引脚挂载一个 Out 器件，并自动连线。
-- `batch_query_component` — 按器件型号字符串列表批量查询模型信息，返回对齐到输入顺序的结果。
+- `batch_query_component_rf_params` — 按器件型号字符串列表批量查询模型信息，返回对齐到输入顺序的结果。
 - `build_laspcem_report` — 给已求解的 .sem 工程建 S 参数网络报告（没求解就返回 SOLVE_REQUIRED）。
 - `calculate_rf_dynamic_range` — 计算射频链路的灵敏度(S)与压缩受限动态范围(DR)。
 - `calculate_transline` — 计算传输线的特性阻抗或线宽（微带 / 带状 / 接地共面波导 / 同轴）。
@@ -354,7 +351,6 @@
 - `close_laspcem_project` — 关闭在 LASPCEM 中打开某个 .sem 的 GUI 实例（等价于关窗口）。
 - `compare_simulation_results` — 比较多个 RAW 仿真结果文件中的同一条曲线并生成对比图。
 - `create_project` — 创建新的 EDI 工程（不显示创建向导，也不自动打开）。
-- `create_simulation_component` — 使用 EDI 器件工厂默认参数创建器件。
 - `create_workspace` — 创建一个新的工作区，不自动切换。
 - `cst_export_farfield` — 导出 CST 模型的远场方向图为 ASCII .txt（自动判断是否已求解）。
 - `cst_export_farfield_query` — 查询远场导出任务：返回进度，完成时附带 farfield_txts。
@@ -387,12 +383,13 @@
 - `find_netlist_paths` — 寻路（仅限 TR 收发链路，不支持混频链路）：给定网表 + 原理图 + 有向端口对，枚举每个端口对的全部信号路径，并给出每条路径上每个开关的目标 Bits。
 - `get_components_static_params` — 查询器件的固有参数（重量、尺寸、封装、所属厂商、成本等）。
 - `get_current_workspace_path` — 查询程序当前实际加载的工作区目录。
+- `get_current_workspace_summary` — 获取当前工作区概要：工程列表与本地性能模型（uuid / 子类型 / 型号）。
 - `get_hfss_analysis_status` — 查询 HFSS 异步仿真状态（默认只读本地，不访问 AEDT）。
 - `get_hfss_project_info` — 查询当前 AEDT 打开的项目和活动设计（纯查询，不启动 AEDT）。
 - `get_laspcem_setup` — 读取 .sem 工程当前配置的求解设置参数（cem.EditSolution 那套键，约 64 个）。
 - `get_model_category_params` — 获取模型管理模块的全部子类及对应参数列表。
 - `get_project_summary` — 获取 .epp 工程概览包括，元数据、原理图位置、最近结果文件位置。注意：该接口只判断有无仿真结果，禁止解析raw文件
-- `get_schematic_component_info` — 通过 gRPC 按实例名查询单个器件的完整信息。
+- `get_schematic_component_info` — 按实例名查询器件参数与几何：支持单个名称或名称列表（批量）。
 - `get_service_logs` — 读取 EDI 服务端日志，检查运行异常（含 ERROR/WARN/异常堆栈分析）。
 - `get_service_status` — 返回 EDI gRPC 通道状态和队列占用信息（只读，不占执行槽位），用于诊断：通道是否健康、是否有任务在排队。
 - `get_signal_chain` — 追踪工程原理图的信号链路（节点接力算法，从源到负载）。
@@ -411,8 +408,7 @@
 - `list_epp_projects` — 扫描指定文件夹中的 .epp 工程文件，该接口用于扫描工作区外的工程文件，工作区内工程可通过GET_CURRENT_WORKSPACE_SUMMARY获取。
 - `list_ideal_components` — 列出内置器件类型及其简要说明。
 - `list_result_curves` — 调用引擎原生 `--curve-info` 列出 RAW 中可用的「依赖 → 曲线名 + 可用单位」。
-- `list_schematic_components` — 列出当前原理图上存在的所有器件及器件对应参数，参数包括器件属性和位置几何信息，
-- `list_simulation_components` — 列出已保存工程中的全部器件及参数（含 wire→public 参数名映射，磁盘读已保存工程，不需要edi在线）。
+- `list_schematic_components` — 列出当前原理图上存在的所有器件及器件对应参数，参数包括器件属性和位置几何信息
 - `open_document` — 打开本地文档：link 模式生成 10 分钟 HTTP 链接，local 模式用系统默认程序打开。
 - `open_edi_project` — 打开 .epp 工程（会切换 EDI 当前工程；同目录需有 schematics/main/schematic.ep）。关闭用 close_edi_project。
 - `open_hfss_project` — 启动 AEDT 并打开 .aedt 项目（COM 附着优先，subprocess 单次启动兜底）。
