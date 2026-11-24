@@ -729,7 +729,7 @@ Chat 工具调用日志对路径做脱敏（只记文件名），不暴露用户
 
 | 工具 | 确认条件 |
 |---|---|
-| `delete_component_from_schematic` / `replace_models_from_csv` / `replace_port_component` | 无条件确认 |
+| `delete_component_from_schematic` / `replace_schematic_components_from_csv` / `replace_port_component` | 无条件确认 |
 | `close_edi_project` | `need_save=true` 时确认 |
 
 Chat 层拦截 → 保存 `PendingAction` → 展示操作摘要 → 用户明确回复「确认」才执行 → 一次确认执行一次，5 分钟过期 → 执行时用原始保存参数（防模型篡改）。
@@ -823,7 +823,7 @@ else:                                 # 两者都没有
 |---|---|---|
 | `export_project_netlist` | VIEW_PROJECT_NETLIST(3) | 仅校验 `project_path` |
 | `capture_schematic` | CAPTURE_SCHEMATIC(7) | 校验 `output_path` 扩展名（PNG/JPG/BMP/SVG）+ resolve |
-| `replace_models_from_csv` | MODEL_REPLACE(6) | `csv_path` 存在且后缀 `.csv` |
+| `replace_schematic_components_from_csv` | MODEL_REPLACE(6) | `csv_path` 存在且后缀 `.csv` |
 | `get_model_category_params` | GET_MODEL_CATEGORY_PARAMS(24) | 无业务参数 |
 | `search_public_models` / `search_personal_models` | SEARCH_*_MODELS(25/26) | `sub_type` 非空；`filters` 原样转发 |
 | `export_schematic_components_to_csv` | EXPORT_SCHEMATIC_COMPONENTS_TO_CSV(40) | `csv_path` 非空 |
@@ -956,14 +956,14 @@ else:                                 # 两者都没有
 |---|---|---|---|
 | `export_project_netlist` | 查看/导出工程网表 | open_edi_project | simulate_netlist |
 | `capture_schematic` | 截图原理图供分析/报告 | open_edi_project | 报告、show_image |
-| `export_schematic_components_to_csv` | 生成模型替换用的器件 CSV | project_path | replace_models_from_csv |
+| `export_schematic_components_to_csv` | 生成模型替换用的器件 CSV | project_path | replace_schematic_components_from_csv |
 | `get_signal_chain` | 理解信号从源到负载 | 网表 | simulate_anti_burnout 前置 |
 
 #### 模型库 / 原理图库
 
 | 工具 | 动机 | 依赖（输入来自） | 被依赖（输出供） |
 |---|---|---|---|
-| `replace_models_from_csv` | 批量替换元件模型（CSV 驱动） | CSV 文件 | — |
+| `replace_schematic_components_from_csv` | 批量替换元件模型（CSV 驱动） | CSV 文件 | — |
 | `get_model_category_params` | 了解模型库分类和参数 | —（模型服务） | search_*_models 前置 |
 | `search_public_models` / `search_personal_models` | 从公共/个人模型库选型 | sub_type | 选型、add_performance_component |
 | `add_performance_component` | 把模型库 Component 放进原理图 | 模型库 Component UUID | — |
@@ -1108,7 +1108,7 @@ create/update 两条分支：先查 Schema → 映射需求为合法参数 → �
 
 ### 7. `select_component` — 器件选型（含替换闭环）
 
-8 步闭环：`get_model_category_params` 确认子类 → **依次**搜公共/个人库（gRPC 串行不并行）→ 提取过滤 → `get_components_static_params` 查厂商/尺寸 → 对比表 → 推荐 → 确认后取 original 三列 → 生成 CSV 调 `replace_models_from_csv`。重点标注字段映射（`model_uuid` → `component_uuids`；`component_type/instance_name/model_id` → CSV 列），防 LLM 编造。
+8 步闭环：`get_model_category_params` 确认子类 → **依次**搜公共/个人库（gRPC 串行不并行）→ 提取过滤 → `get_components_static_params` 查厂商/尺寸 → 对比表 → 推荐 → 确认后取 original 三列 → 生成 CSV 调 `replace_schematic_components_from_csv`。重点标注字段映射（`model_uuid` → `component_uuids`；`component_type/instance_name/model_id` → CSV 列），防 LLM 编造。
 
 ### 8. `analyze_signal_chain` — 信号链分析
 

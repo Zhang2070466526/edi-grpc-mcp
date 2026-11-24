@@ -640,12 +640,12 @@ get_signal_chain(project_path: str, start_component: str = "",
 
 ## 模型库 / 原理图库（6 个）
 
-### `replace_models_from_csv`
+### `replace_schematic_components_from_csv`
 
 ```python
-from servers.eda.model_replace import replace_models_from_csv
+from servers.eda.model_replace import replace_schematic_components_from_csv
 
-replace_models_from_csv(project_path: str, csv_path: str, timeout_seconds: int = 60) -> dict
+replace_schematic_components_from_csv(project_path: str, csv_path: str, timeout_seconds: int = 60) -> dict
 ```
 
 按 CSV 批量替换元件模型。

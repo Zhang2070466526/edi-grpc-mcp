@@ -85,8 +85,8 @@
 - `open_hfss_project` — 启动 AEDT 并打开 .aedt 项目（COM 附着优先，subprocess 单次启动兜底）。
 - `open_laspcem_project` — 在 LASPCEM 中打开 .sem 工程文件。
 - `quit_aedt` — 退出 AEDT **程序**（关掉整个 AEDT 窗口、收掉进程）：不是关工程。
-- `replace_models_from_csv` — ⚠️ 按 CSV 批量替换工程元件模型（影响面大，建议先 get_project_summary 核对）。
 - `replace_port_component` — ⚠️ 将原理图中的端口器件替换为另一种类型（会改变端口）。
+- `replace_schematic_components_from_csv` — ⚠️ 按 CSV 批量替换工程原理图下的器件。
 - `replace_schematic_from_file` — ⚠️ 从 .ep 文件整体替换原理图（整图覆盖，原内容丢失）。
 - `run_laspcem_solve_async` — 提交 LASPCEM 求解任务（异步，立即返回 task_id）
 - `run_mixer_simulation` — 执行混频链路仿真（含混频器、LO 本振、上下变频，15 个指标）。不含变频的纯链路请用 run_tr_simulation。

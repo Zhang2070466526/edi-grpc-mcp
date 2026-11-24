@@ -82,7 +82,7 @@ _INTERNAL_TOOLS: frozenset[str] = frozenset({
     # 信号链（本地网表优先，gRPC 兜底）
     "get_signal_chain",
     # 模型替换 / 模型库 / 软 IP
-    "replace_models_from_csv", "get_model_category_params",
+    "replace_schematic_components_from_csv", "get_model_category_params",
     "search_public_models", "search_personal_models",
     "add_performance_component", "design_schematic_topology", "design_chip",
     # 工作区 / 原理图扩展
@@ -236,7 +236,7 @@ _DESTRUCTIVE_TOOLS: frozenset[str] = frozenset({
     "clear_schematic", "close_edi_project", "close_hfss_project",
     "quit_aedt",
     "close_laspcem_project", "cst_task_cancel", "delete_component_from_schematic",
-    "laspcem_task_cancel", "replace_models_from_csv", "replace_port_component",
+    "laspcem_task_cancel", "replace_schematic_components_from_csv", "replace_port_component",
     "replace_schematic_from_file", "switch_workspace",
 })
 
@@ -250,7 +250,7 @@ _TOOL_TITLES: dict[str, str] = {
     "cst_task_cancel": "取消 CST 任务",
     "delete_component_from_schematic": "删除器件",
     "laspcem_task_cancel": "取消 LASPCEM 任务",
-    "replace_models_from_csv": "批量替换模型",
+    "replace_schematic_components_from_csv": "批量替换模型",
     "replace_port_component": "替换端口器件",
     "replace_schematic_from_file": "整图替换原理图",
     "switch_workspace": "切换工作区",

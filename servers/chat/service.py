@@ -61,7 +61,7 @@ _PENDING_ACTION_TTL = 300      # 待确认操作有效期 5 分钟
 # 破坏性工具：Chat 层需用户确认后才执行（仅工具名匹配，参数条件在下方单独处理）
 _DESTRUCTIVE_CHAT_TOOLS = {
     "delete_component_from_schematic",
-    "replace_models_from_csv",
+    "replace_schematic_components_from_csv",
     "replace_port_component",
     "replace_schematic_from_file",   # 整体替换原理图，无条件确认
     "clear_schematic",               # 清空原理图，无条件确认
@@ -705,7 +705,7 @@ class ChatService:
             "list_schematic_components", "get_schematic_component_info",
             "update_components_from_schematic",
             "delete_component_from_schematic", "set_component_active_state",
-            "replace_models_from_csv",
+            "replace_schematic_components_from_csv",
             "replace_port_component", "attach_out_component",
             "replace_schematic_from_file",
         }
@@ -878,7 +878,7 @@ _TOOL_LABELS: dict[str, str] = {
     "list_eda_tasks": "任务列表",
     "capture_schematic": "截图原理图",
     "export_project_netlist": "导出网表",
-    "replace_models_from_csv": "替换模型",
+    "replace_schematic_components_from_csv": "替换模型",
     "launch_edi": "启动 EDI",
     "get_service_status": "服务状态",
     "compare_simulation_results": "对比结果",
@@ -941,7 +941,7 @@ def _create_pending(tool_name: str, args: dict) -> PendingAction:
     summary = {
         "delete_component_from_schematic":
             f"从工程中删除器件 {args.get('instance_name', '?')} 及其连接线",
-        "replace_models_from_csv":
+        "replace_schematic_components_from_csv":
             f"使用 {args.get('csv_path', '?')} 批量替换工程模型",
         "close_edi_project":
             f"关闭工程 {args.get('project_path', '?')} 并保存修改",
@@ -962,7 +962,7 @@ def _confirmation_text(pending: PendingAction) -> str:
     """生成破坏性操作的确认提示文案。"""
     target = {
         "delete_component_from_schematic": f"{pending.summary}。此操作无法由 MCP 自动恢复。",
-        "replace_models_from_csv": f"{pending.summary}。此操作将修改工程中的模型。",
+        "replace_schematic_components_from_csv": f"{pending.summary}。此操作将修改工程中的模型。",
         "close_edi_project": f"{pending.summary}。保存后无法撤销。",
         "replace_port_component": f"{pending.summary}。此操作将替换器件并重新连线。",
         "replace_schematic_from_file": f"{pending.summary}。当前原理图将被整体替换，原内容丢失。",

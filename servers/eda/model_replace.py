@@ -14,16 +14,22 @@ from servers import mcp
 
 
 @mcp.tool()
-def replace_models_from_csv(
+def replace_schematic_components_from_csv(
     project_path: str,
     input_csv_path: str,
     timeout_seconds: int = 60,
 ) -> dict[str, Any]:
-    """⚠️ 按 CSV 批量替换工程元件模型（影响面大，建议先 get_project_summary 核对）。
+    """⚠️ 按 CSV 批量替换工程原理图下的器件。
 
     用法："用这个 CSV 替换工程里的模型"、"批量更新器件型号"
-    CSV 列：original_model_type, original_model_name, original_model_id,
-            alternative_model_type, alternative_model_name, alternative_model_id
+
+    该 CSV 前三列 original_model_type、original_model_name、original_model_id 由
+    export_schematic_components_to_csv 导出；后三列 alternative_model_type、
+    alternative_model_name、alternative_model_id 在利用 search_personal_models、
+    search_public_models 选择合适的替换模型后一一填写。alternative_model_type 对应
+    两个 search 接口返回数据中的 model_name；alternative_model_name 可在 model_name
+    上增加数字，要求整个 CSV 中唯一不重复；alternative_model_id 对应两个 search 接口
+    返回数据中的 model_uuid。
 
     Args:
         project_path: EDA 服务所在机器上的 .epp 工程文件绝对路径。

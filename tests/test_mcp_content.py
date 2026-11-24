@@ -143,7 +143,7 @@ class TestPromptsDirect:
         text = msgs[0]["content"]
         assert "search_public_models" in text
         assert "search_personal_models" in text
-        assert "replace_models_from_csv" in text
+        assert "replace_schematic_components_from_csv" in text
         assert "依次" in text
         assert "model_uuid" in text
 

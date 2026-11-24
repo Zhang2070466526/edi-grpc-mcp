@@ -17,7 +17,7 @@ def test_all_tools_registered():
         "start_simulation_async", "get_simulation_async_status", "get_simulation_async_result",
         "list_eda_tasks",
         "export_project_netlist", "capture_schematic", "get_signal_chain",
-        "replace_models_from_csv", "launch_edi", "get_service_status",
+        "replace_schematic_components_from_csv", "launch_edi", "get_service_status",
         "get_service_logs",
         "list_result_curves", "turbocharts_convert",
         "show_image", "analyze_image", "analyze_variables",

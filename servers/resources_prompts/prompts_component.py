@@ -104,6 +104,6 @@ def prompt_select_component(sub_type_id: str, requirement: str) -> list[dict[str
         "拿工程现有器件的三列（不编造，以实际返回为准）：\n"
         "   `component_type→original_model_type`、`instance_name→original_model_name`、`model_id→original_model_id`。\n"
         "8. 生成 CSV（列 original_model_type/name/id + alternative_model_type/name/id），"
-        "调用 `replace_models_from_csv` 应用到工程。\n"
+        "调用 `replace_schematic_components_from_csv` 应用到工程。\n"
         "   未确认前只输出推荐，不执行替换。"
     )}]

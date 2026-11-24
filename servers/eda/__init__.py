@@ -49,7 +49,7 @@ signal_chain.py — 信号链追踪（1 工具）
     get_signal_chain  解析网表按「节点↔器件接力」追踪信号流
 
 model_replace.py — 模型替换（1 工具）
-    replace_models_from_csv  根据 CSV 文件批量替换元件模型
+    replace_schematic_components_from_csv  根据 CSV 文件批量替换元件模型
 
 model_library.py — 模型库 / 原理图库（5 工具）
     get_model_category_params           获取模型分类及参数列表
@@ -121,7 +121,7 @@ from servers.eda.design_export import (  # noqa: F401
 from servers.eda.signal_chain import get_signal_chain  # noqa: F401
 
 # -- 模型替换 --
-from servers.eda.model_replace import replace_models_from_csv  # noqa: F401
+from servers.eda.model_replace import replace_schematic_components_from_csv  # noqa: F401
 
 # -- 模型库 / 原理图库 --
 from servers.eda.model_library import (  # noqa: F401
