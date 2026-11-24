@@ -757,7 +757,7 @@ def attach_out_component(
         pin_index: int | None = None,
         timeout_seconds: int = 120,
 ) -> dict[str, Any]:
-    """为目标器件引脚挂载一个 Out 器件，并自动连线。
+    """为目标器件引脚挂载一个 Out 器件，并自动连线，这个器件的作用相当于 ADS 中的 Wire/Pin label。
 
     Out 器件使用默认参数创建，实例名按 Out1/Out2/... 自动分配。
     服务端自动判断引脚朝向、计算放置位置、检测重叠并旋转对齐。

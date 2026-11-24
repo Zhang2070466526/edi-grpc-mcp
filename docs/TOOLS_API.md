@@ -2295,7 +2295,7 @@ from servers.eda.simulation_components import attach_out_component
 attach_out_component(project_path: str, target_instance_name: str, pin_index: int | None = None, timeout_seconds: int = 120) -> dict
 ```
 
-为目标器件引脚挂载 Out 器件并自动连线。单引脚器件可省略 `pin_index`。
+为目标器件引脚挂载 Out 器件并自动连线，这个器件的作用相当于 ADS 中的 Wire/Pin label。单引脚器件可省略 `pin_index`。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|

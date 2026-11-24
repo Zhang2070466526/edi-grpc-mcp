@@ -14,7 +14,7 @@
 - `analyze_image` — 调用视觉模型分析本地图片内容，返回结构化文字结果 —— ⚠️ 结果可能编造（实测把电路原理图认成加法器），只作粗看、不得作为工程结论。(仅开发使用)
 - `analyze_mixer_spur` — 混频杂散分析：枚举 m×源频 ± n×LO 的杂散组合，判断是否落入目标输出频带。
 - `analyze_variables` — 分析工程中的变量定义和引用关系。
-- `attach_out_component` — 为目标器件引脚挂载一个 Out 器件，并自动连线。
+- `attach_out_component` — 为目标器件引脚挂载一个 Out 器件，并自动连线，这个器件的作用相当于 ADS 中的 Wire/Pin label。
 - `batch_query_component_rf_params` — 按器件型号字符串列表批量查询模型的频率、增益、回波损耗、抑制、P-1、Psat、隔离、插损、衰减等信息，返回对齐到输入顺序的结果。
 - `build_laspcem_report` — 给已求解的 .sem 工程建 S 参数网络报告（没求解就返回 SOLVE_REQUIRED）。
 - `calculate_rf_dynamic_range` — 计算射频链路的灵敏度(S)与压缩受限动态范围(DR)。
@@ -176,7 +176,7 @@
 - `add_performance_component` — 按指定坐标新增性能模型器件，只放置器件，不修改器件属性。
 - `add_wire` — 连接指定工程内两个器件的指定引脚，按需创建或合并网段并保存。
 - `analyze_mixer_spur` — 混频杂散分析：枚举 m×源频 ± n×LO 的杂散组合，判断是否落入目标输出频带。
-- `attach_out_component` — 为目标器件引脚挂载一个 Out 器件，并自动连线。
+- `attach_out_component` — 为目标器件引脚挂载一个 Out 器件，并自动连线，这个器件的作用相当于 ADS 中的 Wire/Pin label。
 - `batch_query_component_rf_params` — 按器件型号字符串列表批量查询模型的频率、增益、回波损耗、抑制、P-1、Psat、隔离、插损、衰减等信息，返回对齐到输入顺序的结果。
 - `calculate_rf_dynamic_range` — 计算射频链路的灵敏度(S)与压缩受限动态范围(DR)。
 - `calculate_transline` — 计算传输线的特性阻抗或线宽（微带 / 带状 / 接地共面波导 / 同轴）。
@@ -245,7 +245,7 @@
 - `analyze_image` — 调用视觉模型分析本地图片内容，返回结构化文字结果 —— ⚠️ 结果可能编造（实测把电路原理图认成加法器），只作粗看、不得作为工程结论。(仅开发使用)
 - `analyze_mixer_spur` — 混频杂散分析：枚举 m×源频 ± n×LO 的杂散组合，判断是否落入目标输出频带。
 - `analyze_variables` — 分析工程中的变量定义和引用关系。
-- `attach_out_component` — 为目标器件引脚挂载一个 Out 器件，并自动连线。
+- `attach_out_component` — 为目标器件引脚挂载一个 Out 器件，并自动连线，这个器件的作用相当于 ADS 中的 Wire/Pin label。
 - `batch_query_component_rf_params` — 按器件型号字符串列表批量查询模型的频率、增益、回波损耗、抑制、P-1、Psat、隔离、插损、衰减等信息，返回对齐到输入顺序的结果。
 - `calculate_rf_dynamic_range` — 计算射频链路的灵敏度(S)与压缩受限动态范围(DR)。
 - `calculate_transline` — 计算传输线的特性阻抗或线宽（微带 / 带状 / 接地共面波导 / 同轴）。
@@ -339,7 +339,7 @@
 - `add_wire` — 连接指定工程内两个器件的指定引脚，按需创建或合并网段并保存。
 - `analyze_mixer_spur` — 混频杂散分析：枚举 m×源频 ± n×LO 的杂散组合，判断是否落入目标输出频带。
 - `analyze_variables` — 分析工程中的变量定义和引用关系。
-- `attach_out_component` — 为目标器件引脚挂载一个 Out 器件，并自动连线。
+- `attach_out_component` — 为目标器件引脚挂载一个 Out 器件，并自动连线，这个器件的作用相当于 ADS 中的 Wire/Pin label。
 - `batch_query_component_rf_params` — 按器件型号字符串列表批量查询模型的频率、增益、回波损耗、抑制、P-1、Psat、隔离、插损、衰减等信息，返回对齐到输入顺序的结果。
 - `build_laspcem_report` — 给已求解的 .sem 工程建 S 参数网络报告（没求解就返回 SOLVE_REQUIRED）。
 - `calculate_rf_dynamic_range` — 计算射频链路的灵敏度(S)与压缩受限动态范围(DR)。
