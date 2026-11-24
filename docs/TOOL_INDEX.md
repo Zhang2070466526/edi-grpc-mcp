@@ -101,6 +101,6 @@
 - `start_simulation_async` — 启动异步仿真，立即返回 task_id 供 get_simulation_async_status 查进度；仿真日志在结果查询的 ads_output 字段。
 - `switch_workspace` — ⚠️ 立即切换当前工作区，当前正在进行的任务要及时关闭保存，避免丢失。
 - `turbocharts_convert` — ADS RAW 转曲线图+CSV（SP/HB/XDB）；linename 为「单位_线段名」，多条用 & 分隔。返回含引擎原始输出（stderr/command_runs/engine_report）与 log_path（原文已落盘）；**回复时必须把引擎原文与 warnings 原样转述给用户，不得只回一句 message**。
+- `update_components_from_schematic` — 按实例名更新器件参数，SParameter/HarmonicBalance/XDB 器件调用 get_simulation_component_schema 指导修改，其他器件参数修改需在 get_schematic_component_info 列表中。
 - `update_schematic_components_transform` — 批量设置原理图器件的位置、旋转角度和镜像状态（对齐/挪位/批量旋转镜像；坐标为场景值，按 12.5 网格吸附）。
-- `update_simulation_component` — 按实例名更新器件参数。
 - `wilkinson_marchand_order` — 估计 Wilkinson 功分器 / Marchand 巴伦的节数（阶数）。

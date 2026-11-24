@@ -36,7 +36,7 @@ EDI MCP 服务：把 EDI / ANSYS HFSS / CST 三个仿真引擎包装成 **101 �
 | 查器件型号 / 参数 / 封装 / 成本 | `search_public_models` / `search_personal_models` / `get_components_static_params` |
 | 批量查多个型号 | `batch_query_component_rf_params` |
 | 看工程里有什么器件 | `list_schematic_components`（gRPC 实时，含参数与几何） |
-| 改器件参数 / 加器件 / 连线 | `update_simulation_component` / `add_ideal_component` / `add_wire` |
+| 改器件参数 / 加器件 / 连线 | `update_components_from_schematic` / `add_ideal_component` / `add_wire` |
 | 跑混频链路并出 PDF/DOCX 报告 | `run_mixer_simulation`（自带报告） |
 | 跑 TR 纯链路 | `run_tr_simulation` → `export_simulation_report` |
 | 跑一般仿真（异步 + 轮询） | `start_simulation_async` → `get_simulation_async_status` → `get_simulation_async_result` |

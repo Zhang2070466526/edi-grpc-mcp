@@ -888,7 +888,7 @@ from servers.eda.schematic_ops import add_ideal_component
 add_ideal_component(project_path: str, component_type: str, position: dict, timeout_seconds: int = 120) -> dict
 ```
 
-按指定坐标新增内置器件，只放置器件，不修改器件属性。严格按场景坐标放置，不做网格吸附、自动排布或重叠避让。`component_type` 必须是 `list_ideal_components` 接口返回数据中存在的 component_type（区分大小写）。只放置器件、不修改器件属性，后续参数设置用 `update_simulation_component`。
+按指定坐标新增内置器件，只放置器件，不修改器件属性。严格按场景坐标放置，不做网格吸附、自动排布或重叠避让。`component_type` 必须是 `list_ideal_components` 接口返回数据中存在的 component_type（区分大小写）。只放置器件、不修改器件属性，后续参数设置用 `update_components_from_schematic`。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
@@ -2239,12 +2239,12 @@ get_simulation_component_schema(component_type: str, parameter_name: str = "") -
 
 查询仿真控件支持的参数名、值类型、单位、创建/更新权限和动态参数模式。返回 `schema_version`、`protocol_version`、`parameter_patterns`。创建或修改器件前优先调用。
 
-### `update_simulation_component`
+### `update_components_from_schematic`
 
 ```python
-from servers.eda.simulation_components import update_simulation_component
+from servers.eda.simulation_components import update_components_from_schematic
 
-update_simulation_component(project_path: str, instance_name: str, parameters: dict, component_type: str = "", timeout_seconds: int = 120) -> dict
+update_components_from_schematic(project_path: str, instance_name: str, parameters: dict, component_type: str = "", timeout_seconds: int = 120) -> dict
 ```
 
 按实例名更新仿真器件参数。优先从已保存工程自动识别器件类型；实例未保存时可显式提供 `component_type`。显式类型与实际类型不一致会返回 `COMPONENT_TYPE_MISMATCH`。只更新传入的参数，其余保持原值。

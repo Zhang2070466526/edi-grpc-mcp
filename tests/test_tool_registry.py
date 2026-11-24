@@ -23,7 +23,7 @@ def test_all_tools_registered():
         "show_image", "analyze_image", "analyze_variables",
         "open_document",
         "get_simulation_component_schema",
-        "update_simulation_component", "delete_component_from_schematic",
+        "update_components_from_schematic", "delete_component_from_schematic",
         "set_component_active_state",
         "replace_port_component", "attach_out_component",
         "replace_schematic_from_file", "update_schematic_components_transform",

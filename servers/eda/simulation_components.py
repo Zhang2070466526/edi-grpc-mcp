@@ -1,7 +1,7 @@
 r"""仿真器件管理工具 — 工具 API v3，gRPC 协议 v2。
 
 get_simulation_component_schema  查询器件支持的参数、类型、单位和权限
-update_simulation_component      按实例名更新参数（自动识别类型）
+update_components_from_schematic      按实例名更新参数（自动识别类型）
 delete_component_from_schematic      按实例名删除器件（EDI 直接执行）
 replace_port_component           替换端口器件类型（TermG↔P_nToneG）
 set_component_active_state       确定性设置 NORMAL/DISABLED/SHORTED
@@ -429,18 +429,18 @@ def get_simulation_component_schema(
 
 
 # ═══════════════════════════════════════════════════════════
-# 2. update_simulation_component
+# 2. update_components_from_schematic
 # ═══════════════════════════════════════════════════════════
 
 @mcp.tool()
-def update_simulation_component(
+def update_components_from_schematic(
         project_path: str,
         instance_name: str,
         parameters: dict,
         component_type: str = "",
         timeout_seconds: int = 120,
 ) -> dict[str, Any]:
-    """按实例名更新器件参数。
+    """按实例名更新器件参数，SParameter/HarmonicBalance/XDB 器件调用 get_simulation_component_schema 指导修改，其他器件参数修改需在 get_schematic_component_info 列表中。
 
     SParameter/HarmonicBalance/XDB：执行 MCP 参数校验和 wire 转换。
     其他器件类型：基本格式检查后透传给 EDI 校验。

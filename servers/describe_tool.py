@@ -118,7 +118,7 @@ _EXAMPLES: dict[str, Any] = {
                             "component_type": "P_nToneG", "position": {"x": 0, "y": 0}},
     "add_wire": {"first_instance_name": "PORT1", "first_pin_index": 0,
                  "second_instance_name": "AMP1", "second_pin_index": 0},
-    "update_simulation_component": {"project_path": "C:/path/11.epp",
+    "update_components_from_schematic": {"project_path": "C:/path/11.epp",
                                     "instance_name": "SP1",
                                     "parameters": {"Start": {"value": "29", "unit": "GHz"}}},
     # 批量变换：对外只有 project_path + components（内部 payload 顶层另有 sub_type/filters，

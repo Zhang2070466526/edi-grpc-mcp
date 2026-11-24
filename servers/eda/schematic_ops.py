@@ -58,7 +58,7 @@ def add_ideal_component(
 
     严格按指定场景坐标放置，不做网格吸附、自动排布或重叠避让。component_type 必须是
     list_ideal_components 接口返回数据中存在的 component_type（区分大小写）。
-    只放置器件、不修改器件属性，后续参数设置使用 update_simulation_component。
+    只放置器件、不修改器件属性，后续参数设置使用 update_components_from_schematic。
 
     Args:
         project_path: .epp 工程文件绝对路径。
@@ -205,7 +205,7 @@ def update_schematic_components_transform(
     限制与副作用（均实测）：
         - 目标为 InsertText 时整批拒绝：文本框不能用本工具挪。
         - 只改器件几何，不重算传输线/键合线参数：挪了器件后相邻 EBOND 的 Length 仍是原值，
-          需要自己用 update_simulation_component 同步，否则仿真口径与实际布局不一致。
+          需要自己用 update_components_from_schematic 同步，否则仿真口径与实际布局不一致。
         - 同一批次不能重复指定同一器件（uuid 与名称各指定一次也算重复）。
         - 器件不存在、字段非法时整批不修改，不会出现"改了一半"的状态。
         - rotation_deg 归一化到 [0, 360)：450 等效 90，-90 等效 270；两个镜像字段是目标绝对

@@ -2,7 +2,7 @@
 
 覆盖：
   1. start_simulation_async 超时范围校验
-  2. update_simulation_component 丢弃查找错误（空实例名 / 同名歧义）
+  2. update_components_from_schematic 丢弃查找错误（空实例名 / 同名歧义）
   3. launch_edi(wait_for_grpc=False) 成功语义
   4. _read_curve_csv_xy 的 x/y 列表错位
   5. compare interpolation 对所有文件校验单调
@@ -51,7 +51,7 @@ def test_start_simulation_async_rejects_invalid_timeout(monkeypatch):
 def test_update_rejects_empty_instance_name(monkeypatch):
     from servers.eda import simulation_components as sc
     monkeypatch.setattr(sc, "require_project_path", lambda p: (p, None))
-    r = sc.update_simulation_component(
+    r = sc.update_components_from_schematic(
         "C:/test.epp", "   ", {"Freq": {"value": "1", "unit": "GHz"}})
     assert r["success"] is False
     assert r["error_code"] == "EMPTY_INSTANCE_NAME"
@@ -63,7 +63,7 @@ def test_update_rejects_ambiguous_instance_name(monkeypatch):
     monkeypatch.setattr(sc, "require_project_path", lambda p: (p, None))
     monkeypatch.setattr(sc, "_find_component_by_instance",
                         lambda p, n: (None, error_response("AMBIGUOUS_INSTANCE_NAME", "发现多个同名器件")))
-    r = sc.update_simulation_component(
+    r = sc.update_components_from_schematic(
         "C:/test.epp", "R1", {"Freq": {"value": "1", "unit": "GHz"}})
     assert r["success"] is False
     assert r["error_code"] == "AMBIGUOUS_INSTANCE_NAME"

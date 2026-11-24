@@ -108,7 +108,7 @@ _CHAT_TOOL_DESCRIPTIONS: dict[str, str] = {
     "set_component_active_state": (
         "确定性设置器件状态为 NORMAL、DISABLED 或 SHORTED，不是状态切换"
     ),
-    "update_simulation_component": (
+    "update_components_from_schematic": (
         "按实例名更新器件参数。SP/HB/XDB 支持校验，其他类型参数原样发送"
     ),
     "replace_port_component": (
@@ -703,7 +703,7 @@ class ChatService:
             "capture_schematic", "export_project_netlist",
             "start_simulation_async",
             "list_schematic_components", "get_schematic_component_info",
-            "update_simulation_component",
+            "update_components_from_schematic",
             "delete_component_from_schematic", "set_component_active_state",
             "replace_models_from_csv",
             "replace_port_component", "attach_out_component",
@@ -890,7 +890,7 @@ _TOOL_LABELS: dict[str, str] = {
     "get_simulation_component_schema": "控件参数",
     "list_schematic_components": "实时器件列表",
     "get_schematic_component_info": "查器件详情",
-    "update_simulation_component": "更新器件",
+    "update_components_from_schematic": "更新器件",
     "delete_component_from_schematic": "删除器件",
     "set_component_active_state": "设置状态",
     "replace_port_component": "替换端口",

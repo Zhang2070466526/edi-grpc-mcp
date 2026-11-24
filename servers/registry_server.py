@@ -72,7 +72,7 @@ _INTERNAL_TOOLS: frozenset[str] = frozenset({
     "simulate_netlist", "simulate_anti_burnout",
     "start_simulation_async",
     # 仿真器件
-    "update_simulation_component",
+    "update_components_from_schematic",
     "replace_port_component", "delete_component_from_schematic",
     "set_component_active_state",
     "replace_schematic_from_file", "attach_out_component",

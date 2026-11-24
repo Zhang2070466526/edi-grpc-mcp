@@ -57,7 +57,7 @@ def prompt_configure_simulation_component(
         f"3. 调用 `list_schematic_components` 查找 {inst} 的当前参数。",
         f"4. 把用户需求「{requirements or '修改参数'}」映射为合法的参数名、值和单位。",
         f"5. 在执行前向用户展示：目标器件 {inst}（{ct}）、参数名称、新的值、单位。",
-        f"6. 用户确认后调用 `update_simulation_component`，传入 instance_name=\"{inst}\" 和 component_type=\"{ct}\"。",
+        f"6. 用户确认后调用 `update_components_from_schematic`，传入 instance_name=\"{inst}\" 和 component_type=\"{ct}\"。",
     ]
 
     steps += [

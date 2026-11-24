@@ -481,7 +481,7 @@ class TestToolCount:
         # 已移除 copy_image_to_workspace
         assert "copy_image_to_workspace" not in tools
         # All 7 sim component tools should be present
-        for name in ["update_simulation_component", "delete_component_from_schematic",
+        for name in ["update_components_from_schematic", "delete_component_from_schematic",
                      "set_component_active_state"]:
             assert name in tools, f"Missing tool: {name}"
 
@@ -528,17 +528,17 @@ class TestGrpcPayloads:
     """验证 7 个工具的最终 gRPC 枚举值和 payload 字段。"""
 
     def test_create_falsy_parameters_rejected(self):
-        from servers.eda.simulation_components import update_simulation_component
+        from servers.eda.simulation_components import update_components_from_schematic
         with _VALIDATE_PATCH:
-            result = update_simulation_component("C:/test.epp", "R1", parameters=[])
+            result = update_components_from_schematic("C:/test.epp", "R1", parameters=[])
             assert result["success"] is False
 
     def test_update_enum_and_payload(self):
-        from servers.eda.simulation_components import update_simulation_component
+        from servers.eda.simulation_components import update_components_from_schematic
         with _VALIDATE_PATCH, _CALL_GRPC_PATCH as mock, \
              patch("servers.eda.simulation_components._find_component_by_instance",
                    return_value=({"type": "HarmonicBalance", "name": "HB1"}, None)):
-            update_simulation_component(
+            update_components_from_schematic(
                 "C:/test.epp", "HB1",
                 {"Freq": {"value": "2", "unit": "GHz"}},
             )
@@ -548,9 +548,9 @@ class TestGrpcPayloads:
             assert "Freq[1]" in payload["parameters"]
 
     def test_update_explicit_type(self):
-        from servers.eda.simulation_components import update_simulation_component
+        from servers.eda.simulation_components import update_components_from_schematic
         with _VALIDATE_PATCH, _CALL_GRPC_PATCH as mock, _DISK_LOOKUP_PATCH:
-            update_simulation_component(
+            update_components_from_schematic(
                 "C:/test.epp", "HB2",
                 {"Freq": {"value": "3", "unit": "GHz"}},
                 component_type="HarmonicBalance",
@@ -558,11 +558,11 @@ class TestGrpcPayloads:
             assert mock.call_args.args[0] == ecserver_pb2.UPDATE_SIMULATION_COMPONENT
 
     def test_update_type_mismatch(self):
-        from servers.eda.simulation_components import update_simulation_component
+        from servers.eda.simulation_components import update_components_from_schematic
         with _VALIDATE_PATCH, \
              patch("servers.eda.simulation_components._find_component_by_instance",
                    return_value=({"type": "HarmonicBalance", "name": "HB1"}, None)):
-            result = update_simulation_component(
+            result = update_components_from_schematic(
                 "C:/test.epp", "HB1",
                 {"Start": {"value": "1", "unit": "GHz"}},
                 component_type="SParameter",
@@ -571,9 +571,9 @@ class TestGrpcPayloads:
             assert result["error_code"] == "COMPONENT_TYPE_MISMATCH"
 
     def test_update_no_type_available(self):
-        from servers.eda.simulation_components import update_simulation_component
+        from servers.eda.simulation_components import update_components_from_schematic
         with _VALIDATE_PATCH, _DISK_LOOKUP_PATCH:
-            result = update_simulation_component(
+            result = update_components_from_schematic(
                 "C:/test.epp", "Unknown1",
                 {"Freq": {"value": "1", "unit": "GHz"}},
             )

@@ -117,7 +117,7 @@ class TestPromptsDirect:
             instance_name="HB1", requirements="基频改为 2GHz")
         text = msgs[0]["content"]
         assert "list_schematic_components" in text
-        assert "update_simulation_component" in text
+        assert "update_components_from_schematic" in text
         assert "HB1" in text
         assert "HarmonicBalance" in text
 
