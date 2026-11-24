@@ -48,7 +48,7 @@
 - `draw_chart` — 把一组或多组 XY 数据绘制为曲线图并保存为图片（PNG/JPG，固定 1600×1000）。
 - `export_laspcem_snp` — 导出 .sem 工程的 S 参数为 Touchstone 文件（.sNp 会按端口数落成 .s<N>p）。
 - `export_project_netlist` — 查看 EDA .epp 工程的网表，返回网表文件路径。
-- `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV。
+- `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV，用于器件替换和 replace_schematic_components_from_csv 接口配对使用，不单独使用。
 - `export_simulation_report` — 将提取的各链路参数数据（JSON）导出成正式报告(PDF/DOCX/report.json)
 - `fetch_artifact` — 把本机产物文件注册成可下载 URL（仿真结果 / SNP / RAW / 图 / 报告 / 任意文件）。
 - `filter_order_bandpass` — 带通阶数估算：通带 f_p1~f_p2、阻带在两侧，返回阶数与传输零点。低通/高通/带阻分别用 filter_order_lowpass/highpass/bandstop。
@@ -193,7 +193,7 @@
 - `design_wilkinson` — 设计多级威尔金森功分器，输出各级微带线宽、线长和隔离电阻。
 - `draw_chart` — 把一组或多组 XY 数据绘制为曲线图并保存为图片（PNG/JPG，固定 1600×1000）。
 - `export_project_netlist` — 查看 EDA .epp 工程的网表，返回网表文件路径。
-- `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV。
+- `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV，用于器件替换和 replace_schematic_components_from_csv 接口配对使用，不单独使用。
 - `export_simulation_report` — 将提取的各链路参数数据（JSON）导出成正式报告(PDF/DOCX/report.json)
 - `filter_order_bandpass` — 带通阶数估算：通带 f_p1~f_p2、阻带在两侧，返回阶数与传输零点。低通/高通/带阻分别用 filter_order_lowpass/highpass/bandstop。
 - `filter_order_bandstop` — 带阻阶数估算：阻带是 f_s1~f_s2 这一段，返回阶数与陷波零点。低通用 filter_order_lowpass、高通用 filter_order_highpass。
@@ -276,7 +276,7 @@
 - `design_wilkinson` — 设计多级威尔金森功分器，输出各级微带线宽、线长和隔离电阻。
 - `draw_chart` — 把一组或多组 XY 数据绘制为曲线图并保存为图片（PNG/JPG，固定 1600×1000）。
 - `export_project_netlist` — 查看 EDA .epp 工程的网表，返回网表文件路径。
-- `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV。
+- `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV，用于器件替换和 replace_schematic_components_from_csv 接口配对使用，不单独使用。
 - `export_simulation_report` — 将提取的各链路参数数据（JSON）导出成正式报告(PDF/DOCX/report.json)
 - `fetch_artifact` — 把本机产物文件注册成可下载 URL（仿真结果 / SNP / RAW / 图 / 报告 / 任意文件）。
 - `filter_order_bandpass` — 带通阶数估算：通带 f_p1~f_p2、阻带在两侧，返回阶数与传输零点。低通/高通/带阻分别用 filter_order_lowpass/highpass/bandstop。
@@ -373,7 +373,7 @@
 - `draw_chart` — 把一组或多组 XY 数据绘制为曲线图并保存为图片（PNG/JPG，固定 1600×1000）。
 - `export_laspcem_snp` — 导出 .sem 工程的 S 参数为 Touchstone 文件（.sNp 会按端口数落成 .s<N>p）。
 - `export_project_netlist` — 查看 EDA .epp 工程的网表，返回网表文件路径。
-- `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV。
+- `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV，用于器件替换和 replace_schematic_components_from_csv 接口配对使用，不单独使用。
 - `export_simulation_report` — 将提取的各链路参数数据（JSON）导出成正式报告(PDF/DOCX/report.json)
 - `fetch_artifact` — 把本机产物文件注册成可下载 URL（仿真结果 / SNP / RAW / 图 / 报告 / 任意文件）。
 - `filter_order_bandpass` — 带通阶数估算：通带 f_p1~f_p2、阻带在两侧，返回阶数与传输零点。低通/高通/带阻分别用 filter_order_lowpass/highpass/bandstop。

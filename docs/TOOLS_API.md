@@ -589,7 +589,7 @@ from servers.eda.design_export import export_schematic_components_to_csv
 export_schematic_components_to_csv(project_path: str, csv_path: str, timeout_seconds: int = 60) -> dict
 ```
 
-将工程原理图中的有效器件信息导出为 CSV。导出列为 original_model_type/name/id 与 alternative_model_type/name/id（后三列留空），供 replace_models_from_csv 后续模型替换填写。仿真控制器、端口、变量等 EXCLUDED_TYPES 不导出。csv_path 未以 .csv 结尾时服务端自动追加后缀；父目录必须已存在。
+将工程原理图中的有效器件信息导出为 CSV，用于器件替换和 replace_schematic_components_from_csv 接口配对使用，不单独使用。导出列为 original_model_type/name/id 与 alternative_model_type/name/id（后三列留空），供 replace_schematic_components_from_csv 后续模型替换填写。仿真控制器、端口、变量等 EXCLUDED_TYPES 不导出。csv_path 未以 .csv 结尾时服务端自动追加后缀；父目录必须已存在。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|

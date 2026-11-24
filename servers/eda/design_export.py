@@ -91,12 +91,12 @@ def export_schematic_components_to_csv(
     csv_path: str = "",
     timeout_seconds: int = 60,
 ) -> dict[str, Any]:
-    """将工程原理图中的有效器件信息导出为 CSV。
+    """将工程原理图中的有效器件信息导出为 CSV，用于器件替换和 replace_schematic_components_from_csv 接口配对使用，不单独使用。
 
     用法："把这个工程的器件信息导出成 CSV"
 
     导出列为 original_model_type/name/id 与 alternative_model_type/name/id（后三列
-    留空），供 replace_models_from_csv 后续模型替换填写。仿真控制器、端口、变量等
+    留空），供 replace_schematic_components_from_csv 后续模型替换填写。仿真控制器、端口、变量等
     EXCLUDED_TYPES 不导出。csv_path 未以 .csv 结尾时服务端自动追加后缀；父目录
     必须已存在；同名文件直接覆盖。
 
