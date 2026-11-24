@@ -231,16 +231,16 @@ get_schematic_component_info(project_path: str, instance_name: str | list[str], 
 from servers.eda.project_manage import get_components_static_params
 
 get_components_static_params(
-    original_uuids: list[str],
+    component_uuids: list[str],
     timeout_seconds: int = 60,
 ) -> dict
 ```
 
-查询器件的固有参数（重量、尺寸、封装、所属厂商、成本等）。UUID 来自选型列表（`replace_models_from_csv` 的 CSV）的 `alternative_model_id` 列。不需要打开工程，也不需要 `project_path`。gRPC 服务将请求转发到 `POST /api/v1/components/static-params/`，返回上游完整响应（code/message/data）。
+查询器件的重量、尺寸、封装、所属厂商、成本等。传入参数 `component_uuids` 从 `get_schematic_component_info` 接口返回的 `component_uuid` 获得，内部转成 `original_uuids` 后转发到 `POST /api/v1/components/static-params/`，返回上游完整响应（code/message/data）。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
-| `original_uuids` | list | 是 | — | 器件 UUID 数组（至少一个，非空字符串） |
+| `component_uuids` | list | 是 | — | 器件 UUID 数组（从 get_schematic_component_info 返回的 component_uuid 获得） |
 | `timeout_seconds` | int | 否 | 60 | 最长等待秒数 |
 
 返回（gRPC 统一结构，业务字段在 `details` 中）：

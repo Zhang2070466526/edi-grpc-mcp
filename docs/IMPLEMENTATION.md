@@ -1108,7 +1108,7 @@ create/update 两条分支：先查 Schema → 映射需求为合法参数 → �
 
 ### 7. `select_component` — 器件选型（含替换闭环）
 
-8 步闭环：`get_model_category_params` 确认子类 → **依次**搜公共/个人库（gRPC 串行不并行）→ 提取过滤 → `get_components_static_params` 查厂商/尺寸 → 对比表 → 推荐 → 确认后取 original 三列 → 生成 CSV 调 `replace_models_from_csv`。重点标注字段映射（`model_uuid` → `original_uuids`；`component_type/instance_name/model_id` → CSV 列），防 LLM 编造。
+8 步闭环：`get_model_category_params` 确认子类 → **依次**搜公共/个人库（gRPC 串行不并行）→ 提取过滤 → `get_components_static_params` 查厂商/尺寸 → 对比表 → 推荐 → 确认后取 original 三列 → 生成 CSV 调 `replace_models_from_csv`。重点标注字段映射（`model_uuid` → `component_uuids`；`component_type/instance_name/model_id` → CSV 列），防 LLM 编造。
 
 ### 8. `analyze_signal_chain` — 信号链分析
 

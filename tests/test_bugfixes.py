@@ -324,10 +324,10 @@ def test_analyze_image_max_tokens_non_int(monkeypatch):
 def test_get_components_static_params_validation(monkeypatch):
     from servers.eda import project_manage as pm
     # 空字符串数组元素 → 拒绝
-    r = pm.get_components_static_params(original_uuids=["  "])
+    r = pm.get_components_static_params(component_uuids=["  "])
     assert r["success"] is False and r["error_code"] == "INVALID_PARAMETERS"
     # 空数组 → 拒绝，报错信息精确
-    r = pm.get_components_static_params(original_uuids=[])
+    r = pm.get_components_static_params(component_uuids=[])
     assert r["success"] is False and r["error_code"] == "INVALID_PARAMETERS"
     assert "空数组" in r["message"]
 
@@ -343,11 +343,11 @@ def test_get_components_static_params_payload(monkeypatch):
 
     monkeypatch.setattr(pm, "call_grpc", _fake)
     # 批量查询
-    pm.get_components_static_params(original_uuids=["u1", "u2"])
+    pm.get_components_static_params(component_uuids=["u1", "u2"])
     assert calls[-1][0] == ecserver_pb2.GET_COMPONENTS_STATIC_PARAMS
     assert calls[-1][1] == {"original_uuids": ["u1", "u2"]}
     # 单条查询（单元素数组）
-    pm.get_components_static_params(original_uuids=["u3"])
+    pm.get_components_static_params(component_uuids=["u3"])
     assert calls[-1][0] == ecserver_pb2.GET_COMPONENTS_STATIC_PARAMS
     assert calls[-1][1] == {"original_uuids": ["u3"]}
 

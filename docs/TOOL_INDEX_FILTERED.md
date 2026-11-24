@@ -56,7 +56,7 @@
 - `filter_order_highpass` — 高通阶数估算：通带自 f_p 向上、阻带在 f_p 之下，返回阶数与传输零点。低通用 filter_order_lowpass、带阻用 filter_order_bandstop。
 - `filter_order_lowpass` — 低通阶数估算：通带到 f_p、阻带在 f_p 之上，返回阶数与传输零点。高通用 filter_order_highpass、带阻用 filter_order_bandstop。
 - `find_netlist_paths` — 寻路（仅限 TR 收发链路，不支持混频链路）：给定网表 + 原理图 + 有向端口对，枚举每个端口对的全部信号路径，并给出每条路径上每个开关的目标 Bits。
-- `get_components_static_params` — 查询器件的固有参数（重量、尺寸、封装、所属厂商、成本等）。
+- `get_components_static_params` — 查询器件的重量、尺寸、封装、所属厂商、成本等，传入参数 component_uuids 从 get_schematic_component_info 接口返回的 component_uuid 获得。
 - `get_current_workspace_path` — 查询程序当前实际加载的工作区目录。
 - `get_current_workspace_summary` — 获取当前工作区概要：工程列表与本地性能模型（uuid / 子类型 / 型号）。
 - `get_hfss_analysis_status` — 查询 HFSS 异步仿真状态（默认只读本地，不访问 AEDT）。
@@ -200,7 +200,7 @@
 - `filter_order_highpass` — 高通阶数估算：通带自 f_p 向上、阻带在 f_p 之下，返回阶数与传输零点。低通用 filter_order_lowpass、带阻用 filter_order_bandstop。
 - `filter_order_lowpass` — 低通阶数估算：通带到 f_p、阻带在 f_p 之上，返回阶数与传输零点。高通用 filter_order_highpass、带阻用 filter_order_bandstop。
 - `find_netlist_paths` — 寻路（仅限 TR 收发链路，不支持混频链路）：给定网表 + 原理图 + 有向端口对，枚举每个端口对的全部信号路径，并给出每条路径上每个开关的目标 Bits。
-- `get_components_static_params` — 查询器件的固有参数（重量、尺寸、封装、所属厂商、成本等）。
+- `get_components_static_params` — 查询器件的重量、尺寸、封装、所属厂商、成本等，传入参数 component_uuids 从 get_schematic_component_info 接口返回的 component_uuid 获得。
 - `get_current_workspace_path` — 查询程序当前实际加载的工作区目录。
 - `get_current_workspace_summary` — 获取当前工作区概要：工程列表与本地性能模型（uuid / 子类型 / 型号）。
 - `get_model_category_params` — 获取模型管理模块的全部子类及对应参数列表。
@@ -284,7 +284,7 @@
 - `filter_order_highpass` — 高通阶数估算：通带自 f_p 向上、阻带在 f_p 之下，返回阶数与传输零点。低通用 filter_order_lowpass、带阻用 filter_order_bandstop。
 - `filter_order_lowpass` — 低通阶数估算：通带到 f_p、阻带在 f_p 之上，返回阶数与传输零点。高通用 filter_order_highpass、带阻用 filter_order_bandstop。
 - `find_netlist_paths` — 寻路（仅限 TR 收发链路，不支持混频链路）：给定网表 + 原理图 + 有向端口对，枚举每个端口对的全部信号路径，并给出每条路径上每个开关的目标 Bits。
-- `get_components_static_params` — 查询器件的固有参数（重量、尺寸、封装、所属厂商、成本等）。
+- `get_components_static_params` — 查询器件的重量、尺寸、封装、所属厂商、成本等，传入参数 component_uuids 从 get_schematic_component_info 接口返回的 component_uuid 获得。
 - `get_current_workspace_path` — 查询程序当前实际加载的工作区目录。
 - `get_current_workspace_summary` — 获取当前工作区概要：工程列表与本地性能模型（uuid / 子类型 / 型号）。
 - `get_hfss_analysis_status` — 查询 HFSS 异步仿真状态（默认只读本地，不访问 AEDT）。
@@ -381,7 +381,7 @@
 - `filter_order_highpass` — 高通阶数估算：通带自 f_p 向上、阻带在 f_p 之下，返回阶数与传输零点。低通用 filter_order_lowpass、带阻用 filter_order_bandstop。
 - `filter_order_lowpass` — 低通阶数估算：通带到 f_p、阻带在 f_p 之上，返回阶数与传输零点。高通用 filter_order_highpass、带阻用 filter_order_bandstop。
 - `find_netlist_paths` — 寻路（仅限 TR 收发链路，不支持混频链路）：给定网表 + 原理图 + 有向端口对，枚举每个端口对的全部信号路径，并给出每条路径上每个开关的目标 Bits。
-- `get_components_static_params` — 查询器件的固有参数（重量、尺寸、封装、所属厂商、成本等）。
+- `get_components_static_params` — 查询器件的重量、尺寸、封装、所属厂商、成本等，传入参数 component_uuids 从 get_schematic_component_info 接口返回的 component_uuid 获得。
 - `get_current_workspace_path` — 查询程序当前实际加载的工作区目录。
 - `get_current_workspace_summary` — 获取当前工作区概要：工程列表与本地性能模型（uuid / 子类型 / 型号）。
 - `get_hfss_analysis_status` — 查询 HFSS 异步仿真状态（默认只读本地，不访问 AEDT）。
