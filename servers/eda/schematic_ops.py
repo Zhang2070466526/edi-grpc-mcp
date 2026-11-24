@@ -134,10 +134,11 @@ def add_wire(
         second_pin_index: int,
         timeout_seconds: int = 120,
 ) -> dict[str, Any]:
-    """连接指定工程内两个器件的指定引脚，按需创建或合并网段并保存。
+    """连接指定工程对应原理图中的两个器件的指定引脚，按需创建或合并网段并保存。
 
     用法："把 R1 的 0 号引脚连到 C1 的 0 号引脚"
 
+    器件引脚可以在 list_schematic_components 和 get_schematic_component_info 获取。
     pin_index 是 0 开始的内部引脚编号（不是界面显示的端口名称），必须是
     0~2147483647 的整数。拒绝同一引脚自连接。新增连线及网段合并作为可撤销操作，
     提交后保存工程；保存失败时撤销本次操作。

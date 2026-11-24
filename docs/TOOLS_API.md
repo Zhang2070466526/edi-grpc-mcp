@@ -925,7 +925,7 @@ from servers.eda.schematic_ops import add_wire
 add_wire(project_path: str, first_instance_name: str, first_pin_index: int, second_instance_name: str, second_pin_index: int, timeout_seconds: int = 120) -> dict
 ```
 
-连接两个器件的指定引脚，按需创建或合并网段并保存。`pin_index` 是 0 开始的内部引脚编号（非界面端口名称），范围 0~2147483647。拒绝同一引脚自连接。新增连线及网段合并作为可撤销操作，提交后保存工程。
+连接两个器件的指定引脚，按需创建或合并网段并保存。器件引脚可以在 list_schematic_components 和 get_schematic_component_info 获取。`pin_index` 是 0 开始的内部引脚编号（非界面端口名称），范围 0~2147483647。拒绝同一引脚自连接。新增连线及网段合并作为可撤销操作，提交后保存工程。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
