@@ -5,7 +5,7 @@ update_components_from_schematic      按实例名更新参数（自动识别类
 delete_component_from_schematic      按实例名删除器件（EDI 直接执行）
 replace_port_component           替换端口器件类型（TermG↔P_nToneG）
 set_component_active_state       确定性设置 NORMAL/DISABLED/SHORTED
-replace_schematic_from_file      从 .ep 文件整体替换原理图
+load_schematic_from_file      从 .ep 文件整体替换原理图
 attach_out_component             为器件引脚挂载 Out 器件并自动连线
 
 协议枚举：
@@ -697,16 +697,16 @@ def generate_schematic_from_netlist(
 
 
 # ═══════════════════════════════════════════════════════════
-# 8.5 replace_schematic_from_file
+# 8.5 load_schematic_from_file
 # ═══════════════════════════════════════════════════════════
 
 @mcp.tool()
-def replace_schematic_from_file(
+def load_schematic_from_file(
         project_path: str,
         schematic_path: str,
         timeout_seconds: int = 300,
 ) -> dict[str, Any]:
-    """⚠️ 从 .ep 文件整体替换原理图（整图覆盖，原内容丢失）。
+    """⚠️ 使用指定的 schematic.ep 文件替换当前原理图内容（整图覆盖，原内容丢失）。
 
     用指定的 schematic.ep 文件（完整 edi-schematic S-Expression）整体替换工程唯一原理图，
     不追加、不合并。成功后立即保存，失败恢复原原理图状态。

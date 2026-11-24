@@ -84,6 +84,7 @@
 - `list_ideal_components` — 列出内置器件类型及其简要说明。
 - `list_result_curves` — 调用引擎原生 `--curve-info` 列出 RAW 中可用的「依赖 → 曲线名 + 可用单位」。
 - `list_schematic_components` — 列出当前原理图上存在的所有器件及器件对应参数，参数包括器件属性和位置几何信息
+- `load_schematic_from_file` — ⚠️ 使用指定的 schematic.ep 文件替换当前原理图内容（整图覆盖，原内容丢失）。
 - `open_document` — 打开本地文档：link 模式生成 10 分钟 HTTP 链接，local 模式用系统默认程序打开。
 - `open_edi_project` — 打开 .epp 工程（会切换 EDI 当前工程；同目录需有 schematics/main/schematic.ep）。关闭用 close_edi_project。
 - `open_hfss_project` — 启动 AEDT 并打开 .aedt 项目（COM 附着优先，subprocess 单次启动兜底）。
@@ -91,7 +92,6 @@
 - `quit_aedt` — 退出 AEDT **程序**（关掉整个 AEDT 窗口、收掉进程）：不是关工程。
 - `replace_port_component` — ⚠️ 将原理图中的端口器件替换为另一种类型（会改变端口）。
 - `replace_schematic_components_from_csv` — ⚠️ 按 CSV 批量替换工程原理图下的器件。
-- `replace_schematic_from_file` — ⚠️ 从 .ep 文件整体替换原理图（整图覆盖，原内容丢失）。
 - `run_laspcem_solve_async` — 提交 LASPCEM 求解任务（异步，立即返回 task_id）
 - `run_mixer_simulation` — 执行混频链路仿真（含混频器、LO 本振、上下变频，15 个指标）。不含变频的纯链路请用 run_tr_simulation。
 - `run_tr_simulation` — 跑 TR 收发链路仿真（纯链路：增益/噪声/P−1dB，不含混频器与变频）。有混频/本振/镜像指标请用 run_mixer_simulation。
@@ -215,10 +215,10 @@
 - `list_ideal_components` — 列出内置器件类型及其简要说明。
 - `list_result_curves` — 调用引擎原生 `--curve-info` 列出 RAW 中可用的「依赖 → 曲线名 + 可用单位」。
 - `list_schematic_components` — 列出当前原理图上存在的所有器件及器件对应参数，参数包括器件属性和位置几何信息
+- `load_schematic_from_file` — ⚠️ 使用指定的 schematic.ep 文件替换当前原理图内容（整图覆盖，原内容丢失）。
 - `open_edi_project` — 打开 .epp 工程（会切换 EDI 当前工程；同目录需有 schematics/main/schematic.ep）。关闭用 close_edi_project。
 - `replace_port_component` — ⚠️ 将原理图中的端口器件替换为另一种类型（会改变端口）。
 - `replace_schematic_components_from_csv` — ⚠️ 按 CSV 批量替换工程原理图下的器件。
-- `replace_schematic_from_file` — ⚠️ 从 .ep 文件整体替换原理图（整图覆盖，原内容丢失）。
 - `run_mixer_simulation` — 执行混频链路仿真（含混频器、LO 本振、上下变频，15 个指标）。不含变频的纯链路请用 run_tr_simulation。
 - `run_tr_simulation` — 跑 TR 收发链路仿真（纯链路：增益/噪声/P−1dB，不含混频器与变频）。有混频/本振/镜像指标请用 run_mixer_simulation。
 - `search_personal_models` — 个人模型库检索（自己导入的件）：按子类列出型号与参数。官方件在公共库，用 search_public_models。
@@ -305,13 +305,13 @@
 - `list_ideal_components` — 列出内置器件类型及其简要说明。
 - `list_result_curves` — 调用引擎原生 `--curve-info` 列出 RAW 中可用的「依赖 → 曲线名 + 可用单位」。
 - `list_schematic_components` — 列出当前原理图上存在的所有器件及器件对应参数，参数包括器件属性和位置几何信息
+- `load_schematic_from_file` — ⚠️ 使用指定的 schematic.ep 文件替换当前原理图内容（整图覆盖，原内容丢失）。
 - `open_document` — 打开本地文档：link 模式生成 10 分钟 HTTP 链接，local 模式用系统默认程序打开。
 - `open_edi_project` — 打开 .epp 工程（会切换 EDI 当前工程；同目录需有 schematics/main/schematic.ep）。关闭用 close_edi_project。
 - `open_hfss_project` — 启动 AEDT 并打开 .aedt 项目（COM 附着优先，subprocess 单次启动兜底）。
 - `quit_aedt` — 退出 AEDT **程序**（关掉整个 AEDT 窗口、收掉进程）：不是关工程。
 - `replace_port_component` — ⚠️ 将原理图中的端口器件替换为另一种类型（会改变端口）。
 - `replace_schematic_components_from_csv` — ⚠️ 按 CSV 批量替换工程原理图下的器件。
-- `replace_schematic_from_file` — ⚠️ 从 .ep 文件整体替换原理图（整图覆盖，原内容丢失）。
 - `run_mixer_simulation` — 执行混频链路仿真（含混频器、LO 本振、上下变频，15 个指标）。不含变频的纯链路请用 run_tr_simulation。
 - `run_tr_simulation` — 跑 TR 收发链路仿真（纯链路：增益/噪声/P−1dB，不含混频器与变频）。有混频/本振/镜像指标请用 run_mixer_simulation。
 - `search_personal_models` — 个人模型库检索（自己导入的件）：按子类列出型号与参数。官方件在公共库，用 search_public_models。
@@ -409,6 +409,7 @@
 - `list_ideal_components` — 列出内置器件类型及其简要说明。
 - `list_result_curves` — 调用引擎原生 `--curve-info` 列出 RAW 中可用的「依赖 → 曲线名 + 可用单位」。
 - `list_schematic_components` — 列出当前原理图上存在的所有器件及器件对应参数，参数包括器件属性和位置几何信息
+- `load_schematic_from_file` — ⚠️ 使用指定的 schematic.ep 文件替换当前原理图内容（整图覆盖，原内容丢失）。
 - `open_document` — 打开本地文档：link 模式生成 10 分钟 HTTP 链接，local 模式用系统默认程序打开。
 - `open_edi_project` — 打开 .epp 工程（会切换 EDI 当前工程；同目录需有 schematics/main/schematic.ep）。关闭用 close_edi_project。
 - `open_hfss_project` — 启动 AEDT 并打开 .aedt 项目（COM 附着优先，subprocess 单次启动兜底）。
@@ -416,7 +417,6 @@
 - `quit_aedt` — 退出 AEDT **程序**（关掉整个 AEDT 窗口、收掉进程）：不是关工程。
 - `replace_port_component` — ⚠️ 将原理图中的端口器件替换为另一种类型（会改变端口）。
 - `replace_schematic_components_from_csv` — ⚠️ 按 CSV 批量替换工程原理图下的器件。
-- `replace_schematic_from_file` — ⚠️ 从 .ep 文件整体替换原理图（整图覆盖，原内容丢失）。
 - `run_laspcem_solve_async` — 提交 LASPCEM 求解任务（异步，立即返回 task_id）
 - `run_mixer_simulation` — 执行混频链路仿真（含混频器、LO 本振、上下变频，15 个指标）。不含变频的纯链路请用 run_tr_simulation。
 - `run_tr_simulation` — 跑 TR 收发链路仿真（纯链路：增益/噪声/P−1dB，不含混频器与变频）。有混频/本振/镜像指标请用 run_mixer_simulation。

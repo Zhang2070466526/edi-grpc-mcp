@@ -790,7 +790,7 @@ Chat 层拦截 → 保存 `PendingAction` → 展示操作摘要 → 用户明�
 | `replace_port_component` | REPLACE_PORT_COMPONENT(16) | TermG/P_nToneG 替换，保留连线，Chat 层需确认 |
 | `attach_out_component` | ATTACH_OUT_COMPONENT(17) | 自动判断引脚朝向 → 计算放置位置 → 顺时针四方向检测重叠 → 器件+网线同一撤销组 |
 | `get_simulation_component_schema` | — | 读 catalog，与 `edi://reference/simulation-components` 同源 |
-| `replace_schematic_from_file` | LOAD_SCHEMATIC_FROM_FILE | 从 .ep 文件整体替换原理图 |
+| `load_schematic_from_file` | LOAD_SCHEMATIC_FROM_FILE | 从 .ep 文件整体替换原理图 |
 
 **update 三路类型推断**：
 
@@ -937,7 +937,7 @@ else:                                 # 两者都没有
 | `set_component_active_state` | 仿真时临时禁用/短路器件（不改参数） | list_schematic_components（instance_name） | — |
 | `replace_port_component` | 端口类型切换（TermG↔P_nToneG）保留连线 | list_schematic_components（instance_name） | — |
 | `attach_out_component` | 给器件引脚挂 Out 器件观察输出 | list_schematic_components（instance_name） | — |
-| `replace_schematic_from_file` | 用现成 .ep 文件整体替换原理图 | 现成 .ep 文件 | — |
+| `load_schematic_from_file` | 用现成 .ep 文件整体替换原理图 | 现成 .ep 文件 | — |
 
 #### 仿真
 

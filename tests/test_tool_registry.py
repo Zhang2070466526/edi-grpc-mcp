@@ -26,7 +26,7 @@ def test_all_tools_registered():
         "update_components_from_schematic", "delete_component_from_schematic",
         "set_component_active_state",
         "replace_port_component", "attach_out_component",
-        "replace_schematic_from_file", "update_schematic_components_transform",
+        "load_schematic_from_file", "update_schematic_components_transform",
         "list_schematic_components", "get_schematic_component_info",
         "get_components_static_params", "batch_query_component_rf_params",
         "get_model_category_params", "search_public_models", "search_personal_models",

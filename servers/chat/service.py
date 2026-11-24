@@ -63,7 +63,7 @@ _DESTRUCTIVE_CHAT_TOOLS = {
     "delete_component_from_schematic",
     "replace_schematic_components_from_csv",
     "replace_port_component",
-    "replace_schematic_from_file",   # 整体替换原理图，无条件确认
+    "load_schematic_from_file",   # 整体替换原理图，无条件确认
     "clear_schematic",               # 清空原理图，无条件确认
     "close_edi_project",          # 确认时需要 need_save=true
 }
@@ -707,7 +707,7 @@ class ChatService:
             "delete_component_from_schematic", "set_component_active_state",
             "replace_schematic_components_from_csv",
             "replace_port_component", "attach_out_component",
-            "replace_schematic_from_file",
+            "load_schematic_from_file",
         }
         if tool_name in _PROJECT_PATH_TOOLS:
             if not args.get("project_path"):
@@ -895,7 +895,7 @@ _TOOL_LABELS: dict[str, str] = {
     "set_component_active_state": "设置状态",
     "replace_port_component": "替换端口",
     "attach_out_component": "挂载Out器件",
-    "replace_schematic_from_file": "替换原理图",
+    "load_schematic_from_file": "替换原理图",
     "cst_solve_async": "CST求解",
     "cst_solve_query": "CST求解查询",
     "cst_export_snp": "CST导出S参数",
@@ -947,7 +947,7 @@ def _create_pending(tool_name: str, args: dict) -> PendingAction:
             f"关闭工程 {args.get('project_path', '?')} 并保存修改",
         "replace_port_component":
             f"替换端口器件 {args.get('target_instance_name', '?')} 为 {args.get('replacement_component_type', '?')}",
-        "replace_schematic_from_file":
+        "load_schematic_from_file":
             f"用 {args.get('schematic_path', '?')} 整体替换当前原理图",
     }.get(tool_name, f"执行 {tool_name}")
     return PendingAction(
@@ -965,7 +965,7 @@ def _confirmation_text(pending: PendingAction) -> str:
         "replace_schematic_components_from_csv": f"{pending.summary}。此操作将修改工程中的模型。",
         "close_edi_project": f"{pending.summary}。保存后无法撤销。",
         "replace_port_component": f"{pending.summary}。此操作将替换器件并重新连线。",
-        "replace_schematic_from_file": f"{pending.summary}。当前原理图将被整体替换，原内容丢失。",
+        "load_schematic_from_file": f"{pending.summary}。当前原理图将被整体替换，原内容丢失。",
     }.get(pending.tool_name, pending.summary)
     return (
         f"⚠️ **确认操作**\n\n{target}\n\n"

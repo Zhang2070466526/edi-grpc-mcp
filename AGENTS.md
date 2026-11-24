@@ -51,7 +51,7 @@ EDI MCP 服务：把 EDI / ANSYS HFSS / CST 三个仿真引擎包装成 **101 �
    这类数组参数的元素结构在 schema 里是空的 —— 只有 `describe_tool` 能给完整字段表和示例。
 2. **异步工具的套路**：`*_async` 返回 `task_id`，用 `*_query` / `*_status` 轮询，别重复提交。
 3. **破坏性工具**（首行带 ⚠️ 的：`clear_schematic`、`delete_component_from_schematic`、
-   `replace_schematic_from_file`、`replace_schematic_components_from_csv`、`close_edi_project`…）
+   `load_schematic_from_file`、`replace_schematic_components_from_csv`、`close_edi_project`…）
    调用前先 `get_project_summary` 核对，避免误删/误覆盖。
 
 ## 不要做的事（会被 review 打回）

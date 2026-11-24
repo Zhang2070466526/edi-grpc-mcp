@@ -145,7 +145,7 @@ def test_annotations_classify_readonly_and_destructive():
     # 破坏性：必须标出来（客户端据此弹二次确认）
     assert by["clear_schematic"].destructiveHint is True
     assert by["clear_schematic"].readOnlyHint is False
-    assert by["replace_schematic_from_file"].destructiveHint is True
+    assert by["load_schematic_from_file"].destructiveHint is True
     assert by["close_hfss_project"].destructiveHint is True
     # 只读：不能被误标成破坏性，否则每次查询都弹确认
     assert by["get_service_status"].readOnlyHint is True

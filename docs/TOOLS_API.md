@@ -2306,12 +2306,12 @@ attach_out_component(project_path: str, target_instance_name: str, pin_index: in
 
 ---
 
-### `replace_schematic_from_file`
+### `load_schematic_from_file`
 
 ```python
-from servers.eda.simulation_components import replace_schematic_from_file
+from servers.eda.simulation_components import load_schematic_from_file
 
-replace_schematic_from_file(project_path: str, schematic_path: str, timeout_seconds: int = 300) -> dict
+load_schematic_from_file(project_path: str, schematic_path: str, timeout_seconds: int = 300) -> dict
 ```
 
 从 .ep 文件整体替换原理图（不追加不合并）。成功后立即保存，失败恢复原原理图状态。

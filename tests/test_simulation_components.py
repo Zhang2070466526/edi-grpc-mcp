@@ -648,17 +648,17 @@ class TestGrpcPayloads:
 
 
 # ═══════════════════════════════════════════════════════════
-# 11. replace_schematic_from_file 工具
+# 11. load_schematic_from_file 工具
 # ═══════════════════════════════════════════════════════════
 
 class TestLoadSchematicFromFile:
-    """测试 replace_schematic_from_file 工具（参数校验 + payload）。"""
+    """测试 load_schematic_from_file 工具（参数校验 + payload）。"""
 
     def test_load_enum_and_payload(self):
         """正确传递 LOAD_SCHEMATIC_FROM_FILE 枚举和 payload。"""
-        from servers.eda.simulation_components import replace_schematic_from_file
+        from servers.eda.simulation_components import load_schematic_from_file
         with _VALIDATE_PATCH, _NETLIST_ISFILE_PATCH, _CALL_GRPC_PATCH as mock:
-            replace_schematic_from_file("C:/test.epp", "C:/test/schematic.ep")
+            load_schematic_from_file("C:/test.epp", "C:/test/schematic.ep")
             args = mock.call_args.args
             assert args[0] == ecserver_pb2.LOAD_SCHEMATIC_FROM_FILE
             assert args[1]["project_path"] == "C:/test.epp"
@@ -666,10 +666,10 @@ class TestLoadSchematicFromFile:
 
     def test_load_schematic_file_not_found(self):
         """schematic_path 不存在时返回 FILE_NOT_FOUND。"""
-        from servers.eda.simulation_components import replace_schematic_from_file
+        from servers.eda.simulation_components import load_schematic_from_file
         with _VALIDATE_PATCH, patch(
             "servers.eda.simulation_components.Path.is_file", return_value=False
         ):
-            result = replace_schematic_from_file("C:/test.epp", "C:/test/missing.ep")
+            result = load_schematic_from_file("C:/test.epp", "C:/test/missing.ep")
             assert result["success"] is False
             assert result["error_code"] == "FILE_NOT_FOUND"

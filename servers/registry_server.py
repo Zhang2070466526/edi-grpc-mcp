@@ -75,7 +75,7 @@ _INTERNAL_TOOLS: frozenset[str] = frozenset({
     "update_components_from_schematic",
     "replace_port_component", "delete_component_from_schematic",
     "set_component_active_state",
-    "replace_schematic_from_file", "attach_out_component",
+    "load_schematic_from_file", "attach_out_component",
     "update_schematic_components_transform",
     # 网表/截图/CSV
     "export_project_netlist", "capture_schematic", "export_schematic_components_to_csv",
@@ -237,7 +237,7 @@ _DESTRUCTIVE_TOOLS: frozenset[str] = frozenset({
     "quit_aedt",
     "close_laspcem_project", "cst_task_cancel", "delete_component_from_schematic",
     "laspcem_task_cancel", "replace_schematic_components_from_csv", "replace_port_component",
-    "replace_schematic_from_file", "switch_workspace",
+    "load_schematic_from_file", "switch_workspace",
 })
 
 #: 破坏性工具的中文短名（客户端列表里显示这个，不显示英文工具名）。其余工具 title=name。
@@ -252,7 +252,7 @@ _TOOL_TITLES: dict[str, str] = {
     "laspcem_task_cancel": "取消 LASPCEM 任务",
     "replace_schematic_components_from_csv": "批量替换模型",
     "replace_port_component": "替换端口器件",
-    "replace_schematic_from_file": "整图替换原理图",
+    "load_schematic_from_file": "整图替换原理图",
     "switch_workspace": "切换工作区",
 }
 
