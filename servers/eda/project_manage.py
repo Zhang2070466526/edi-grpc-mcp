@@ -397,7 +397,8 @@ def list_schematic_components(
               "active_state": 0, "state": "NORMAL", "parameters": {...}}, ...]}}
         分页字段：total（器件总数）/ offset / limit / returned（本页条数）/
         truncated（本页之后还有没有）；component_count 保持原含义（总数）。
-        每项含属性（parameters 等）与几何（position / rotation_deg / mirrored_* / pins）。
+        每项含属性（parameters 等）与几何（position / rotation_deg / mirrored_* / pins），
+        以及 component_uuid（模型库 Component UUID；性能器件非空、内置/仿真器件为空）。
         Var / Sweep / SParameter / HB(XDB) / 形状类(EBOND_ShapeJedec) 等非图形器件本来没有引脚，
         pins 返回空列表 [] 属正常，不代表数据缺失或异常；判断几何是否完整看 position。
     """
@@ -526,11 +527,14 @@ def batch_query_component_rf_params(
 ) -> dict[str, Any]:
     """按器件型号字符串列表批量查询模型的频率、增益、回波损耗、抑制、P-1、Psat、隔离、插损、衰减等信息，返回对齐到输入顺序的结果。
 
-    用法：批量查这几个型号的模型信息（如 MAAD_008866）
+    用法：批量查这几个型号的模型信息（如 HGC259、NC10424C_812）
 
-    传入参数 model_name_list 从 list_schematic_components 中的 component_type 字段获取。
-    注意：本工具只接受器件型号串（如 "MAAD_008866"），不接受 UUID；
-    按 UUID 查固有参数（重量/尺寸/封装/厂商）用 get_components_static_params。
+    器件型号串数组（如 HGC259、NC10424C_812）。来源二选一：
+    ① 选型阶段：search_public_models / search_personal_models 返回的 model_name；
+    ② 工程内已有的性能器件：list_schematic_components 返回的 component_type，仅当该器件 component_uuid 非空。
+    内置/仿真器件（TermG、P_nToneG、SParameter、Var、Sweep、XDB、Out）的 component_type 是类型名
+    不是型号，传入后只会进 missing（整体仍返回 success=true），不要用它们。
+    本工具只接受器件型号串，不接受 UUID；按 UUID 查固有参数（重量/尺寸/封装/厂商）用 get_components_static_params。
 
     下游模型服务只返回命中的型号且不保序。本工具将返回的 data 按输入 model_name_list
     顺序对齐：未命中的型号补 null 占位，并在 missing 中列出未命中的型号。

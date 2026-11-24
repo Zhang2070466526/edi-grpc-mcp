@@ -272,7 +272,7 @@ batch_query_component_rf_params(
 ) -> dict
 ```
 
-按器件型号字符串列表批量查询模型的频率、增益、回波损耗、抑制、P-1、Psat、隔离、插损、衰减等信息，返回对齐到输入顺序的结果。传入参数 `model_name_list` 从 `list_schematic_components` 中的 `component_type` 字段获取。只接受型号串（如 `"MAAD_008866"`），不接受 UUID（按 UUID 查固有参数用 `get_components_static_params`）。不需要打开工程，也不需要 `project_path`。gRPC 服务将请求转发到 `POST /api/v1/models/manage/batch_query_component/`。
+按器件型号字符串列表批量查询模型的频率、增益、回波损耗、抑制、P-1、Psat、隔离、插损、衰减等信息，返回对齐到输入顺序的结果。器件型号串数组（如 HGC259、NC10424C_812），来源二选一：① 选型阶段 `search_public_models` / `search_personal_models` 返回的 `model_name`；② 工程内已有的性能器件 `list_schematic_components` 返回的 `component_type`，仅当该器件 `component_uuid` 非空。内置/仿真器件（TermG、P_nToneG、SParameter、Var、Sweep、XDB、Out）的 `component_type` 是类型名不是型号，传入后只会进 missing，不要用它们。只接受型号串，不接受 UUID（按 UUID 查固有参数用 `get_components_static_params`）。不需要打开工程，也不需要 `project_path`。gRPC 服务将请求转发到 `POST /api/v1/models/manage/batch_query_component/`。
 
 下游模型服务只返回命中的型号且不保序。本工具会将返回的 `data` 按输入 `model_name_list` 顺序对齐：未命中的型号补 `null` 占位，并在 `missing` 中列出未命中的型号。
 
