@@ -59,7 +59,7 @@
 - `get_hfss_project_info` — 查询当前 AEDT 打开的项目和活动设计（纯查询，不启动 AEDT）。
 - `get_laspcem_setup` — 读取 .sem 工程当前配置的求解设置参数（cem.EditSolution 那套键，约 64 个）。
 - `get_model_category_params` — 获取模型管理模块的全部子类及对应参数列表。
-- `get_project_summary` — 获取 .epp 工程完整概览：元数据、原理图、元件统计、仿真配置、最近结果。
+- `get_project_summary` — 获取 .epp 工程概览包括，元数据、原理图位置、最近结果文件位置。注意：该接口只判断有无仿真结果，禁止解析raw文件
 - `get_schematic_component_info` — 通过 gRPC 按实例名查询单个器件的完整信息。
 - `get_service_logs` — 读取 EDI 服务端日志，检查运行异常（含 ERROR/WARN/异常堆栈分析）。
 - `get_service_status` — 返回 EDI gRPC 通道状态和队列占用信息（只读，不占执行槽位），用于诊断：通道是否健康、是否有任务在排队。
@@ -76,11 +76,11 @@
 - `launch_edi` — 启动 EDI 客户端并等待 gRPC 就绪。已运行时跳过启动。
 - `launch_laspcem` — 启动 LASPCEM 电磁仿真软件。已运行时返回状态，不重复启动。
 - `list_eda_tasks` — 列出当前所有异步仿真任务，可选按状态过滤。不阻塞。
-- `list_epp_projects` — 扫描指定文件夹中的 .epp 工程文件。
+- `list_epp_projects` — 扫描指定文件夹中的 .epp 工程文件，该接口用于扫描工作区外的工程文件，工作区内工程可通过GET_CURRENT_WORKSPACE_SUMMARY获取。
 - `list_ideal_components` — 列出内置器件类型及其简要说明。
 - `list_result_curves` — 调用引擎原生 `--curve-info` 列出 RAW 中可用的「依赖 → 曲线名 + 可用单位」。
 - `list_schematic_components` — 通过 gRPC 查询原理图全部器件（含完整参数），比本地文件读取更实时。
-- `list_simulation_components` — 列出已保存工程中的全部器件及参数（含 wire→public 参数名映射）。
+- `list_simulation_components` — 列出已保存工程中的全部器件及参数（含 wire→public 参数名映射，磁盘读已保存工程，不需要edi在线）。
 - `open_document` — 打开本地文档：link 模式生成 10 分钟 HTTP 链接，local 模式用系统默认程序打开。
 - `open_edi_project` — 打开 .epp 工程（会切换 EDI 当前工程；同目录需有 schematics/main/schematic.ep）。关闭用 close_edi_project。
 - `open_hfss_project` — 启动 AEDT 并打开 .aedt 项目（COM 附着优先，subprocess 单次启动兜底）。

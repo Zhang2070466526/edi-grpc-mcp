@@ -567,7 +567,7 @@ def list_simulation_components(
         include_hidden: bool = False,
         summary_only: bool = False,
 ) -> dict[str, Any]:
-    """列出已保存工程中的全部器件及参数（含 wire→public 参数名映射）。
+    """列出已保存工程中的全部器件及参数（含 wire→public 参数名映射，磁盘读已保存工程，不需要edi在线）。
 
     可列出所有器件（SP/HB/XDB/Var/Sweep/P_nToneG/TermG 等）。
     已知类型做 wire→public 映射；其他类型返回原始 paramsinfo。

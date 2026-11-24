@@ -43,7 +43,7 @@ from servers import mcp
 
 @mcp.tool()
 def list_epp_projects(folder_path: str) -> dict[str, Any]:
-    """扫描指定文件夹中的 .epp 工程文件。
+    """扫描指定文件夹中的 .epp 工程文件，该接口用于扫描工作区外的工程文件，工作区内工程可通过GET_CURRENT_WORKSPACE_SUMMARY获取。
 
     用法："帮我看看 C:/Projects 下有哪些工程"、"扫描 EDI-Workspace 目录"
 
@@ -179,7 +179,7 @@ def get_project_summary(
         include_component_types: bool = True,
         include_latest_result: bool = True,
 ) -> dict[str, Any]:
-    """获取 .epp 工程完整概览：元数据、原理图、元件统计、仿真配置、最近结果。
+    """获取 .epp 工程概览包括，元数据、原理图位置、最近结果文件位置。注意：该接口只判断有无仿真结果，禁止解析raw文件
 
     用法："帮我看看这个工程的概览"、"查看工程信息"
 
