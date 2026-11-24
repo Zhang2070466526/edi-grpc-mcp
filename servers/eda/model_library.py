@@ -165,17 +165,17 @@ def add_performance_component(
         position: dict,
         timeout_seconds: int = 120,
 ) -> dict[str, Any]:
-    """将工作区模型库中的 Component 放置到指定工程原理图并保存。
+    """按指定坐标新增性能模型器件，只放置器件，不修改器件属性。
 
     用法："把性能器件 <uuid> 放到 (100,200)"
 
-    component_uuid 为工作区模型库中的 Component UUID，不能假定等于 MMS 的
-    original_uuid。坐标会吸附到网格。不自动下载模型、不额外设置参数、不自动
-    避让重叠、不返回器件实例名。
+    component_uuid 必须是 get_current_workspace_summary 接口返回的性能模型的 uuid，
+    不能假定等于 MMS 的 original_uuid。坐标会吸附到网格。只放置器件、不修改器件属性，
+    不自动下载模型、不额外设置参数、不自动避让重叠、不返回器件实例名。
 
     Args:
         project_path: .epp 工程文件绝对路径。
-        component_uuid: 工作区模型库中的 Component UUID（非空字符串）。
+        component_uuid: 性能模型 UUID（非空字符串，从 get_current_workspace_summary 返回获取）。
         position: 场景坐标对象 {"x": 100, "y": 200}（x/y 均为有限数值）。
         timeout_seconds: 最长等待秒数，默认 120。
 

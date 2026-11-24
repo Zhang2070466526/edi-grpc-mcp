@@ -9,7 +9,7 @@
 共 100 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，只放置器件，不修改器件属性。
-- `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
+- `add_performance_component` — 按指定坐标新增性能模型器件，只放置器件，不修改器件属性。
 - `add_wire` — 连接指定工程内两个器件的指定引脚，按需创建或合并网段并保存。
 - `analyze_image` — 调用视觉模型分析本地图片内容，返回结构化文字结果 —— ⚠️ 结果可能编造（实测把电路原理图认成加法器），只作粗看、不得作为工程结论。(仅开发使用)
 - `analyze_mixer_spur` — 混频杂散分析：枚举 m×源频 ± n×LO 的杂散组合，判断是否落入目标输出频带。
@@ -173,7 +173,7 @@
 共 60 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，只放置器件，不修改器件属性。
-- `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
+- `add_performance_component` — 按指定坐标新增性能模型器件，只放置器件，不修改器件属性。
 - `add_wire` — 连接指定工程内两个器件的指定引脚，按需创建或合并网段并保存。
 - `analyze_mixer_spur` — 混频杂散分析：枚举 m×源频 ± n×LO 的杂散组合，判断是否落入目标输出频带。
 - `attach_out_component` — 为目标器件引脚挂载一个 Out 器件，并自动连线。
@@ -240,7 +240,7 @@
 共 88 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，只放置器件，不修改器件属性。
-- `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
+- `add_performance_component` — 按指定坐标新增性能模型器件，只放置器件，不修改器件属性。
 - `add_wire` — 连接指定工程内两个器件的指定引脚，按需创建或合并网段并保存。
 - `analyze_image` — 调用视觉模型分析本地图片内容，返回结构化文字结果 —— ⚠️ 结果可能编造（实测把电路原理图认成加法器），只作粗看、不得作为工程结论。(仅开发使用)
 - `analyze_mixer_spur` — 混频杂散分析：枚举 m×源频 ± n×LO 的杂散组合，判断是否落入目标输出频带。
@@ -335,7 +335,7 @@
 共 99 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，只放置器件，不修改器件属性。
-- `add_performance_component` — 将工作区模型库中的 Component 放置到指定工程原理图并保存。
+- `add_performance_component` — 按指定坐标新增性能模型器件，只放置器件，不修改器件属性。
 - `add_wire` — 连接指定工程内两个器件的指定引脚，按需创建或合并网段并保存。
 - `analyze_mixer_spur` — 混频杂散分析：枚举 m×源频 ± n×LO 的杂散组合，判断是否落入目标输出频带。
 - `analyze_variables` — 分析工程中的变量定义和引用关系。

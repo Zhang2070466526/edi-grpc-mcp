@@ -718,12 +718,12 @@ from servers.eda.model_library import add_performance_component
 add_performance_component(project_path: str, component_uuid: str, position: dict, timeout_seconds: int = 120) -> dict
 ```
 
-将工作区模型库中的 Component 放置到指定工程原理图并保存。`component_uuid` 是模型库 Component UUID（非 MMS 的 original_uuid），坐标会吸附到网格。不自动下载模型、不设置参数、不避让重叠、不返回实例名。
+按指定坐标新增性能模型器件，只放置器件，不修改器件属性。`component_uuid` 必须是 `get_current_workspace_summary` 接口返回的性能模型的 uuid，坐标会吸附到网格。只放置器件、不修改器件属性，不自动下载模型、不设置参数、不避让重叠、不返回实例名。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `project_path` | str | 是 | — | `.epp` 文件绝对路径 |
-| `component_uuid` | str | 是 | — | 模型库 Component UUID |
+| `component_uuid` | str | 是 | — | 性能模型 UUID（从 get_current_workspace_summary 返回获取） |
 | `position` | dict | 是 | — | 场景坐标 `{"x": .., "y": ..}` |
 | `timeout_seconds` | int | 否 | 120 | 最长等待秒数 |
 
