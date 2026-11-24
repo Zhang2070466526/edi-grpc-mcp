@@ -7,9 +7,9 @@ close_edi_project             关闭已打开的工程，可选择是否保存
 get_project_summary           工程概览（元数据、原理图、仿真配置）
 analyze_variables             分析变量定义、引用和 Sweep 配置
 list_schematic_components     查询原理图全部器件（gRPC，含完整参数与几何）
-get_schematic_component_info  按实例名查询器件完整信息（gRPC）
+get_schematic_component_info  按实例名查器件参数与几何（gRPC）
 get_components_static_params  查询器件固有参数（重量/尺寸/封装/厂商/成本）
-batch_query_component         按器件型号列表批量查询模型信息
+batch_query_component_rf_params  按器件型号列表批量查询模型信息
 
 自然语言使用示例：
   帮我看看 C:/EDI-Workspace 下面有哪些 .epp 工程
@@ -365,21 +365,26 @@ def list_schematic_components(
         limit: int = 50,
         offset: int = 0,
 ) -> dict[str, Any]:
-    """列出当前原理图上存在的所有器件及器件对应参数，参数包括器件属性和位置几何信息，
+    """列出当前原理图上存在的所有器件及器件对应参数，参数包括器件属性和位置几何信息
+
+    列出原理图全部器件：器件属性 + 位置/旋转/镜像/引脚几何（gRPC 实时）。
     例如，电阻R的电阻值和位置坐标、引脚索引和引脚相对坐标、旋转角度、水平还是垂直镜像。
+    每项除属性（如电阻阻值、器件类型）外，同步带几何：position（场景坐标）/
+    rotation_deg / mirrored_horizontal / mirrored_vertical / pins（含引脚索引与相对坐标）。
+    不需要再逐器件调 get_schematic_component_info 补几何。
 
     用法："列出这个工程原理图上的所有器件"、"查看原理图器件"、"把每个器件的位置和旋转角都列出来"
 
     定位：gRPC 实时读取当前工程全部器件（含 Var/Sweep 等），属性与几何信息（position /
-    rotation_deg / mirrored_horizontal / mirrored_vertical / pins）同步返回，不需要再逐器件
-    调 get_schematic_component_info 补几何。需要分页/过滤/只取器件标识用
-    list_simulation_components（本地磁盘）。
+    rotation_deg / mirrored_horizontal / mirrored_vertical / pins）同步返回。需要分页或
+    只取器件标识时用 limit/offset 与 summary_only。
 
     Args:
         project_path: .epp 工程文件绝对路径。
         timeout_seconds: 单次调用的最长等待秒数，默认 60。
-        summary_only: True 时每项只保留标量字段（instance_name/component_type/active_state/state），
-            裁掉 parameters 等 dict/list 大头，省上下文。
+        summary_only: True 时每项只保留标量字段（instance_name/component_type/active_state/state
+            以及 rotation_deg/mirrored_*），裁掉 parameters 与 position/pins（dict/list），省上下文；
+            需要坐标或引脚时不要用它，改用 limit 分页。
         limit: 只返回前 N 个器件，默认 50；0 = 全部。截断时 details.truncated=true。
         offset: 从第几个器件开始返回，默认 0；配合 limit 翻页（details.total 是总数）。
             例：limit=50, offset=50 取第二页。
@@ -393,6 +398,8 @@ def list_schematic_components(
         分页字段：total（器件总数）/ offset / limit / returned（本页条数）/
         truncated（本页之后还有没有）；component_count 保持原含义（总数）。
         每项含属性（parameters 等）与几何（position / rotation_deg / mirrored_* / pins）。
+        Var / Sweep / SParameter / HB(XDB) / 形状类(EBOND_ShapeJedec) 等非图形器件本来没有引脚，
+        pins 返回空列表 [] 属正常，不代表数据缺失或异常；判断几何是否完整看 position。
     """
     result = call_project_grpc(ecserver_pb2.LIST_SCHEMATIC_COMPONENTS, project_path, timeout_seconds)
     if result.get("success"):
@@ -425,32 +432,54 @@ def list_schematic_components(
 @mcp.tool()
 def get_schematic_component_info(
         project_path: str,
-        instance_name: str,
+        instance_name: str | list[str],
         timeout_seconds: int = 60,
 ) -> dict[str, Any]:
-    """通过 gRPC 按实例名查询单个器件的完整信息。
+    """按实例名查询器件参数与几何：支持单个名称或名称列表（批量）。
+
+    每项含器件属性（如电阻阻值、器件类型）与几何 position / rotation_deg /
+    mirrored_horizontal / mirrored_vertical / pins（引脚索引与相对坐标）。
 
     用法："查看 R1 这个器件的参数"、"U1 是什么类型的器件"、"这个器件现在的位置和旋转角是多少"
 
-    返回含几何：position / rotation_deg / mirrored_horizontal / mirrored_vertical / pins，可直接作为
-    update_schematic_components_transform 的输入；批量列出用 list_schematic_components（同步返回几何）。
+    instance_name 从 list_schematic_components 返回的 instance_name 字段取值。传字符串返回单个
+    component；传列表返回 component_count + components，顺序与请求一致，任一实例不存在则整批失败。
+    批量没有分页：每器件约 1.2 KB，一次建议不超过 10–20 个；全量请用 list_schematic_components 分页。
+    返回含几何：position / rotation_deg / mirrored_horizontal / mirrored_vertical / pins。
 
     Args:
         project_path: .epp 工程文件绝对路径。
-        instance_name: 器件实例名（如 "R1"）。
+        instance_name: 器件实例名（如 "R1"）或实例名列表，取自 list_schematic_components 返回。
         timeout_seconds: 最长等待秒数，默认 60。
 
     Returns:
         gRPC 统一返回结构（业务字段在 details 中）：
-        {"success": True, "status": "SUCCEEDED",
+        传字符串时：{"success": True, "status": "SUCCEEDED",
          "details": {"instance_name": "R1", "component": {
              "instance_name": "R1", "component_type": "R",
-             "active_state": 0, "state": "NORMAL", "parameters": {...}}}}
+             "active_state": 0, "state": "NORMAL", "parameters": {...},
+             "position": {...}, "rotation_deg": 0, "pins": [...]}}}
+        传列表时 details 含 component_count + components（元素结构与 component 一致）。
     """
-    instance_name, err = require_nonempty(instance_name, error_code="EMPTY_INSTANCE_NAME",
-                                          label="instance_name")
-    if err:
-        return err
+    if isinstance(instance_name, str):
+        instance_name, err = require_nonempty(instance_name, error_code="EMPTY_INSTANCE_NAME",
+                                              label="instance_name")
+        if err:
+            return err
+    elif isinstance(instance_name, list):
+        if not instance_name:
+            return error_response("EMPTY_INSTANCE_NAME", "instance_name 不能为空列表")
+        cleaned = []
+        for name in instance_name:
+            if not isinstance(name, str):
+                return error_response("INVALID_PARAMETERS", "instance_name 列表元素必须是字符串")
+            s = name.strip()
+            if not s:
+                return error_response("EMPTY_INSTANCE_NAME", "instance_name 列表不能含空字符串")
+            cleaned.append(s)
+        instance_name = cleaned
+    else:
+        return error_response("INVALID_PARAMETERS", "instance_name 必须是字符串或字符串列表")
     return call_project_grpc(ecserver_pb2.GET_SCHEMATIC_COMPONENT_INFO, project_path,
                              timeout_seconds, instance_name=instance_name)
 
@@ -490,7 +519,7 @@ def get_components_static_params(
 
 
 @mcp.tool()
-def batch_query_component(
+def batch_query_component_rf_params(
         model_name_list: list[str],
         timeout_seconds: int = 60,
 ) -> dict[str, Any]:

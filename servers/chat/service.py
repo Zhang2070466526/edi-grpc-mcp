@@ -114,10 +114,6 @@ _CHAT_TOOL_DESCRIPTIONS: dict[str, str] = {
     "replace_port_component": (
         "替换端口器件类型（TermG-P_nToneG），服务端保留位置和连线"
     ),
-    "create_simulation_component": (
-        "使用 EDI 器件工厂默认参数创建器件。"
-        "创建后根据 instance_name 调用 update 设置参数。支持任意 EDI 工厂类型"
-    ),
     "get_simulation_component_schema": (
         "查询仿真控件支持的参数、类型和单位；配置控件前优先调用"
     ),
@@ -706,9 +702,8 @@ class ChatService:
             "get_project_summary", "analyze_variables",
             "capture_schematic", "export_project_netlist",
             "start_simulation_async",
-            "list_simulation_components",
             "list_schematic_components", "get_schematic_component_info",
-            "create_simulation_component", "update_simulation_component",
+            "update_simulation_component",
             "delete_simulation_component", "set_component_active_state",
             "replace_models_from_csv",
             "replace_port_component", "attach_out_component",
@@ -893,10 +888,8 @@ _TOOL_LABELS: dict[str, str] = {
     "analyze_image": "分析图片",
     "open_document": "打开文档",
     "get_simulation_component_schema": "控件参数",
-    "list_simulation_components": "查询器件",
     "list_schematic_components": "实时器件列表",
     "get_schematic_component_info": "查器件详情",
-    "create_simulation_component": "新增器件",
     "update_simulation_component": "更新器件",
     "delete_simulation_component": "删除器件",
     "set_component_active_state": "设置状态",

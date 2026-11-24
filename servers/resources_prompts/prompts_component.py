@@ -27,15 +27,15 @@ def prompt_configure_simulation_component(
 
     Args:
         project_path: .epp 工程文件绝对路径。
-        action: create（创建）或 update（更新）。
+        action: update（更新）。
         component_type: SParameter / HarmonicBalance / XDB。
         instance_name: update 时需要提供实例名。
         requirements: 用户对参数的自然语言描述。
     """
     act = action.lower().strip()
-    if act not in ("create", "update"):
+    if act != "update":
         return [{"role": "user", "content": (
-            f"错误：action 必须是 'create' 或 'update'，收到 '{action}'。"
+            f"错误：action 必须是 'update'，收到 '{action}'。"
         )}]
 
     ct = component_type.strip()
@@ -52,20 +52,13 @@ def prompt_configure_simulation_component(
         "   （如果客户端支持 Resource，也可读取 edi://reference/simulation-components）",
     ]
 
-    if act == "update":
-        inst = instance_name.strip() or "（请提供实例名）"
-        steps += [
-            f"3. 调用 `list_simulation_components` 查找 {inst} 的当前参数。",
-            f"4. 把用户需求「{requirements or '修改参数'}」映射为合法的参数名、值和单位。",
-            f"5. 在执行前向用户展示：目标器件 {inst}（{ct}）、参数名称、新的值、单位。",
-            f"6. 用户确认后调用 `update_simulation_component`，传入 instance_name=\"{inst}\" 和 component_type=\"{ct}\"。",
-        ]
-    else:
-        steps += [
-            f"3. 把用户需求「{requirements or '使用默认参数'}」映射为合法的参数名、值和单位。",
-            f"4. 在执行前向用户展示：器件类型 {ct}、参数名称、值、单位。",
-            f"5. 用户确认后调用 `create_simulation_component`，传入 component_type=\"{ct}\"。",
-        ]
+    inst = instance_name.strip() or "（请提供实例名）"
+    steps += [
+        f"3. 调用 `list_schematic_components` 查找 {inst} 的当前参数。",
+        f"4. 把用户需求「{requirements or '修改参数'}」映射为合法的参数名、值和单位。",
+        f"5. 在执行前向用户展示：目标器件 {inst}（{ct}）、参数名称、新的值、单位。",
+        f"6. 用户确认后调用 `update_simulation_component`，传入 instance_name=\"{inst}\" 和 component_type=\"{ct}\"。",
+    ]
 
     steps += [
         "",
@@ -73,7 +66,6 @@ def prompt_configure_simulation_component(
         "- 参数名必须与 `get_simulation_component_schema` 返回的一致。",
         "- 不要编造参数名、单位或 wire 字段。",
         "- 无单位参数不要传 unit 字段。",
-        "- 每次 create 都会创建新实例，EDI 自动分配实例名。",
         "- TIMEOUT 或 STREAM_DISCONNECTED 后禁止自动重试。",
     ]
 
@@ -108,7 +100,7 @@ def prompt_select_component(sub_type_id: str, requirement: str) -> list[dict[str
         "   二者值相同仅参数名不同，选型结果里没有 `alternative_model_id` 字段）查厂商/尺寸/封装。\n"
         "5. 输出对比表：型号 | 厂商 | 关键参数 | 尺寸 | 来源(公共/个人)。\n"
         "6. 给出推荐及理由，不编造参数。\n"
-        "7. 若用户确认要替换到工程：先调 `list_simulation_components(summary_only=true)` "
+        "7. 若用户确认要替换到工程：先调 `list_schematic_components(summary_only=true)` "
         "拿工程现有器件的三列（不编造，以实际返回为准）：\n"
         "   `component_type→original_model_type`、`instance_name→original_model_name`、`model_id→original_model_id`。\n"
         "8. 生成 CSV（列 original_model_type/name/id + alternative_model_type/name/id），"

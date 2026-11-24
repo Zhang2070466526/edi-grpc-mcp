@@ -82,5 +82,49 @@ def test_summary_only_still_paginates(monkeypatch):
     assert "parameters" not in d["components"][0]
 
 
+def _stub_with_geom(monkeypatch, count: int):
+    """桩数据带几何（position/rotation_deg/mirrored_*/pins），模拟服务端 LIST 的同步返回。"""
+    from servers.eda import project_manage as pm
+
+    comps = [{
+        "instance_name": f"R{i:03d}", "component_type": "R",
+        "active_state": 0, "state": "NORMAL",
+        "parameters": {"r": i},
+        "position": {"x": i * 2.5, "y": -7.5},
+        "rotation_deg": 90 if i % 2 else 0,
+        "mirrored_horizontal": False, "mirrored_vertical": bool(i % 3),
+        "pins": [{"index": 0, "local_position": {"x": 0, "y": 0},
+                  "position": {"x": i * 2.5, "y": -7.5}, "uuid": f"pin-{i}"}],
+    } for i in range(count)]
+
+    def fake_call(*a, **k):
+        return {"success": True, "status": "SUCCEEDED", "message": "",
+                "details": {"component_count": count, "components": [dict(c) for c in comps]}}
+
+    monkeypatch.setattr(pm, "call_project_grpc", fake_call)
+    return pm
+
+
+def test_geometry_survives_paging(monkeypatch):
+    """几何来自同一次 gRPC（不再逐器件补），分页截断后本页每项仍须带几何。"""
+    pm = _stub_with_geom(monkeypatch, 40)
+    d = pm.list_schematic_components("x.epp", limit=5, offset=35)["details"]
+    assert d["returned"] == 5 and d["truncated"] is False
+    for c in d["components"]:
+        assert isinstance(c["position"], dict) and "x" in c["position"]
+        assert isinstance(c["pins"], list) and c["pins"]
+        assert c["rotation_deg"] in (0, 90)
+
+
+def test_summary_only_drops_position_and_pins(monkeypatch):
+    """钉住现状（2026-11-24 决定不改白名单）：summary_only 裁 parameters + position/pins，
+    只保留 rotation_deg / mirrored_* 这类标量；要坐标或引脚必须走 limit 分页。
+    若哪天把 summary_only 改成保留几何，本用例应同步改（这是行为变更，不是修 bug）。"""
+    pm = _stub_with_geom(monkeypatch, 3)
+    c = pm.list_schematic_components("x.epp", limit=1, summary_only=True)["details"]["components"][0]
+    assert "parameters" not in c and "position" not in c and "pins" not in c
+    assert c["rotation_deg"] in (0, 90) and "mirrored_vertical" in c
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-p", "no:cacheprovider"])

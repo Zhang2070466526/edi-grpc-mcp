@@ -38,7 +38,6 @@ def resource_operation_guide() -> str:
         "# EDI gRPC MCP 操作规则\n\n"
         "- 查询工程时优先使用 `get_project_summary`。\n"
         "- 创建或修改仿真器件前先查询参数 Schema。\n"
-        "- `create_simulation_component` 每次都会创建新实例。\n"
         "- `TIMEOUT` 或 `STREAM_DISCONNECTED` 后禁止自动重试创建或导入。\n"
         "- `delete_simulation_component` 按实例名精确删除，删除前先确认目标。\n"
         "- `set_component_active_state` 是确定性设置，不是状态切换。\n"

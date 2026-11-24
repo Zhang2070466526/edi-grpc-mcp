@@ -20,10 +20,7 @@ from servers.eda.simulation_components import (
     _catalog_component,
     _resolve_parameter_schema,
     _prepare_parameters,
-    _from_wire_parameters,
     _find_component_by_instance,
-    _format_component_parameters,
-    _find_sim_components,
     _COMPONENT_TYPES,
     _ACTIVE_STATES,
 )
@@ -274,40 +271,6 @@ class TestPrepareParameters:
 
 
 # ═══════════════════════════════════════════════════════════
-# 4. Wire conversion
-# ═══════════════════════════════════════════════════════════
-
-class TestWireConversion:
-    def test_from_wire_fixed(self):
-        public = _from_wire_parameters("HarmonicBalance", {
-            "Freq[1]": {"value": "1", "unit": "GHz"},
-            "Order[1]": {"value": "5"},
-        })
-        assert "Freq" in public
-        assert "Order" in public
-
-    def test_from_wire_dynamic(self):
-        public = _from_wire_parameters("HarmonicBalance", {
-            "Freq[2]": {"value": "2", "unit": "GHz"},
-            "Order[2]": {"value": "3"},
-        })
-        assert "Freq[2]" in public
-        assert "Order[2]" in public
-
-    def test_from_wire_mixed(self):
-        public = _from_wire_parameters("HarmonicBalance", {
-            "Freq[1]": {"value": "1", "unit": "GHz"},
-            "Order[1]": {"value": "5"},
-            "Freq[2]": {"value": "2", "unit": "GHz"},
-            "Order[2]": {"value": "3"},
-        })
-        assert "Freq" in public          # Freq[1] → Freq
-        assert "Freq[2]" in public        # Freq[2] → Freq[2]
-        assert "Order" in public          # Order[1] → Order
-        assert "Order[2]" in public       # Order[2] → Order[2]
-
-
-# ═══════════════════════════════════════════════════════════
 # 5. Component lookup
 # ═══════════════════════════════════════════════════════════
 
@@ -332,52 +295,6 @@ class TestFindComponentByInstance:
         )
         assert comp is None
         assert error["error_code"] in ("COMPONENT_NOT_FOUND", "PROJECT_NOT_FOUND")
-
-
-# ═══════════════════════════════════════════════════════════
-# 6. Parameter formatting
-# ═══════════════════════════════════════════════════════════
-
-class TestFormatComponentParameters:
-    def test_no_unit_on_unitless_param(self):
-        result = _format_component_parameters("SParameter", {
-            "Pts": {"value": "101"},
-        })
-        assert "Pts" in result
-        assert "unit" not in result["Pts"], "Unitless param should not have unit key"
-
-    def test_unit_on_unitful_param(self):
-        result = _format_component_parameters("SParameter", {
-            "Start": {"value": "1.0", "unit": "GHz"},
-        })
-        assert result["Start"]["unit"] == "GHz"
-
-    def test_empty_result(self):
-        result = _format_component_parameters("SParameter", {})
-        assert result == {}
-
-    def test_wire_to_public(self):
-        result = _format_component_parameters("HarmonicBalance", {
-            "Freq[1]": {"value": "1", "unit": "GHz"},
-        })
-        assert "Freq" in result
-        assert result["Freq"]["value"] == "1"
-
-    def test_dynamic_wire_to_public(self):
-        result = _format_component_parameters("HarmonicBalance", {
-            "Freq[2]": {"value": "2", "unit": "GHz"},
-        })
-        assert "Freq[2]" in result
-
-    def test_full_metadata_preserved(self):
-        result = _format_component_parameters("SParameter", {
-            "Start": {"value": "1.0", "unit": "GHz", "default_unit": "GHz",
-                      "tunable": False, "visible": True},
-        })
-        assert result["Start"]["default_unit"] == "GHz"
-        assert result["Start"]["tunable"] is False
-        assert result["Start"]["visible"] is True
-        assert result["Start"]["initial"] == ""
 
 
 # ═══════════════════════════════════════════════════════════
@@ -564,8 +481,8 @@ class TestToolCount:
         # 已移除 copy_image_to_workspace
         assert "copy_image_to_workspace" not in tools
         # All 7 sim component tools should be present
-        for name in ["create_simulation_component", "update_simulation_component",
-                     "delete_simulation_component", "set_component_active_state"]:
+        for name in ["update_simulation_component", "delete_simulation_component",
+                     "set_component_active_state"]:
             assert name in tools, f"Missing tool: {name}"
 
     def test_no_upsert_registered(self):
@@ -609,21 +526,6 @@ _DISK_LOOKUP_PATCH = patch(
 
 class TestGrpcPayloads:
     """验证 7 个工具的最终 gRPC 枚举值和 payload 字段。"""
-
-    def test_create_enum_and_payload(self):
-        from servers.eda.simulation_components import create_simulation_component
-        with patch("servers.eda.simulation_components.call_project_grpc",
-                   return_value=_MOCK_GRPC_OK) as mock:
-            create_simulation_component("C:/test.epp", "HarmonicBalance")
-            assert mock.call_args.args[0] == ecserver_pb2.CREATE_SIMULATION_COMPONENT
-            assert mock.call_args.args[1] == "C:/test.epp"
-            assert mock.call_args.kwargs["component_type"] == "HarmonicBalance"
-
-    def test_create_empty_component_type_rejected(self):
-        from servers.eda.simulation_components import create_simulation_component
-        with _VALIDATE_PATCH:
-            result = create_simulation_component("C:/test.epp", "")
-            assert result["success"] is False
 
     def test_create_falsy_parameters_rejected(self):
         from servers.eda.simulation_components import update_simulation_component
@@ -743,146 +645,6 @@ class TestGrpcPayloads:
             payload = mock.call_args.args[1]
             assert "confirm_clear" not in payload
             assert payload["clear_before_import"] is True
-
-
-# ═══════════════════════════════════════════════════════════
-# 10. _find_sim_components 过滤逻辑（include_hidden / schematic_name）
-# ═══════════════════════════════════════════════════════════
-
-class TestFindSimComponents:
-    """测试 _find_sim_components 的过滤逻辑（此前无单测覆盖的盲区）。"""
-
-    @staticmethod
-    def _setup(monkeypatch, comps, schematics=None):
-        """mock ProjectReader 和 parse_components，返回 simulation_components 模块。"""
-        from servers.eda import simulation_components as sc
-
-        class FakeReader:
-            def __init__(self, path):
-                self.path = path
-
-            def list_schematics(self):
-                return schematics or ["main"]
-
-            def read_schematic(self, name):
-                return f"fake:{name}"
-
-        monkeypatch.setattr(sc, "ProjectReader", FakeReader)
-        monkeypatch.setattr(sc, "parse_components", lambda raw: comps)
-        return sc
-
-    def test_include_hidden_filters_hidden_params(self, monkeypatch):
-        """include_hidden=False（默认）过滤 visible=false 的隐藏参数；True 保留。"""
-        comps = [{
-            "name": "R1", "type": "R", "component_id": "uuid1", "model_id": "m1",
-            "paramsinfo": {
-                "R": {"value": "50", "unit": "Ohm", "visible": True},
-                "Hidden": {"value": "x", "visible": False},
-            },
-            "pin_count": 2, "parameter_count": 2,
-        }]
-        sc = self._setup(monkeypatch, comps)
-
-        # 默认过滤隐藏参数
-        result = sc._find_sim_components("fake.epp")
-        assert "R" in result[0]["parameters"]
-        assert "Hidden" not in result[0]["parameters"]
-
-        # include_hidden=True 保留隐藏参数
-        result = sc._find_sim_components("fake.epp", include_hidden=True)
-        assert "R" in result[0]["parameters"]
-        assert "Hidden" in result[0]["parameters"]
-
-    def test_include_hidden_sp_type(self, monkeypatch):
-        """SP 类型走 wire→public 映射，同时过滤 visible=false。"""
-        comps = [{
-            "name": "SP1", "type": "SParameter", "component_id": "uuid2", "model_id": "m2",
-            "paramsinfo": {
-                "Start": {"value": "1", "unit": "GHz", "visible": True},
-                "Hidden": {"value": "x", "visible": False},
-            },
-            "pin_count": 0, "parameter_count": 2,
-        }]
-        sc = self._setup(monkeypatch, comps)
-
-        result = sc._find_sim_components("fake.epp")
-        params = result[0]["parameters"]
-        assert "Start" in params
-        assert params["Start"]["value"] == "1"
-        assert "Hidden" not in params
-
-    def test_schematic_name_filters(self, monkeypatch):
-        """schematic_name 指定时只读取匹配的原理图。"""
-        from servers.eda import simulation_components as sc
-
-        read_names = []
-
-        class FakeReader:
-            def __init__(self, path):
-                pass
-
-            def list_schematics(self):
-                return ["main", "other"]
-
-            def read_schematic(self, name):
-                read_names.append(name)
-                return f"fake:{name}"
-
-        monkeypatch.setattr(sc, "ProjectReader", FakeReader)
-        monkeypatch.setattr(sc, "parse_components", lambda raw: [{
-            "name": "R1", "type": "R", "component_id": "u", "model_id": "m",
-            "paramsinfo": {}, "pin_count": 2, "parameter_count": 0,
-        }])
-
-        # 指定 schematic_name="main" 只读 main
-        result = sc._find_sim_components("fake.epp", schematic_name="main")
-        assert read_names == ["main"]
-        assert len(result) == 1
-
-        # 不指定则读全部
-        read_names.clear()
-        result = sc._find_sim_components("fake.epp")
-        assert read_names == ["main", "other"]
-        assert len(result) == 2
-
-
-# ═══════════════════════════════════════════════════════════
-# 10.5 list_simulation_components summary_only 裁剪
-# ═══════════════════════════════════════════════════════════
-
-class TestListSummaryOnly:
-    """测试 list_simulation_components 的 summary_only 裁剪逻辑。"""
-
-    def test_summary_only_strips_parameters(self, monkeypatch):
-        from pathlib import Path
-        from servers.eda import simulation_components as sc
-
-        class FakeReader:
-            def __init__(self, path):
-                self.epp_path = Path(path)
-
-            def list_schematics(self):
-                return ["main"]
-
-            def read_schematic(self, name):
-                return f"fake:{name}"
-
-        monkeypatch.setattr(sc, "ProjectReader", FakeReader)
-        monkeypatch.setattr(sc, "parse_components", lambda raw: [{
-            "name": "R1", "type": "R", "component_id": "u1", "model_id": "m1",
-            "paramsinfo": {"R": {"value": "50", "unit": "Ohm"}},
-            "pin_count": 2, "parameter_count": 1,
-        }])
-
-        # 默认返回完整字段（含 parameters）
-        full = sc.list_simulation_components("fake.epp")
-        assert "parameters" in full["components"][0]
-
-        # summary_only=True 只保留 4 个核心字段，裁掉 parameters
-        summary = sc.list_simulation_components("fake.epp", summary_only=True)
-        comp = summary["components"][0]
-        assert set(comp.keys()) == {"component_type", "instance_name", "model_id", "pin_count"}
-        assert "parameters" not in comp
 
 
 # ═══════════════════════════════════════════════════════════

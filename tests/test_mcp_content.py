@@ -93,7 +93,7 @@ class TestPromptsDirect:
         msgs = prompt_inspect_edi_project("C:/test.epp", "full")
         assert msgs[0]["role"] == "user"
         assert "get_project_summary" in msgs[0]["content"]
-        assert "list_simulation_components" in msgs[0]["content"]
+        assert "list_schematic_components" in msgs[0]["content"]
         assert "analyze_variables" in msgs[0]["content"]
 
     def test_run_and_review_async(self):
@@ -110,23 +110,13 @@ class TestPromptsDirect:
         # execution_mode 已废弃，始终走异步
         assert "start_simulation_async" in msgs[0]["content"]
 
-    def test_configure_create(self):
-        from servers.resources_prompts.prompts_component import prompt_configure_simulation_component
-        msgs = prompt_configure_simulation_component(
-            "C:/test.epp", "create", "XDB", requirements="默认参数")
-        text = msgs[0]["content"]
-        assert "get_simulation_component_schema" in text
-        assert "create_simulation_component" in text
-        assert "不要编造参数名" in text
-        assert "XDB" in text
-
     def test_configure_update(self):
         from servers.resources_prompts.prompts_component import prompt_configure_simulation_component
         msgs = prompt_configure_simulation_component(
             "C:/test.epp", "update", "HarmonicBalance",
             instance_name="HB1", requirements="基频改为 2GHz")
         text = msgs[0]["content"]
-        assert "list_simulation_components" in text
+        assert "list_schematic_components" in text
         assert "update_simulation_component" in text
         assert "HB1" in text
         assert "HarmonicBalance" in text

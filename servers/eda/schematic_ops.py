@@ -52,17 +52,17 @@ def add_ideal_component(
         position: dict,
         timeout_seconds: int = 120,
 ) -> dict[str, Any]:
-    """按指定坐标新增内置器件，使用工厂默认参数，不自动排布。
+    """按指定坐标新增内置器件，只放置器件，不修改器件属性。
 
     用法："在 (100,200) 处放一个电阻 R"
 
-    严格按指定场景坐标放置，不做网格吸附、自动排布或重叠避让。component_type
-    区分大小写，支持范围同 CREATE_SIMULATION_COMPONENT 的工厂注册类型列表。
-    不接收 parameters，后续参数设置使用 update_simulation_component。
+    严格按指定场景坐标放置，不做网格吸附、自动排布或重叠避让。component_type 必须是
+    list_ideal_components 接口返回数据中存在的 component_type（区分大小写）。
+    只放置器件、不修改器件属性，后续参数设置使用 update_simulation_component。
 
     Args:
         project_path: .epp 工程文件绝对路径。
-        component_type: 器件工厂注册类型名（非空、区分大小写，如 "R"）。
+        component_type: 内置器件类型名，必须来自 list_ideal_components 返回（非空、区分大小写，如 "R"）。
         position: 场景坐标对象 {"x": 100, "y": 200}（x/y 均为有限数值）。
         timeout_seconds: 最长等待秒数，默认 120。
 

@@ -45,7 +45,7 @@ def prompt_inspect_edi_project(
                 "步骤：\n"
                 "1. 调用 `get_project_summary` 获取工程概览。\n"
                 "2. 调用 `analyze_variables` 查看变量定义和 Sweep 配置。\n"
-                "3. standard/full 时调用 `list_simulation_components` 查看器件分布和仿真器件配置。\n"
+                "3. standard/full 时调用 `list_schematic_components` 查看器件分布和仿真器件配置。\n"
                 "4. 汇总输出：原理图数量、器件统计、变量与 Sweep、仿真配置、已有的问题。\n\n"
                 "注意：只读操作，不修改工程，不启动仿真。"
             ),

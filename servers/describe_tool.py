@@ -121,8 +121,6 @@ _EXAMPLES: dict[str, Any] = {
     "update_simulation_component": {"project_path": "C:/path/11.epp",
                                     "instance_name": "SP1",
                                     "parameters": {"Start": {"value": "29", "unit": "GHz"}}},
-    "create_simulation_component": {"project_path": "C:/path/11.epp",
-                                     "component_type": "SParameter"},
     # 批量变换：对外只有 project_path + components（内部 payload 顶层另有 sub_type/filters，
     # 属 EDI 侧 DTO 必填残留，不由调用方提供，示例里不出现）
     "update_schematic_components_transform": {

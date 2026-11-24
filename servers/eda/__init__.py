@@ -19,9 +19,9 @@ project_manage.py — 工程管理（10 工具）
     get_project_summary           工程概览（元数据/原理图/仿真配置）
     analyze_variables             分析变量定义和引用关系
     list_schematic_components     查询原理图全部器件（gRPC，含完整参数与几何）
-    get_schematic_component_info  按实例名查询器件完整信息
+    get_schematic_component_info  按实例名查器件参数与几何
     get_components_static_params  查询器件固有参数（重量/尺寸/封装/厂商/成本）
-    batch_query_component         按器件型号列表批量查询模型信息
+    batch_query_component_rf_params  按器件型号列表批量查询模型信息
 
 simulation.py — 仿真（6 工具，默认异步）
     start_simulation_async        启动异步仿真，返回 task_id
@@ -31,10 +31,8 @@ simulation.py — 仿真（6 工具，默认异步）
     simulate_netlist              仿真网表文件
     simulate_anti_burnout         抗烧毁仿真与风险评估
 
-simulation_components.py — 仿真器件（10 工具）
+simulation_components.py — 仿真器件（8 工具）
     get_simulation_component_schema  查询器件参数 schema 和权限
-    list_simulation_components       列出工程中的仿真器件（支持 summary_only）
-    create_simulation_component      新增器件（EDI 默认参数）
     update_simulation_component      按实例名更新参数（三路类型推断）
     replace_port_component           替换端口器件类型（TermG↔P_nToneG）
     delete_simulation_component      按实例名删除器件
@@ -88,7 +86,7 @@ from servers.eda.project_manage import (  # noqa: F401
     list_schematic_components,
     get_schematic_component_info,
     get_components_static_params,
-    batch_query_component,
+    batch_query_component_rf_params,
 )
 
 # -- 仿真 --
@@ -104,8 +102,6 @@ from servers.eda.simulation import (  # noqa: F401
 # -- 仿真器件 --
 from servers.eda.simulation_components import (  # noqa: F401
     get_simulation_component_schema,
-    list_simulation_components,
-    create_simulation_component,
     update_simulation_component,
     replace_port_component,
     delete_simulation_component,

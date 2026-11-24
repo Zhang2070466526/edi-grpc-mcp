@@ -67,12 +67,12 @@ _INTERNAL_TOOLS: frozenset[str] = frozenset({
     # 工程管理
     "create_project", "open_edi_project", "close_edi_project",
     "list_schematic_components", "get_schematic_component_info",
-    "get_components_static_params", "batch_query_component",
+    "get_components_static_params", "batch_query_component_rf_params",
     # 仿真
     "simulate_netlist", "simulate_anti_burnout",
     "start_simulation_async",
     # 仿真器件
-    "create_simulation_component", "update_simulation_component",
+    "update_simulation_component",
     "replace_port_component", "delete_simulation_component",
     "set_component_active_state",
     "replace_schematic_from_file", "attach_out_component",
@@ -87,6 +87,7 @@ _INTERNAL_TOOLS: frozenset[str] = frozenset({
     "add_performance_component", "design_schematic_topology", "design_chip",
     # 工作区 / 原理图扩展
     "create_workspace", "switch_workspace", "get_current_workspace_path",
+    "get_current_workspace_summary",
     "list_ideal_components", "add_ideal_component", "clear_schematic", "add_wire",
     # 独立 exe 工具（由 EDI 安装目录提供）：TR/混频需提权 + ADS，网表寻路纯本地但同属 EDI 组件
     "run_tr_simulation", "run_mixer_simulation", "find_netlist_paths",
@@ -209,13 +210,14 @@ _hide_internal_tools()
 #           destructiveHint = 会删除/覆盖已有数据、或不可逆改变工程状态。
 # 名单显式列出（不用名字前缀猜），新增工具时请同步这里。
 _READONLY_TOOLS: frozenset[str] = frozenset({
-    "analyze_image", "analyze_mixer_spur", "batch_query_component",
+    "analyze_image", "analyze_mixer_spur", "batch_query_component_rf_params",
     "calculate_rf_dynamic_range", "calculate_transline",
     "cst_export_farfield_query", "cst_export_snp_query", "cst_get_model_info",
     "cst_list_results", "cst_solve_query", "cst_task_list", "describe_tool",
     "design_wilkinson", "fetch_artifact",
     "filter_order_bandpass", "filter_order_bandstop", "filter_order_highpass",
     "filter_order_lowpass", "get_components_static_params", "get_current_workspace_path",
+    "get_current_workspace_summary",
     "get_hfss_analysis_status", "get_hfss_project_info", "get_laspcem_setup",
     "get_model_category_params", "get_project_summary",
     "get_schematic_component_info", "get_service_logs", "get_service_status",
@@ -223,7 +225,7 @@ _READONLY_TOOLS: frozenset[str] = frozenset({
     "get_simulation_component_schema", "laspcem_solve_query", "laspcem_task_list",
     "list_eda_tasks", "list_epp_projects", "list_ideal_components",
     "list_result_curves", "list_schematic_components",
-    "list_simulation_components", "open_document", "search_personal_models",
+    "open_document", "search_personal_models",
     "search_public_models", "show_image", "wilkinson_marchand_order",
 })
 

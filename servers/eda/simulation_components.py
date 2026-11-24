@@ -1,8 +1,6 @@
 r"""仿真器件管理工具 — 工具 API v3，gRPC 协议 v2。
 
 get_simulation_component_schema  查询器件支持的参数、类型、单位和权限
-list_simulation_components       查询工程中的仿真器件及其参数
-create_simulation_component      新增仿真器件（每次创建新实例）
 update_simulation_component      按实例名更新参数（自动识别类型）
 delete_simulation_component      按实例名删除器件（EDI 直接执行）
 replace_port_component           替换端口器件类型（TermG↔P_nToneG）
@@ -11,7 +9,6 @@ replace_schematic_from_file      从 .ep 文件整体替换原理图
 attach_out_component             为器件引脚挂载 Out 器件并自动连线
 
 协议枚举：
-  CREATE_SIMULATION_COMPONENT = 11
   DELETE_SIMULATION_COMPONENT = 12
   GENERATE_SCHEMATIC_FROM_NETLIST = 13
   SET_COMPONENT_ACTIVE_STATE = 14
@@ -312,40 +309,6 @@ def _supported_param_names(component_type: str) -> list[str]:
 
 
 # ═══════════════════════════════════════════════════════════
-# Wire ↔ public name conversion
-# ═══════════════════════════════════════════════════════════
-
-def _from_wire_parameters(component_type: str, parameters: dict) -> dict:
-    """Convert wire parameter names back to public names."""
-    comp = _catalog_component(component_type)
-    fixed = comp.get("parameters", {})
-
-    # Build reverse map: wire_name → public_name
-    reverse: dict[str, str] = {}
-    for pub_name, defn in fixed.items():
-        reverse[defn.get("wire_name", pub_name)] = pub_name
-
-    # Also map dynamic patterns (don't override fixed mappings)
-    for pat in comp.get("parameter_patterns", []):
-        public_pat = pat.get("public_pattern", "")
-        wire_pat = pat.get("wire_pattern", public_pat)
-        for wire_key in parameters:
-            if wire_key in reverse:
-                continue  # already mapped by fixed parameter
-            wire_regex = _re.escape(wire_pat).replace(r"\{index\}", r"(\d+)")
-            m = _re.fullmatch(wire_regex, wire_key)
-            if m:
-                reverse[wire_key] = public_pat.replace("{index}", m.group(1))
-
-    result: dict = {}
-    for wire_name, pval in parameters.items():
-        pub_name = reverse.get(wire_name, wire_name)
-        result[pub_name] = pval
-
-    return result
-
-
-# ═══════════════════════════════════════════════════════════
 # 实例查找（供 update / delete 复用）
 # ═══════════════════════════════════════════════════════════
 
@@ -381,7 +344,7 @@ def _find_component_by_instance(
     if not matches:
         return None, error_response("COMPONENT_NOT_FOUND",
                                 f"在已保存工程中未找到器件实例 {target}",
-                                hint="请确认 EDI 中已保存工程，或使用 list_simulation_components 查看当前器件")
+                                hint="请确认 EDI 中已保存工程，或使用 list_schematic_components 查看当前器件")
 
     if len(matches) > 1:
         return None, error_response("AMBIGUOUS_INSTANCE_NAME",
@@ -397,45 +360,6 @@ def _find_component_by_instance(
                                 )
 
     return matches[0], None
-
-
-# ═══════════════════════════════════════════════════════════
-# 参数格式化（供 list_simulation_components）
-# ═══════════════════════════════════════════════════════════
-
-def _format_component_parameters(
-        component_type: str,
-        paramsinfo: dict,
-) -> dict:
-    """Build public-facing parameter dict from raw paramsinfo.
-
-    paramsinfo is the already-parsed dict from parse_paramsinfo().
-    Does NOT call parse_paramsinfo again.
-
-    保留完整元数据字段（value/unit/default_unit/tunable/visible/initial/max/min/status），
-    unit 无值时省略该键。
-    """
-    parameters: dict = {}
-    for wire_name, metadata in paramsinfo.items():
-        if not isinstance(metadata, dict):
-            continue
-
-        entry: dict = {
-            "value": metadata.get("value", ""),
-            "default_unit": metadata.get("default_unit", ""),
-            "tunable": metadata.get("tunable", False),
-            "visible": metadata.get("visible", True),
-            "initial": metadata.get("initial", ""),
-            "max": metadata.get("max", ""),
-            "min": metadata.get("min", ""),
-            "status": metadata.get("status", ""),
-        }
-        if metadata.get("unit"):
-            entry["unit"] = metadata["unit"]
-
-        parameters[wire_name] = entry
-
-    return _from_wire_parameters(component_type, parameters)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -458,54 +382,6 @@ def _param_error(
     return error_response(code, message, **kwargs)
 
 
-def _find_sim_components(project_path: str, component_type: str = "", schematic_name: str = "",
-                         include_hidden: bool = False, reader: ProjectReader | None = None) -> list[dict]:
-    """Local lookup of all components from saved project files.
-
-    schematic_name 为空时遍历所有原理图，指定时只读取该原理图。
-    include_hidden=False 时过滤 visible=false 的隐藏参数。
-    reader 为 None 时内部创建；否则复用（避免调用方二次实例化）。
-    """
-    if reader is None:
-        reader = ProjectReader(project_path)
-    schematics = reader.list_schematics() or []
-    if schematic_name:
-        schematics = [s for s in schematics if s == schematic_name]
-    results: list[dict] = []
-    for sname in schematics:
-        raw = reader.read_schematic(sname)
-        if not raw:
-            continue
-        for comp in parse_components(raw):
-            ct = comp.get("type", "")
-            if component_type and ct != component_type:
-                continue
-            params = comp.get("paramsinfo", {})
-            # 默认过滤 visible=false 的隐藏参数，include_hidden=True 时放开
-            if not include_hidden:
-                params = {
-                    k: v for k, v in params.items()
-                    if not isinstance(v, dict) or v.get("visible", True)
-                }
-            # SP/HB/XDB: format with wire→public name mapping
-            # Other types (Var, Sweep, P_nToneG, etc.): raw paramsinfo
-            if ct in _COMPONENT_TYPES:
-                formatted = _format_component_parameters(ct, params)
-            else:
-                formatted = params
-            results.append({
-                "component_type": ct,
-                "instance_name": comp.get("name", ""),
-                "component_id": comp.get("component_id", ""),
-                "model_id": comp.get("model_id", ""),
-                "pin_count": comp.get("pin_count", 0),
-                "parameter_count": comp.get("parameter_count", 0),
-                "schematic": sname,
-                "parameters": formatted,
-            })
-    return results
-
-
 # ═══════════════════════════════════════════════════════════
 # 1. get_simulation_component_schema
 # ═══════════════════════════════════════════════════════════
@@ -518,7 +394,7 @@ def get_simulation_component_schema(
     """查询已建模器件类型的参数 Schema 和权限。
 
     仅支持 SParameter / HarmonicBalance / XDB 的参数目录。
-    其他类型可通过 list_simulation_components 读取但无本地 Schema。
+    其他类型可通过 list_schematic_components 读取但无本地 Schema。
 
     Args:
         component_type: "SParameter" / "HarmonicBalance" / "XDB"。
@@ -553,113 +429,7 @@ def get_simulation_component_schema(
 
 
 # ═══════════════════════════════════════════════════════════
-# 2. list_simulation_components
-# ═══════════════════════════════════════════════════════════
-
-@mcp.tool()
-def list_simulation_components(
-        project_path: str,
-        component_type: str = "",
-        name_contains: str = "",
-        schematic_name: str = "",
-        offset: int = 0,
-        limit: int = 100,
-        include_hidden: bool = False,
-        summary_only: bool = False,
-) -> dict[str, Any]:
-    """列出已保存工程中的全部器件及参数（含 wire→public 参数名映射，磁盘读已保存工程，不需要edi在线）。
-
-    可列出所有器件（SP/HB/XDB/Var/Sweep/P_nToneG/TermG 等）。
-    已知类型做 wire→public 映射；其他类型返回原始 paramsinfo。
-
-    定位：本地磁盘读已保存工程，支持分页/过滤/summary_only。
-    读取磁盘文件，EDI 未保存的修改不会反映到结果中。
-    字段包含：component_type/instance_name/component_id/model_id/pin_count/parameter_count/schematic/parameters。
-
-    本工具同时覆盖原 list_project_components 的能力：支持按原理图过滤和分页。
-    修改器件后建议先保存工程再调用本工具确认。
-
-    Args:
-        project_path: .epp 工程文件绝对路径。
-        component_type: 按类型过滤（可选）。
-        name_contains: 按实例名模糊匹配（可选）。
-        schematic_name: 只读指定原理图（可选，默认遍历全部原理图）。
-        offset: 分页偏移（默认 0）。
-        limit: 每页数量（默认 100，最大 500；0 = 全部）。
-        include_hidden: 是否包含 Visible=false 的隐藏参数（默认 False）。
-        summary_only: 为 True 时每个器件只保留 component_type/instance_name/model_id/pin_count，
-            裁掉 parameters 等大字段（用于选型/清单等只需器件标识的场景）；需要完整参数时不传此参数或单独查询该器件。
-    """
-    try:
-        reader = ProjectReader(project_path)
-    except FileNotFoundError:
-        return error_response("PROJECT_NOT_FOUND", "工程文件不存在")
-    except ValueError:
-        return error_response("INVALID_PROJECT_PATH", "project_path 必须是 .epp 文件")
-    components = _find_sim_components(project_path, component_type, schematic_name=schematic_name,
-                                      include_hidden=include_hidden, reader=reader)
-    if name_contains:
-        components = [c for c in components
-                      if name_contains.lower() in c["instance_name"].lower()]
-
-    type_counts: dict[str, int] = {}
-    for c in components:
-        type_counts[c["component_type"]] = type_counts.get(c["component_type"], 0) + 1
-
-    total = len(components)
-    offset = max(0, offset)
-    if limit > 0:
-        paged = components[offset:offset + min(limit, 500)]
-    else:
-        paged = components[offset:]  # limit=0 = 全部（与 list_schematic_components 一致）
-
-    if summary_only:
-        paged = [{
-            "component_type": c["component_type"],
-            "instance_name": c["instance_name"],
-            "model_id": c.get("model_id", ""),
-            "pin_count": c.get("pin_count", 0),
-        } for c in paged]
-
-    return {
-        "success": True,
-        "project_path": str(reader.epp_path.resolve()),
-        "total": total,
-        "offset": offset,
-        "limit": limit,
-        "component_type_counts": type_counts,
-        "components": paged,
-    }
-
-
-# ═══════════════════════════════════════════════════════════
-# 3. create_simulation_component
-# ═══════════════════════════════════════════════════════════
-
-@mcp.tool()
-def create_simulation_component(
-        project_path: str,
-        component_type: str,
-        timeout_seconds: int = 120,
-) -> dict[str, Any]:
-    """使用 EDI 器件工厂默认参数创建器件。
-
-    不传自定义参数，创建后根据返回的 instance_name 调用 update 设参。
-    component_type 是否支持由 EDI 服务决定，MCP 不做类型限制。
-
-    Args:
-        project_path: .epp 工程文件绝对路径。
-        component_type: EDI 器件工厂类型名。
-        timeout_seconds: 最长等待秒数。
-    """
-    ct, err = require_nonempty(component_type, label="component_type")
-    if err:
-        return err
-    return call_project_grpc(ecserver_pb2.CREATE_SIMULATION_COMPONENT, project_path, timeout_seconds, component_type=ct)
-
-
-# ═══════════════════════════════════════════════════════════
-# 4. update_simulation_component
+# 2. update_simulation_component
 # ═══════════════════════════════════════════════════════════
 
 @mcp.tool()
@@ -674,7 +444,7 @@ def update_simulation_component(
 
     SParameter/HarmonicBalance/XDB：执行 MCP 参数校验和 wire 转换。
     其他器件类型：基本格式检查后透传给 EDI 校验。
-    建议先调用 list_simulation_components 确认实例名和类型。
+    建议先调用 list_schematic_components 确认实例名和类型。
 
     示例：
       {"project_path": "...", "instance_name": "HB1",
@@ -814,7 +584,7 @@ def delete_simulation_component(
     这是通用删除工具，不限于仿真器件。删除直接由 EDI 按实例名执行，
     不做本地磁盘预检查，因此即使 EDI 中有未保存的更改也能正常工作。
 
-    建议调用前先用 list_simulation_components 确认目标实例名。
+    建议调用前先用 list_schematic_components 确认目标实例名。
 
     Args:
         project_path: .epp 工程文件绝对路径。

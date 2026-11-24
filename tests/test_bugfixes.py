@@ -354,20 +354,20 @@ def test_get_components_static_params_payload(monkeypatch):
 
 # ── BATCH_QUERY_COMPONENT 新工具 ─────────────────────────
 
-def test_batch_query_component_validation():
+def test_batch_query_component_rf_params_validation():
     from servers.eda import project_manage as pm
     # 空数组 → 拒绝
-    r = pm.batch_query_component(model_name_list=[])
+    r = pm.batch_query_component_rf_params(model_name_list=[])
     assert r["success"] is False and r["error_code"] == "INVALID_PARAMETERS"
     # 空字符串元素 → 拒绝
-    r = pm.batch_query_component(model_name_list=["  "])
+    r = pm.batch_query_component_rf_params(model_name_list=["  "])
     assert r["success"] is False and r["error_code"] == "INVALID_PARAMETERS"
     # 非字符串元素 → 拒绝
-    r = pm.batch_query_component(model_name_list=[1, "u2"])
+    r = pm.batch_query_component_rf_params(model_name_list=[1, "u2"])
     assert r["success"] is False and r["error_code"] == "INVALID_PARAMETERS"
 
 
-def test_batch_query_component_payload(monkeypatch):
+def test_batch_query_component_rf_params_payload(monkeypatch):
     from servers.eda import project_manage as pm
     from proto import ecserver_pb2
     calls = []
@@ -377,12 +377,12 @@ def test_batch_query_component_payload(monkeypatch):
         return {"success": True, "status": "SUCCEEDED"}
 
     monkeypatch.setattr(pm, "call_grpc", _fake)
-    pm.batch_query_component(model_name_list=["MAAD_008866", "HMC462_DIE"])
+    pm.batch_query_component_rf_params(model_name_list=["MAAD_008866", "HMC462_DIE"])
     assert calls[-1][0] == ecserver_pb2.BATCH_QUERY_COMPONENT
     assert calls[-1][1] == {"originalid_list": ["MAAD_008866", "HMC462_DIE"]}
 
 
-def test_batch_query_component_alignment(monkeypatch):
+def test_batch_query_component_rf_params_alignment(monkeypatch):
     """下游 data 不保序且未命中被丢弃，应对齐输入顺序、未命中补 null、返回 missing。"""
     from servers.eda import project_manage as pm
 
@@ -398,7 +398,7 @@ def test_batch_query_component_alignment(monkeypatch):
     }
     monkeypatch.setattr(pm, "call_grpc", lambda *a, **k: downstream)
 
-    r = pm.batch_query_component(model_name_list=["MAAD_008866", "HMC462_DIE", "NOPE"])
+    r = pm.batch_query_component_rf_params(model_name_list=["MAAD_008866", "HMC462_DIE", "NOPE"])
 
     models = [item["model"] if item else None for item in r["details"]["data"]]
     assert models == ["MAAD_008866", "HMC462_DIE", None]  # 对齐到输入顺序 + 未命中补 null
