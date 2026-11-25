@@ -391,13 +391,13 @@ def get_simulation_component_schema(
         component_type: str,
         parameter_name: str = "",
 ) -> dict[str, Any]:
-    """查询已建模器件类型的参数 Schema 和权限。
+    """查询SParameter/HarmonicBalance/XDB/ParameterSweep/var控件的参数说明,用于指导在使用update_components_from_schematic时的传参设置。
 
-    仅支持 SParameter / HarmonicBalance / XDB 的参数目录。
-    其他类型可通过 list_schematic_components 读取但无本地 Schema。
+    仅支持SParameter/HarmonicBalance/XDB/ParameterSweep/var的参数目录。
+    其他类型参数可通过 list_schematic_components获取。
 
     Args:
-        component_type: "SParameter" / "HarmonicBalance" / "XDB"。
+        component_type: "SParameter" / "HarmonicBalance" / "XDB"/ "ParameterSweep"/ "Var"。
         parameter_name: 指定参数名时只返回该参数，为空返回全部。
     """
     catalog = _load_catalog()
@@ -525,7 +525,7 @@ def replace_port_component(
         parameters: dict | None = None,
         timeout_seconds: int = 300,
 ) -> dict[str, Any]:
-    """⚠️ 将原理图中的端口器件替换为另一种类型（会改变端口）。
+    """将原理图中的端口器件替换为另一种类型（会改变端口）。
 
     如果有多个端口需要替换，应逐一替换，禁止一次同时替换多个端口。
     端口器件仅有 TermG 和 P_nToneG 两种类型。目前仅支持 TermG ↔ P_nToneG 之间的替换。
@@ -580,10 +580,7 @@ def delete_component_from_schematic(
         instance_name: str,
         timeout_seconds: int = 120,
 ) -> dict[str, Any]:
-    """⚠️ 按实例名删除原理图器件及其连接线（不可恢复）。
-
-    这是通用删除工具，不限于仿真器件。删除直接由 EDI 按实例名执行，
-    不做本地磁盘预检查，因此即使 EDI 中有未保存的更改也能正常工作。
+    """按实例名删除原理图器件及其连接线。
 
     建议调用前先用 list_schematic_components 确认目标实例名。
 
@@ -706,12 +703,12 @@ def load_schematic_from_file(
         schematic_path: str,
         timeout_seconds: int = 300,
 ) -> dict[str, Any]:
-    """⚠️ 使用指定的 schematic.ep 文件替换当前原理图内容（整图覆盖，原内容丢失）。
+    """使用指定的 schematic.ep 文件替换当前原理图内容（整图覆盖，原内容丢失）。
 
     用指定的 schematic.ep 文件（完整 edi-schematic S-Expression）整体替换工程唯一原理图，
     不追加、不合并。成功后立即保存，失败恢复原原理图状态。
 
-    ⚠️ 此操作会整体替换当前原理图，原内容丢失，请谨慎使用。
+    此操作会整体替换当前原理图，原内容丢失，请谨慎使用。
 
     Args:
         project_path: .epp 工程文件绝对路径。
