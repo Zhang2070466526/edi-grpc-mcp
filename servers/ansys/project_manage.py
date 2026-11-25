@@ -24,7 +24,7 @@ from servers.ansys.config import (
     aedt_is_running, get_aedt_pids,
     cleanup_stale_project_lock, get_project_lock_path,
     read_project_lock_pid,
-    _attach_aedt, com_session, logger,
+    _attach_aedt, com_session, query_desktop_state, logger,
 )
 from servers.utils import validate_file, error_response
 from servers import mcp
@@ -99,18 +99,22 @@ def _find_aedt_modal_dialogs() -> list[str]:
 
 def _call_com_child(task: str, args: tuple[str, ...],
                     timeout_s: float) -> tuple[bool, Any, str | None]:
-    """在**独立子进程**里执行一次 AEDT COM 操作，超时直接 terminate。
+    """执行一次 AEDT COM 操作。
 
-    与 `_call_with_timeout`（线程版）的区别：线程版超时只是"不等人"，卡住的
-    线程仍持有 `_AEDT_LOCK` 与 COM 引用，一次卡死就堵到 AEDT 重启为止；
-    子进程被杀后 COM 资源随进程消失，服务侧零残留。
-    2026-11-25 真机：AEDT 弹隐藏模态框 → 线程持锁 → 之后 28 分钟所有调用全超时。
+    「state」这类高频只读查询、且无卡死迹象（模态框）时走线程版（零进程开销，快）；
+    有卡死迹象或写操作（open/quit/export）走子进程版——卡死能 terminate，服务侧零残留。
+    2026-11-25 真机：AEDT 弹隐藏模态框 → 线程持锁 → 之后 28 分钟所有调用全超时，
+    因此只有「无框」才敢走线程。
 
     模态框只当**诊断线索**，不当拒绝理由：实测 `Show Queued Simulations`（#32770，
-    Visible=False）存在时 COM 仍可能 0.86s 正常返回，一律拒绝会误伤可用实例；
-    只在检测到它时把等待缩短，超时后再把它写进错误信息。
+    Visible=False）存在时 COM 仍可能 0.86s 正常返回；有框时仍走子进程并缩短等待，
+    超时后把框写进错误信息。
     """
     dialogs = _find_aedt_modal_dialogs()
+
+    if not dialogs and task == "state":
+        return _call_with_timeout(query_desktop_state, timeout_s)
+
     if dialogs:
         timeout_s = min(timeout_s, 5.0)             # 有疑似阻塞框：短试，不干等整段超时
 
