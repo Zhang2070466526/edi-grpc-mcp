@@ -36,6 +36,7 @@ a = Analysis(
         (str(root / 'servers' / 'chat' / 'tool_browser.html'), 'servers/chat'),
         (str(root / 'servers' / 'eda' / 'simulation_component_catalog.json'), 'servers/eda'),
         (str(root / 'servers' / 'cst' / 'cst_worker.py'), 'servers/cst'),
+        (str(root / 'servers' / 'ansys' / 'com_child.py'), 'servers/ansys'),
         (str(root / 'servers' / 'turbocharts' / 'RAW 转图像工具使用说明.txt'), 'servers/turbocharts'),
     ],
     hiddenimports=[
