@@ -427,34 +427,6 @@ def get_simulation_async_result(task_id: str) -> dict[str, Any]:
     }
 
 
-@mcp.tool()
-def simulate_anti_burnout(
-        project_path: str,
-        timeout_seconds: int = 600,
-) -> dict[str, Any]:
-    """对工程原理图中具备抗烧毁数据的器件执行输入功率仿真和抗烧毁风险评估。
-
-    用法："评估这个工程器件的抗烧毁风险"、"跑一下抗烧毁仿真"
-
-    服务端只计算并返回结果，不主动显示仿真窗口。results 只包含 isAntiBurnout==true
-    的器件；部分器件评估失败时整体仍成功，每个器件的结论/原因在各自的 result 字段。
-
-    Args:
-        project_path: EDA 服务所在机器上的 .epp 工程文件绝对路径。
-        timeout_seconds: 最长等待时间，默认 600 秒。
-
-    Returns:
-        gRPC 统一返回结构，业务字段（results）在 details 中；每个结果项含
-        component_type / instance_name / simulated_input_power / max_input_power / result。
-    """
-    return call_project_grpc(
-        ecserver_pb2.SIMULATE_ANTI_BURNOUT,
-        project_path,
-        timeout_seconds,
-        max_timeout_seconds=3600
-    )
-
-
 def _require_netlist(netlist_path: str) -> tuple[str, dict[str, Any] | None]:
     """校验网表文件存在；不存在时回 NETLIST_NOT_FOUND（提示先生成网表），而非通用 FILE_NOT_FOUND。
 

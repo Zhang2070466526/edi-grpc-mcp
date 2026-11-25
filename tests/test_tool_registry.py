@@ -12,7 +12,6 @@ def test_all_tools_registered():
         "list_epp_projects", "create_project", "open_edi_project", "close_edi_project",
         "get_project_summary",
         "simulate_netlist",
-        "simulate_anti_burnout",
         "compare_simulation_results",
         "start_simulation_async", "get_simulation_async_status", "get_simulation_async_result",
         "list_eda_tasks",

@@ -29,7 +29,6 @@ simulation.py — 仿真（6 工具，默认异步）
     get_simulation_async_result   获取异步仿真最终结果
     list_eda_tasks                列出异步仿真任务
     simulate_netlist              仿真网表文件
-    simulate_anti_burnout         抗烧毁仿真与风险评估
 
 simulation_components.py — 仿真器件（8 工具）
     get_simulation_component_schema  查询器件参数 schema 和权限
@@ -92,7 +91,6 @@ from servers.eda.project_manage import (  # noqa: F401
 # -- 仿真 --
 from servers.eda.simulation import (  # noqa: F401
     simulate_netlist,
-    simulate_anti_burnout,
     start_simulation_async,
     get_simulation_async_status,
     get_simulation_async_result,

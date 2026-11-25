@@ -63,27 +63,3 @@ def prompt_run_and_review_simulation(
             ),
         },
     ]
-
-
-@mcp.prompt(
-    name="assess_anti_burnout",
-    title="评估器件抗烧毁风险",
-    description="对工程执行抗烧毁仿真并按功率裕量排序输出结论。",
-)
-def prompt_assess_anti_burnout(project_path: str) -> list[dict[str, Any]]:
-    """抗烧毁评估工作流模板。
-
-    Args:
-        project_path: .epp 工程文件绝对路径。
-    """
-    return [{"role": "user", "content": (
-        f"请对工程 {project_path} 执行抗烧毁评估。\n\n"
-        "步骤：\n"
-        "1. 调用 `simulate_anti_burnout` 执行评估（timeout 默认 600s）。\n"
-        "2. 若返回『抗烧毁仿真网表处理失败』：提示用户检查 PORT1 功率是否异常（>40dBm 会导致仿真溢出），"
-        "或链路是否为多通道合路（该场景服务端可能不支持）。\n"
-        "3. 成功时解析 results：按 (simulated_input_power - max_input_power) 裕量升序排列，"
-        "标注最接近限值的器件。\n"
-        "4. 汇总表格：器件 | 仿真输入功率 | 最大允许 | 裕量 | 判定。\n\n"
-        "重要：max_input_power 单位可能是 dBm 或 W，比较前统一换算成 dBm。"
-    )}]

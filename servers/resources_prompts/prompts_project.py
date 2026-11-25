@@ -68,8 +68,6 @@ def prompt_analyze_signal_chain(project_path: str, start: str = "PORT1") -> list
     return [{"role": "user", "content": (
         f"请分析工程 {project_path} 从 {start} 开始的信号链路。\n\n"
         "步骤：\n"
-        "0. 若工程近期跑过 simulate_anti_burnout：先调 `export_project_netlist` 刷新干净网表"
-        "（抗烧毁流程会把 PowerPin 虚拟节点写进本地 netlist.log，污染追踪源）。\n"
         "1. 调用 `get_signal_chain`（project_path, start_component=start）获取链路。\n"
         "2. 说明每级器件作用（LNA/衰减器/移相器/功放/功分器）。\n"
         "3. 若结果含 warning（PowerPin 污染），提示用户先重新导出网表再追踪。\n"

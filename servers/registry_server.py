@@ -69,7 +69,7 @@ _INTERNAL_TOOLS: frozenset[str] = frozenset({
     "list_schematic_components", "get_schematic_component_info",
     "get_components_static_params", "batch_query_component_rf_params",
     # 仿真
-    "simulate_netlist", "simulate_anti_burnout",
+    "simulate_netlist",
     "start_simulation_async",
     # 仿真器件
     "update_components_from_schematic",
@@ -105,7 +105,7 @@ _INTERNAL_TOOLS: frozenset[str] = frozenset({
 # 与 gRPC 通信相关的 prompt（引导调用上面这些 gRPC 工具的流程模板）
 _INTERNAL_PROMPTS: frozenset[str] = frozenset({
     "configure_simulation_component", "select_component",
-    "analyze_signal_chain", "run_and_review_simulation", "assess_anti_burnout",
+    "analyze_signal_chain", "run_and_review_simulation",
     "create_simulation_report", "troubleshoot_edi_error",
 })
 
