@@ -188,15 +188,17 @@ class TestDecodeLocalText:
 
 
 class TestTokenStore:
-    def test_per_token_ttl_does_not_affect_default(self):
-        import time
+    def test_token_is_urlquote_permanent(self):
+        """token 就是 urlencode 路径：确定性、无过期、重启（新实例）后可解。"""
         from servers.token_registry import TokenStore
-        store = TokenStore(ttl=600, route="/x")
-        now = time.time()
-        t1, _ = store.register("/tmp/a", ttl=30)
-        t2, _ = store.register("/tmp/b")
-        assert store.lookup(t1)["expires_at"] - now == pytest.approx(30, abs=2)
-        assert store.lookup(t2)["expires_at"] - now == pytest.approx(600, abs=2)
+        t1, url1 = TokenStore(route="/x").register("/tmp/a b.pdf")
+        t2, url2 = TokenStore(route="/x").register("/tmp/a b.pdf")
+        assert t1 == t2 and url1 == url2          # 同路径同 token（确定性）
+        assert "%20" in t1                        # urlencode，不是随机/base64
+        entry = TokenStore(route="/x").lookup(t1)  # 新实例 = 服务重启
+        assert entry["path"] == "/tmp/a b.pdf"
+        assert "expires_at" not in entry           # 不过期
+        assert "/x/" in url1
 
 
 class TestResultPath:

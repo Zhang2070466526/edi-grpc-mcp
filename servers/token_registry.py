@@ -1,54 +1,34 @@
-"""临时文件访问 Token 存储 — 供图片 / 文档等本地文件的临时 HTTP 访问复用。
+"""文件访问 token — token 就是 urlencode 的绝对路径（无状态、不过期、不签名）。
 
-图片（image_display.py）与文档（document.py）原本各有一份「dict + RLock + 过期清理
-+ 注册 + 查询」的近重复实现，这里提取为统一的 TokenStore。
+图片（image_display.py）与文档（document.py）复用这个 TokenStore，通过
+/images/{token} 或 /documents/{token} 返回本地文件。token 由路径确定性生成，
+路径不变就永久有效，文件移动/改名后自然失效。不做鉴权（内网，怎么简单怎么来）。
 """
 
 from __future__ import annotations
 
-import secrets
-import threading
-import time
+import urllib.parse
 from typing import Any
 
 from servers.utils import get_server_base_url
 
 
 class TokenStore:
-    """临时文件访问 Token 存储：注册 → 查询（查询时顺带过期清理）。"""
+    """路径 → 永久访问 token 的确定性映射。"""
 
     def __init__(self, ttl: int = 600, route: str = "/files") -> None:
-        """初始化 ttl、route、token 表与锁。"""
-        self._ttl = ttl
+        """ttl 参数保留仅为兼容旧调用方，实际不参与（永久有效）。"""
         self._route = route
-        self._tokens: dict[str, dict[str, Any]] = {}
-        self._lock = threading.RLock()
-
-    def cleanup_expired(self) -> None:
-        """清理已过期的 Token。"""
-        now = time.time()
-        with self._lock:
-            for t in [t for t, v in self._tokens.items() if v["expires_at"] < now]:
-                del self._tokens[t]
 
     def register(self, path: str, ttl: int | None = None, **extra: Any) -> tuple[str, str]:
-        """注册一个 Token，返回 (token, url)。extra 存附加字段（如 disposition）。
-
-        ttl 为 per-token 过期秒数，None 用实例默认。注意不要通过改 self._ttl 来临时
-        调 TTL——那会永久污染所有复用同一 store 的调用方。
-        """
-        self.cleanup_expired()
-        token = secrets.token_urlsafe(24)
-        with self._lock:
-            self._tokens[token] = {
-                "path": str(path),
-                "expires_at": time.time() + (ttl if ttl is not None else self._ttl),
-                **extra,
-            }
+        """注册文件，返回 (token, url)。ttl / extra 忽略（永久、无状态）。"""
+        token = urllib.parse.quote(str(path), safe="")
         return token, f"{get_server_base_url()}{self._route}/{token}"
 
     def lookup(self, token: str) -> dict[str, Any] | None:
-        """查询 Token（带过期清理），不存在/过期返回 None。"""
-        self.cleanup_expired()
-        with self._lock:
-            return self._tokens.get(token)
+        """按 token 解回 {"path": ...}；解不出返回 None。"""
+        try:
+            path = urllib.parse.unquote(token)
+        except Exception:
+            return None
+        return {"path": path} if path else None

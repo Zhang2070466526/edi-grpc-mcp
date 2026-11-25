@@ -36,12 +36,13 @@
 - `cst_solve_query` — 查询 CST 求解任务进度（配合 cst_solve_async 拿到的 task_id）。S 参数导出任务用 cst_export_snp_query。
 - `cst_task_cancel` — ⚠️ 取消一个 CST 异步任务（会终止运行中的求解）。
 - `cst_task_list` — 列出当前所有 CST 异步任务（求解 / 导出）及状态。
-- `delete_component_from_schematic` — ⚠️ 按实例名删除原理图器件及其连接线（不可恢复）。
+- `delete_component_from_schematic` — 按实例名删除原理图器件及其连接线。
 - `describe_tool` — 查工具参数/示例，或按能力关键词找工具（留空 name=列全部）；先查它，别猜也别读源码。
 - `design_chip` — 用户输入指标来设计cst天线模型（中心频率），hfss带通滤波器（中心频率，相对带宽）、低通滤波器（截止频率）负载（中心频率）等电路指标，获取相应的模型文件。
 - `design_schematic_topology` — 用户输入指标来设计电路拓扑（收发组件、滤波器、天线等），自动创建并打开新工程。
 - `design_wilkinson` — 设计多级威尔金森功分器，输出各级微带线宽、线长和隔离电阻。
 - `draw_chart` — 把一组或多组 XY 数据绘制为曲线图并保存为图片（PNG/JPG，固定 1600×1000）。
+- `export_hfss_snp` — 导出 HFSS 已求解的 S 参数为 Touchstone 文件（.sNp）。
 - `export_laspcem_snp` — 导出 .sem 工程的 S 参数为 Touchstone 文件（.sNp 会按端口数落成 .s<N>p）。
 - `export_project_netlist` — 查看 .epp 工程的网表；成功时网表文件路径在 details.netlist_path（统一信封顶层 result_path 为空，属正常）。
 - `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV，用于器件替换和 replace_schematic_components_from_csv 接口配对使用，不单独使用。
@@ -52,7 +53,7 @@
 - `filter_order_highpass` — 高通阶数估算：通带自 f_p 向上、阻带在 f_p 之下，返回阶数与传输零点。低通用 filter_order_lowpass、带阻用 filter_order_bandstop。
 - `filter_order_lowpass` — 低通阶数估算：通带到 f_p、阻带在 f_p 之上，返回阶数与传输零点。高通用 filter_order_highpass、带阻用 filter_order_bandstop。
 - `find_netlist_paths` — 寻路（仅限 TR 收发链路，不支持混频链路）：给定网表 + 原理图 + 有向端口对，枚举每个端口对的全部信号路径，并给出每条路径上每个开关的目标 Bits。
-- `get_components_static_params` — 查询器件的重量、尺寸、封装、所属厂商、成本等，传入参数 component_uuids 从 get_schematic_component_info 接口返回的 component_uuid 获得。
+- `get_components_static_params` — 查询器件的重量、尺寸、封装、所属厂商、成本等，传入参数 component_uuids 从 list_schematic_components或者get_schematic_component_info 接口返回的 component_uuid 获得。
 - `get_current_workspace_path` — 查询程序当前实际加载的工作区目录。
 - `get_current_workspace_summary` — 获取当前工作区概要：工程列表与本地性能模型（uuid / 子类型 / 型号）。
 - `get_hfss_analysis_status` — 查询 HFSS 异步仿真状态（默认只读本地，不访问 AEDT）。
@@ -66,7 +67,7 @@
 - `get_signal_chain` — 追踪工程原理图的信号链路（节点接力算法，从源到负载）。
 - `get_simulation_async_result` — 获取异步仿真最终结果，完整仿真日志在 ads_output 字段。运行中返回部分日志，完成后返回完整结果。
 - `get_simulation_async_status` — 查询异步仿真进度和实时日志（仿真日志在 ads_output 字段）。运行中即可调用，不阻塞。
-- `get_simulation_component_schema` — 查询已建模器件类型的参数 Schema 和权限。
+- `get_simulation_component_schema` — 查询SParameter/HarmonicBalance/XDB/ParameterSweep/var控件的参数说明,用于指导在使用update_components_from_schematic时的传参设置。
 - `import_aedt_as_sem` — 把 ANSYS HFSS `.aedt` 导入 LASPCEM 并生成 `.sem` 工程（等价于 GUI 的 Import）。
 - `laspcem_cleanup_orphans` — 清理残留的 LASPCEM 进程（GUI / mpiexec / phofem / MPI 代理）。
 - `laspcem_solve_query` — 查询 LASPCEM 求解任务（配合 run_laspcem_solve_async 的 task_id）。
@@ -77,17 +78,17 @@
 - `launch_laspcem` — 启动 LASPCEM 电磁仿真软件。已运行时返回状态，不重复启动。
 - `list_eda_tasks` — 列出当前所有异步仿真任务，可选按状态过滤。不阻塞。
 - `list_epp_projects` — 扫描指定文件夹中的 .epp 工程文件，该接口用于扫描工作区外的工程文件，工作区内工程可通过GET_CURRENT_WORKSPACE_SUMMARY获取。
-- `list_ideal_components` — 列出内置器件类型及其简要说明。
+- `list_ideal_components` — 列出EDI软件内置器件类型及其简要说明，是add_ideal_component接口调用的前置步骤。
 - `list_result_curves` — 调用引擎原生 `--curve-info` 列出 RAW 中可用的「依赖 → 曲线名 + 可用单位」。
 - `list_schematic_components` — 列出当前原理图上存在的所有器件及器件对应参数，参数包括器件属性和位置几何信息
-- `load_schematic_from_file` — ⚠️ 使用指定的 schematic.ep 文件替换当前原理图内容（整图覆盖，原内容丢失）。
+- `load_schematic_from_file` — 使用指定的 schematic.ep 文件替换当前原理图内容（整图覆盖，原内容丢失）。
 - `open_document` — 打开本地文档：link 模式生成 10 分钟 HTTP 链接，local 模式用系统默认程序打开。
 - `open_edi_project` — 打开 .epp 工程（会切换 EDI 当前工程；同目录需有 schematics/main/schematic.ep）。关闭用 close_edi_project。
 - `open_hfss_project` — 启动 AEDT 并打开 .aedt 项目（COM 附着优先，subprocess 单次启动兜底）。
 - `open_laspcem_project` — 在 LASPCEM 中打开 .sem 工程文件。
 - `quit_aedt` — 退出 AEDT **程序**（关掉整个 AEDT 窗口、收掉进程）：不是关工程。
-- `replace_port_component` — ⚠️ 将原理图中的端口器件替换为另一种类型（会改变端口）。
-- `replace_schematic_components_from_csv` — ⚠️ 按 CSV 批量替换工程原理图下的器件。
+- `replace_port_component` — 将原理图中的端口器件替换为另一种类型（会改变端口）。
+- `replace_schematic_components_from_csv` — 按 CSV 批量替换工程原理图下的器件。
 - `run_laspcem_solve_async` — 提交 LASPCEM 求解任务（异步，立即返回 task_id）
 - `run_mixer_simulation` — 执行混频链路仿真（含混频器、LO 本振、上下变频，15 个指标）。不含变频的纯链路请用 run_tr_simulation。
 - `run_tr_simulation` — 跑 TR 收发链路仿真（纯链路：增益/噪声/P−1dB，不含混频器与变频）。有混频/本振/镜像指标请用 run_mixer_simulation。
@@ -95,7 +96,6 @@
 - `search_public_models` — 公共模型库检索（官方件）：按子类列出型号与参数。自己导入的件在个人库，用 search_personal_models。
 - `set_component_active_state` — 确定性设置器件状态为 NORMAL(激活状态)、DISABLED(禁用状态) 或 SHORTED(短路状态)。
 - `show_image` — 读取本地图片，返回标准 MCP ImageContent 和本地路径。
-- `simulate_anti_burnout` — 对工程原理图中具备抗烧毁数据的器件执行输入功率仿真和抗烧毁风险评估。
 - `simulate_netlist` — 仿真指定 netlist.log 文件，不需打开 .epp 工程。返回 RAW 结果+日志。
 - `start_hfss_analysis_async` — 异步启动 HFSS Setup 仿真，立即返回 task_id。
 - `start_simulation_async` — 启动异步仿真，立即返回 task_id 供 get_simulation_async_status 查进度；仿真日志在结果查询的 ads_output 字段。
