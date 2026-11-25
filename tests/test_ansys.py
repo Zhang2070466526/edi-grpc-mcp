@@ -1,5 +1,6 @@
 """测试 ANSYS HFSS 模块 —— 队列迁移后的逻辑（mock COM/AEDT，不依赖真实 AEDT）。"""
 from pathlib import Path
+import threading
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,6 +13,40 @@ def _patch_com():
         patch("servers.ansys.config.pythoncom.CoInitialize"),
         patch("servers.ansys.config.pythoncom.CoUninitialize"),
     )
+
+
+def _patch_state(monkeypatch, module, state_provider):
+    """把 AEDT 状态探测替换成假实现。
+
+    实现已改为隔离子进程（`_call_com_child("state", ...)`），不再是模块级
+    `query_desktop_state()`；这里跟随新契约返回 (ok, state, err)，并保留
+    「超时放弃等待」的语义（测试里常用 sleep 模拟卡死的 AEDT）。
+    """
+    def _fake(task, args=(), timeout_s=0.0):
+        if task == "quit":
+            return True, {"status": "quit_sent"}, None
+        if task == "open":
+            return True, {"status": "opened", "project_name": Path(args[0]).stem}, None
+        assert task == "state", f"unexpected COM task: {task}"
+
+        box: dict = {}
+
+        def _run():
+            try:
+                box["value"] = state_provider() if callable(state_provider) else state_provider
+            except Exception as exc:                 # noqa: BLE001 —— 模拟探测失败
+                box["error"] = exc
+
+        th = threading.Thread(target=_run, daemon=True)
+        th.start()
+        th.join(timeout_s)
+        if th.is_alive():
+            return False, None, f"COM 调用超过 {timeout_s:.0f}s 未返回"
+        if "error" in box:
+            return False, None, str(box["error"])
+        return True, box.get("value"), None
+
+    monkeypatch.setattr(module, "_call_com_child", _fake)
 
 
 class TestValidateSetups:
@@ -250,7 +285,7 @@ def test_launch_aedt_already_running_waits_for_com(tmp_path, monkeypatch):
 
     monkeypatch.setattr(P, "aedt_is_running", lambda: True)
     monkeypatch.setattr(P, "get_aedt_pids", lambda: [111, 222])
-    monkeypatch.setattr(P, "query_desktop_state", fake_state)
+    _patch_state(monkeypatch, P, fake_state)
     monkeypatch.setattr(P.time, "sleep", lambda s: None)
 
     r = P.launch_aedt(aedt_path=str(fake_exe), timeout_seconds=10)
@@ -275,7 +310,7 @@ def test_launch_aedt_already_running_times_out_with_pid(tmp_path, monkeypatch):
 
     monkeypatch.setattr(P, "aedt_is_running", lambda: True)
     monkeypatch.setattr(P, "get_aedt_pids", lambda: [333])
-    monkeypatch.setattr(P, "query_desktop_state", lambda: {"connected": False})
+    _patch_state(monkeypatch, P, lambda: {"connected": False})
     monkeypatch.setattr(P.time, "monotonic", fake_monotonic)
     monkeypatch.setattr(P.time, "sleep", lambda s: None)
 
@@ -326,7 +361,7 @@ def test_launch_aedt_does_not_hold_lock_while_waiting_for_com(tmp_path, monkeypa
 
     monkeypatch.setattr(P, "aedt_is_running", lambda: True)
     monkeypatch.setattr(P, "get_aedt_pids", lambda: [1])
-    monkeypatch.setattr(P, "query_desktop_state", fake_state)
+    _patch_state(monkeypatch, P, fake_state)
     monkeypatch.setattr(P.time, "monotonic", fast_clock)
     monkeypatch.setattr(P.time, "sleep", lambda s: None)
 
@@ -761,7 +796,7 @@ def test_open_hfss_project_timeout_is_not_success(monkeypatch, tmp_path):
     monkeypatch.setattr(pm, "_clear_self_lock", lambda p: None)
     monkeypatch.setattr(pm, "cleanup_stale_project_lock",
                         lambda p: {"removed": False, "lock_pid": None})
-    monkeypatch.setattr(pm, "query_desktop_state",
+    _patch_state(monkeypatch, pm,
                         lambda: {"connected": True, "projects": []})
     monkeypatch.setattr(pm, "get_project_lock_path", lambda p: tmp_path / "Proj.aedt.lock")
     monkeypatch.setattr(pm.time, "sleep", lambda _s: None)   # 收尾核对 5×5s，别让测试真等 25s
@@ -794,7 +829,7 @@ def test_clear_self_lock_moves_lock_when_project_not_open(monkeypatch, tmp_path)
     lock.write_text("$begin 'ConnectionParameters'\n\tDesktopProcessID=99999\n"
                     "$end 'ConnectionParameters'\n", encoding="utf-8")
     monkeypatch.setattr(pm, "get_aedt_pids", lambda: [99999])
-    monkeypatch.setattr(pm, "query_desktop_state",
+    _patch_state(monkeypatch, pm,
                         lambda: {"connected": True, "projects": []})
 
     res = pm._clear_self_lock(str(epp))
@@ -813,7 +848,7 @@ def test_clear_self_lock_keeps_lock_when_project_really_open(monkeypatch, tmp_pa
     lock = tmp_path / "P.aedt.lock"
     lock.write_text("DesktopProcessID=99999\n", encoding="utf-8")
     monkeypatch.setattr(pm, "get_aedt_pids", lambda: [99999])
-    monkeypatch.setattr(pm, "query_desktop_state",
+    _patch_state(monkeypatch, pm,
                         lambda: {"connected": True, "projects": ["P"]})
 
     assert pm._clear_self_lock(str(epp)) is None
@@ -829,7 +864,7 @@ def test_get_hfss_project_info_reports_not_responding(monkeypatch):
     monkeypatch.setattr(pm, "aedt_is_running", lambda: True)
     monkeypatch.setattr(pm, "get_aedt_pids", lambda: [777])
     monkeypatch.setattr(pm, "_COM_READ_TIMEOUT", 0.3)
-    monkeypatch.setattr(pm, "query_desktop_state",
+    _patch_state(monkeypatch, pm,
                         lambda: _time.sleep(2) or {"connected": True, "projects": []})
 
     t0 = _time.monotonic()
@@ -847,7 +882,7 @@ def test_get_hfss_project_info_flags_multi_instance(monkeypatch):
     monkeypatch.setattr(pm, "aedt_is_running", lambda: True)
     monkeypatch.setattr(pm, "get_aedt_pids", lambda: [1, 2])
     monkeypatch.setattr(pm, "_aedt_instance_groups", lambda: [[1], [2]])
-    monkeypatch.setattr(pm, "query_desktop_state",
+    _patch_state(monkeypatch, pm,
                         lambda: {"connected": True, "projects": ["A"], "active_project": "A",
                                  "active_design": "D"})
 
@@ -942,7 +977,7 @@ def test_quit_aedt_refuses_multi_instance(monkeypatch):
     from servers.ansys import project_manage as pm
 
     monkeypatch.setattr(pm, "get_aedt_pids", lambda: [1, 2])
-    monkeypatch.setattr(pm, "query_desktop_state", lambda: {"connected": True, "projects": []})
+    _patch_state(monkeypatch, pm, lambda: {"connected": True, "projects": []})
     monkeypatch.setattr(pm, "_aedt_instance_groups", lambda: [[1], [2]])
 
     r = pm.quit_aedt()
@@ -950,31 +985,24 @@ def test_quit_aedt_refuses_multi_instance(monkeypatch):
 
 
 def test_quit_aedt_com_quit_success(monkeypatch):
-    import contextlib
-
     from servers.ansys import project_manage as pm
 
     state = {"pids": [111]}
+    tasks: list[str] = []
 
-    class _Desk:
-        def __init__(self):
-            self.quit_called = 0
+    def _fake_com(task, args=(), timeout_s=0.0):
+        tasks.append(task)
+        return True, {"status": "quit_sent"}, None
 
-        def QuitApplication(self):
-            self.quit_called += 1
-
-    desk = _Desk()
     monkeypatch.setattr(pm, "get_aedt_pids", lambda: list(state["pids"]))
-    monkeypatch.setattr(pm, "query_desktop_state", lambda: {"connected": True, "projects": []})
+    monkeypatch.setattr(pm, "_call_com_child", _fake_com)
     monkeypatch.setattr(pm, "_aedt_instance_groups", lambda: [[111]])
     monkeypatch.setattr(pm, "_is_managed_aedt", lambda pids: True)
-    monkeypatch.setattr(pm, "com_session", contextlib.nullcontext)
-    monkeypatch.setattr(pm, "_attach_aedt", lambda: (object(), desk))
     monkeypatch.setattr(pm, "_wait_no_aedt", lambda _t: (state.update(pids=[]), True)[1])
 
     r = pm.quit_aedt()
 
-    assert desk.quit_called == 1, "应走 COM QuitApplication"
+    assert "quit" in tasks, "应把 QuitApplication 发给隔离子进程"
     assert r["success"] is True and r["status"] == "quit" and r["method"] == "com"
     assert r["pids_after"] == []
 
@@ -986,7 +1014,7 @@ def test_quit_aedt_warns_about_open_projects(monkeypatch):
 
     state = {"pids": [111]}
     monkeypatch.setattr(pm, "get_aedt_pids", lambda: list(state["pids"]))
-    monkeypatch.setattr(pm, "query_desktop_state",
+    _patch_state(monkeypatch, pm,
                         lambda: {"connected": True, "projects": ["A", "B"]})
     monkeypatch.setattr(pm, "_aedt_instance_groups", lambda: [[111]])
     monkeypatch.setattr(pm, "_is_managed_aedt", lambda pids: True)
@@ -1005,7 +1033,7 @@ def test_quit_aedt_force_kills_all(monkeypatch):
 
     calls = {}
     monkeypatch.setattr(pm, "get_aedt_pids", lambda: [111, 222])
-    monkeypatch.setattr(pm, "query_desktop_state", lambda: {"connected": True, "projects": ["A"]})
+    _patch_state(monkeypatch, pm, lambda: {"connected": True, "projects": ["A"]})
 
     def fake_kill(pids):
         calls.update(pids=pids)
@@ -1044,7 +1072,7 @@ def test_quit_aedt_still_running_returns_error(monkeypatch):
         raise RuntimeError("COM 挂了")
 
     monkeypatch.setattr(pm, "get_aedt_pids", lambda: [333])
-    monkeypatch.setattr(pm, "query_desktop_state", lambda: {"connected": True, "projects": []})
+    _patch_state(monkeypatch, pm, lambda: {"connected": True, "projects": []})
     monkeypatch.setattr(pm, "_aedt_instance_groups", lambda: [[333]])
     monkeypatch.setattr(pm, "_is_managed_aedt", lambda pids: True)
     monkeypatch.setattr(pm, "com_session", contextlib.nullcontext)
@@ -1064,7 +1092,7 @@ def test_quit_aedt_unmanaged_instance_requires_confirm(monkeypatch):
     from servers.ansys import project_manage as pm
 
     monkeypatch.setattr(pm, "get_aedt_pids", lambda: [555])
-    monkeypatch.setattr(pm, "query_desktop_state",
+    _patch_state(monkeypatch, pm,
                         lambda: {"connected": True, "projects": ["UserProject"]})
     monkeypatch.setattr(pm, "_aedt_instance_groups", lambda: [[555]])
     monkeypatch.setattr(pm, "_is_managed_aedt", lambda pids: False)
@@ -1082,23 +1110,25 @@ def test_quit_aedt_unmanaged_instance_requires_confirm(monkeypatch):
 
 def test_quit_aedt_unmanaged_instance_with_confirm_proceeds(monkeypatch):
     """确认后可以退：COM QuitApplication 正常走完。"""
-    import contextlib
-
     from servers.ansys import project_manage as pm
 
     state = {"pids": [555]}
-    desk = type("D", (), {"n": 0, "QuitApplication": lambda self: setattr(self, "n", 1)})()
+    tasks: list[str] = []
+
+    def _fake_com(task, args=(), timeout_s=0.0):
+        tasks.append(task)
+        return True, {"status": "quit_sent"}, None
+
     monkeypatch.setattr(pm, "get_aedt_pids", lambda: list(state["pids"]))
-    monkeypatch.setattr(pm, "query_desktop_state", lambda: {"connected": True, "projects": []})
+    monkeypatch.setattr(pm, "_call_com_child", _fake_com)
     monkeypatch.setattr(pm, "_aedt_instance_groups", lambda: [[555]])
     monkeypatch.setattr(pm, "_is_managed_aedt", lambda pids: False)
-    monkeypatch.setattr(pm, "com_session", contextlib.nullcontext)
-    monkeypatch.setattr(pm, "_attach_aedt", lambda: (object(), desk))
     monkeypatch.setattr(pm, "_wait_no_aedt", lambda _t: (state.update(pids=[]), True)[1])
 
     r = pm.quit_aedt(confirm=True)
 
-    assert r["success"] is True and r["method"] == "com" and desk.n == 1
+    assert r["success"] is True and r["method"] == "com"
+    assert tasks.count("quit") == 1, "QuitApplication 应发给隔离子进程一次"
 
 
 def test_open_hfss_project_opened_after_timeout_is_success(monkeypatch, tmp_path):
@@ -1141,7 +1171,7 @@ def test_open_hfss_project_opened_after_timeout_is_success(monkeypatch, tmp_path
     monkeypatch.setattr(pm, "_clear_self_lock", lambda p: None)
     monkeypatch.setattr(pm.subprocess, "Popen", lambda *a, **k: _Proc())
     monkeypatch.setattr(pm, "_register_launched", lambda p: None)
-    monkeypatch.setattr(pm, "query_desktop_state", fake_state)
+    _patch_state(monkeypatch, pm, fake_state)
     monkeypatch.setattr(pm.time, "sleep", lambda _s: None)
     monkeypatch.setattr(pm.time, "monotonic", fake_mono)
 
@@ -1172,7 +1202,7 @@ def test_open_hfss_project_already_open_reports_success(monkeypatch, tmp_path):
     monkeypatch.setattr(pm, "_clear_self_lock", lambda p: None)
     monkeypatch.setattr(pm, "cleanup_stale_project_lock",
                         lambda p: {"removed": False, "lock_pid": 9001, "status": "lock_active"})
-    monkeypatch.setattr(pm, "query_desktop_state",
+    _patch_state(monkeypatch, pm,
                         lambda: {"connected": True, "projects": ["Opened"]})
     monkeypatch.setattr(pm.subprocess, "Popen",
                         lambda *a, **k: (_ for _ in ()).throw(AssertionError("不该再起进程")))
@@ -1200,7 +1230,7 @@ def test_open_hfss_project_lock_held_elsewhere_stays_error(monkeypatch, tmp_path
     monkeypatch.setattr(pm, "_clear_self_lock", lambda p: None)
     monkeypatch.setattr(pm, "cleanup_stale_project_lock",
                         lambda p: {"removed": False, "lock_pid": 9002, "status": "lock_active"})
-    monkeypatch.setattr(pm, "query_desktop_state",
+    _patch_state(monkeypatch, pm,
                         lambda: {"connected": True, "projects": ["Other"]})
 
     r = pm.open_hfss_project(project_path=str(epp), timeout_seconds=5)
@@ -1282,7 +1312,7 @@ def test_quit_aedt_cleans_leftover_embedding_helpers(monkeypatch):
     killed = []
 
     monkeypatch.setattr(pm, "get_aedt_pids", lambda: list(state["pids"]))
-    monkeypatch.setattr(pm, "query_desktop_state", lambda: {"connected": True, "projects": []})
+    _patch_state(monkeypatch, pm, lambda: {"connected": True, "projects": []})
     monkeypatch.setattr(pm, "_aedt_instance_groups", lambda: [[45920]])
     monkeypatch.setattr(pm, "_is_managed_aedt", lambda pids: True)
     monkeypatch.setattr(pm, "com_session", contextlib.nullcontext)
@@ -1315,7 +1345,7 @@ def test_quit_aedt_does_not_kill_when_launcher_alive(monkeypatch):
     from servers.ansys import project_manage as pm
 
     monkeypatch.setattr(pm, "get_aedt_pids", lambda: [45920, 35932])
-    monkeypatch.setattr(pm, "query_desktop_state", lambda: {"connected": True, "projects": []})
+    _patch_state(monkeypatch, pm, lambda: {"connected": True, "projects": []})
     monkeypatch.setattr(pm, "_aedt_instance_groups", lambda: [[45920]])
     monkeypatch.setattr(pm, "_is_managed_aedt", lambda pids: True)
     monkeypatch.setattr(pm, "com_session", contextlib.nullcontext)

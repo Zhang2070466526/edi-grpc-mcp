@@ -37,7 +37,7 @@ def test_all_tools_registered():
         "export_schematic_components_to_csv",
         "design_chip",
         "open_hfss_project", "close_hfss_project", "launch_aedt", "quit_aedt",
-        "get_hfss_project_info",
+        "get_hfss_project_info", "export_hfss_snp",
         "launch_laspcem", "open_laspcem_project", "import_aedt_as_sem",
         "run_laspcem_solve_async", "laspcem_solve_query",
         "laspcem_task_cancel", "laspcem_task_list",

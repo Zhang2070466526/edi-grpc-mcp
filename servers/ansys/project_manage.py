@@ -9,9 +9,11 @@ get_hfss_project_info: 只读查询，不启动 AEDT
 from __future__ import annotations
 
 import atexit
+import json
 import psutil
 import stat
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -19,7 +21,7 @@ from typing import Any
 
 from servers.ansys.config import (
     AEDT_PATH, _AEDT_LOCK,
-    aedt_is_running, get_aedt_pids, query_desktop_state,
+    aedt_is_running, get_aedt_pids,
     cleanup_stale_project_lock, get_project_lock_path,
     read_project_lock_pid,
     _attach_aedt, com_session, logger,
@@ -35,6 +37,110 @@ _OPEN_PROJECT_PATHS: dict[str, str] = {}  # project_name -> project_path
 _COM_READ_TIMEOUT = 10.0
 #: 关闭动作的等待上限（秒）：CloseProject 正常 <2s，超过就是实例卡住。
 _COM_CLOSE_TIMEOUT = 30.0
+
+#: COM 操作的隔离子进程脚本（见 com_child.py 顶部注释）。
+_COM_CHILD_SCRIPT = Path(__file__).resolve().parent / "com_child.py"
+#: 项目根目录：作为子进程 cwd，保证相对路径可控。
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+#: 项目 venv 解释器（uv 项目必有）。
+_VENV_PYTHON = _PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
+
+
+def _com_child_python() -> str:
+    """跑 com_child 的解释器：优先项目 venv。
+
+    ⚠️ 服务用 `uv run python start_servers.py` 启动时，`sys.executable` 是 uv 托管的
+    base python，它的 site-packages 里没有 pywin32/psutil —— 直接拿它 spawn 子进程会
+    ModuleNotFoundError（2026-11-25 真机：3s 全部超时，实际是子进程起不来）。
+    项目 venv 是唯一保证有依赖的解释器，没有 venv（打包分发）时才退回 sys.executable。
+    """
+    if _VENV_PYTHON.is_file():
+        return str(_VENV_PYTHON)
+    return sys.executable
+
+
+def _find_aedt_modal_dialogs() -> list[str]:
+    """列出 ansysedt 进程上挂着的模态对话框标题（Win32 类 `#32770`）。
+
+    AEDT 卡死最常见的原因就是弹了个看不见的模态框：2026-11-25 实测
+    `Show Queued Simulations`（Visible=False）把消息循环堵死，COM 调用永远不返回。
+    用 EnumWindows 直接看窗口，比干等 COM 超时快得多，也能直接告诉用户该处理哪个框。
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    pids = set(get_aedt_pids())
+    if not pids:
+        return []
+
+    titles: list[str] = []
+    user32 = ctypes.windll.user32
+    WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def _cb(hwnd, _lparam):
+        pid = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if pid.value in pids:
+            cls = ctypes.create_unicode_buffer(256)
+            user32.GetClassNameW(hwnd, cls, 256)
+            if cls.value == "#32770":
+                buf = ctypes.create_unicode_buffer(512)
+                user32.GetWindowTextW(hwnd, buf, 512)
+                if buf.value:
+                    titles.append(buf.value)
+        return True
+
+    try:
+        user32.EnumWindows(WNDENUMPROC(_cb), 0)
+    except Exception:                               # noqa: BLE001 —— 枚举失败不阻塞主流程
+        return []
+    return titles
+
+
+def _call_com_child(task: str, args: tuple[str, ...],
+                    timeout_s: float) -> tuple[bool, Any, str | None]:
+    """在**独立子进程**里执行一次 AEDT COM 操作，超时直接 terminate。
+
+    与 `_call_with_timeout`（线程版）的区别：线程版超时只是"不等人"，卡住的
+    线程仍持有 `_AEDT_LOCK` 与 COM 引用，一次卡死就堵到 AEDT 重启为止；
+    子进程被杀后 COM 资源随进程消失，服务侧零残留。
+    2026-11-25 真机：AEDT 弹隐藏模态框 → 线程持锁 → 之后 28 分钟所有调用全超时。
+
+    模态框只当**诊断线索**，不当拒绝理由：实测 `Show Queued Simulations`（#32770，
+    Visible=False）存在时 COM 仍可能 0.86s 正常返回，一律拒绝会误伤可用实例；
+    只在检测到它时把等待缩短，超时后再把它写进错误信息。
+    """
+    dialogs = _find_aedt_modal_dialogs()
+    if dialogs:
+        timeout_s = min(timeout_s, 5.0)             # 有疑似阻塞框：短试，不干等整段超时
+
+    cmd = [_com_child_python(), str(_COM_CHILD_SCRIPT), task, *args]
+    try:
+        cp = subprocess.run(cmd, cwd=str(_PROJECT_ROOT), capture_output=True,
+                            text=True, encoding="utf-8", errors="replace",
+                            timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        extra = (f"；检测到 AEDT 模态框 {dialogs}，先处理掉再重试" if dialogs else "")
+        return False, None, (f"COM 调用超过 {timeout_s:.1f}s 未返回（AEDT 可能（未响应）"
+                             f"{extra}；子进程已终止，通道无残留）")
+    except Exception as exc:                        # noqa: BLE001 —— 起不来也要回结构化错误
+        return False, None, f"COM 子进程启动失败：{exc}"
+
+    payload: dict[str, Any] | None = None
+    for line in reversed((cp.stdout or "").splitlines()):
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                payload = json.loads(line)
+                break
+            except json.JSONDecodeError:
+                continue
+    if payload is None:
+        return False, None, (f"COM 子进程无有效输出（exit={cp.returncode}）："
+                             f"{(cp.stderr or '')[-300:]}")
+    if not payload.get("ok"):
+        return False, None, str(payload.get("error") or "unknown com_child error")
+    return True, payload.get("result"), None
 
 
 def _call_with_timeout(fn, timeout_s: float) -> tuple[bool, Any, str | None]:
@@ -108,6 +214,32 @@ def _instance_guard(action: str) -> dict[str, Any] | None:
     )
 
 
+def _detect_shell_instance() -> dict[str, Any] | None:
+    """只剩 `-Embedding` 孤壳、没有 GUI 启动器时返回诊断错误。
+
+    AEDT 2020 被 COM 激活时由 DcomLaunch 拉起 `ansysedt.exe -Embedding`。GUI 关掉后
+    这个孤壳会一直留着，而 `Dispatch` 恰好能连上它 —— 之后所有工程操作都打在一个
+    没有窗口、没有工程的对象上，`OpenProject` 也开不出来；同时 `_open_via_subprocess`
+    的每次 Popen 都会被单实例转发、新进程立刻 exit 0（上层只看到 PROCESS_EXITED）。
+    2026-11-25 真机：残留 PID 37316 就是这样把 AEDT 通道整个锁死的。
+    """
+    pids = get_aedt_pids()
+    if not pids:
+        return None
+    helpers = set(_embedding_pids(pids))
+    if len(helpers) != len(pids):
+        return None                                 # 有真实启动器 → 正常实例
+    return error_response(
+        "AEDT_SHELL_ONLY",
+        f"AEDT 只剩 -Embedding 空壳进程 {sorted(helpers)}（无窗口、无工程），"
+        f"COM 会附着到它而不是真实实例，工程打不开",
+        hint="先清掉空壳再重试（不持有工程，杀它不丢数据）："
+             + "；".join(f"taskkill /F /PID {p}" for p in sorted(helpers)),
+        aedt_running=True, aedt_pids=sorted(helpers),
+        instances=[[p] for p in sorted(helpers)],
+    )
+
+
 def _clear_self_lock(project_path: str) -> dict[str, Any] | None:
     """清掉"自己锁自己"的残留锁；返回清理结果或 None。
 
@@ -126,7 +258,7 @@ def _clear_self_lock(project_path: str) -> dict[str, Any] | None:
     if pid is None or pid not in get_aedt_pids():
         return None                                 # 死锁 / 读不到 PID：交给 cleanup_stale_project_lock
     name = Path(project_path).stem
-    ok, state, _err = _call_with_timeout(query_desktop_state, 5.0)
+    ok, state, _err = _call_com_child("state", (), 5.0)
     if not ok or name in ((state or {}).get("projects") or []):
         return None                                 # COM 不可用或工程确实在打开 → 不动
     backup = lock.with_name(lock.name + ".selflock.bak")
@@ -251,7 +383,7 @@ def open_hfss_project(
         if lock_result.get("status") == "lock_active":
             # 锁被活进程持有时，工程很可能**已经开着**（同一个实例）→ 先核对，
             # 别把"已打开"报成锁冲突（2026-11-18 真机：已打开时回 PROJECT_LOCKED 会误导 agent）
-            ok_open, st_open, _err_open = _call_with_timeout(query_desktop_state, _COM_READ_TIMEOUT)
+            ok_open, st_open, _err_open = _call_com_child("state", (), _COM_READ_TIMEOUT)
             if ok_open and st_open["connected"] and project_name in st_open["projects"]:
                 _OPEN_PROJECT_PATHS[project_name] = resolved
                 return {
@@ -277,10 +409,14 @@ def open_hfss_project(
         aedt_was_running = aedt_is_running()
 
         if aedt_was_running:
+            # 只剩 -Embedding 孤壳（无 GUI 启动器）→ COM 只会连到空对象，先明确拒，
+            # 别让后续 OpenProject 打在空壳上或让 Popen 被单实例转发后静默 exit 0
+            if (shell := _detect_shell_instance()) is not None:
+                return shell
             # 多实例时 COM 无法按 PID 定向（AEDT 2020 不注册 ROT）→ 明确拒绝，别猜
             if (guard := _instance_guard("打开工程")) is not None:
                 return guard
-            ok, state, st_err = _call_with_timeout(query_desktop_state, _COM_READ_TIMEOUT)
+            ok, state, st_err = _call_com_child("state", (), _COM_READ_TIMEOUT)
             if not ok:
                 return error_response(
                     "AEDT_NOT_RESPONDING",
@@ -318,8 +454,8 @@ def open_hfss_project(
                     **lock_info,
                 }
 
-            ok_com, result, com_err = _call_with_timeout(
-                lambda: _com_open_project(resolved), float(timeout_seconds))
+            ok_com, result, com_err = _call_com_child(
+                "open", (resolved,), float(timeout_seconds))
             if not ok_com:
                 return error_response(
                     "AEDT_NOT_RESPONDING",
@@ -380,7 +516,7 @@ def _open_via_subprocess(exe_path: Path, resolved: str, project_name: str,
                 self_lock_retried = True
                 lock_info["self_lock_removed"] = again
                 logger.warning("启动后检测到自锁，已清理并继续等待：%s", resolved)
-        ok_rd, state, _rd_err = _call_with_timeout(query_desktop_state, 5.0)
+        ok_rd, state, _rd_err = _call_com_child("state", (), 5.0)
         if ok_rd and state["connected"] and project_name in state["projects"]:
             _OPEN_PROJECT_PATHS[project_name] = resolved
             return {
@@ -397,7 +533,7 @@ def _open_via_subprocess(exe_path: Path, resolved: str, project_name: str,
     # 收尾再核：AEDT 常在截止后一段时间才把工程挂进 open_projects（2026-11-18 实测
     # 129.5s/246s 都假失败过），按 5×5s 给足，避免刚要开出来就被判失败。
     for _ in range(5):
-        ok_g, st_g, _err_g = _call_with_timeout(query_desktop_state, 5.0)
+        ok_g, st_g, _err_g = _call_com_child("state", (), 5.0)
         if ok_g and st_g["connected"] and project_name in st_g["projects"]:
             _LAST_PID = proc.pid
             _OPEN_PROJECT_PATHS[project_name] = resolved
@@ -990,12 +1126,7 @@ def _quit_aedt_graceful(ok_state: bool, pids_before: list[int], timeout_seconds:
     """
     method = ""
     if ok_state:
-        def _com_quit() -> None:
-            with com_session():
-                _app, desktop = _attach_aedt()
-                desktop.QuitApplication()
-
-        okq, _v, qerr = _call_with_timeout(_com_quit, _COM_CLOSE_TIMEOUT)
+        okq, _v, qerr = _call_com_child("quit", (), _COM_CLOSE_TIMEOUT)
         if okq:
             method = "com"
         else:
@@ -1087,7 +1218,7 @@ def quit_aedt(force: bool = False, confirm: bool = False,
                 "pids_before": [], "pids_after": [],
                 "duration_s": round(time.monotonic() - t0, 1)}
 
-    ok_state, state, _err = _call_with_timeout(query_desktop_state, _COM_READ_TIMEOUT)
+    ok_state, state, _err = _call_com_child("state", (), _COM_READ_TIMEOUT)
     open_projects = list((state or {}).get("projects") or []) if (ok_state and state) else None
 
     warnings: list[str] = []
@@ -1152,9 +1283,14 @@ def launch_aedt(
         return error_response("INVALID_AEDT_PATH", "必须以 ansysedt.exe 结尾")
 
     def _wait_com(deadline: float) -> bool:
-        """在 deadline 前轮询 COM 是否就绪（新起进程 / 已有进程共用同一判据）。"""
+        """在 deadline 前轮询 COM 是否就绪（新起进程 / 已有进程共用同一判据）。
+
+        用隔离子进程探测：AEDT 启动/加载阶段 COM 可能长时间不返回，直接调用会把
+        launch_aedt 整个挂住、连 deadline 都判不到（2026-11-25 复核）。
+        """
         while True:
-            if query_desktop_state()["connected"]:
+            ok, st, _err = _call_com_child("state", (), 2.0)
+            if ok and (st or {}).get("connected"):
                 return True
             if time.monotonic() >= deadline:
                 return False
@@ -1209,7 +1345,7 @@ def get_hfss_project_info() -> dict[str, Any]:
         return {"success": True, "aedt_running": False, "message": "AEDT 未运行", "pids": []}
 
     pids = get_aedt_pids()
-    ok, state, err = _call_with_timeout(query_desktop_state, _COM_READ_TIMEOUT)
+    ok, state, err = _call_com_child("state", (), _COM_READ_TIMEOUT)
     if not ok:
         return error_response(
             "AEDT_NOT_RESPONDING",

@@ -237,3 +237,73 @@ def get_hfss_analysis_status(
             result["aedt_refresh_error"] = str(exc)
 
     return result
+
+
+@mcp.tool()
+def export_hfss_snp(
+    project_path: str,
+    design_name: str,
+    setup_name: str,
+    sweep_name: str = "Sweep",
+    output_path: str = "",
+    port_count: int = 0,
+) -> dict[str, Any]:
+    """导出 HFSS 已求解的 S 参数为 Touchstone 文件（.sNp）。
+
+    用法："把 CPW_SL 的 S 参数导成 snp"、"导出 HFSSDesign1 的 Setup1 扫频结果"
+
+    对 AEDT 中**已打开且已求解**的工程调用 Solutions.ExportNetworkData（做法同
+    edi-server `apps/star/hfss/hfss_export.py`），在隔离子进程里执行 —— AEDT 卡死时
+    不会拖住服务。端口数会先探测，文件名按端口数落成 .s<N>p。要重新求解请先调
+    start_hfss_analysis_async。
+
+    Args:
+        project_path: .aedt 项目文件绝对路径。
+        design_name: HFSS 设计名（如 "HFSSDesign1"）。
+        setup_name: Analysis Setup 名（如 "Setup1"）。
+        sweep_name: 扫频名（如 "Sweep"）。必填：AEDT 2020 的自适应解
+            （"Setup : LastAdaptive"）导出不稳定，传空会直接报错。
+        output_path: 输出路径；留空则落在 .aedt 同目录 <工程>_<设计>.s<N>p。
+        port_count: 端口数（决定 .sNp 后缀）；0 = 自动探测，探测失败按 2。
+
+    Returns:
+        {"success": true, "snp_path": "...s2p", "size_bytes": 33101,
+         "port_count": 2, "solution": "Setup1 : Sweep"}
+    """
+    from servers.ansys.project_manage import _call_com_child
+
+    try:
+        resolved = validate_file(project_path, (".aedt", ".aedtz"))
+    except (FileNotFoundError, ValueError) as exc:
+        return error_response("INVALID_PATH", str(exc))
+
+    if not aedt_is_running():
+        return error_response("AEDT_NOT_RUNNING", "AEDT 未运行，请先用 open_hfss_project 打开工程")
+
+    project_name = Path(resolved).stem
+    if not output_path:
+        output_path = str(Path(resolved).parent / f"{project_name}_{design_name}.sNp")
+
+    ok, result, err = _call_com_child(
+        "export_snp",
+        (resolved, design_name, setup_name, sweep_name, output_path,
+         str(max(0, int(port_count)))),
+        180.0,
+    )
+    if not ok:
+        return error_response("EXPORT_FAILED", err or "导出失败",
+                              project_name=project_name, design_name=design_name,
+                              setup_name=setup_name, sweep_name=sweep_name)
+
+    result = dict(result or {})
+    return {
+        "success": True,
+        "project_name": project_name,
+        "design_name": design_name,
+        "snp_path": result.get("snp_path", ""),
+        "size_bytes": result.get("size", 0),
+        "port_count": result.get("port_count", 0),
+        "solution": result.get("solution", ""),
+        "aedt_pid": result.get("pid"),
+        "message": f"已导出 {result.get('solution', '')} 的 S 参数: {result.get('snp_path', '')}",
+    }
