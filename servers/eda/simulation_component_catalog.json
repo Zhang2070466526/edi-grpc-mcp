@@ -714,7 +714,7 @@
           "value_type": "string",
           "unit_required": false,
           "units": [],
-          "create_allowed": true,
+          "create_allowed": false,
           "update_allowed": true
         }
       ],
