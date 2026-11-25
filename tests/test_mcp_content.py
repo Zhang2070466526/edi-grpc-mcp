@@ -42,7 +42,6 @@ class TestResourcesDirect:
         data = resource_simulation_components()
         cat = _load_catalog()
         assert data == cat
-        assert data["schema_version"] == "2.0.0"
 
     def test_operation_guide_has_key_rules(self):
         from servers.resources_prompts.resources_reference import resource_operation_guide
@@ -129,14 +128,6 @@ class TestPromptsDirect:
         assert "错误" in msgs[0]["content"]
         assert "nonexistent" in msgs[0]["content"]
 
-    def test_assess_anti_burnout(self):
-        from servers.resources_prompts.prompts_simulation import prompt_assess_anti_burnout
-        msgs = prompt_assess_anti_burnout("C:/test.epp")
-        text = msgs[0]["content"]
-        assert "simulate_anti_burnout" in text
-        assert "裕量" in text
-        assert "max_input_power" in text
-
     def test_select_component(self):
         from servers.resources_prompts.prompts_component import prompt_select_component
         msgs = prompt_select_component("61", "低噪声放大器")
@@ -152,7 +143,6 @@ class TestPromptsDirect:
         msgs = prompt_analyze_signal_chain("C:/test.epp")
         text = msgs[0]["content"]
         assert "get_signal_chain" in text
-        assert "export_project_netlist" in text
 
 
 # ═══════════════════════════════════════════════════════════

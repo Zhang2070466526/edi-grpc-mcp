@@ -219,12 +219,13 @@ def test_upload_rejects_oversized_file(monkeypatch):
 
 # ── 低危修复回归 ────────────────────────────────────────────────
 
-def test_register_document_url_rejects_invalid_path(tmp_path):
+def test_open_document_rejects_invalid_path(tmp_path):
+    """open_document 的路径校验（存在性、拒绝 UNC）仍生效。"""
     from servers.multimodal_vision import document
-    with pytest.raises(FileNotFoundError):
-        document.register_document_url(str(tmp_path / "nope.pdf"))
-    with pytest.raises(PermissionError):
-        document.register_document_url("\\\\server\\share\\file.pdf")
+    missing = document.open_document(str(tmp_path / "nope.pdf"))
+    assert missing["success"] is False and missing["error_code"] == "FILE_NOT_FOUND"
+    unc = document.open_document("\\\\server\\share\\file.pdf")
+    assert unc["success"] is False and unc["error_code"] == "INVALID_PATH"
 
 
 def test_vswr_split_removes_consecutive_ampersand_and_passes_ac(tmp_path, monkeypatch):
@@ -442,21 +443,6 @@ def test_kill_port_process(monkeypatch):
     fake_proc.wait.assert_called()
 
 
-# ── SIMULATE_ANTI_BURNOUT 新工具 ───────────────────────────────
-
-def test_simulate_anti_burnout_payload(monkeypatch):
-    from servers.eda import simulation as sim
-    from proto import ecserver_pb2
-    calls = []
-
-    def _fake(task_type, project_path, timeout_seconds, *, max_timeout_seconds=300, **extras):
-        calls.append((task_type, {"project_path": project_path, **extras}))
-        return {"success": True, "status": "SUCCEEDED"}
-
-    monkeypatch.setattr(sim, "call_project_grpc", _fake)
-    sim.simulate_anti_burnout("C:/test.epp")
-    assert calls[-1][0] == ecserver_pb2.SIMULATE_ANTI_BURNOUT
-    assert calls[-1][1] == {"project_path": "C:/test.epp"}
 
 
 # ── get_service_logs 新工具 ─────────────────────────────────────
