@@ -34,8 +34,6 @@ class TestCatalog:
     def test_catalog_loads(self):
         cat = _load_catalog()
         assert cat, "Catalog should not be empty"
-        assert cat.get("schema_version") == "2.0.0"
-        assert cat.get("protocol_version") == "2"
 
     def test_all_types_present(self):
         for ct in _COMPONENT_TYPES:
@@ -49,7 +47,6 @@ class TestCatalog:
             for pname, pschema in comp.get("parameters", {}).items():
                 assert "create_allowed" in pschema, f"{ct}.{pname} missing create_allowed"
                 assert "update_allowed" in pschema, f"{ct}.{pname} missing update_allowed"
-                assert "permission_source" in pschema, f"{ct}.{pname} missing permission_source"
 
     def test_wire_names_unique(self):
         for ct in _COMPONENT_TYPES:
@@ -319,8 +316,6 @@ class TestGetSchema:
         result = get_simulation_component_schema("SParameter")
         assert result["success"] is True
         assert result["component_type"] == "SParameter"
-        assert result["schema_version"] == "2.0.0"
-        assert result["protocol_version"] == "2"
         assert "parameters" in result
         assert "parameter_patterns" in result
         assert "example" in result

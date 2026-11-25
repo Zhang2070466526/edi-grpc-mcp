@@ -1399,6 +1399,14 @@ example: `{"task_id": "<string>"}`
 > - 判定"求解完成"看**求解器进程**：见过 `mpiexec/phofem` → 等它们退出且 `.sem` 安静 15 s。只看解序号不行（同一 setup 重解是**覆盖**，不新增序号）。
 > - 工程已有解且模型没变化时，LASPCEM 会跳过重算（Message: `already calculated`）——正常行为，本组工具**不提供强制重解**；需要重算就让模型真的变化。
 > - 实测耗时：一次完整求解 ≈ **220 s**；未求解工程"求解→导出" ≈ **238 s**；已求解工程导出 **2–5 s**。
+>
+> **并发限制：单工程独占，没有 attach 通道（2026-11-25 真机实测 → 现象 + 根因）**
+> - **现象**：GUI 里已经打开某个 `.sem` 时，`run_laspcem_solve_async` / `export_laspcem_snp` / `build_laspcem_report` 一律回 `PROJECT_IN_USE`（"工程已被 LASPCEM 实例占用（PID xxx），无法求解"），且是 **0.1 s 级**的前置校验拒绝——不进队列、不烧时间、不留半成品，不是超时也不是求解失败。
+> - **根因 1（产品侧，不在本仓）**：LASPCEM 对外**没有任何控制/投递接口**——进程不监听端口（`netstat -ano` 查不到该 PID 的 socket）、无 COM、无 gRPC、无命名管道控制通道；唯一程序化入口就是"起一个 `laspcem /session <脚本>` 进程，由脚本自己 open 工程"。
+> - **根因 2（数据保护）**：`.sem` 是单文件工程，GUI 打开时写字面锁 `~$<工程名>.lock`（0 字节，与 `.sem` 同目录），求解/导出脚本也要以独占方式打开同一文件写中间数据与结果，两个进程同持必然互相踩 → 后到者被拒。
+> - **因此"打开"与"工具求解"是同一 `.sem` 上的互斥关系**：GUI 开着看 → 后台求解/导出必 `PROJECT_IN_USE`；求解在跑 → 同一工程也打不开 GUI。人工操作不受影响（在已开的 GUI 里点求解仍是同一进程自己算）。
+> - **正确顺序**：先 `run_laspcem_solve_async`（可带 `then_export` / `then_report`）→ 跑完再 `open_laspcem_project` 看结果。若已开着 GUI 又想跑工具求解，只有两条路：`close_laspcem_project` 关实例（等价关窗口，`force=false` 不强杀），或在 GUI 内手动求解。
+> - **能力边界**：要做到"打开着由工具接着算"，前提是 LASPCEM 侧提供 attach/服务化接口（COM、本地 socket、named pipe 任一）；在此之前工具层只能自己起进程独占，无法附着到已开实例（对比：AEDT 有 COM，`open_hfss_project` 才能做到"COM 附着优先、失败才起新进程"）。
 
 ### `launch_laspcem`
 
@@ -1698,6 +1706,31 @@ get_laspcem_setup(sem_path: str) -> dict
 | `sem_path` | str | 是 | — | .sem 文件绝对路径 |
 
 返回：`{"success": true, "sem_path": "...", "setup": {...}, "count": N, "resolved_count": M, "unresolved_double_keys": [...], "warning"?: "..."}`。
+
+### 实测案例：`CPW_SL.aedt` → `.sem` → 求解（2026-11-25，可复现）
+
+源文件：`C:\Users\JGL\Desktop\CPW_SL.aedt`（312,666 B，`Design = HFSSDesign1`，`SolutionType=DrivenModal`，
+`Setup1` 中心频率 5 GHz，扫频点见下方 `.sd` 记录：1 / 3.25 / 5.5 / 10 GHz）。
+环境：AEDT `C:\Program Files\AnsysEM\AnsysEM20.2\Win64\ansysedt.exe`（2020 R2）、
+LASPCEM `D:\LASPCEM_2026\bin\laspcem.exe`。
+
+1. `import_aedt_as_sem("C:\Users\JGL\Desktop\CPW_SL.aedt")` → `C:\Users\JGL\Desktop\CPW_SL-HFSSDesign1.sem`
+   （260,979 B，**14.5 s**），`is_solved=false`，`setup_name="Setup1(FEM)"`、`setup_candidates=["Setup1(FEM)","Setup1"]`；
+   自动删掉 `~$CPW_SL-HFSSDesign1.lock` 与 `CPW_SL-HFSSDesign1.py`。注意 `exit_code=1` 与 `success=true` 并存是常态。
+2. `open_laspcem_project` → 新起 GUI 实例（`running_instances=[11304]`，`reused_existing=false`）；
+   cmdline = `laspcem.exe ...\CPW_SL-HFSSDesign1.sem`，2 min 后落字面锁 `~$CPW_SL-HFSSDesign1.lock`。
+3. 此时 `run_laspcem_solve_async(sem_path, then_export=true)` → **0.13 s 回 `PROJECT_IN_USE`**（PID 11304），
+   solve=FAILED、export=PENDING —— 即本节开头「并发限制」。正确顺序是**先求解、后开 GUI**；
+   或先 `close_laspcem_project` 再求解。
+4. HFSS 侧 `open_hfss_project` 冷启动 **146.6 s** 后返回 `OPEN_TIMEOUT`（`lock_present=true`、
+   `lock_pid=48984` = 自己刚起的进程，属自锁）；`get_hfss_project_info` 显示 `open_projects=["CPW_SL"]`、
+   `active_design="HFSSDesign1"`、`com_available=true` → **工程其实已打开，不要重试**（重试会多起实例）。
+5. `start_hfss_analysis_async(project_path, "HFSSDesign1", "Setup1")` **16 s** 结束却报
+   `status=UNKNOWN` / `result_verified=false` / `aedt_refresh_error=GetAppDesktop.AreThereSimulationsRunning`；
+   磁盘证据证明求解成功：`CPW_SL.aedtresults/HFSSDesign1.results/current.ngmesh`（1901 tets）、
+   `DV312_S61_V303_F334_SU.txt` 内 `Success 1`、`HFSSDesign1.asol_priv` 末尾
+   `M(VID=312, Ver=258, File='DV312_SOL61_M0_V336.sd')` + `SolverUsage` 四个频点。
+   → 判成败只看 `<工程>.aedtresults/<Design>.results/*_SU.txt` 的 `Success 1`，别把 UNKNOWN 当失败重跑。
 
 ---
 
@@ -2253,7 +2286,7 @@ from servers.eda.simulation_components import get_simulation_component_schema
 get_simulation_component_schema(component_type: str, parameter_name: str = "") -> dict
 ```
 
-查询仿真控件支持的参数名、值类型、单位、创建/更新权限和动态参数模式。返回 `schema_version`、`protocol_version`、`parameter_patterns`。创建或修改器件前优先调用。
+查询仿真控件支持的参数名、值类型、单位、创建/更新权限和动态参数模式。返回 `parameter_patterns`。创建或修改器件前优先调用。
 
 ### `update_components_from_schematic`
 

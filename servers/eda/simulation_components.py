@@ -420,8 +420,6 @@ def get_simulation_component_schema(
     return {
         "success": True,
         "component_type": component_type,
-        "schema_version": catalog.get("schema_version", ""),
-        "protocol_version": catalog.get("protocol_version", ""),
         "parameters": params,
         "parameter_patterns": comp.get("parameter_patterns", []),
         "example": comp.get("example", {}),
