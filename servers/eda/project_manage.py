@@ -490,13 +490,9 @@ def get_components_static_params(
         component_uuids: list[str],
         timeout_seconds: int = 60,
 ) -> dict[str, Any]:
-    """查询器件的重量、尺寸、封装、所属厂商、成本等，传入参数 component_uuids 从 get_schematic_component_info 接口返回的 component_uuid 获得。
+    """查询器件的重量、尺寸、封装、所属厂商、成本等，传入参数 component_uuids 从 list_schematic_components或者get_schematic_component_info 接口返回的 component_uuid 获得。
 
     用法：查一下这几个器件的重量和尺寸 这几个器件的封装和厂商是什么，该任务在获取选型列表后，通过选型列表的model_uuid去对所选器件的固有属性进行合理性检查
-
-    该任务不需要打开工程，也不需要 project_path。gRPC 服务将请求转发到
-    POST /api/v1/components/static-params/，返回上游完整响应（code/message/data）。
-    内部把 component_uuids 转化成 original_uuids 作为 gRPC payload。
 
     Args:
         component_uuids: 器件 UUID 数组（从 get_schematic_component_info 返回的 component_uuid 获得）。
