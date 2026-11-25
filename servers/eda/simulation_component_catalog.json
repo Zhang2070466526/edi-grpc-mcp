@@ -1,14 +1,7 @@
 {
-  "schema_version": "2.0.0",
-  "protocol_version": "2",
-  "generated_at": "2026-08-04",
-  "source": "EDA service component parameter whitelist",
-  "permissions_verified": false,
-  "permission_source": "grpc documentation + legacy catalog",
   "components": {
     "SParameter": {
       "display_name": "S 参数仿真控制器",
-      "instance_prefix": "SP",
       "parameters": {
         "Start": {
           "wire_name": "Start",
@@ -16,14 +9,14 @@
           "value_type": "string",
           "unit_required": true,
           "units": [
+			"None",
             "Hz",
             "kHz",
             "MHz",
             "GHz"
           ],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "Stop": {
           "wire_name": "Stop",
@@ -31,14 +24,14 @@
           "value_type": "string",
           "unit_required": true,
           "units": [
+			"None",
             "Hz",
             "kHz",
             "MHz",
             "GHz"
           ],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "Step": {
           "wire_name": "Step",
@@ -46,28 +39,27 @@
           "value_type": "string",
           "unit_required": true,
           "units": [
+			"None",
             "Hz",
             "kHz",
             "MHz",
             "GHz"
           ],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "Pts": {
           "wire_name": "Pts",
-          "description": "扫描点数",
+          "description": "扫描点数，根据Start Stop和Step计算得出",
           "value_type": "integer",
           "unit_required": false,
           "units": [],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "CalcS": {
           "wire_name": "CalcS",
-          "description": "是否计算 S 参数",
+          "description": "是否计算 S 参数,用户无要求时无需传入该变量",
           "value_type": "boolean",
           "unit_required": false,
           "units": [],
@@ -76,12 +68,11 @@
             "no"
           ],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "CalcNoise": {
           "wire_name": "CalcNoise",
-          "description": "是否计算噪声系数",
+          "description": "是否计算噪声系数,用户无要求时无需传入该变量",
           "value_type": "boolean",
           "unit_required": false,
           "units": [],
@@ -90,12 +81,11 @@
             "no"
           ],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "CalcGroupDelay": {
           "wire_name": "CalcGroupDelay",
-          "description": "是否计算群时延",
+          "description": "是否计算群时延,用户无要求时无需传入该变量",
           "value_type": "boolean",
           "unit_required": false,
           "units": [],
@@ -104,12 +94,11 @@
             "no"
           ],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "EnforcePassivity": {
           "wire_name": "EnforcePassivity",
-          "description": "是否强制执行无源性",
+          "description": "是否强制执行无源性,用户无要求时无需传入该变量",
           "value_type": "boolean",
           "unit_required": false,
           "units": [],
@@ -118,12 +107,11 @@
             "no"
           ],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "FreqConversion": {
           "wire_name": "FreqConversion",
-          "description": "是否启用频率转换",
+          "description": "是否启用频率转换,用户无要求时无需传入该变量",
           "value_type": "boolean",
           "unit_required": false,
           "units": [],
@@ -132,93 +120,82 @@
             "no"
           ],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "NoiseInputPort": {
           "wire_name": "NoiseInputPort",
-          "description": "噪声输入端口号",
+          "description": "噪声输入端口号,用户无要求时无需传入该变量",
           "value_type": "integer",
           "unit_required": false,
           "units": [],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "NoiseOutputPort": {
           "wire_name": "NoiseOutputPort",
-          "description": "噪声输出端口号",
+          "description": "噪声输出端口号,用户无要求时无需传入该变量",
           "value_type": "integer",
           "unit_required": false,
           "units": [],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "FreqConversionPort": {
           "wire_name": "FreqConversionPort",
-          "description": "频率转换端口号",
+          "description": "频率转换端口号,用户无要求时无需传入该变量",
           "value_type": "integer",
           "unit_required": false,
           "units": [],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "BandwidthForNoise": {
           "wire_name": "BandwidthForNoise",
-          "description": "噪声带宽（EDI 内部参数，使用默认值，禁止手动设置）",
+          "description": "噪声带宽,用户无要求时无需传入该变量",
           "value_type": "number",
           "unit_required": true,
           "units": [
+			"None",
             "Hz",
             "kHz",
             "MHz",
             "GHz"
           ],
           "create_allowed": false,
-          "update_allowed": false,
-          "permission_source": "edi internal default"
+          "update_allowed": false
         },
         "GroupDelayAperture": {
           "wire_name": "GroupDelayAperture",
-          "description": "群时延孔径",
+          "description": "群时延孔径,用户无要求时无需传入该变量",
           "value_type": "string",
           "unit_required": false,
           "units": [],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         }
       },
       "parameter_patterns": [],
       "example": {
         "Start": {
-          "value": "1.0",
+          "value": "8",
           "unit": "GHz"
         },
         "Stop": {
-          "value": "10.0",
+          "value": "12",
           "unit": "GHz"
         },
         "Step": {
-          "value": "1.0",
+          "value": "0.1",
           "unit": "GHz"
         },
         "Pts": {
-          "value": "10"
+          "value": "41"
         },
         "CalcS": {
           "value": "yes"
         },
         "CalcNoise": {
-          "value": "no"
-        },
-        "NoiseInputPort": {
-          "value": "1"
-        },
-        "NoiseOutputPort": {
-          "value": "2"
+          "value": "yes"
         },
         "CalcGroupDelay": {
           "value": "no"
@@ -226,35 +203,41 @@
         "EnforcePassivity": {
           "value": "no"
         },
-        "GroupDelayAperture": {
-          "value": "1e-4"
-        },
         "FreqConversion": {
           "value": "no"
         },
         "FreqConversionPort": {
           "value": "1"
+        },
+        "NoiseInputPort": {
+          "value": "2"
+        },
+        "NoiseOutputPort": {
+          "value": "1"
+        },
+        "GroupDelayAperture": {
+          "value": "1e-4"
         }
       }
     },
     "HarmonicBalance": {
       "display_name": "谐波平衡控制器",
-      "instance_prefix": "HB",
       "parameters": {
         "Freq": {
           "wire_name": "Freq[1]",
-          "description": "基频频率（同 Freq[1]）",
+          "description": "基频频率（同 Freq[1]），可为变量名",
           "value_type": "string",
           "unit_required": true,
           "units": [
+            "None",
             "Hz",
             "kHz",
             "MHz",
-            "GHz"
+            "GHz",
+            "THz"
           ],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "Order": {
           "wire_name": "Order[1]",
@@ -263,8 +246,111 @@
           "unit_required": false,
           "units": [],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
+        },
+        "InputFreq": {
+          "wire_name": "InputFreq",
+          "description": "噪声分析输入频率，可为变量名,用户无要求时无需传入该变量",
+          "value_type": "string",
+          "unit_required": true,
+          "units": [
+            "None",
+            "Hz",
+            "kHz",
+            "MHz",
+            "GHz",
+            "THz"
+          ],
+          "create_allowed": true,
+          "update_allowed": true
+        },
+        "NoiseInputPort": {
+          "wire_name": "NoiseInputPort",
+          "description": "噪声分析输入端口号,用户无要求时无需传入该变量",
+          "value_type": "integer",
+          "unit_required": false,
+          "units": [],
+          "create_allowed": true,
+          "update_allowed": true
+        },
+        "NoiseOutputPort": {
+          "wire_name": "NoiseOutputPort",
+          "description": "噪声分析输出端口号,用户无要求时无需传入该变量",
+          "value_type": "integer",
+          "unit_required": false,
+          "units": [],
+          "create_allowed": true,
+          "update_allowed": true
+        },
+        "Noise_Start": {
+          "wire_name": "Noise_Start",
+          "description": "噪声频率扫描起始频率；SweepType=Single Point 时作为 FreqForNoise，SweepType=Linear 时作为 SweepPlan 起始值,用户无要求时无需传入该变量",
+          "value_type": "string",
+          "unit_required": true,
+          "units": [
+            "None",
+            "Hz",
+            "kHz",
+            "MHz",
+            "GHz",
+            "THz"
+          ],
+          "create_allowed": true,
+          "update_allowed": true
+        },
+        "Noise_Step": {
+          "wire_name": "Noise_Step",
+          "description": "噪声频率扫描步长；仅 SweepType=Linear 时写入网表 SweepPlan,用户无要求时无需传入该变量",
+          "value_type": "string",
+          "unit_required": true,
+          "units": [
+            "None",
+            "Hz",
+            "kHz",
+            "MHz",
+            "GHz",
+            "THz"
+          ],
+          "create_allowed": true,
+          "update_allowed": true
+        },
+        "Noise_Stop": {
+          "wire_name": "Noise_Stop",
+          "description": "噪声频率扫描终止频率；仅 SweepType=Linear 时写入网表 SweepPlan,用户无要求时无需传入该变量",
+          "value_type": "string",
+          "unit_required": true,
+          "units": [
+            "None",
+            "Hz",
+            "kHz",
+            "MHz",
+            "GHz",
+            "THz"
+          ],
+          "create_allowed": true,
+          "update_allowed": true
+        },
+        "NonlinearNoise": {
+          "wire_name": "NonlinearNoise",
+          "description": "非线性噪声开关（实测取值：no；值域未确认）,用户无要求时无需传入该变量",
+          "value_type": "string",
+          "unit_required": false,
+          "units": [],
+          "create_allowed": true,
+          "update_allowed": true
+        },
+        "SweepType": {
+          "wire_name": "SweepType",
+          "description": "噪声频率扫描类型，取值 Linear 或 Single Point；Single Point 时网表只取 InputFreq/Noise_Start/NoiseInputPort/NoiseOutputPort，Linear 时另生成 NoiseFreqPlan 与 SweepPlan(Noise_Start/Noise_Stop/Noise_Step),用户无要求时无需传入该变量",
+          "value_type": "string",
+          "unit_required": false,
+          "units": [],
+          "enum_values": [
+            "Linear",
+            "Single Point"
+          ],
+          "create_allowed": true,
+          "update_allowed": true
         }
       },
       "parameter_patterns": [
@@ -277,10 +363,12 @@
           "value_type": "string",
           "unit_required": true,
           "units": [
+            "None",
             "Hz",
             "kHz",
             "MHz",
-            "GHz"
+            "GHz",
+            "THz"
           ],
           "create_allowed": true,
           "update_allowed": true
@@ -300,32 +388,60 @@
       ],
       "example": {
         "Freq": {
-          "value": "1",
+          "value": "Freq",
           "unit": "GHz"
         },
         "Order": {
           "value": "5"
+        },
+        "InputFreq": {
+          "value": "noisefreq",
+          "unit": "None"
+        },
+        "NoiseInputPort": {
+          "value": "1"
+        },
+        "NoiseOutputPort": {
+          "value": "2"
+        },
+        "Noise_Start": {
+          "value": "1.0",
+          "unit": "GHz"
+        },
+        "Noise_Step": {
+          "value": "1.0",
+          "unit": "GHz"
+        },
+        "Noise_Stop": {
+          "value": "10.0",
+          "unit": "GHz"
+        },
+        "NonlinearNoise": {
+          "value": "no"
+        },
+        "SweepType": {
+          "value": "Linear"
         }
       }
     },
     "XDB": {
       "display_name": "XDB 控制器",
-      "instance_prefix": "XDB",
       "parameters": {
         "Freq": {
           "wire_name": "Freq[1]",
-          "description": "基频频率（同 Freq[1]）",
+          "description": "基频频率（同 Freq[1]），可为变量名",
           "value_type": "string",
           "unit_required": true,
           "units": [
+            "None",
             "Hz",
             "kHz",
             "MHz",
-            "GHz"
+            "GHz",
+            "THz"
           ],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "Order": {
           "wire_name": "Order[1]",
@@ -334,18 +450,16 @@
           "unit_required": false,
           "units": [],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "GC_XdB": {
           "wire_name": "GC_XdB",
-          "description": "增益压缩",
+          "description": "增益压缩,一般来说GC_XdB=1是仿真1dB压缩点(也叫P1dB)，GC_XdB=5认为是仿真饱和输出功率(也叫Psat)",
           "value_type": "string",
           "unit_required": false,
           "units": [],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "GC_InputPort": {
           "wire_name": "GC_InputPort",
@@ -354,8 +468,7 @@
           "unit_required": false,
           "units": [],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "GC_OutputPort": {
           "wire_name": "GC_OutputPort",
@@ -364,12 +477,11 @@
           "unit_required": false,
           "units": [],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "GC_InputFreq": {
           "wire_name": "GC_InputFreq",
-          "description": "增益压缩输入频率",
+          "description": "增益压缩输入频率，可为变量名",
           "value_type": "string",
           "unit_required": true,
           "units": [
@@ -379,12 +491,11 @@
             "GHz"
           ],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "GC_OutputFreq": {
           "wire_name": "GC_OutputFreq",
-          "description": "增益压缩输出频率",
+          "description": "增益压缩输出频率，可为变量名",
           "value_type": "string",
           "unit_required": true,
           "units": [
@@ -394,8 +505,7 @@
             "GHz"
           ],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "GC_InputPowerTol": {
           "wire_name": "GC_InputPowerTol",
@@ -404,8 +514,7 @@
           "unit_required": false,
           "units": [],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "GC_OutputPowerTol": {
           "wire_name": "GC_OutputPowerTol",
@@ -414,8 +523,7 @@
           "unit_required": false,
           "units": [],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "GC_MaxInputPower": {
           "wire_name": "GC_MaxInputPower",
@@ -424,8 +532,7 @@
           "unit_required": false,
           "units": [],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         },
         "StatusLevel": {
           "wire_name": "StatusLevel",
@@ -434,8 +541,7 @@
           "unit_required": false,
           "units": [],
           "create_allowed": true,
-          "update_allowed": true,
-          "permission_source": "legacy_non_readonly"
+          "update_allowed": true
         }
       },
       "parameter_patterns": [
@@ -448,10 +554,12 @@
           "value_type": "string",
           "unit_required": true,
           "units": [
+            "None",
             "Hz",
             "kHz",
             "MHz",
-            "GHz"
+            "GHz",
+            "THz"
           ],
           "create_allowed": true,
           "update_allowed": true
@@ -471,27 +579,27 @@
       ],
       "example": {
         "Freq": {
-          "value": "1.0",
+          "value": "Freq",
           "unit": "GHz"
         },
         "Order": {
-          "value": "5"
+          "value": "3"
         },
         "GC_XdB": {
           "value": "1"
         },
         "GC_InputPort": {
-          "value": "1"
-        },
-        "GC_OutputPort": {
           "value": "2"
         },
+        "GC_OutputPort": {
+          "value": "1"
+        },
         "GC_InputFreq": {
-          "value": "1.0",
+          "value": "Freq",
           "unit": "GHz"
         },
         "GC_OutputFreq": {
-          "value": "1.0",
+          "value": "Freq",
           "unit": "GHz"
         },
         "GC_InputPowerTol": {
@@ -505,6 +613,117 @@
         },
         "StatusLevel": {
           "value": "2"
+        }
+      }
+    },
+    "Sweep": {
+      "display_name": "参数扫描控制器",
+      "parameters": {
+        "SweepVar": {
+          "wire_name": "SweepVar",
+          "description": "扫描变量名（实测取值：Freq、X）",
+          "value_type": "string",
+          "unit_required": false,
+          "units": [],
+          "create_allowed": true,
+          "update_allowed": true
+        },
+        "Start": {
+          "wire_name": "Start",
+          "description": "扫描起始值；参数记录中不含单位字段，无单位可写",
+          "value_type": "string",
+          "unit_required": false,
+          "units": [],
+          "create_allowed": true,
+          "update_allowed": true
+        },
+        "Stop": {
+          "wire_name": "Stop",
+          "description": "扫描终止值；参数记录中不含单位字段，无单位可写",
+          "value_type": "string",
+          "unit_required": false,
+          "units": [],
+          "create_allowed": true,
+          "update_allowed": true
+        },
+        "Step": {
+          "wire_name": "Step",
+          "description": "扫描步长；参数记录中不含单位字段，无单位可写",
+          "value_type": "string",
+          "unit_required": false,
+          "units": [],
+          "create_allowed": true,
+          "update_allowed": true
+        },
+        "Pts": {
+          "wire_name": "Pts",
+          "description": "扫描点数；参数记录中不含单位字段",
+          "value_type": "integer",
+          "unit_required": false,
+          "units": [],
+          "create_allowed": true,
+          "update_allowed": true
+        }
+      },
+      "parameter_patterns": [
+        {
+          "public_pattern": "SimInstanceName[{index}]",
+          "wire_pattern": "SimInstanceName[{index}]",
+          "index_min": 1,
+          "index_max": 6,
+          "description": "被扫描的仿真器实例名，空槽位写入空字符串",
+          "value_type": "string",
+          "unit_required": false,
+          "units": [],
+          "create_allowed": true,
+          "update_allowed": true
+        }
+      ],
+      "example": {
+        "SweepVar": {
+          "value": "Freq"
+        },
+        "Start": {
+          "value": "8"
+        },
+        "Stop": {
+          "value": "12"
+        },
+        "Step": {
+          "value": "0.1"
+        },
+        "Pts": {
+          "value": "41"
+        },
+        "SimInstanceName[1]": {
+          "value": "HB1"
+        },
+        "SimInstanceName[2]": {
+          "value": ""
+        }
+      }
+    },
+    "Var": {
+      "display_name": "变量定义控制器",
+      "parameters": {},
+      "parameter_patterns": [
+        {
+          "public_pattern": "{name}",
+          "wire_pattern": "{name}",
+          "description": "变量名由用户自定义（如 Pin、freq1、Vb），直接作为 parameters 的键，不要使用 SetValues 或 VarName 之类的包裹键；值为 {\"value\": \"<数值或表达式>\"}，变量记录没有单位字段，unit 不可写。一次提交可定义多个变量。Sweep 的 SweepVar 必须等于这里定义的某个键名，否则写入报 SweepVar <name> was not found in existing Var components。",
+          "value_type": "string",
+          "unit_required": false,
+          "units": [],
+          "create_allowed": true,
+          "update_allowed": true
+        }
+      ],
+      "example": {
+        "freq1": {
+          "value": "10"
+        },
+        "Pin": {
+          "value": "-20"
         }
       }
     }
