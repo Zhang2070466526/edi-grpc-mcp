@@ -4,7 +4,7 @@ list_epp_projects             扫描文件夹中的所有 .epp 工程文件
 create_project                创建新的 .epp 工程（不显示创建向导）
 open_edi_project              打开 .epp 工程，等待返回成功或失败
 close_edi_project             关闭已打开的工程，可选择是否保存
-get_project_summary           工程概览（元数据、原理图、仿真配置）
+get_project_summary           工程概览（元数据、原理图路径、元件统计、仿真器件配置、最近结果路径）
 analyze_variables             分析变量定义、引用和 Sweep 配置
 list_schematic_components     查询原理图全部器件（gRPC，含完整参数与几何）
 get_schematic_component_info  按实例名查器件参数与几何（gRPC）
@@ -22,13 +22,13 @@ batch_query_component_rf_params  按器件型号列表批量查询模型信息
 参数说明：
   project_path     EDA 服务所在机器上的 .epp 工程文件绝对路径
   folder_path      要扫描的文件夹绝对路径（list_epp_projects）
-  schematic_name   原理图名称，默认 main
   timeout_seconds  最长等待秒数，默认 60 秒
   need_save        关闭前是否保存工程（close_edi_project），默认 False
 """
 
 from __future__ import annotations
 
+import re
 from itertools import islice
 from pathlib import Path
 from typing import Any
@@ -39,6 +39,60 @@ from servers.eda.config import SIM_COMPONENT_TYPES, require_project_path
 from servers.eda.project_reader import ProjectReader, parse_components
 from servers.utils import require_nonempty, error_response
 from servers import mcp
+
+# 器件级 active_state → state 名称（EDI 约定：0=NORMAL / 1=DISABLED / 2=SHORTED）
+_ACTIVE_STATE_NAMES = {0: "NORMAL", 1: "DISABLED", 2: "SHORTED"}
+
+
+def _state_name(active_state: int | None) -> str:
+    """把器件级 active_state 数值翻成 EDI 的状态名，未知值或缺失返回 UNKNOWN。"""
+    if active_state is None:
+        return "UNKNOWN"
+    return _ACTIVE_STATE_NAMES.get(active_state, "UNKNOWN")
+
+
+def _find_latest_result(workspace: Path) -> dict[str, Any]:
+    """找工程目录下最近的仿真结果 .raw。
+
+    取用顺序：先只看 history/*.raw（EDI 的仿真产物目录）；history 里没有才回退到
+    整个工程目录，但排除 model/ 下的模型自带文件（如 ICE 的 .result.raw）与隐藏文件，
+    避免把模型文件当成仿真结果。文件大小为 0 时 exists=false（多半是失败的仿真）。
+    """
+    candidates: list[Path] = []
+    history = workspace / "history"
+    if history.is_dir():
+        try:
+            candidates = [p for p in history.glob("*.raw") if p.is_file()]
+        except OSError:
+            candidates = []
+    if not candidates:
+        try:
+            for p in workspace.rglob("*.raw"):
+                if not p.is_file() or p.name.startswith("."):
+                    continue
+                if any(part.lower() == "model" for part in p.parts):
+                    continue
+                candidates.append(p)
+        except OSError:
+            candidates = []
+
+    sized: list[tuple[float, Path, int]] = []
+    for p in candidates:
+        try:
+            st = p.stat()
+        except OSError:
+            continue
+        sized.append((st.st_mtime, p, st.st_size))
+
+    if not sized:
+        return {"path": "", "exists": False, "size": 0}
+
+    _, latest, size = max(sized, key=lambda item: item[0])
+    try:
+        path = latest.resolve().as_posix()
+    except OSError:
+        path = latest.as_posix()
+    return {"path": path, "exists": size > 0, "size": size}
 
 
 @mcp.tool()
@@ -71,7 +125,7 @@ def list_epp_projects(folder_path: str) -> dict[str, Any]:
     skipped = 0
     for epp in epp_paths:
         try:
-            path = str(epp.resolve())
+            path = epp.resolve().as_posix()
             size = epp.stat().st_size
         except OSError:
             skipped += 1
@@ -80,7 +134,7 @@ def list_epp_projects(folder_path: str) -> dict[str, Any]:
 
     result: dict[str, Any] = {
         "success": True,
-        "folder": str(root.resolve()),
+        "folder": root.resolve().as_posix(),
         "count": len(projects),
         "projects": projects,
     }
@@ -97,10 +151,10 @@ def list_epp_projects(folder_path: str) -> dict[str, Any]:
 
 @mcp.tool()
 def create_project(
-    name: str,
-    author: str = "",
-    path: str = "",
-    timeout_seconds: int = 60,
+        name: str,
+        author: str = "",
+        path: str = "",
+        timeout_seconds: int = 60,
 ) -> dict[str, Any]:
     """创建新的 EDI 工程（不显示创建向导，也不自动打开）。
 
@@ -179,36 +233,83 @@ def get_project_summary(
         include_component_types: bool = True,
         include_latest_result: bool = True,
 ) -> dict[str, Any]:
-    """获取 .epp 工程概览包括，元数据、原理图位置、最近结果文件位置。注意：该接口只判断有无仿真结果，禁止解析raw文件
+    """获取 .epp 工程概览：元数据、原理图文件路径、元件统计、仿真器件配置、最近结果文件路径。注意：该接口只判断有无仿真结果，禁止解析raw文件。
 
     用法："帮我看看这个工程的概览"、"查看工程信息"
 
+    字段说明：
+        project.name 取自工程内嵌元数据（project/metadata.ep），可能与磁盘目录名不同，
+            拼路径/定位目录请用 project.project_dir_name。
+        latest_result：未查询时为 null；查询了但工程里没有 .raw 时为
+            {"path": "", "exists": false, "size": 0}；文件大小为 0 时 exists=false 并附 warning。
+            只认 history/*.raw 优先，其次工程内其他 .raw，但排除 model/ 目录（模型自带文件）与隐藏文件。
+        simulation[].parameters 为结构化参数 {"参数名": {"value": ..., "unit": ...}}。
+        include_component_types 只控制 components.by_type 的统计，无论 True/False 都要解析原理图；
+            False 时 by_type 为 null（不是空对象，避免与"没有器件"混淆），器件总数看 total。
+        warnings 为结构化列表，每项 {"code": ..., "message": ..., "path"?: ...}，
+            code 取值：METADATA_MISSING（元数据缺失）、NO_SCHEMATIC（未找到原理图）、
+            SCHEMATIC_MISSING（某个原理图文件缺失或为空，其器件未统计，带 path）、
+            RESULT_EMPTY（最近结果文件 0 字节，带 path）。success 为 True 时也可能带 warning，需转告用户。
+
     Args:
         project_path: .epp 工程文件绝对路径。
-        include_component_types: 是否统计元件类型分布。
-        include_latest_result: 是否包含最近仿真结果信息。
+        include_component_types: 是否统计元件类型分布（components.by_type）。
+        include_latest_result: 是否包含最近仿真结果信息（False 时 latest_result 为 null）。
 
     Returns:
-        {"success": True, "project": {...}, "schematics": {"count": 1, "names": ["main"]},
-         "components": {"total": 15, "by_type": {"ResG": 5}},
-         "simulation": [{"component_type": "SParameter", "Freq": "1 GHz", ...}],
-         "latest_result": {"path": ".../result.raw", "exists": True, "size": 2048}}
+        {"success": True,
+         "project": {"project_id": "...", "name": "NC35352ME-812",
+                     "project_dir_name": "NC35352ME-812", "author": "bm", ...},
+         "schematics": {"count": 1, "paths": ["D:/.../schematics/main/schematic.ep"]},
+         "components": {"total": 55, "by_type": {"HGC367": 16}},
+         "simulation": [{"component_type": "SParameter", "instance_name": "SP1",
+                         "parameters": {"Start": {"value": "8", "unit": "GHz"}}}],
+         "latest_result": {"path": "D:/.../result.raw", "exists": True, "size": 2048},
+         "warnings": []}
     """
     resolved, err = require_project_path(project_path)
     if err:
         return err
     reader = ProjectReader(resolved)
-    metadata = reader.read_metadata()
 
-    schematics = reader.list_schematics()
-    schematics_info = {"count": len(schematics), "names": schematics}
+    warnings: list[dict[str, Any]] = []
+    # metadata 固定键，缺文件时给空串（避免下游取值 KeyError），并明确告警；
+    # 注意：read_metadata() 若新增字段，需在此同步显式透传，否则不会自动带出。
+    raw_meta = reader.read_metadata()
+    metadata: dict[str, Any] = {
+        "project_id": raw_meta.get("project_id", ""),
+        "name": raw_meta.get("name", ""),
+        "author": raw_meta.get("author", ""),
+        "version": raw_meta.get("version", ""),
+        "created": raw_meta.get("created", ""),
+        # name 取自工程内嵌文件，与磁盘目录名可能不同（如目录 Dual Conversion Link HB / name 20260117）
+        "project_dir_name": reader.workspace.name,
+    }
+    if not raw_meta:
+        warnings.append({
+            "code": "METADATA_MISSING",
+            "message": "未找到工程元数据（project/metadata.ep 缺失或无法解析），project.name 等字段为空串",
+        })
 
-    components_info: dict[str, Any] = {"total": 0, "by_type": {}}
+    entries = reader.list_schematic_entries()
+    schematics_info = {"count": len(entries), "paths": [e["path"] for e in entries]}
+
+    # by_type 用 None 表示"未统计"，与 {}（工程里没有器件）区分开
+    components_info: dict[str, Any] = {
+        "total": 0,
+        "by_type": {} if include_component_types else None,
+    }
     simulation_info: list[dict] = []
     # 单遍遍历：每个原理图只读+解析一次，同时统计组件与仿真配置
-    for sname in schematics:
-        raw = reader.read_schematic(sname)
+    for entry in entries:
+        raw = reader.read_schematic(entry["name"])
         if not raw:
+            # schematics.ep 里登记了但文件缺失/为空：不能静默跳过，否则 count=1 而 total=0
+            warnings.append({
+                "code": "SCHEMATIC_MISSING",
+                "message": "原理图文件缺失或为空，其器件未统计",
+                "path": entry["path"],
+            })
             continue
         comps = parse_components(raw)
         components_info["total"] += len(comps)
@@ -218,32 +319,32 @@ def get_project_summary(
                 components_info["by_type"][ct] = components_info["by_type"].get(ct, 0) + 1
             if ct in SIM_COMPONENT_TYPES:
                 pi = comp.get("paramsinfo", {})
-                entry: dict[str, Any] = {"component_type": ct, "instance_name": comp.get("name", "")}
+                sim_params: dict[str, dict[str, str]] = {}
                 for key, info in pi.items():
                     if key == "BasicParameters" or not isinstance(info, dict):
                         continue
-                    entry[key] = f"{info.get('value', '')} {info.get('unit', '')}".strip()
-                simulation_info.append(entry)
+                    sim_params[key] = {
+                        "value": str(info.get("value") or ""),
+                        "unit": str(info.get("unit") or ""),
+                    }
+                simulation_info.append({
+                    "component_type": ct,
+                    "instance_name": comp.get("name", ""),
+                    "parameters": sim_params,
+                })
 
-    latest_result: dict[str, Any] = {}
+    latest_result: dict[str, Any] | None = None
     if include_latest_result:
-        result_paths = list(reader.workspace.rglob("*.raw"))
-        if result_paths:
-            try:
-                rp = sorted(
-                    result_paths, key=lambda x: x.stat().st_mtime, reverse=True
-                )[0]
-                latest_result = {
-                    "path": str(rp.resolve()),
-                    "exists": True,
-                    "size": rp.stat().st_size,
-                }
-            except OSError:
-                latest_result = {}
+        latest_result = _find_latest_result(reader.workspace)
+        if latest_result["path"] and latest_result["size"] == 0:
+            warnings.append({
+                "code": "RESULT_EMPTY",
+                "message": "最近结果文件大小为 0 字节（可能是失败的仿真），已标记 exists=false",
+                "path": latest_result["path"],
+            })
 
-    warnings: list[str] = []
-    if not schematics:
-        warnings.append("未找到原理图")
+    if not entries:
+        warnings.append({"code": "NO_SCHEMATIC", "message": "未找到原理图"})
 
     return {
         "success": True,
@@ -262,9 +363,22 @@ def analyze_variables(project_path: str) -> dict[str, Any]:
 
     识别 Var 元件定义的变量、其他元件中对这些变量的引用、
     以及 Sweep 的扫描配置。
+    引用判定为「变量名作为标识符出现在任意参数表达式中」（如 P[1]=polar(dbmtow(Pwr_IN),0)、
+    Bits=itob(int(X1))），不限于 Freq[1] 这类字段；引号内字面量（如 Bits="000000"）不计为引用。
+    变量的 status 字段无意义（恒为 Disable），生效与否看器件级 active_state/state。
 
     Args:
         project_path: .epp 工程文件绝对路径。
+
+    Returns:
+        {"success": True, "project_path": "...",
+         "variables": [{"name": "Var1", "parameter": "Pwr_IN", "initial": "-30",
+                        "min": "", "max": "", "tunable": False,
+                        "active_state": 0, "state": "NORMAL"}],
+         "references": [{"variable": "Pwr_IN", "component": "PORT1",
+                         "component_type": "P_nToneG", "parameter": "P[1]"}],
+         "sweeps": [{"sweep": "Sweep1", "variable": "Freq", "start": "8", "stop": "12",
+                     "step": "0.1", "targets": ["SP1"]}]}
     """
     resolved, err = require_project_path(project_path)
     if err:
@@ -297,7 +411,8 @@ def analyze_variables(project_path: str) -> dict[str, Any]:
                             "min": pinfo.get("min", ""),
                             "max": pinfo.get("max", ""),
                             "tunable": pinfo.get("tunable", False),
-                            "status": pinfo.get("status", ""),
+                            "active_state": comp.get("active_state"),
+                            "state": _state_name(comp.get("active_state")),
                         })
 
             # Sweep 元件：扫描配置
@@ -325,28 +440,38 @@ def analyze_variables(project_path: str) -> dict[str, Any]:
                 })
 
     # 第二遍：在所有变量收集完后，跨原理图查找引用（避免后定义变量匹配不到前文引用）
+    # 判定方式：变量名作为标识符出现在参数表达式里 —— P[1]=polar(dbmtow(Pwr_IN),0)、
+    # Bits=itob(int(X1)) 这类字段同样算引用；先剥掉引号内字面量（Bits="000000"）避免误判。
     var_names = {
         value
         for v in variables
         for value in (v["name"], v["parameter"])
         if value
     }
+    var_patterns = {
+        name: re.compile(rf"(?<![A-Za-z0-9_.]){re.escape(name)}(?![A-Za-z0-9_.])")
+        for name in var_names
+    }
+    string_literal = re.compile(r'"[^"]*"')
     for comps in all_comps.values():
         for comp in comps:
             params = comp.get("paramsinfo", {})
             for pkey, pinfo in params.items():
-                val = pinfo.get("value", "")
-                if val and val in var_names:
-                    references.append({
-                        "variable": val,
-                        "component": comp.get("name", ""),
-                        "component_type": comp.get("type", ""),
-                        "parameter": pkey,
-                    })
+                expr = string_literal.sub(" ", str(pinfo.get("value", "")))
+                if not expr.strip():
+                    continue
+                for var, pattern in var_patterns.items():
+                    if pattern.search(expr):
+                        references.append({
+                            "variable": var,
+                            "component": comp.get("name", ""),
+                            "component_type": comp.get("type", ""),
+                            "parameter": pkey,
+                        })
 
     return {
         "success": True,
-        "project_path": str(reader.epp_path.resolve()),
+        "project_path": reader.epp_path.resolve().as_posix(),
         "variables": variables,
         "references": references,
         "sweeps": sweeps,

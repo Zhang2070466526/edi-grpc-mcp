@@ -107,8 +107,11 @@ def open_document(
         disposition: link 模式下，inline（预览）或 attachment（下载）。
 
     Returns:
-        link 模式：{"success": True, "url": "http://...", "markdown_link": "...", "expires_in": 600}
-        local 模式：{"success": True, "status": "OPEN_REQUESTED", "file_path": "..."}
+        link 模式：{"success": True, "file_name": "报告.docx", "mime_type": "...",
+                    "url": "http://...", "expires_in": 600, "display_mode": "inline/attachment",
+                    "markdown_link": "[报告.docx](http://...)"}
+        local 模式：{"success": True, "status": "OPEN_REQUESTED", "file_path": "C:/...",
+                     "file_type": ".docx", "message": "..."}
     """
     try:
         path = _validate_path(file_path, _ALLOWED_EXTENSIONS)

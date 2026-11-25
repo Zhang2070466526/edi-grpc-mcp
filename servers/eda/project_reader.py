@@ -50,19 +50,25 @@ class ProjectReader:
             "created": _kv(meta, "created"),
         }
 
-    def list_schematics(self) -> list[str]:
-        """列出原理图名称（如 'main'），去掉了路径前缀。"""
+    def list_schematic_entries(self) -> list[dict[str, str]]:
+        """列出原理图条目：name（如 'main'）+ path（schematic.ep 绝对路径，正斜杠）。"""
         raw = self.read_text("schematics/schematics.ep") or ""
         items = list(parse_sexp(raw))
-        names: list[str] = []
-        schematic_entries = _walk_find(items, "schematic")
-        for entry in schematic_entries:
-            if len(entry) >= 2:
-                path = entry[1].strip('"')
-                # "schematics/main/schematic.ep" -> "main"
-                name = Path(path).parent.name if ("/" in path or "\\" in path) else path
-                names.append(name)
-        return names
+        entries: list[dict[str, str]] = []
+        for entry in _walk_find(items, "schematic"):
+            if len(entry) < 2:
+                continue
+            rel = str(entry[1]).strip('"').replace("\\", "/")
+            # "schematics/main/schematic.ep" -> "main"
+            name = rel.split("/")[-2] if "/" in rel else rel
+            # 返回绝对路径，便于直接喂给其他工具/打开文件
+            path = (self.workspace / rel).resolve().as_posix()
+            entries.append({"name": name, "path": path})
+        return entries
+
+    def list_schematics(self) -> list[str]:
+        """列出原理图名称（如 'main'），去掉了路径前缀。"""
+        return [e["name"] for e in self.list_schematic_entries()]
 
     def read_schematic(self, name: str = "main") -> str | None:
         """读取指定原理图内容（安全检查：拒绝 .. 和路径分隔符）。"""
@@ -245,6 +251,13 @@ def parse_components(schematic_text):
         params = parse_paramsinfo(params_raw) if params_raw else {}
         param_count = len(params)
 
+        # 器件级运行状态（0=NORMAL / 1=DISABLED / 2=SHORTED），与参数内的 Status 无关
+        active_state_raw = _kv(comp, "active_state")
+        try:
+            active_state = int(float(active_state_raw)) if active_state_raw != "" else None
+        except (TypeError, ValueError):
+            active_state = None
+
         comps.append({
             "component_id": comp_id,
             "name": name,
@@ -252,6 +265,7 @@ def parse_components(schematic_text):
             "model_id": model_id,
             "pin_count": pin_count,
             "parameter_count": max(0, param_count),
+            "active_state": active_state,
             "paramsinfo": params,
         })
 

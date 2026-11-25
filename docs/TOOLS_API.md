@@ -315,23 +315,33 @@ get_project_summary(
 ) -> dict
 ```
 
-获取 `.epp` 工程完整概览（元数据、原理图、仿真配置、最近结果）。
+获取 `.epp` 工程概览（元数据、原理图文件路径、元件统计、仿真器件配置、最近结果）。
+
+字段语义：
+- `project.name` 取自工程内嵌元数据（`project/metadata.ep`），可能与磁盘目录名不同；拼路径/定位目录用 `project.project_dir_name`。元数据缺失时所有字段为空串并附 warning。
+- `latest_result`：未查询（`include_latest_result=false`）为 `null`；查询了但没有 `.raw` 为 `{"path": "", "exists": false, "size": 0}`；文件 0 字节时 `exists=false` 并附 warning。选择顺序为 `history/*.raw` 优先，其次工程内其他 `.raw`，排除 `model/` 目录与隐藏文件。
+- `simulation[].parameters` 为结构化参数 `{"参数名": {"value": ..., "unit": ...}}`。
+- `include_component_types` 只控制 `components.by_type` 统计，不影响解析开销；`false` 时 `by_type` 为 `null`（区别于"工程里没有器件"的 `{}`，总数看 `total`）。
+- `warnings` 为结构化列表，每项 `{"code", "message", "path"?}`；`code` 取值：`METADATA_MISSING`、`NO_SCHEMATIC`、`SCHEMATIC_MISSING`（带 `path`）、`RESULT_EMPTY`（带 `path`）。`success=true` 也可能带 warning。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `project_path` | str | 是 | — | `.epp` 文件绝对路径 |
-| `include_component_types` | bool | 否 | True | 是否统计元件类型分布 |
-| `include_latest_result` | bool | 否 | True | 是否包含最近仿真结果 |
+| `include_component_types` | bool | 否 | True | 是否统计元件类型分布 `components.by_type` |
+| `include_latest_result` | bool | 否 | True | 是否包含最近仿真结果（false 时为 `null`） |
 
 返回：
 ```python
 {
     "success": True,
-    "project": {"project_id": "...", "name": "demo", "author": ""},
-    "schematics": {"count": 1, "names": ["main"]},
-    "components": {"total": 15, "by_type": {"ResG": 5, "CapG": 3}},
-    "simulation": {"type": "S_Param", "start": "0 GHz", "stop": "10 GHz"},
-    "latest_result": {"path": ".../result.raw", "exists": True, "size": 2048}
+    "project": {"project_id": "...", "name": "demo", "project_dir_name": "demo", "author": ""},
+    "schematics": {"count": 1, "paths": ["D:/.../schematics/main/schematic.ep"]},
+    "components": {"total": 55, "by_type": {"HGC367": 16, "TermG": 5}},
+    "simulation": [{"component_type": "SParameter", "instance_name": "SP1",
+                    "parameters": {"Start": {"value": "8", "unit": "GHz"},
+                                   "Stop": {"value": "12", "unit": "GHz"}}}],
+    "latest_result": {"path": "D:/.../result.raw", "exists": True, "size": 2048},
+    "warnings": []
 }
 ```
 
@@ -347,12 +357,18 @@ analyze_variables(project_path: str) -> dict
 
 分析工程中的 Var 变量定义、其他元件对变量的引用、Sweep 扫描配置。
 
+引用判定：变量名作为**标识符出现在任意参数表达式**里即算引用（如 `P[1]=polar(dbmtow(Pwr_IN),0)`、`Bits=itob(int(X1))`），不限于 `Freq[1]` 这类字段；引号内字面量（如 `Bits="000000"`）不算引用。变量的状态取器件级 `active_state`/`state`，参数内恒为 `Disable` 的 `Status` 不再返回。
+
 返回：
 ```python
 {
-    "variables": [{"name": "freqin", "parameter": "freqin", "initial": "29", ...}],
-    "references": [{"variable": "freqin", "component": "PORT1", "parameter": "Freq[1]"}, ...],
-    "sweeps": [{"sweep": "Sweep2", "variable": "freqin", "start": "29", "stop": "31", ...}]
+    "variables": [{"name": "Var1", "parameter": "Pwr_IN", "initial": "-30",
+                   "min": "", "max": "", "tunable": False,
+                   "active_state": 0, "state": "NORMAL"}],
+    "references": [{"variable": "Pwr_IN", "component": "PORT1",
+                    "component_type": "P_nToneG", "parameter": "P[1]"}],
+    "sweeps": [{"sweep": "Sweep1", "variable": "Freq", "start": "8", "stop": "12",
+                "step": "0.1", "targets": ["SP1"]}]
 }
 ```
 

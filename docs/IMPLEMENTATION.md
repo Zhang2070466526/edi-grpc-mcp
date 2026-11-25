@@ -321,7 +321,7 @@ if ".." in name or "/" in name or "\\" in name:
 | 工具 | 读取内容 | 特点 |
 |---|---|---|
 | `list_epp_projects` | 文件夹扫描 | `rglob("*.epp")`，最多 1000 个，返回名称/路径/大小 |
-| `get_project_summary` | metadata + schematics + netlist + RAW | 聚合元数据、原理图列表、元件类型分布、仿真器件配置、最新 RAW |
+| `get_project_summary` | metadata + schematics + netlist + RAW | 聚合元数据、原理图路径、元件总数、仿真器件实例、最新 RAW |
 | `analyze_variables` | 所有原理图 | 识别 Var 定义 → 找引用 → 列 Sweep 配置 |
 
 ### 1.5 subprocess 命令行
@@ -777,7 +777,7 @@ Chat 层拦截 → 保存 `PendingAction` → 展示操作摘要 → 用户明�
 | `get_components_static_params` | — | gRPC→MMS | 转发到 `POST /api/v1/components/static-params/`，查重量/尺寸/封装/厂商 |
 | `batch_query_component_rf_params` | BATCH_QUERY_COMPONENT | gRPC→MMS | 按型号批量查询，按输入顺序对齐、未命中补 null |
 | `list_epp_projects` | — | 本地 | `rglob("*.epp")` 扫描 |
-| `get_project_summary` | — | 本地 | 聚合元数据/原理图/器件/仿真配置/最新 RAW |
+| `get_project_summary` | — | 本地 | 聚合元数据/原理图路径/元件总数/仿真器件实例/最新 RAW |
 | `analyze_variables` | — | 本地 | Var 定义 + 引用 + Sweep 配置 |
 
 ### 4.2 仿真器件（协议 v3）

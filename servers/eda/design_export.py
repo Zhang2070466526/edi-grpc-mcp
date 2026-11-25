@@ -34,7 +34,7 @@ def export_project_netlist(
     project_path: str,
     timeout_seconds: int = 60,
 ) -> dict[str, Any]:
-    """查看 .epp 工程的网表，返回网表文件路径。
+    """查看 .epp 工程的网表；成功时网表文件路径在 details.netlist_path（统一信封顶层 result_path 为空，属正常）。
 
     Args:
         project_path: EDA 服务所在机器上的 .epp 工程文件绝对路径。

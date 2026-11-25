@@ -47,7 +47,7 @@
 - `design_wilkinson` — 设计多级威尔金森功分器，输出各级微带线宽、线长和隔离电阻。
 - `draw_chart` — 把一组或多组 XY 数据绘制为曲线图并保存为图片（PNG/JPG，固定 1600×1000）。
 - `export_laspcem_snp` — 导出 .sem 工程的 S 参数为 Touchstone 文件（.sNp 会按端口数落成 .s<N>p）。
-- `export_project_netlist` — 查看 .epp 工程的网表，返回网表文件路径。
+- `export_project_netlist` — 查看 .epp 工程的网表；成功时网表文件路径在 details.netlist_path（统一信封顶层 result_path 为空，属正常）。
 - `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV，用于器件替换和 replace_schematic_components_from_csv 接口配对使用，不单独使用。
 - `export_simulation_report` — 将提取的各链路参数数据（JSON）导出成正式报告(PDF/DOCX/report.json)
 - `fetch_artifact` — 把本机产物文件注册成可下载 URL（仿真结果 / SNP / RAW / 图 / 报告 / 任意文件）。
@@ -63,7 +63,7 @@
 - `get_hfss_project_info` — 查询当前 AEDT 打开的项目和活动设计（纯查询，不启动 AEDT）。
 - `get_laspcem_setup` — 读取 .sem 工程当前配置的求解设置参数（cem.EditSolution 那套键，约 64 个）。
 - `get_model_category_params` — 获取模型管理模块的全部子类及对应参数列表。
-- `get_project_summary` — 获取 .epp 工程概览包括，元数据、原理图位置、最近结果文件位置。注意：该接口只判断有无仿真结果，禁止解析raw文件
+- `get_project_summary` — 获取 .epp 工程概览：元数据、原理图文件路径、元件统计、仿真器件配置、最近结果文件路径。注意：该接口只判断有无仿真结果，禁止解析raw文件。
 - `get_schematic_component_info` — 按实例名查询器件参数与几何：支持单个名称或名称列表（批量）。
 - `get_service_logs` — 读取 EDI 服务端日志，检查运行异常（含 ERROR/WARN/异常堆栈分析）。
 - `get_service_status` — 返回 EDI gRPC 通道状态和队列占用信息（只读，不占执行槽位），用于诊断：通道是否健康、是否有任务在排队。
@@ -147,7 +147,7 @@
 - `get_hfss_analysis_status` — 查询 HFSS 异步仿真状态（默认只读本地，不访问 AEDT）。
 - `get_hfss_project_info` — 查询当前 AEDT 打开的项目和活动设计（纯查询，不启动 AEDT）。
 - `get_laspcem_setup` — 读取 .sem 工程当前配置的求解设置参数（cem.EditSolution 那套键，约 64 个）。
-- `get_project_summary` — 获取 .epp 工程概览包括，元数据、原理图位置、最近结果文件位置。注意：该接口只判断有无仿真结果，禁止解析raw文件
+- `get_project_summary` — 获取 .epp 工程概览：元数据、原理图文件路径、元件统计、仿真器件配置、最近结果文件路径。注意：该接口只判断有无仿真结果，禁止解析raw文件。
 - `get_simulation_component_schema` — 查询已建模器件类型的参数 Schema 和权限。
 - `import_aedt_as_sem` — 把 ANSYS HFSS `.aedt` 导入 LASPCEM 并生成 `.sem` 工程（等价于 GUI 的 Import）。
 - `laspcem_cleanup_orphans` — 清理残留的 LASPCEM 进程（GUI / mpiexec / phofem / MPI 代理）。
@@ -192,7 +192,7 @@
 - `design_schematic_topology` — 用户输入指标来设计电路拓扑（收发组件、滤波器、天线等），自动创建并打开新工程。
 - `design_wilkinson` — 设计多级威尔金森功分器，输出各级微带线宽、线长和隔离电阻。
 - `draw_chart` — 把一组或多组 XY 数据绘制为曲线图并保存为图片（PNG/JPG，固定 1600×1000）。
-- `export_project_netlist` — 查看 .epp 工程的网表，返回网表文件路径。
+- `export_project_netlist` — 查看 .epp 工程的网表；成功时网表文件路径在 details.netlist_path（统一信封顶层 result_path 为空，属正常）。
 - `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV，用于器件替换和 replace_schematic_components_from_csv 接口配对使用，不单独使用。
 - `export_simulation_report` — 将提取的各链路参数数据（JSON）导出成正式报告(PDF/DOCX/report.json)
 - `filter_order_bandpass` — 带通阶数估算：通带 f_p1~f_p2、阻带在两侧，返回阶数与传输零点。低通/高通/带阻分别用 filter_order_lowpass/highpass/bandstop。
@@ -275,7 +275,7 @@
 - `design_schematic_topology` — 用户输入指标来设计电路拓扑（收发组件、滤波器、天线等），自动创建并打开新工程。
 - `design_wilkinson` — 设计多级威尔金森功分器，输出各级微带线宽、线长和隔离电阻。
 - `draw_chart` — 把一组或多组 XY 数据绘制为曲线图并保存为图片（PNG/JPG，固定 1600×1000）。
-- `export_project_netlist` — 查看 .epp 工程的网表，返回网表文件路径。
+- `export_project_netlist` — 查看 .epp 工程的网表；成功时网表文件路径在 details.netlist_path（统一信封顶层 result_path 为空，属正常）。
 - `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV，用于器件替换和 replace_schematic_components_from_csv 接口配对使用，不单独使用。
 - `export_simulation_report` — 将提取的各链路参数数据（JSON）导出成正式报告(PDF/DOCX/report.json)
 - `fetch_artifact` — 把本机产物文件注册成可下载 URL（仿真结果 / SNP / RAW / 图 / 报告 / 任意文件）。
@@ -290,7 +290,7 @@
 - `get_hfss_analysis_status` — 查询 HFSS 异步仿真状态（默认只读本地，不访问 AEDT）。
 - `get_hfss_project_info` — 查询当前 AEDT 打开的项目和活动设计（纯查询，不启动 AEDT）。
 - `get_model_category_params` — 获取模型管理模块的全部子类及对应参数列表。
-- `get_project_summary` — 获取 .epp 工程概览包括，元数据、原理图位置、最近结果文件位置。注意：该接口只判断有无仿真结果，禁止解析raw文件
+- `get_project_summary` — 获取 .epp 工程概览：元数据、原理图文件路径、元件统计、仿真器件配置、最近结果文件路径。注意：该接口只判断有无仿真结果，禁止解析raw文件。
 - `get_schematic_component_info` — 按实例名查询器件参数与几何：支持单个名称或名称列表（批量）。
 - `get_service_logs` — 读取 EDI 服务端日志，检查运行异常（含 ERROR/WARN/异常堆栈分析）。
 - `get_service_status` — 返回 EDI gRPC 通道状态和队列占用信息（只读，不占执行槽位），用于诊断：通道是否健康、是否有任务在排队。
@@ -372,7 +372,7 @@
 - `design_wilkinson` — 设计多级威尔金森功分器，输出各级微带线宽、线长和隔离电阻。
 - `draw_chart` — 把一组或多组 XY 数据绘制为曲线图并保存为图片（PNG/JPG，固定 1600×1000）。
 - `export_laspcem_snp` — 导出 .sem 工程的 S 参数为 Touchstone 文件（.sNp 会按端口数落成 .s<N>p）。
-- `export_project_netlist` — 查看 .epp 工程的网表，返回网表文件路径。
+- `export_project_netlist` — 查看 .epp 工程的网表；成功时网表文件路径在 details.netlist_path（统一信封顶层 result_path 为空，属正常）。
 - `export_schematic_components_to_csv` — 将工程原理图中的有效器件信息导出为 CSV，用于器件替换和 replace_schematic_components_from_csv 接口配对使用，不单独使用。
 - `export_simulation_report` — 将提取的各链路参数数据（JSON）导出成正式报告(PDF/DOCX/report.json)
 - `fetch_artifact` — 把本机产物文件注册成可下载 URL（仿真结果 / SNP / RAW / 图 / 报告 / 任意文件）。
@@ -388,7 +388,7 @@
 - `get_hfss_project_info` — 查询当前 AEDT 打开的项目和活动设计（纯查询，不启动 AEDT）。
 - `get_laspcem_setup` — 读取 .sem 工程当前配置的求解设置参数（cem.EditSolution 那套键，约 64 个）。
 - `get_model_category_params` — 获取模型管理模块的全部子类及对应参数列表。
-- `get_project_summary` — 获取 .epp 工程概览包括，元数据、原理图位置、最近结果文件位置。注意：该接口只判断有无仿真结果，禁止解析raw文件
+- `get_project_summary` — 获取 .epp 工程概览：元数据、原理图文件路径、元件统计、仿真器件配置、最近结果文件路径。注意：该接口只判断有无仿真结果，禁止解析raw文件。
 - `get_schematic_component_info` — 按实例名查询器件参数与几何：支持单个名称或名称列表（批量）。
 - `get_service_logs` — 读取 EDI 服务端日志，检查运行异常（含 ERROR/WARN/异常堆栈分析）。
 - `get_service_status` — 返回 EDI gRPC 通道状态和队列占用信息（只读，不占执行槽位），用于诊断：通道是否健康、是否有任务在排队。
