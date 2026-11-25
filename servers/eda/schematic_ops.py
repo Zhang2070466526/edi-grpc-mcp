@@ -21,12 +21,11 @@ from servers import mcp
 
 @mcp.tool()
 def list_ideal_components(timeout_seconds: int = 60) -> dict[str, Any]:
-    """列出内置器件类型及其简要说明。
+    """列出EDI软件内置器件类型及其简要说明，是add_ideal_component接口调用的前置步骤。
 
     用法："列出内置器件类型"、"有哪些内置器件可用"
 
-    数据直接读取 ComponentToolBar 使用的 symbolDescriptionMap，不需要打开工程。
-    每项包含 component_type 和 description。
+    该接口全局调用一次即可，接口在软件未更新前不会发生变化。
 
     Args:
         timeout_seconds: 最长等待秒数，默认 60。

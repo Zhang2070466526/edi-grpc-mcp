@@ -19,7 +19,7 @@ def replace_schematic_components_from_csv(
     input_csv_path: str,
     timeout_seconds: int = 60,
 ) -> dict[str, Any]:
-    """⚠️ 按 CSV 批量替换工程原理图下的器件。
+    """按 CSV 批量替换工程原理图下的器件。
 
     用法："用这个 CSV 替换工程里的模型"、"批量更新器件型号"
 
