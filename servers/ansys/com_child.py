@@ -8,19 +8,25 @@
 直接 terminate，COM 资源、Python 线程、模块状态随进程一起消失，服务侧零残留。
 
 父进程用法（servers/ansys/project_manage.py::_call_com_child）：
-    python -m servers.ansys.com_child state
-    python -m servers.ansys.com_child open  <project_path>
-    python -m servers.ansys.com_child quit
+    源码态：python -m servers.ansys.com_child state
+            python -m servers.ansys.com_child open  <project_path>
+            python -m servers.ansys.com_child quit
+    冻结态：edi_mcp_server.exe --com-child state      （见 edi_entry.py）
+打包后包内没有解释器，父进程不能再 `python 脚本路径`（会撞 exe 自己的 argparse，
+exit=2）；两条路的子进程逻辑完全相同，冻结态只是换了个入口。
 
 输出约定：stdout 最后一行是单行 JSON
     {"ok": true,  "result": {...}}
     {"ok": false, "error": "..."}
+窗口模式（console=False）下子进程 sys.stdout 可能是 None，所以父进程还会通过环境变量
+`EDI_COM_CHILD_OUT` 指定一个结果文件，JSON 同时写入该文件；父进程优先读文件。
 诊断信息一律走 stderr，避免污染 JSON。
 """
 
 from __future__ import annotations
 
 import json
+import os
 import sys
 
 #: 与 config._COM_PROGIDS 保持一致：AEDT 2020 R2 不注册 ROT，
@@ -306,21 +312,41 @@ def cmd_quit() -> dict:
 TASKS = {"state": cmd_state, "open": cmd_open,
          "export_snp": cmd_export_snp, "quit": cmd_quit}
 
+#: 父进程指定的结果文件（窗口模式没有可用 stdout）。需与 project_manage._COM_CHILD_OUT_ENV 一致。
+_OUT_ENV = "EDI_COM_CHILD_OUT"
+
+
+def _emit(payload: dict, code: int) -> int:
+    """输出单行 JSON：优先写父进程给的结果文件，再顺手写 stdout（若有）。"""
+    line = json.dumps(payload, ensure_ascii=False)
+    out = os.environ.get(_OUT_ENV)
+    if out:
+        try:
+            with open(out, "w", encoding="utf-8") as f:
+                f.write(line)
+        except OSError:
+            pass                                    # 写不了文件就退到 stdout
+    stream = getattr(sys, "stdout", None)
+    if stream is not None:
+        try:
+            stream.write(line + "\n")
+            stream.flush()
+        except Exception:                           # noqa: BLE001 —— 窗口模式句柄不可用
+            pass
+    return code
+
 
 def main() -> int:
     if len(sys.argv) < 2 or sys.argv[1] not in TASKS:
-        print(json.dumps({"ok": False,
-                          "error": f"usage: com_child.py {'|'.join(TASKS)} [args]"},
-                         ensure_ascii=False))
-        return 2
+        return _emit({"ok": False,
+                      "error": f"usage: com_child.py {'|'.join(TASKS)} [args]"},
+                     2)
     task, args = sys.argv[1], sys.argv[2:]
     try:
         result = TASKS[task](*args)
-        print(json.dumps({"ok": True, "result": result}, ensure_ascii=False))
-        return 0
+        return _emit({"ok": True, "result": result}, 0)
     except Exception as exc:                        # noqa: BLE001 —— 原样回给父进程
-        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
-        return 1
+        return _emit({"ok": False, "error": str(exc)}, 1)
 
 
 if __name__ == "__main__":

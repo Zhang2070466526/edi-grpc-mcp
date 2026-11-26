@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import atexit
 import json
+import os
 import psutil
 import stat
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -45,18 +47,80 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 #: 项目 venv 解释器（uv 项目必有）。
 _VENV_PYTHON = _PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
 
+#: 冻结（PyInstaller）态启动子进程时不要弹控制台窗口。
+_NO_WINDOW = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+
+#: 子进程把 JSON 结果写这里（窗口模式没有可用的 stdout）——必须与 com_child._OUT_ENV 一致。
+_COM_CHILD_OUT_ENV = "EDI_COM_CHILD_OUT"
+
 
 def _com_child_python() -> str:
-    """跑 com_child 的解释器：优先项目 venv。
+    """**源码态**跑 com_child 的解释器：优先项目 venv。
 
     ⚠️ 服务用 `uv run python start_servers.py` 启动时，`sys.executable` 是 uv 托管的
     base python，它的 site-packages 里没有 pywin32/psutil —— 直接拿它 spawn 子进程会
     ModuleNotFoundError（2026-11-25 真机：3s 全部超时，实际是子进程起不来）。
-    项目 venv 是唯一保证有依赖的解释器，没有 venv（打包分发）时才退回 sys.executable。
+    项目 venv 是唯一保证有依赖的解释器。
     """
     if _VENV_PYTHON.is_file():
         return str(_VENV_PYTHON)
     return sys.executable
+
+
+def _com_child_cmd(task: str, args: tuple[str, ...]) -> list[str]:
+    """拼 com_child 的启动命令（源码态 / 冻结态两条路）。
+
+    冻结后包内**没有解释器**：`sys.executable` 就是 edi_mcp_server.exe 本身，
+    再在后面拼脚本路径会被它的 argparse 当成非法位置参数 → exit=2，
+    `export_snp` / `open` / `state` 全部失败（2026-11-26 真机：HFSS 工具只有
+    走子进程的那几个挂，进程内 COM 的求解/状态查询正常）。
+    所以冻结态改用同一个 exe 的隐藏入口 `--com-child`（见 edi_entry.py），
+    子进程逻辑与主服务共用一个二进制。
+    """
+    if getattr(sys, "frozen", False):
+        return [sys.executable, "--com-child", task, *args]
+    return [_com_child_python(), str(_COM_CHILD_SCRIPT), task, *args]
+
+
+def _com_child_cwd() -> str:
+    """子进程 cwd。
+
+    冻结态 `__file__` 落在 `_internal` 里，而 `_internal` 跟解释器 DLL 同目录 ——
+    用外部 python 跑时会被 DLL/`win32com` 抢到包内的 3.12 版本
+    （`Module use of python312.dll conflicts with this version of Python`）。
+    因此冻结态固定用 exe 所在目录（等同正常启动），源码态用项目根目录。
+    """
+    if getattr(sys, "frozen", False):
+        return str(Path(sys.executable).parent)
+    return str(_PROJECT_ROOT)
+
+
+def _com_child_env() -> tuple[dict[str, str], str]:
+    """子进程环境 + 结果文件路径。
+
+    冻结产物是窗口模式（console=False），子进程 `sys.stdout` 可能是 None，
+    光靠 stdout 传 JSON 会丢结果；因此额外给一个结果文件，父进程优先读文件。
+    """
+    env = os.environ.copy()
+    fd, path = tempfile.mkstemp(prefix="edi_com_child_", suffix=".json")
+    os.close(fd)
+    env[_COM_CHILD_OUT_ENV] = path
+    return env, path
+
+
+def _read_json_payload(path: str) -> dict[str, Any] | None:
+    """读子进程写的结果文件（最后一行 JSON）。"""
+    try:
+        raw = Path(path).read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:
+        return None
+    if not raw:
+        return None
+    try:
+        payload = json.loads(raw.splitlines()[-1])
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 def _find_aedt_modal_dialogs() -> list[str]:
@@ -118,33 +182,41 @@ def _call_com_child(task: str, args: tuple[str, ...],
     if dialogs:
         timeout_s = min(timeout_s, 5.0)             # 有疑似阻塞框：短试，不干等整段超时
 
-    cmd = [_com_child_python(), str(_COM_CHILD_SCRIPT), task, *args]
+    cmd = _com_child_cmd(task, args)
+    env, out_path = _com_child_env()
     try:
-        cp = subprocess.run(cmd, cwd=str(_PROJECT_ROOT), capture_output=True,
-                            text=True, encoding="utf-8", errors="replace",
-                            timeout=timeout_s)
-    except subprocess.TimeoutExpired:
-        extra = (f"；检测到 AEDT 模态框 {dialogs}，先处理掉再重试" if dialogs else "")
-        return False, None, (f"COM 调用超过 {timeout_s:.1f}s 未返回（AEDT 可能（未响应）"
-                             f"{extra}；子进程已终止，通道无残留）")
-    except Exception as exc:                        # noqa: BLE001 —— 起不来也要回结构化错误
-        return False, None, f"COM 子进程启动失败：{exc}"
+        try:
+            cp = subprocess.run(cmd, cwd=_com_child_cwd(), capture_output=True,
+                                text=True, encoding="utf-8", errors="replace",
+                                timeout=timeout_s, env=env, creationflags=_NO_WINDOW)
+        except subprocess.TimeoutExpired:
+            extra = (f"；检测到 AEDT 模态框 {dialogs}，先处理掉再重试" if dialogs else "")
+            return False, None, (f"COM 调用超过 {timeout_s:.1f}s 未返回（AEDT 可能（未响应）"
+                                 f"{extra}；子进程已终止，通道无残留）")
+        except Exception as exc:                    # noqa: BLE001 —— 起不来也要回结构化错误
+            return False, None, f"COM 子进程启动失败：{exc}"
 
-    payload: dict[str, Any] | None = None
-    for line in reversed((cp.stdout or "").splitlines()):
-        line = line.strip()
-        if line.startswith("{"):
-            try:
-                payload = json.loads(line)
-                break
-            except json.JSONDecodeError:
-                continue
-    if payload is None:
-        return False, None, (f"COM 子进程无有效输出（exit={cp.returncode}）："
-                             f"{(cp.stderr or '')[-300:]}")
-    if not payload.get("ok"):
-        return False, None, str(payload.get("error") or "unknown com_child error")
-    return True, payload.get("result"), None
+        payload = _read_json_payload(out_path)      # 窗口模式没有 stdout → 优先读结果文件
+        if payload is None:
+            for line in reversed((cp.stdout or "").splitlines()):
+                line = line.strip()
+                if line.startswith("{"):
+                    try:
+                        payload = json.loads(line)
+                        break
+                    except json.JSONDecodeError:
+                        continue
+        if payload is None:
+            return False, None, (f"COM 子进程无有效输出（exit={cp.returncode}）："
+                                 f"{(cp.stderr or '')[-300:]}")
+        if not payload.get("ok"):
+            return False, None, str(payload.get("error") or "unknown com_child error")
+        return True, payload.get("result"), None
+    finally:
+        try:
+            os.unlink(out_path)
+        except OSError:
+            pass
 
 
 def _call_with_timeout(fn, timeout_s: float) -> tuple[bool, Any, str | None]:

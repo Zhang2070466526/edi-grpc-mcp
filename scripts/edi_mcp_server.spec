@@ -28,7 +28,9 @@ from PyInstaller.utils.hooks import collect_all
 _scipy_datas, _scipy_binaries, _scipy_hiddenimports = collect_all("scipy")
 
 a = Analysis(
-    [str(root / 'start_servers.py')],
+    # 入口必须是 edi_entry.py：它在 import start_servers 之前拦截 `--com-child`，
+    # 让冻结产物同时充当 COM 隔离子进程的"解释器"（包内没有 python.exe）。
+    [str(root / 'edi_entry.py')],
     pathex=[str(root)],
     binaries=_msvc_dlls + _scipy_binaries,
     datas=_scipy_datas + [
@@ -43,6 +45,8 @@ a = Analysis(
         # MCP 核心
         'servers',
         'servers.registry_server',
+        # edi_entry.py 在函数内 import（静态分析能抓到，仍显式列出防漏）
+        'start_servers',
 
         # Chat 模块
         'servers.chat',
@@ -76,6 +80,9 @@ a = Analysis(
         'servers.ansys.config',
         'servers.ansys.project_manage',
         'servers.ansys.run_analysis',
+        # ⚠️ 冻结态由 `edi_mcp_server.exe --com-child` 走到这个模块（edi_entry.py 里
+        # 函数内 import）。漏收 ⇒ 打包后 export_snp/open/state 报 ModuleNotFoundError。
+        'servers.ansys.com_child',
 
         # 图片 / 视觉 / 文档工具
         'servers.multimodal_vision',

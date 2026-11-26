@@ -91,7 +91,8 @@ servers/
     service.py            # 聊天服务（会话/LLM/工具闭环）
     routes.py             # Web 路由（/health /chat /ui /tools/list）
     index.html            # 聊天前端页面
-start_servers.py         # 一键启动入口
+start_servers.py         # 一键启动入口（源码态：uv run python start_servers.py）
+edi_entry.py             # 打包入口：主服务 / `--com-child` 共用同一个 exe（见下）
 tests/                   # 测试套件
 scripts/                 # 打包脚本 + PyInstaller 配置 + 启动脚本
 docs/                    # 文档（API 参考/实现原理/交接/gRPC 协议）
