@@ -10,7 +10,7 @@ from typing import Any
 
 from servers import mcp
 from servers.cst.cst_api import cst_runner, query_task, run_cst_job
-from servers.utils import queue_full_response, require_file, submitted_response
+from servers.utils import bounded_wait, queue_full_response, require_file, submitted_response
 
 
 class CstSimulator:
@@ -56,14 +56,17 @@ def cst_solve_async(model_path: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def cst_solve_query(task_id: str) -> dict[str, Any]:
+def cst_solve_query(task_id: str, wait_seconds: int = 0) -> dict[str, Any]:
     """查询 CST 求解任务进度（配合 cst_solve_async 拿到的 task_id）。S 参数导出任务用 cst_export_snp_query。
 
     一次调用同时拿到进度和结果，无需先查 status 再取 result。
 
     Args:
         task_id: cst_solve_async 返回的 task_id。
+        wait_seconds: 阻塞等待上限（秒），默认 0 = 立即返回；会被 clamp 到 [0, 120]。
+            短任务（导出、已完成的求解）可以用它一次拿到终态；长求解仍应轮询。
     """
+    bounded_wait(task_id, wait_seconds, cst_runner.snapshot)
     return query_task(
         task_id, cst_runner.snapshot(task_id),
         not_found_msg="CST 求解任务不存在、已过期或服务已重启",

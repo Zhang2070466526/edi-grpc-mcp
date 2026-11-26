@@ -38,7 +38,8 @@ _logger = logging.getLogger("eda.simulation")
 from proto import ecserver_pb2
 from servers.eda.config import require_project_path
 from servers.eda.grpc_client import call_grpc, call_project_grpc
-from servers.utils import error_response, submitted_response, require_file, queue_full_response
+from servers.utils import (bounded_wait, error_response, queue_full_response,
+                           require_file, submitted_response)
 from servers import mcp
 
 # -- 异步仿真任务注册表 --
@@ -321,13 +322,15 @@ def start_simulation_async(
 
 
 @mcp.tool()
-def get_simulation_async_status(task_id: str) -> dict[str, Any]:
+def get_simulation_async_status(task_id: str, wait_seconds: int = 0) -> dict[str, Any]:
     """查询异步仿真进度和实时日志（仿真日志在 ads_output 字段）。运行中即可调用，不阻塞。
 
     用法："查一下 task_id 为 xxx 的仿真进度"、"仿真跑完了吗"
 
     Args:
         task_id: 异步仿真任务 ID（由异步启动接口返回）。
+        wait_seconds: 阻塞等待上限（秒），默认 0 = 立即返回；会被 clamp 到 [0, 120]。
+            短仿真可以用它一次拿到终态；长仿真仍应轮询。
 
     Returns:
         {"success": bool, "completed": bool, "task_success": bool|null,
@@ -337,6 +340,9 @@ def get_simulation_async_status(task_id: str) -> dict[str, Any]:
         运行中 success=true；终态时 success=task_success（结果未知如 TIMEOUT 时 success=false）。
         completed=True 且 outcome_known=False 表示 MCP 已退出但 EDI 结果未知（如 TIMEOUT）。
     """
+    bounded_wait(task_id, wait_seconds,
+                 lambda t: _get_task_snapshot(t, prune=False),
+                 is_done=lambda s: s is None or _task_completed(s))
     task = _get_task_snapshot(task_id, prune=True)
 
     if task is None:

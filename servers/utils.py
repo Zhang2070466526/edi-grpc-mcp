@@ -551,6 +551,45 @@ def collect_simulation_artifacts(sim_path: str, tool_name: str,
     return artifacts, report_artifacts, len(key_files) > max_artifacts
 
 
+MAX_QUERY_WAIT_SECONDS = 120
+
+
+def _default_task_done(snap: dict | None) -> bool:
+    """默认终态判定：快照缺失 / 有 finished_at / 已取消。"""
+    return (snap is None or bool(snap.get("finished_at"))
+            or snap.get("status") == "CANCELLED")
+
+
+def bounded_wait(task_id: str, wait_seconds: int, snapshot, is_done=None,
+                 sleep=None, clock=None, max_wait: int = MAX_QUERY_WAIT_SECONDS,
+                 interval: float = 2.0) -> None:
+    """阻塞轮询到任务终态或超时，让客户端一次调用就拿到结果（省掉 sleep 轮询）。
+
+    为什么必须有上限：任务执行层是单槽 FIFO，一次调用阻塞太久会堵住其它工具调用；
+    MCP 客户端自身也有超时，几十分钟的等待照样会断。所以「短任务一次拿结果、
+    长任务继续轮询」。
+
+    Args:
+        task_id: 任务 ID。
+        wait_seconds: 期望等待秒数，clamp 到 [0, max_wait]；0/负数 = 立即返回。
+        snapshot: callable(task_id) -> dict|None，返回任务快照。
+        is_done: callable(snapshot) -> bool；缺省判定「None / finished_at 非空 /
+            status == CANCELLED」。
+        sleep / clock: 可注入，便于单测（默认 time.sleep / time.monotonic）。
+    """
+    sleep = time.sleep if sleep is None else sleep
+    clock = time.monotonic if clock is None else clock
+    wait = max(0, min(int(wait_seconds or 0), int(max_wait)))
+    if wait <= 0:
+        return
+    is_done = _default_task_done if is_done is None else is_done
+    deadline = clock() + wait
+    while clock() < deadline:
+        if is_done(snapshot(task_id)):
+            return
+        sleep(interval)
+
+
 def build_file_link(path: str, label: str = "打开文件", *,
                     ttl: int = 3600, disposition: str = "inline") -> dict:
     """为本地文件生成 file:// URI、可下载 token 链接和 Markdown 链接。

@@ -38,6 +38,8 @@ from servers.laspcem.launcher import (
 from servers.laspcem.setup_reader import is_solved
 from servers.task_runner import TaskRunner
 from servers.utils import (
+    MAX_QUERY_WAIT_SECONDS,
+    bounded_wait,
     error_response,
     queue_full_response,
     submitted_response,
@@ -252,6 +254,29 @@ def _mark(steps: list[dict], name: str, status: str) -> None:
             step["status"] = status
 
 
+_DONE_STATES = ("SUCCEEDED", "SKIPPED")
+
+
+def _aggregate_steps(steps: list[dict]) -> str:
+    """按 steps 聚合任务状态（顶层 runner status 只表示「任务体是否正常返回」，不聚合步骤）。
+
+    2026-11-26 实测：solve 失败时 TaskRunner 仍把任务记为 SUCCEEDED（任务体正常 return 了
+    一个 success=False 的结果），`laspcem_task_list` 直接透传该状态会误报成功。
+    """
+    states = [str(s.get("status") or "").upper() for s in steps]
+    if not states:
+        return "UNKNOWN"
+    if "FAILED" in states:
+        return "FAILED"
+    if "CANCELLED" in states:
+        return "CANCELLED"
+    if all(s in _DONE_STATES for s in states):
+        return "SUCCEEDED"
+    if any(s == "RUNNING" for s in states):
+        return "RUNNING"
+    return "PENDING"
+
+
 def _run_solve_chain(
     sem_path: str,
     setup_name: str = "",
@@ -289,6 +314,9 @@ def _run_solve_chain(
     if not solved_ok:
         if state is not None:
             state["phase"] = "failed"
+        # 失败后不执行的后续步骤要标 SKIPPED，不能留 PENDING（读起来像"还在跑"）
+        for rest in ("export", "report"):
+            _mark(steps, rest, "SKIPPED")
         return {"success": False,
                 "error_code": solve_r.get("error_code") or "LASPECM_SOLVE_FAILED",
                 "message": f"求解失败，后续步骤未执行：{solve_r.get('message')}",
@@ -307,6 +335,8 @@ def _run_solve_chain(
             _mark(steps, "export", "FAILED")
             if state is not None:
                 state["phase"] = "failed"
+            # 导出失败后不会建报告 ⇒ 标 SKIPPED，别留 PENDING 像"还在跑"
+            _mark(steps, "report", "SKIPPED")
             out.update({"success": False,
                         "error_code": exp.get("error_code") or "LASPECM_EXPORT_FAILED",
                         "message": f"求解已完成，但导出失败：{exp.get('message')}"})
@@ -400,8 +430,13 @@ def run_laspcem_solve_async(
     return resp
 
 
+_MAX_WAIT_SECONDS = MAX_QUERY_WAIT_SECONDS   # 兼容旧引用
+# 具体实现已提到公共层（CST / EDI 的 query 复用同一套），旧名保留给既有测试与调用方
+_bounded_wait = bounded_wait
+
+
 @mcp.tool()
-def laspcem_solve_query(task_id: str) -> dict[str, Any]:
+def laspcem_solve_query(task_id: str, wait_seconds: int = 0) -> dict[str, Any]:
     """查询 LASPCEM 求解任务（配合 run_laspcem_solve_async 的 task_id）。
 
     运行中回传 `phase`（solving/exporting/reporting）、`elapsed_seconds`、`adapt_iterations`、
@@ -410,7 +445,10 @@ def laspcem_solve_query(task_id: str) -> dict[str, Any]:
 
     Args:
         task_id: run_laspcem_solve_async 返回的 task_id。
+        wait_seconds: 阻塞等待上限（秒），默认 0 = 立即返回快照；会被 clamp 到 [0, 120]。
+            短求解（导出、已完成的求解）可以用它一次拿到终态；超过 120 s 的求解仍应轮询。
     """
+    _bounded_wait(task_id, wait_seconds, _runner.snapshot)
     snap = _runner.snapshot(task_id)
     if snap is None:
         return error_response("TASK_NOT_FOUND", "任务不存在、已过期或服务已重启",
@@ -513,13 +551,21 @@ def laspcem_task_list() -> dict[str, Any]:
         meta = snap.get("metadata") or {}
         with _events_lock:
             state = dict(_phases.get(snap.get("task_id")) or {})
+        steps_detail = state.get("steps") or []
+        status = _aggregate_steps(steps_detail)
+        # 排队/未开始时 steps 还没状态（UNKNOWN/PENDING），回退到 runner 的真实状态（QUEUED/RUNNING）
+        if status in ("UNKNOWN", "PENDING"):
+            status = snap.get("status")
         item = {
             "task_id": snap.get("task_id"),
-            "status": snap.get("status"),
+            # status = 按 steps 聚合的真实状态（steps 还没状态时回退 runner_status）
+            "status": status,
+            "runner_status": snap.get("status"),
             "operation": meta.get("operation", ""),
             "sem_path": meta.get("sem_path", ""),
             # metadata.steps 存的是名字列表；state.steps 是 [{name,status}]
-            "steps": meta.get("steps") or [s.get("name") for s in (state.get("steps") or [])],
+            "steps": meta.get("steps") or [s.get("name") for s in steps_detail],
+            "steps_detail": steps_detail,
             "created_at": snap.get("created_at"),
             "started_at": snap.get("started_at"),
             "finished_at": snap.get("finished_at"),

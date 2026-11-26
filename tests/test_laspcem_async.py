@@ -109,7 +109,8 @@ def test_chain_stops_when_solve_fails(tmp_path, monkeypatch):
     _wait(r["task_id"])
     q = A.laspcem_solve_query(r["task_id"])
     assert q["success"] is False and q["error_code"] == "SOLVE_STALLED"
-    assert q["steps"][1]["status"] == "PENDING"
+    # 2026-11-26 起：未执行的后续步骤标 SKIPPED（旧行为留 PENDING，读起来像"还在跑"）
+    assert q["steps"][1]["status"] == "SKIPPED"
     assert "export_result" not in q
 
 
