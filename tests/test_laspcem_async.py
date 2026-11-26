@@ -183,7 +183,10 @@ def test_query_reports_phase_and_progress(tmp_path, monkeypatch):
     deadline = time.time() + 15
     while time.time() < deadline:
         q = A.laspcem_solve_query(r["task_id"])
-        if q.get("phase") == "solving" and q.get("adapt_iterations"):
+        # ⚠️ 必须等 2 次自适应迭代都落盘再取样：原来只要非 0 就 break，负载高时会在两条
+        # Iter 日志之间采到 1，随后 `assert adapt_iterations == 2` 偶发失败
+        # （2026-11-26 全量跑实测 `assert 1 == 2`，单跑该文件 16 passed）。
+        if q.get("phase") == "solving" and int(q.get("adapt_iterations") or 0) >= 2:
             sample = q
             sampled.set()            # 放行求解线程
             break

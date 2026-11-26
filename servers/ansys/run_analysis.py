@@ -13,7 +13,7 @@ from servers.ansys.config import (
     _attach_aedt,
 )
 from servers.task_runner import TaskRunner
-from servers.utils import submitted_response, validate_file, error_response
+from servers.utils import default_result_path, submitted_response, validate_file, error_response
 from servers import mcp
 
 # HFSS 全局串行队列：AEDT 是单实例桌面程序，同一时间只能跑一个仿真。
@@ -62,6 +62,29 @@ def _solved_evidence_or_error(project_path: str, design_name: str):
             evidence_directory=su["directory"],
         )
     return su, None
+
+
+def _existing_snp(path: Path) -> Path | None:
+    """同名导出是否已存在；`.sNp` 占位按 `.s*p` 通配判（端口数未知）。"""
+    try:
+        if path.suffix.lower() == ".snp":
+            hits = sorted(path.parent.glob(path.stem + ".s*p"))
+            return hits[0] if hits else None
+        return path if path.is_file() else None
+    except OSError:
+        return None
+
+
+def _newest_su_mtime(su: dict) -> float | None:
+    """求解证据文件里最新的 mtime —— 用来算 `solution_age_seconds`（判断是否旧解）。"""
+    newest: float | None = None
+    for f in su.get("files") or []:
+        try:
+            m = Path(f).stat().st_mtime
+        except OSError:
+            continue
+        newest = m if newest is None else max(newest, m)
+    return newest
 
 
 def _run_hfss_analysis_task(
@@ -298,6 +321,7 @@ def export_hfss_snp(
     sweep_name: str = "Sweep",
     output_path: str = "",
     port_count: int = 0,
+    overwrite: bool = False,
 ) -> dict[str, Any]:
     """导出 HFSS 已求解的 S 参数为 Touchstone 文件（.sNp）。
 
@@ -318,12 +342,17 @@ def export_hfss_snp(
         setup_name: Analysis Setup 名（如 "Setup1"）。
         sweep_name: 扫频名（如 "Sweep"）。必填：AEDT 2020 的自适应解
             （"Setup : LastAdaptive"）导出不稳定，传空会直接报错。
-        output_path: 输出路径；留空则落在 .aedt 同目录 <工程>_<设计>.s<N>p。
+        output_path: 输出路径；留空则落到默认产物目录（<result_dir>/export_hfss_snp_<时间戳>.sNp，
+            与 export_laspcem_snp / cst_export_snp 口径一致）。
         port_count: 端口数（决定 .sNp 后缀）；0 = 自动探测，探测失败按 2。
+        overwrite: 显式给定的 output_path 已存在时是否允许覆盖，默认 False
+            （返回 `OUTPUT_ALREADY_EXISTS`；2026-11-26 之前是静默覆盖）。
 
     Returns:
         {"success": true, "snp_path": "...s2p", "size_bytes": 33101,
-         "port_count": 2, "solution": "Setup1 : Sweep"}
+         "port_count": 2, "port_count_source": "content", "solution": "Setup1 : Sweep",
+         "result_verified": true, "solution_mtime": 1795678493.3, "solution_age_seconds": 12}
+        `solution_age_seconds` 很大 ⇒ 导出的是**旧解**（没有重新求解）。
     """
     from servers.ansys.project_manage import _call_com_child
 
@@ -341,7 +370,20 @@ def export_hfss_snp(
     if su_err:
         return su_err
     if not output_path:
-        output_path = str(Path(resolved).parent / f"{project_name}_{design_name}.sNp")
+        # 默认落 MCP_RESULT_DIR（与 export_laspcem_snp / cst_export_snp 口径一致）
+        output_path = default_result_path("export_hfss_snp", ".sNp")
+    else:
+        existing = _existing_snp(Path(output_path))
+        if existing is not None and not overwrite:
+            target = Path(output_path)
+            return error_response(
+                "OUTPUT_ALREADY_EXISTS",                 # 复用 servers/utils._DEFAULT_HINTS 已登记的码
+                f"输出文件已存在：{existing}",
+                hint="要覆盖请传 overwrite=True；或换一个 output_path"
+                     "（不传 output_path 时默认落 MCP_RESULT_DIR，文件名自带时间戳、不会撞名）",
+                existing_path=str(existing),
+                suggested_path=str(target.with_name(
+                    f"{target.stem}_{time.strftime('%H%M%S')}{target.suffix}")))
 
     ok, result, err = _call_com_child(
         "export_snp",
@@ -355,6 +397,7 @@ def export_hfss_snp(
                               setup_name=setup_name, sweep_name=sweep_name)
 
     result = dict(result or {})
+    su_mtime = _newest_su_mtime(su)
     return {
         "success": True,
         "project_name": project_name,
@@ -362,7 +405,12 @@ def export_hfss_snp(
         "snp_path": result.get("snp_path", ""),
         "size_bytes": result.get("size", 0),
         "port_count": result.get("port_count", 0),
+        "port_count_source": result.get("port_count_source", ""),
         "solution": result.get("solution", ""),
         "aedt_pid": result.get("pid"),
+        # 求解证据：导出前已确认存在 `Success 1`；age 很大说明导的是旧解
+        "result_verified": True,
+        "solution_mtime": su_mtime,
+        "solution_age_seconds": (round(time.time() - su_mtime, 1) if su_mtime else None),
         "message": f"已导出 {result.get('solution', '')} 的 S 参数: {result.get('snp_path', '')}",
     }

@@ -176,6 +176,13 @@ _DEFAULT_HINTS: dict[str, str] = {
                            "核对解名/setup，必要时到 GUI 手工建一次确认",
     "AEDT_NOT_RUNNING": "先 launch_aedt 启动 AEDT（或 open_hfss_project 会自动拉起）",
     "AEDT_NOT_FOUND": "用 aedt_path 显式指定 AEDT 安装目录",
+    # 2026-11-26：COM 失败按原因分档（com_child 的 reason → 错误码），默认 hint 覆盖"没显式传 hint"的调用点
+    "AEDT_VERSION_MISMATCH": "双版本 AEDT：给 open_hfss_project 传 aedt_path 指向与 GUI 同版本的 "
+                             "ansysedt.exe，或关掉另一版本的 AEDT 后重试",
+    "AEDT_SHELL_ONLY": "只剩 -Embedding 空壳（服务已自动清理）：重新 launch_aedt / open_hfss_project",
+    "AEDT_PERMISSION_MISMATCH": "服务与 AEDT 的完整性级别不一致（UAC 隔离会让 COM 只连到空壳）："
+                                "让两者以相同权限运行（关掉 AEDT，用与服务相同的权限重新启动）；"
+                                "若刚启动过 AEDT，也可能是 GUI 还没注册完，重开该实例再试",
 }
 
 

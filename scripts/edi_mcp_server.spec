@@ -83,6 +83,10 @@ a = Analysis(
         # ⚠️ 冻结态由 `edi_mcp_server.exe --com-child` 走到这个模块（edi_entry.py 里
         # 函数内 import）。漏收 ⇒ 打包后 export_snp/open/state 报 ModuleNotFoundError。
         'servers.ansys.com_child',
+        # com_child 与 config 都 `from servers.ansys import aedt_procs`（空壳/版本/ProgID 公共层）。
+        # config 是模块级 import 会被静态分析抓到，但 com_child 走 `--com-child` 函数内 import，
+        # 显式列出防漏收（漏了 ⇒ 冻结后 --com-child 报 ModuleNotFoundError）。
+        'servers.ansys.aedt_procs',
 
         # 图片 / 视觉 / 文档工具
         'servers.multimodal_vision',

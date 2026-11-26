@@ -22,6 +22,7 @@ from win32com.client import Dispatch, GetActiveObject
 
 load_dotenv()
 from servers.settings import get_settings  # noqa: E402 — 必须在 load_dotenv 之后
+from servers.ansys import aedt_procs  # noqa: E402 — 纯 stdlib+psutil，与 com_child 共用
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,33 @@ def aedt_is_running() -> bool:
 _COM_PROGIDS = ("AnsoftHfss.HfssScriptInterface", "Ansoft.ElectronicsDesktop")
 
 
+def _progids_to_try() -> tuple[str, ...]:
+    """本次附着要试的 ProgID 顺序：**运行实例的版本化 ProgID 优先**，再回退裸名。
+
+    2026-11-26 真机（现场机 star）：裸 `Ansoft.ElectronicsDesktop` 走注册表 CurVer 指到
+    AEDT 2024.2，而用户看着的 GUI 是 2020 R2 → `Dispatch` 连到另一个版本实例，
+    所有查询都像"未响应"。AEDT 另外注册了 `Ansoft.ElectronicsDesktop.2020.2`（独立 CLSID），
+    按运行实例版本先试它就能连对。
+
+    ⚠️ 版本化 ProgID **只在对应版本实例确实在跑时**才加入：`Dispatch` 在该版本不存在时
+    会新建一个 AEDT，违反"只附着、绝不创建"。
+    """
+    try:
+        versioned = aedt_procs.progid_candidates()
+    except Exception:                               # noqa: BLE001 —— 枚举失败就只试裸名
+        versioned = []
+    extra = tuple(p for p in versioned if p not in _COM_PROGIDS)
+    return extra + tuple(_COM_PROGIDS)
+
+
+def com_version_info() -> dict[str, Any]:
+    """运行实例版本 / CurVer 版本 / 是否存在版本失配（给工具层做自证字段）。"""
+    try:
+        return aedt_procs.version_report()
+    except Exception as exc:                        # noqa: BLE001 —— 只读诊断，绝不抛
+        return {"error": str(exc)}
+
+
 def _connected_pid(desktop) -> int | None:
     """COM 连到的 AEDT 进程 PID（Desktop.GetProcessID）；拿不到就 None（不阻塞附着）。"""
     # ⚠️ 本组「-Embedding 空壳处理」与 servers/ansys/com_child.py 的 _kill_embedding_shell /
@@ -111,41 +139,24 @@ def _is_embedding_pid(pid: int) -> bool:
 
 
 def _reap_orphan_shells() -> list[int]:
-    """只剩 `-Embedding` 空壳（没有任何 GUI 实例）时清掉它们，返回被清的 PID。
+    """只剩 `-Embedding` 空壳（没有任何 GUI 实例）时清掉它们，返回被清的 PID（实现见 aedt_procs）。
 
     2026-11-25 真机：`taskkill /F` 掉 GUI 后，空壳 COM 服务进程活下来并继续被
     `Dispatch` 抢到 → 之后每次附着都只连到这个无窗口、无工程的孤儿，用户看到的就是
     「工程列表恒空 / 连到空壳」。空壳不持有任何工程，清它不丢数据；但只要还有真 GUI
     在场就绝不动手（那不是孤儿）。
     """
-    pids = get_aedt_pids()
-    if not pids:
-        return []
-    shells = [p for p in pids if _is_embedding_pid(p)]
-    if len(shells) != len(pids):
-        return []
-    killed: list[int] = []
-    for pid in shells:
-        try:
-            psutil.Process(pid).kill()
-            killed.append(pid)
-        except Exception:                               # noqa: BLE001 —— 已退出/无权
-            continue
-    return killed
+    return aedt_procs.reap_orphan_shells(get_aedt_pids(), _is_embedding_pid, psutil)
 
 
 def _kill_embedding_shell(pid: int) -> bool:
-    """Kill 一个 `-Embedding` 空壳。
+    """Kill 一个 `-Embedding` 空壳（实现收敛在 aedt_procs，两处共用）。
 
     2026-11-25 真机实测：GUI 在跑时 `Dispatch` 仍会连到 AEDT 自带的空壳（PID 41776），
     杀掉落空壳后同一秒 `Dispatch` 就连到 GUI（com_available=true、读到 Project27）。
     空壳不持有工程，且杀它不影响 GUI —— 这是让附着能到达 GUI 的唯一有效手段。
     """
-    try:
-        psutil.Process(pid).kill()
-        return True
-    except Exception:                                   # noqa: BLE001 —— 已退出/无权
-        return False
+    return aedt_procs.kill_embedding_shell(pid, psutil)
 
 
 def _has_gui_instance() -> bool:
@@ -182,7 +193,8 @@ def _attach_aedt():
                 "（需要新建请用 launch_aedt）"
             )
         errors: list[str] = []
-        for progid in _COM_PROGIDS:
+        progids = _progids_to_try()
+        for progid in progids:
             for name, getter in (("GetActiveObject", GetActiveObject), ("Dispatch", Dispatch)):
                 # 最多两次：第一次撞到空壳就先清掉再重连一次（实测清完即连上 GUI）
                 for attempt in (1, 2):
@@ -199,6 +211,7 @@ def _attach_aedt():
                                 continue
                             errors.append(f"{progid} via {name}: 连到的 PID {pid} 是 -Embedding 空壳，跳过")
                             break
+                        logger.info("COM attached: progid=%s pid=%s", progid, pid)
                         return app, desktop
                     except Exception as exc:                # noqa: BLE001 —— 换下一通道/PROGID
                         errors.append(f"{progid} via {name}: {exc}")
@@ -208,7 +221,7 @@ def _attach_aedt():
             raise RuntimeError(
                 f"只连得到残留的 -Embedding 空壳（PID {reaped}，无 GUI 实例），已清理；"
                 f"重新 launch_aedt / open_hfss_project 即可")
-        raise RuntimeError(f"attached none of {_COM_PROGIDS}: {' | '.join(errors)}")
+        raise RuntimeError(f"attached none of {progids}: {' | '.join(errors)}")
 
 
 def query_desktop_state() -> dict[str, Any]:

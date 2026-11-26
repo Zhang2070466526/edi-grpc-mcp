@@ -28,78 +28,81 @@ from __future__ import annotations
 import json
 import os
 import sys
+from pathlib import Path
 
-#: 与 config._COM_PROGIDS 保持一致：AEDT 2020 R2 不注册 ROT，
+try:
+    from servers.ansys import aedt_procs
+except ImportError:                                 # 以脚本方式直跑：python servers/ansys/com_child.py
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from servers.ansys import aedt_procs
+
+#: 裸名回退（与 config._COM_PROGIDS 一致）：AEDT 2020 R2 不注册 ROT，
 #: GetActiveObject 会 MK_E_UNAVAILABLE，真正的通道是 Dispatch。
-PROGIDS = ("AnsoftHfss.HfssScriptInterface", "Ansoft.ElectronicsDesktop")
+#: 版本化 ProgID（Ansoft.ElectronicsDesktop.<ver>）由 aedt_procs 按**运行实例版本**给出。
+PROGIDS = (aedt_procs.HFSS_SCRIPT_PROGID, aedt_procs.BASE_PROGID)
+
+
+class ComChildError(RuntimeError):
+    """带 reason 的失败，父进程据此映射成不同错误码（不再一律"未响应"）。
+
+    reason ∈ `not_running` / `version_mismatch` / `shell_only` / `permission_mismatch` / `attach_failed`
+    """
+
+    def __init__(self, message: str, reason: str = "attach_failed") -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
+def _infos() -> dict[int, dict]:
+    """pid -> {cmdline, exe, version, is_helper}。
+
+    枚举失败**如实抛**（不伪装成"AEDT 未运行"）：依赖缺失/权限问题会因此一眼看出来。
+    """
+    return aedt_procs.instances()
 
 
 def _ansysedt_instances() -> dict[int, str]:
-    """PID -> 命令行。用来区分 GUI 启动器（无参数）与 `-Embedding` 辅助进程。"""
-    import psutil
-    out: dict[int, str] = {}
-    for p in psutil.process_iter(["name", "pid", "cmdline"]):
-        if p.info.get("name") == "ansysedt.exe":
-            out[p.info["pid"]] = " ".join(p.info.get("cmdline") or [])
-    return out
+    """PID -> 命令行（兼容旧调用点）。"""
+    return {pid: info["cmdline"] for pid, info in _infos().items()}
 
 
 def _kill_embedding_shell(pid: int) -> bool:
     """杀掉抢镜的 `-Embedding` 空壳（清掉后 Dispatch 才能连到 GUI）。"""
-    # ⚠️ 本组「-Embedding 空壳处理」与 servers/ansys/config.py 的 _kill_embedding_shell /
-    # _reap_orphan_shells 逻辑一致，改这里要同步改另一边（本进程是隔离脚本，不能 import config）。
     import psutil
-    try:
-        psutil.Process(pid).kill()
-        return True
-    except Exception:                               # noqa: BLE001 —— 已退出/无权
-        return False
+
+    return aedt_procs.kill_embedding_shell(pid, psutil)
 
 
-def _reap_orphan_shells(infos: dict[int, str]) -> list[int]:
-    """只剩 `-Embedding` 空壳（无 GUI）时清掉，返回被清 PID。
+def _reap_orphan_shells(infos: dict[int, dict]) -> list[int]:
+    """只剩 `-Embedding` 空壳（无 GUI）时清掉，返回被清 PID；有真 GUI 时不动手。"""
+    import psutil
 
-    2026-11-25 真机：强杀 GUI 后空壳 COM 服务活下来继续被 `Dispatch` 抢到，
-    之后所有附着都只连到它。空壳不持有工程，清它不丢数据；有真 GUI 时不动手。
+    return aedt_procs.reap_orphan_shells(
+        list(infos), lambda pid: bool(infos.get(pid, {}).get("is_helper")), psutil)
+
+
+def _attach(infos: dict[int, dict] | None = None) -> tuple[object, str]:
+    """附着现有 AEDT 实例，返回 `(desktop, progid)`。失败抛 `ComChildError`（带 reason）。
+
+    2026-11-26 两处改进：
+    1. **一次调用只枚举一次进程**（旧版 `_attach` 里枚举 2–3 次，每次都是全表 psutil 扫描）；
+    2. **ProgID 按运行实例版本排序**（aedt_procs）：双版本机器上裸名走 CurVer 会连到
+       另一个版本实例，症状就是"查询全部未响应"，版本化 ProgID 能连对。
     """
+    infos = _infos() if infos is None else infos
     if not infos:
-        return []
-    shells = [p for p, cmd in infos.items() if "-embedding" in cmd.lower()]
-    if len(shells) != len(infos):
-        return []
-    import psutil
-    killed: list[int] = []
-    for pid in shells:
-        try:
-            psutil.Process(pid).kill()
-            killed.append(pid)
-        except Exception:                           # noqa: BLE001 —— 已退出/无权
-            continue
-    return killed
-
-
-def _aedt_running() -> bool:
-    """AEDT 是否在跑。子进程必须自己判一次：Dispatch 在实例不存在时会**新建**一个，
-    那会违反「附着现有实例、绝不创建」的约定。
-
-    不做 try/except 兜底：依赖缺失或枚举失败要如实报错，否则会被伪装成
-    「AEDT 未运行」误导排查（2026-11-25 实测：uv base python 缺 psutil 即踩此坑）。
-    """
-    return bool(_ansysedt_instances())
-
-
-def _attach():
-    """附着现有 AEDT 实例，返回 desktop。失败抛异常，并带上每条通道的错误。"""
-    if not _aedt_running():
-        raise RuntimeError("AEDT 未运行：com_child 只附着现有实例，绝不创建新实例")
+        raise ComChildError("AEDT 未运行：com_child 只附着现有实例，绝不创建新实例",
+                            "not_running")
 
     import pythoncom
     from win32com.client import Dispatch, GetActiveObject
 
     pythoncom.CoInitialize()
     errors: list[str] = []
-    instances = _ansysedt_instances()
-    for progid in PROGIDS:
+    progids = (tuple(p for p in aedt_procs.progid_candidates(infos) if p not in PROGIDS)
+               + PROGIDS)
+    gui_pids = aedt_procs.gui_pids(infos)
+    for progid in progids:
         for name, getter in (("GetActiveObject", GetActiveObject), ("Dispatch", Dispatch)):
             for attempt in (1, 2):          # 撞到空壳先清掉，再重连一次（实测清完即连上 GUI）
                 try:
@@ -107,25 +110,31 @@ def _attach():
                     desktop = app.GetAppDesktop()
                     list(desktop.GetProjectList())      # 探活：空壳/瘦壳在这里抛
                     pid = _desktop_pid(desktop)
-                    if pid and "-embedding" in instances.get(pid, "").lower():
+                    if pid and aedt_procs.is_embedding(infos, pid):
                         # 2026-11-25 真机：空壳的 GetProjectList() 返回 [] 且不抛，
                         # 探活形同虚设 → 必须按 PID 认出来，否则下游只看到"空工程列表"。
-                        gui = [p for p, cmd in instances.items() if "-embedding" not in cmd.lower()]
-                        if attempt == 1 and gui and _kill_embedding_shell(pid):
+                        if attempt == 1 and gui_pids and _kill_embedding_shell(pid):
                             errors.append(f"{progid} via {name}: 连到 -Embedding 空壳(PID {pid})，已清掉，重试")
                             continue
                         errors.append(f"{progid} via {name}: 连到的 PID {pid} 是 -Embedding 空壳，跳过")
                         break
-                    return desktop
+                    return desktop, progid
                 except Exception as exc:                # noqa: BLE001 —— 换下一条通道
                     errors.append(f"{progid} via {name}: {exc}")
                     break
-    reaped = _reap_orphan_shells(instances)
+    reaped = _reap_orphan_shells(infos)
     if reaped:
-        raise RuntimeError(
+        raise ComChildError(
             f"只连得到残留的 -Embedding 空壳（PID {reaped}，无 GUI 实例），已清理；"
-            f"重新 launch_aedt / open_hfss_project 即可")
-    raise RuntimeError(f"attached none of {PROGIDS}: {' | '.join(errors)}")
+            f"重新 launch_aedt / open_hfss_project 即可", "shell_only")
+    detail = " | ".join(errors)
+    rep = aedt_procs.version_report(infos)
+    if rep.get("version_mismatch"):
+        raise ComChildError(
+            f"运行中的 AEDT 版本 {rep['aedt_versions_running']} 与裸 ProgID 指向的版本 "
+            f"{rep['curver_version']} 不一致（CurVer={rep['curver_progid']}），"
+            f"版本化 ProgID 也没连上：{detail}", "version_mismatch")
+    raise ComChildError(f"attached none of {progids}: {detail}", "attach_failed")
 
 
 def _desktop_pid(desktop) -> int | None:
@@ -136,7 +145,8 @@ def _desktop_pid(desktop) -> int | None:
         return None
 
 
-def _instance_diagnosis(connected_pid: int | None) -> str | None:
+def _instance_diagnosis(connected_pid: int | None,
+                        infos: dict[int, dict] | None = None) -> str | None:
     """连到 `-Embedding` 空壳而机器上还有 GUI 实例时，给出权限不匹配的诊断。
 
     2026-11-25 真机根因：服务以普通权限运行、AEDT 是管理员权限（UAC 隔离）→
@@ -146,10 +156,10 @@ def _instance_diagnosis(connected_pid: int | None) -> str | None:
     """
     if not connected_pid:
         return None
-    infos = _ansysedt_instances()
-    if "-embedding" not in infos.get(connected_pid, "").lower():
+    infos = _infos() if infos is None else infos
+    if not aedt_procs.is_embedding(infos, connected_pid):
         return None                                 # 连的是真实 GUI 实例，正常
-    gui = [pid for pid, cmd in infos.items() if "-embedding" not in cmd.lower()]
+    gui = aedt_procs.gui_pids(infos)
     if not gui:
         return None                                 # 只有空壳，没有可选的真实实例
     return (f"COM 连到了 -Embedding 空壳（PID {connected_pid}），真实 GUI 实例是 {gui}："
@@ -159,11 +169,13 @@ def _instance_diagnosis(connected_pid: int | None) -> str | None:
 
 
 def cmd_state() -> dict:
-    desktop = _attach()
+    """读工程状态。结果附带 COM 通道的自证字段（progid / 版本 / CurVer）。"""
+    infos = _infos()
+    desktop, progid = _attach(infos)
     connected_pid = _desktop_pid(desktop)
     projects = list(desktop.GetProjectList())
-    if not projects and (diag := _instance_diagnosis(connected_pid)):
-        raise RuntimeError(diag)
+    if not projects and (diag := _instance_diagnosis(connected_pid, infos)):
+        raise ComChildError(diag, "permission_mismatch")
     active = desktop.GetActiveProject()
     active_name = active.GetName() if active is not None else ""
     active_design = ""
@@ -174,34 +186,44 @@ def cmd_state() -> dict:
                 active_design = d.GetName()
         except Exception:                           # noqa: BLE001 —— 设计可能没打开
             pass
+    rep = aedt_procs.version_report(infos)
     return {
         "connected": True,
         "pid": connected_pid,
         "projects": projects,
         "active_project": active_name,
         "active_design": active_design,
+        # 版本自证：attach 用的是哪个 ProgID、连到的实例是什么版本、裸名 CurVer 指向谁
+        "progid": progid,
+        "aedt_version": (infos.get(connected_pid or -1) or {}).get("version", ""),
+        "curver_progid": rep.get("curver_progid", ""),
+        "curver_version": rep.get("curver_version", ""),
+        "version_mismatch": bool(rep.get("version_mismatch")),
     }
 
 
 def cmd_open(project_path: str) -> dict:
     from pathlib import Path
 
-    desktop = _attach()
+    desktop, progid = _attach()
     connected_pid = _desktop_pid(desktop)
     names = list(desktop.GetProjectList())
     if not names and (diag := _instance_diagnosis(connected_pid)):
-        raise RuntimeError(diag)
+        raise ComChildError(diag, "permission_mismatch")
     name = Path(project_path).stem
     if name in names:
         desktop.SetActiveProject(name)
-        return {"status": "already_open", "project_name": name, "pid": connected_pid}
+        return {"status": "already_open", "project_name": name, "pid": connected_pid,
+                "progid": progid}
     result = desktop.OpenProject(project_path)
     if result is not None or name in list(desktop.GetProjectList()):
-        return {"status": "opened", "project_name": name, "pid": connected_pid}
+        return {"status": "opened", "project_name": name, "pid": connected_pid,
+                "progid": progid}
     return {
         "status": "COM_OPEN_FAILED",
         "project_name": name,
         "pid": connected_pid,
+        "progid": progid,
         "error": "OpenProject returned None and project not in list",
     }
 
@@ -242,7 +264,7 @@ def cmd_export_snp(project_path: str, design_name: str, setup: str,
     """
     from pathlib import Path
 
-    desktop = _attach()
+    desktop, _progid = _attach()
     pid = _desktop_pid(desktop)
     name = Path(project_path).stem
     names = list(desktop.GetProjectList())
@@ -290,7 +312,13 @@ def cmd_export_snp(project_path: str, design_name: str, setup: str,
     if not export_path.is_file() or export_path.stat().st_size <= 0:
         raise RuntimeError(f"导出未生成文件：{export_path}（solution={solution}）")
 
-    n = _snport_from_content(export_path) or int(port_count or 0) or 2
+    n_content = _snport_from_content(export_path)
+    if n_content:
+        n, n_src = n_content, "content"           # 文件内容列数推断（最可信）
+    elif int(port_count or 0) > 0:
+        n, n_src = int(port_count), "argument"    # 调用方显式给的
+    else:
+        n, n_src = 2, "default"                   # 兜底 2 端口
     if placeholder:
         final = out.with_suffix(f".s{n}p")
         if final.exists():
@@ -300,11 +328,12 @@ def cmd_export_snp(project_path: str, design_name: str, setup: str,
         final = export_path
 
     return {"snp_path": str(final), "size": final.stat().st_size,
-            "solution": solution, "port_count": n, "pid": pid}
+            "solution": solution, "port_count": n, "port_count_source": n_src,
+            "pid": pid}
 
 
 def cmd_quit() -> dict:
-    desktop = _attach()
+    desktop, _progid = _attach()
     desktop.QuitApplication()
     return {"status": "quit_sent"}
 
@@ -346,7 +375,11 @@ def main() -> int:
         result = TASKS[task](*args)
         return _emit({"ok": True, "result": result}, 0)
     except Exception as exc:                        # noqa: BLE001 —— 原样回给父进程
-        return _emit({"ok": False, "error": str(exc)}, 1)
+        payload = {"ok": False, "error": str(exc)}
+        reason = getattr(exc, "reason", None)       # ComChildError 的分类，父进程据此映射错误码
+        if reason:
+            payload["reason"] = reason
+        return _emit(payload, 1)
 
 
 if __name__ == "__main__":

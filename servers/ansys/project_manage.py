@@ -161,6 +161,110 @@ def _find_aedt_modal_dialogs() -> list[str]:
     return titles
 
 
+#: com_child 的失败分类 → MCP 错误码（2026-11-26：不再一律报 AEDT_NOT_RESPONDING）。
+_COM_REASON_CODES = {
+    "not_running": "AEDT_NOT_RUNNING",
+    "version_mismatch": "AEDT_VERSION_MISMATCH",
+    "shell_only": "AEDT_SHELL_ONLY",
+    "permission_mismatch": "AEDT_PERMISSION_MISMATCH",
+    "attach_failed": "AEDT_NOT_RESPONDING",
+}
+_COM_REASON_HINTS = {
+    "version_mismatch": "COM 连到的 AEDT 版本与注册表 CurVer 指向的版本不一致："
+                        "① 给 open_hfss_project 传 aedt_path 指向与 GUI 同版本的 ansysedt.exe；"
+                        "或 ② 关掉另一个版本的 AEDT 再试",
+    "shell_only": "只剩 -Embedding 空壳（无 GUI 实例），已清理；重新 launch_aedt / open_hfss_project",
+    "permission_mismatch": "服务与 AEDT 的完整性级别不一致（UAC 隔离）时 COM 只能新建/连到 -Embedding 空壳："
+                          "让两者以相同权限运行（关掉该 AEDT，用与服务相同的权限重新启动）；"
+                          "若 AEDT 是刚启动的，也可能是 GUI 还没注册完、Dispatch 抢到了自带空壳，重开该实例再试"
+                          "（aedt_path 只决定用哪个 exe/版本，改不了权限级别）",
+    "not_running": "AEDT 未运行：先 open_hfss_project / launch_aedt",
+    "attach_failed": "AEDT 可能（未响应）：看窗口是否卡住/有模态框；确认该实例可整体丢弃时用 quit_aedt(force=true)",
+}
+
+
+def _com_reason(err: str | None) -> str:
+    """取子进程错误的分类标记（`_call_com_child` 会把 reason 写成 `[reason] msg`）。"""
+    if err and err.startswith("[") and "]" in err:
+        return err[1:err.index("]")]
+    return ""
+
+
+def _com_error_code(err: str | None, default: str = "AEDT_NOT_RESPONDING") -> str:
+    return _COM_REASON_CODES.get(_com_reason(err), default)
+
+
+def _com_error_hint(err: str | None) -> str:
+    return _COM_REASON_HINTS.get(_com_reason(err), _COM_REASON_HINTS["attach_failed"])
+
+
+def _strip_reason(err: str | None) -> str:
+    if err and err.startswith("[") and "]" in err:
+        return err[err.index("]") + 1:].strip()
+    return err or ""
+
+
+def _version_fields() -> dict[str, Any]:
+    """版本自证字段（运行实例版本 / CurVer 版本 / 是否失配）；只读，失败返回空 dict。"""
+    try:
+        from servers.ansys.config import com_version_info
+        info = com_version_info()
+    except Exception:                               # noqa: BLE001 —— 诊断字段不许拖垮主流程
+        return {}
+    return {
+        "aedt_versions_running": info.get("aedt_versions_running", []),
+        "curver_progid": info.get("curver_progid", ""),
+        "curver_version": info.get("curver_version", ""),
+        "version_mismatch": bool(info.get("version_mismatch")),
+    }
+
+
+def _aedt_window_titles() -> list[str]:
+    """ansysedt 进程的顶层窗口标题（Qt 主窗标题形如 `<project> - <design> - 3D Model`）。"""
+    import ctypes
+    from ctypes import wintypes
+
+    pids = set(get_aedt_pids())
+    if not pids:
+        return []
+    titles: list[str] = []
+    user32 = ctypes.windll.user32
+    WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def _cb(hwnd, _lparam):
+        pid = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if pid.value in pids:
+            buf = ctypes.create_unicode_buffer(512)
+            user32.GetWindowTextW(hwnd, buf, 512)
+            if buf.value:
+                titles.append(buf.value)
+        return True
+
+    try:
+        user32.EnumWindows(WNDENUMPROC(_cb), 0)
+    except Exception:                               # noqa: BLE001 —— 枚举失败不影响主流程
+        return []
+    return titles
+
+
+def _confirm_project_opened(project_name: str) -> str:
+    """失败路径的二次核对：工程其实已打开时返回判断依据（`com` / `window-title`），否则空串。
+
+    2026-11-26 真机：`open_hfss_project` 等了 213 s 后回 `project_opened=false`，但 AEDT
+    窗口标题已经是 `<project> - HFSSDesign1`，工程确实开着 —— 因为验证走的 COM 通道
+    正好连错了版本。窗口标题是**独立于 COM 的第二判据**。
+    """
+    if not project_name:
+        return ""
+    ok, state, _err = _call_com_child("state", (), _COM_READ_TIMEOUT)
+    if ok and state and project_name in (state.get("projects") or []):
+        return "com"
+    if any(project_name.lower() in t.lower() for t in _aedt_window_titles()):
+        return "window-title"
+    return ""
+
+
 def _call_com_child(task: str, args: tuple[str, ...],
                     timeout_s: float) -> tuple[bool, Any, str | None]:
     """执行一次 AEDT COM 操作。
@@ -179,8 +283,11 @@ def _call_com_child(task: str, args: tuple[str, ...],
     if not dialogs and task == "state":
         return _call_with_timeout(query_desktop_state, timeout_s)
 
-    if dialogs:
-        timeout_s = min(timeout_s, 5.0)             # 有疑似阻塞框：短试，不干等整段超时
+    if dialogs and task != "state":
+        # 有疑似阻塞框：**写操作**短试，不干等整段超时。
+        # ⚠️ state 是高频只读探针，压到 5 s 会把"慢但正常"误判成未响应
+        # （2026-11-26 真机：探到隐藏的 Show Queued Simulations 后 COM 查询全 5 s 超时）。
+        timeout_s = min(timeout_s, 5.0)
 
     cmd = _com_child_cmd(task, args)
     env, out_path = _com_child_env()
@@ -210,7 +317,9 @@ def _call_com_child(task: str, args: tuple[str, ...],
             return False, None, (f"COM 子进程无有效输出（exit={cp.returncode}）："
                                  f"{(cp.stderr or '')[-300:]}")
         if not payload.get("ok"):
-            return False, None, str(payload.get("error") or "unknown com_child error")
+            msg = str(payload.get("error") or "unknown com_child error")
+            reason = str(payload.get("reason") or "")   # 分类见 _COM_REASON_CODES
+            return False, None, (f"[{reason}] {msg}" if reason else msg)
         return True, payload.get("result"), None
     finally:
         try:
@@ -533,12 +642,31 @@ def open_hfss_project(
             ok_com, result, com_err = _call_com_child(
                 "open", (resolved,), float(timeout_seconds))
             if not ok_com:
+                # 2026-11-26：COM 通道失败不等于工程没开 —— 先独立核对（COM/窗口标题），
+                # 确认开了就回 opened_unverified，别报假阴性把 agent 带偏。
+                confirmed = _confirm_project_opened(project_name)
+                if confirmed:
+                    _OPEN_PROJECT_PATHS[project_name] = resolved
+                    return {
+                        "success": True, "status": "opened_unverified",
+                        "aedt_running": True, "project_opened": True, "verified": False,
+                        "confirmed_by": confirmed,
+                        "project_name": project_name, "project_path": resolved,
+                        "method": "com", "duration_s": round(time.monotonic() - t0, 1),
+                        "message": f"工程已打开（依据 {confirmed}），但 COM 打开/核对没走通："
+                                   f"{_strip_reason(com_err)}",
+                        "warnings": [f"COM 通道异常：{_strip_reason(com_err)}"],
+                        **lock_info,
+                    }
                 return error_response(
-                    "AEDT_NOT_RESPONDING",
-                    f"打开工程未在限时内返回：{com_err}",
-                    hint="AEDT 可能（未响应）或弹了模态框：处理掉后重试；确认该实例可整体丢弃时用 quit_aedt(force=true)",
+                    _com_error_code(com_err),
+                    f"打开工程未在限时内返回：{_strip_reason(com_err)}",
+                    hint=_com_error_hint(com_err),
                     aedt_running=True, project_opened=False, verified=False,
-                    project_name=project_name, project_path=resolved, **lock_info)
+                    com_reason=_com_reason(com_err),
+                    modal_dialogs=_find_aedt_modal_dialogs(),
+                    project_name=project_name, project_path=resolved,
+                    **_version_fields(), **lock_info)
             if result["status"] in ("opened", "already_open"):
                 _OPEN_PROJECT_PATHS[project_name] = resolved
                 return {
@@ -629,7 +757,24 @@ def _open_via_subprocess(exe_path: Path, resolved: str, project_name: str,
         time.sleep(5)
 
     # 起得来但没确认打开：不能再报 success（2026-11-18 实测会误导 agent）
+    # 2026-11-26 补充：先做一次独立核对（COM 再查一遍 / 看 AEDT 窗口标题），
+    # 真开着就回 opened_unverified（verified=false），别把"已打开"报成失败。
+    confirmed = _confirm_project_opened(project_name)
     lock_now = get_project_lock_path(resolved)
+    if confirmed:
+        _OPEN_PROJECT_PATHS[project_name] = resolved
+        return {
+            "success": True, "status": "opened_unverified",
+            "aedt_running": True, "project_opened": True, "verified": False,
+            "confirmed_by": confirmed,
+            "project_name": project_name, "project_path": resolved,
+            "method": "subprocess", "pid": proc.pid,
+            "duration_s": round(time.monotonic() - t0, 1),
+            "message": f"工程已打开（依据 {confirmed}），但 COM 的 open_projects 没核对上 —— "
+                       f"多为 COM 连到了另一个 AEDT 版本，看 curver_version / version_mismatch",
+            "warnings": [f"COM 未确认工程在 open_projects 里，判据取自 {confirmed}"],
+            **lock_info,
+        }
     return error_response(
         "OPEN_TIMEOUT",
         f"AEDT 已启动（PID {proc.pid}），{timeout_seconds}s 内未确认工程打开"
@@ -1454,19 +1599,27 @@ def get_hfss_project_info() -> dict[str, Any]:
     Returns:
         {"success": True, "aedt_running": bool, "pids": [...],
          "com_available": bool, "open_projects": [...],
-         "active_project": str, "active_design": str}
+         "active_project": str, "active_design": str,
+         # 版本自证（2026-11-26）：双版本机器上"查询全部未响应"的真正原因常是版本失配
+         "aedt_version": str, "curver_progid": str, "curver_version": str,
+         "com_progid_used": str, "version_mismatch": bool, "modal_dialogs": [...]}
     """
     if not aedt_is_running():
-        return {"success": True, "aedt_running": False, "message": "AEDT 未运行", "pids": []}
+        return {"success": True, "aedt_running": False, "message": "AEDT 未运行", "pids": [],
+                **_version_fields()}
 
     pids = get_aedt_pids()
     ok, state, err = _call_com_child("state", (), _COM_READ_TIMEOUT)
     if not ok:
+        # 版本失配 / 空壳 / 真未响应 分开报（2026-11-26），别再让调用方猜
         return error_response(
-            "AEDT_NOT_RESPONDING",
-            f"AEDT 在运行（PID {pids}）但取不到状态：{err}",
-            hint="AEDT 可能（未响应）：处理掉窗口上的模态框再查；必要时重启该实例",
-            aedt_running=True, pids=pids)
+            _com_error_code(err),
+            f"AEDT 在运行（PID {pids}）但取不到状态：{_strip_reason(err)}",
+            hint=_com_error_hint(err),
+            aedt_running=True, pids=pids,
+            com_reason=_com_reason(err),
+            modal_dialogs=_find_aedt_modal_dialogs(),
+            **_version_fields())
 
     groups = _aedt_instance_groups()
     return {
@@ -1480,4 +1633,11 @@ def get_hfss_project_info() -> dict[str, Any]:
         "open_projects": state.get("projects", []),
         "active_project": state.get("active_project", ""),
         "active_design": state.get("active_design", ""),
+        # 版本自证：com_child 连到的 progid / 实例版本 / CurVer 指向谁 / 是否失配
+        "com_progid_used": state.get("progid", ""),
+        "aedt_version": state.get("aedt_version", ""),
+        "curver_progid": state.get("curver_progid", ""),
+        "curver_version": state.get("curver_version", ""),
+        "version_mismatch": bool(state.get("version_mismatch")),
+        "modal_dialogs": _find_aedt_modal_dialogs(),
     }
