@@ -57,10 +57,12 @@ def _absolutize_images(report: dict) -> dict:
 @per_tool_mutex
 @prune_empty_default_dirs
 def export_simulation_report(
-    report: dict,
+    report: dict | None = None,
     output_dir: str = "",
     schematic: str = "",
     timeout_seconds: int = 300,
+    overwrite: bool = False,
+    report_path: str = "",
 ) -> dict[str, Any]:
     """将提取的各链路参数数据（JSON）导出成正式报告(PDF/DOCX/report.json)
 
@@ -74,13 +76,15 @@ def export_simulation_report(
     links 的 electrical_parameters 结构与 run_tr_simulation 产出的 results 一致，可直接衔接。
 
     Args:
-        report: 报告数据对象（透传 Report_Exporter 原生 JSON，非空 dict）。
+        report: 报告数据对象（透传 Report_Exporter 原生 JSON，非空 dict）；与 report_path 二选一。
             ⚠️ 图片路径请传绝对路径：`schematic_path` / `charts[].image_path` 若写成相对路径，
             会被本工具按服务进程当前目录转成绝对（exe 只按「JSON 文件所在目录」解析，而本工具
             把 JSON 写在临时目录，相对路径必然找不到图）。
-        output_dir: 输出目录；留空则落到默认产物目录下的子目录（<result_dir>/export_simulation_report_<时间戳>/）。自动创建，产出 document.pdf / document.docx / report.json；三个文件任一已存在时 exe 会拒绝。
+        report_path: 报告 JSON 文件路径（与 report 二选一，适合大 JSON 落盘后传路径）。
+        output_dir: 输出目录；留空则落到默认产物目录下的子目录（<result_dir>/export_simulation_report_<时间戳>/）。自动创建，产出 document.pdf / document.docx / report.json。
         schematic: 可选，原理图图片路径（覆盖 report 里的 schematic_path）。
         timeout_seconds: 最长等待秒数，默认 300。
+        overwrite: True 时输出目录里已存在的三个目标文件先删再导出（默认 False 会拒绝）。
 
     Returns:
         {"success": True, "report_dir": "...", "pdf_path": "...", "docx_path": "...",
@@ -90,9 +94,16 @@ def export_simulation_report(
         `output_dir` 与 `report_dir` 同值 —— 其余产物类工具的目录键统一叫 `output_dir`，
         这里补个别名免得调用方按统一口径取路径时扑空（2026-11-16，ENV-2）。
     """
-    # 1. report 必须是非空对象
+    # 1. report 与 report_path 二选一：report_path 优先读文件，否则用内联 report
+    if report_path:
+        if not isinstance(report_path, str) or not Path(report_path).is_file():
+            return error_response("FILE_NOT_FOUND", f"report_path 文件不存在: {report_path}")
+        try:
+            report = json.loads(Path(report_path).read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            return error_response("INVALID_REPORT_JSON", f"report_path 不是合法 JSON: {exc}")
     if not isinstance(report, dict) or not report:
-        return error_response("INVALID_REPORT_JSON", "report 必须是包含报告数据的非空对象")
+        return error_response("INVALID_REPORT_JSON", "report 或 report_path 必须提供报告数据（非空对象）")
 
     # 2. output_dir 非空，解析为绝对路径（exe 相对路径按进程 cwd 算，这里统一转绝对）
     if not isinstance(output_dir, str) or not output_dir.strip():
@@ -102,12 +113,18 @@ def export_simulation_report(
     # 2.5 输出目录占用预检：exe 也会拒绝，但这里能给出语义化错误码 + 冲突文件，省一次 exe 白跑
     conflicts = [out_dir / n for n in ("document.pdf", "document.docx", "report.json")
                  if (out_dir / n).exists()]
-    if conflicts:
+    if conflicts and not overwrite:
         return error_response(
             "OUTPUT_FILE_BUSY",
             f"输出目录里已存在同名文件，请换一个新目录：{conflicts[0]}",
-            hint="每次导出请用一个新目录（三个目标文件任一已存在都会被拒绝）",
+            hint="每次导出请用一个新目录（或传 overwrite=true 覆盖）",
             conflicts=[str(c) for c in conflicts])
+    if conflicts:  # overwrite=True：先清掉旧文件再跑，避免 exe 再拒
+        for c in conflicts:
+            try:
+                c.unlink()
+            except OSError:
+                pass
 
     # 3. schematic（可选）存在性
     if schematic:
