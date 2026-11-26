@@ -1,6 +1,6 @@
 # EDI gRPC MCP 实现原理与机制
 
-> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 101 个工具的逐类实现，再到 13 个 Resource 与 7 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
+> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 101 个工具的逐类实现，再到 13 个 Resource 与 8 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
 
 > 相关文档：[TOOLS_API.md](./TOOLS_API.md)（101 个工具接口参数/返回）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由请求/响应体）。
 
@@ -15,7 +15,7 @@
 | 理解某个工具走什么协议、怎么实现 | [四、工具实现](#四工具实现) + [一、底层通信原理](#一底层通信原理) |
 | 排查远程连不上 / 421 / 产物打不开 | [三、特殊机制](#三特殊机制)（远程 / 白名单 / 产物传输） |
 | 查配置项 / 错误码 / 返回字段 / 校验管线 | [二、公有设置与公有方法](#二公有设置与公有方法) |
-| 查 Resource / Prompt | [五、Resources](#五resources13-个) / [六、Prompts](#六prompts7-个) |
+| 查 Resource / Prompt | [五、Resources](#五resources13-个) / [六、Prompts](#六prompts8-个) |
 
 **章节明细**：
 
@@ -67,7 +67,7 @@
   - `edi://reference/error-codes` — 错误码词典
   - `edi://reference/turbocharts-guide` — RAW 转图说明
 
-- **[六、Prompts（7 个）](#六prompts7-个)** —— 可复用工作流模板逐条详解
+- **[六、Prompts（8 个）](#六prompts8-个)** —— 可复用工作流模板逐条详解
   - `inspect_edi_project` — 工程只读检查
   - `run_and_review_simulation` — 仿真执行 + 日志分析
   - `configure_simulation_component` — 配置仿真器件
@@ -1083,7 +1083,7 @@ Resource 是**只读上下文/参考资料**，客户端通过 `resources/list` 
 - **用途**：5 个独立仿真 exe 的参数表/使用说明原文（混频链路 / TR 收发链路 / 网表寻路 / 报告导出 / XY 绘图），打包成 exe 后 agent 也能读全文。
 - **怎么实现**：`servers/simulation_tool/resource.py` 一张 `_GUIDES` 表循环注册，直接读 `servers/simulation_tool/*.md` **原文**（单一事实源，不复制内容）；文件缺失返回兜底提示不抛异常。
 
-## 六、Prompts（7 个）
+## 六、Prompts（8 个）
 
 Prompt 是**可复用工作流模板**，客户端通过 `prompts/list` → `prompts/get` 访问。带参数（如 `project_path`），返回 `[{"role": "user", "content": "..."}]` 给 LLM 的步骤指令。
 
@@ -1116,6 +1116,10 @@ create/update 两条分支：先查 Schema → 映射需求为合法参数 → �
 ### 7. `analyze_signal_chain` — 信号链分析
 
 步骤 0 若跑过抗烧毁先 `export_project_netlist` 刷新网表（防 PowerPin 污染）→ `get_signal_chain` 追踪 → 逐级说明器件作用 → 处理 warning → 结合 result.raw 说明功率。
+
+### 8. `run_aedt_laspcem_compare` — AEDT/LASPCEM 同模型求解对比
+
+8 步联动：`import_aedt_as_sem` 生成 .sem → `run_laspcem_solve_async(then_export=true)` 求解并导出 → `laspcem_solve_query` 有界轮询 → `open_hfss_project` → `start_hfss_analysis_async` + 轮询 → `export_hfss_snp` → `compare_snp`（带 `z0_csv` 让 LASPCEM 侧按端口阻抗重归一化）→ 汇报曲线图 + 关键频点数值表 + 差值统计。强调先重归一化再比较、不要为看结果提前开 LASPCEM GUI。
 
 
 

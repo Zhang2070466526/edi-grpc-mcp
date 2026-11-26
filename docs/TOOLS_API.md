@@ -2418,7 +2418,7 @@ load_schematic_from_file(project_path: str, schematic_path: str, timeout_seconds
 
 > Resource 是只读上下文，由客户端主动拉取。标准 MCP 客户端可通过 `resources/list` 和 `resources/read` 访问。
 
-### Prompts（7 个）
+### Prompts（8 个）
 
 | Prompt | 参数 | 用途 |
 |---|---|---|
@@ -2429,6 +2429,7 @@ load_schematic_from_file(project_path: str, schematic_path: str, timeout_seconds
 | `troubleshoot_edi_error` | `status`, `error_code` | 按状态码查错误词典、检查服务状态、给排查建议 |
 | `analyze_signal_chain` | `project_path`, `start` | 追踪信号链路并逐级说明 |
 | `select_component` | `sub_type_id`, `requirement` | 从公共/个人模型库选型（含替换闭环） |
+| `run_aedt_laspcem_compare` | `aedt_path`, `design_name`, `setup_name`, `sweep_name`, `renormalize_to` | AEDT/LASPCEM 同模型各求解一遍并导出 sNp 对比 |
 
 > Prompt 是用户主动选择的工作流模板。标准 MCP 客户端可通过 `prompts/list` 和 `prompts/get` 访问。
 
