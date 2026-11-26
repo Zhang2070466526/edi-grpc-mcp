@@ -57,3 +57,6 @@ from servers.resources_prompts.prompts_report import (  # noqa: F401
     prompt_create_simulation_report,
     prompt_troubleshoot_edi_error,
 )
+from servers.resources_prompts.prompts_laspcem import (  # noqa: F401
+    prompt_run_aedt_laspcem_compare,
+)

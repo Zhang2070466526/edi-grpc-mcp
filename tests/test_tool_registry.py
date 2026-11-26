@@ -58,6 +58,7 @@ def test_all_tools_registered():
         "export_simulation_report", "run_tr_simulation",
         "run_mixer_simulation",
         "analyze_mixer_spur", "calculate_rf_dynamic_range",
+        "compare_snp",
         "draw_chart",
         "find_netlist_paths",
         "describe_tool",
