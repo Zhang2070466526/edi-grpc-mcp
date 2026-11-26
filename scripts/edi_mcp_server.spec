@@ -84,8 +84,8 @@ a = Analysis(
         # 函数内 import）。漏收 ⇒ 打包后 export_snp/open/state 报 ModuleNotFoundError。
         'servers.ansys.com_child',
         # com_child 与 config 都 `from servers.ansys import aedt_procs`（空壳/版本/ProgID 公共层）。
-        # config 是模块级 import 会被静态分析抓到，但 com_child 走 `--com-child` 函数内 import，
-        # 显式列出防漏收（漏了 ⇒ 冻结后 --com-child 报 ModuleNotFoundError）。
+        # config 是模块级 import，静态分析能抓到；com_child 也放在模块级（try/except 兜脚本直跑），
+        # 但 `--com-child` 是函数内 import 走的另一条入口，历史上有过漏收，显式列出防漏。
         'servers.ansys.aedt_procs',
 
         # 图片 / 视觉 / 文档工具

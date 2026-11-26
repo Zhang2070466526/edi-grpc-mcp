@@ -168,6 +168,27 @@ class TestStartAsync:
         assert r["error_code"] == "ANALYSIS_BUSY"
 
 
+def _mk_infos(*pairs: tuple[int, bool]):
+    """构造 aedt_procs.instances() 的返回：`[(pid, is_helper), ...]`（无版本 ⇒ 裸 ProgID）。"""
+    return {pid: {"cmdline": "ansysedt.exe", "exe": "", "version": "", "is_helper": h}
+            for pid, h in pairs}
+
+
+def test_attach_aedt_enumeration_failure_is_not_reported_as_not_running():
+    """进程枚举报错（缺 psutil / 权限）必须如实抛，不许伪装成「AEDT 未运行」。
+
+    2026-11-25 实测过这个假象：uv base python 缺 psutil 时，报「AEDT 未运行」把排查带偏。
+    """
+    from servers.ansys import config as C
+
+    with patch.object(C.aedt_procs, "instances", side_effect=ImportError("No module named psutil")), \
+         pytest.raises(RuntimeError) as ei:
+        C._attach_aedt()
+    msg = str(ei.value)
+    assert "枚举" in msg and "psutil" in msg
+    assert "AEDT 未运行" not in msg
+
+
 def test_attach_aedt_requires_running_instance():
     """AEDT 未运行 ⇒ 直接报错，**一个 COM 通道都不许碰**。
 
@@ -178,7 +199,7 @@ def test_attach_aedt_requires_running_instance():
 
     touched: list[str] = []
 
-    with patch.object(C, "aedt_is_running", return_value=False), \
+    with patch.object(C.aedt_procs, "instances", return_value={}), \
          patch.object(C, "GetActiveObject", side_effect=lambda p: touched.append(p)), \
          patch.object(C, "Dispatch", side_effect=lambda p: touched.append(p)), \
          pytest.raises(RuntimeError) as ei:
@@ -209,7 +230,7 @@ def test_attach_aedt_falls_back_to_dispatch_when_rot_empty():
         tried.append(("Dispatch", progid))
         return good_app
 
-    with patch.object(C, "aedt_is_running", return_value=True), \
+    with patch.object(C.aedt_procs, "instances", return_value=_mk_infos((1, False))), \
          patch.object(C, "GetActiveObject", side_effect=ga), \
          patch.object(C, "Dispatch", side_effect=di):
         app, desktop = C._attach_aedt()
@@ -237,7 +258,7 @@ def test_attach_aedt_skips_shell_object_and_tries_next_progid():
             return shell
         return good_app
 
-    with patch.object(C, "aedt_is_running", return_value=True), \
+    with patch.object(C.aedt_procs, "instances", return_value=_mk_infos((1, False))), \
          patch.object(C, "GetActiveObject", side_effect=getter), \
          patch.object(C, "Dispatch", side_effect=getter):
         app, desktop = C._attach_aedt()
@@ -253,8 +274,7 @@ def test_attach_aedt_error_keeps_each_attempt_reason():
     def boom(progid):
         raise OSError(f"cannot attach {progid}")
 
-    with patch.object(C, "aedt_is_running", return_value=True), \
-         patch.object(C, "_reap_orphan_shells", return_value=[]), \
+    with patch.object(C.aedt_procs, "instances", return_value=_mk_infos((1, False))), \
          patch.object(C, "GetActiveObject", side_effect=boom), \
          patch.object(C, "Dispatch", side_effect=boom), \
          pytest.raises(RuntimeError) as ei:
@@ -274,9 +294,7 @@ def test_attach_aedt_reaps_orphan_shell_only(tmp_path):
     fake_psutil = type("P", (), {"Process": staticmethod(
         lambda pid: type("X", (), {"kill": lambda self: killed.append(pid)})())})
 
-    with patch.object(C, "aedt_is_running", return_value=True), \
-         patch.object(C, "get_aedt_pids", return_value=[5824]), \
-         patch.object(C, "_is_embedding_pid", return_value=True), \
+    with patch.object(C.aedt_procs, "instances", return_value=_mk_infos((5824, True))), \
          patch.object(C, "psutil", fake_psutil), \
          patch.object(C, "GetActiveObject", side_effect=OSError("x")), \
          patch.object(C, "Dispatch", side_effect=OSError("x")), \
@@ -287,9 +305,7 @@ def test_attach_aedt_reaps_orphan_shell_only(tmp_path):
     assert "空壳" in str(ei.value)
 
     killed.clear()
-    with patch.object(C, "aedt_is_running", return_value=True), \
-         patch.object(C, "get_aedt_pids", return_value=[5824, 36612]), \
-         patch.object(C, "_is_embedding_pid", side_effect=lambda pid: pid == 5824), \
+    with patch.object(C.aedt_procs, "instances", return_value=_mk_infos((5824, True), (36612, False))), \
          patch.object(C, "GetActiveObject", side_effect=OSError("x")), \
          patch.object(C, "Dispatch", side_effect=OSError("x")), \
          pytest.raises(RuntimeError):
@@ -319,9 +335,7 @@ def test_attach_aedt_kills_shell_then_retries_same_channel():
         lambda pid: type("X", (), {"kill": lambda self: killed.append(pid)})())})
     seq = iter([41776, 47328])                       # 第一次空壳，清理后第二次 GUI
 
-    with patch.object(C, "aedt_is_running", return_value=True), \
-         patch.object(C, "get_aedt_pids", return_value=[41776, 47328]), \
-         patch.object(C, "_is_embedding_pid", side_effect=lambda pid: pid == 41776), \
+    with patch.object(C.aedt_procs, "instances", return_value=_mk_infos((41776, True), (47328, False))), \
          patch.object(C, "psutil", fake_psutil), \
          patch.object(C, "GetActiveObject", side_effect=OSError("no rot")), \
          patch.object(C, "Dispatch", side_effect=lambda progid: App(next(seq))), \

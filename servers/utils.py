@@ -183,6 +183,13 @@ _DEFAULT_HINTS: dict[str, str] = {
     "AEDT_PERMISSION_MISMATCH": "服务与 AEDT 的完整性级别不一致（UAC 隔离会让 COM 只连到空壳）："
                                 "让两者以相同权限运行（关掉 AEDT，用与服务相同的权限重新启动）；"
                                 "若刚启动过 AEDT，也可能是 GUI 还没注册完，重开该实例再试",
+    # 2026-11-26：ANSYS 链路常见的另外四档（此前这些都退化成 do_not_retry，agent 只知道"别重试"）
+    "INVALID_PATH": "路径不对或文件不存在：改传绝对路径（正斜杠更省事），并确认 .aedt/.sem/.epp 与目录都在",
+    "OPEN_TIMEOUT": "限时内没确认打开：先 get_hfss_project_info 看是否其实已经打开（假失败），"
+                    "再决定重试；冷启动 AEDT 可调大 timeout_seconds",
+    "SOLVE_REQUIRED": "先跑完 setup 拿到求解证据（start_hfss_analysis_async / run_laspcem_solve_async），"
+                      "再导出；details 里会给出已扫描的证据目录",
+    "EXPORT_FAILED": "看 details 与 AEDT 日志的原始错误：确认 setup/sweep 名对、该 sweep 已求解、输出目录可写",
 }
 
 

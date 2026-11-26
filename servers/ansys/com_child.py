@@ -205,10 +205,11 @@ def cmd_state() -> dict:
 def cmd_open(project_path: str) -> dict:
     from pathlib import Path
 
-    desktop, progid = _attach()
+    infos = _infos()                                # 一次枚举，附着与诊断共用
+    desktop, progid = _attach(infos)
     connected_pid = _desktop_pid(desktop)
     names = list(desktop.GetProjectList())
-    if not names and (diag := _instance_diagnosis(connected_pid)):
+    if not names and (diag := _instance_diagnosis(connected_pid, infos)):
         raise ComChildError(diag, "permission_mismatch")
     name = Path(project_path).stem
     if name in names:

@@ -17,6 +17,7 @@ import pytest
 from servers.ansys import aedt_procs as A
 from servers.ansys import project_manage as PM
 from servers.ansys import run_analysis as RA
+from servers.ansys import com_child as CC
 
 
 @pytest.mark.parametrize("path,expected", [
@@ -116,3 +117,84 @@ def test_export_overwrite_true_is_allowed(tmp_path, monkeypatch):
                              output_path=str(existing), overwrite=True)
     assert res.get("error_code") != "OUTPUT_ALREADY_EXISTS"
     assert res["success"] is False                             # 撞到桩的 COM 失败
+
+
+# ── com_child 的失败分档：什么条件下抛哪个 reason（此前只有 ad-hoc 验过，套件不红） ──
+
+GUI = {"cmdline": "ansysedt.exe", "exe": r"C:\x\AnsysEM20.2\Win64\ansysedt.exe",
+       "version": "2020.2", "is_helper": False}
+SHELL = {"cmdline": "ansysedt.exe -Embedding", "exe": "", "version": "", "is_helper": True}
+
+
+def _com_boom(*_a, **_k):
+    raise RuntimeError("COM 连不上（桩）")
+
+
+def _patch_com(monkeypatch, *, curver_version: str = "2020.2",
+               reaped: list[int] | None = None) -> None:
+    """把所有 COM 通道打成必失败，并固定 CurVer / 空壳清理结果。"""
+    from win32com.client import Dispatch, GetActiveObject
+
+    monkeypatch.setattr(Dispatch, "__call__", _com_boom, raising=False)
+    monkeypatch.setattr("win32com.client.Dispatch", _com_boom)
+    monkeypatch.setattr("win32com.client.GetActiveObject", _com_boom)
+    monkeypatch.setattr(CC, "_reap_orphan_shells", lambda infos: list(reaped or []))
+    monkeypatch.setattr(A, "curver",
+                        lambda: (f"Ansoft.ElectronicsDesktop.{curver_version}", curver_version))
+
+
+def test_attach_reason_not_running(monkeypatch):
+    monkeypatch.setattr(CC, "_infos", lambda: {})
+    with pytest.raises(CC.ComChildError) as ei:
+        CC._attach()
+    assert ei.value.reason == "not_running"
+
+
+def test_attach_reason_shell_only(monkeypatch):
+    """只剩 -Embedding 空壳且清掉了 → shell_only（提示重开 AEDT）。"""
+    monkeypatch.setattr(CC, "_infos", lambda: {200: dict(SHELL)})
+    _patch_com(monkeypatch, reaped=[200])
+    with pytest.raises(CC.ComChildError) as ei:
+        CC._attach()
+    assert ei.value.reason == "shell_only"
+    assert "200" in str(ei.value)
+
+
+def test_attach_reason_version_mismatch(monkeypatch):
+    """运行实例 2020.2、CurVer 却指 2024.2，且版本化 ProgID 也没连上 → version_mismatch。"""
+    monkeypatch.setattr(CC, "_infos", lambda: {100: dict(GUI)})
+    _patch_com(monkeypatch, curver_version="2024.2")
+    with pytest.raises(CC.ComChildError) as ei:
+        CC._attach()
+    assert ei.value.reason == "version_mismatch"
+    assert "2024.2" in str(ei.value) and "2020.2" in str(ei.value)
+
+
+def test_attach_reason_attach_failed_when_versions_match(monkeypatch):
+    monkeypatch.setattr(CC, "_infos", lambda: {100: dict(GUI)})
+    _patch_com(monkeypatch, curver_version="2020.2")
+    with pytest.raises(CC.ComChildError) as ei:
+        CC._attach()
+    assert ei.value.reason == "attach_failed"
+
+
+def test_cmd_state_reason_permission_mismatch(monkeypatch):
+    """连到空壳、同时机器上有真 GUI → permission_mismatch（UAC 隔离的典型形态）。"""
+    infos = {100: dict(GUI), 200: dict(SHELL)}
+
+    class _Desk:
+        def GetProjectList(self):
+            return []
+
+        def GetActiveProject(self):
+            return None
+
+        def GetProcessID(self):
+            return 200                       # 连到了空壳
+
+    monkeypatch.setattr(CC, "_infos", lambda: infos)
+    monkeypatch.setattr(CC, "_attach", lambda infos=None: (_Desk(), "Ansoft.ElectronicsDesktop.2020.2"))
+    with pytest.raises(CC.ComChildError) as ei:
+        CC.cmd_state()
+    assert ei.value.reason == "permission_mismatch"
+    assert "100" in str(ei.value)            # 指出真实 GUI 是哪个 PID

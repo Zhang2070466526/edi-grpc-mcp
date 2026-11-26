@@ -93,7 +93,7 @@ def aedt_is_running() -> bool:
 _COM_PROGIDS = ("AnsoftHfss.HfssScriptInterface", "Ansoft.ElectronicsDesktop")
 
 
-def _progids_to_try() -> tuple[str, ...]:
+def _progids_to_try(infos: dict[int, dict] | None = None) -> tuple[str, ...]:
     """本次附着要试的 ProgID 顺序：**运行实例的版本化 ProgID 优先**，再回退裸名。
 
     2026-11-26 真机（现场机 star）：裸 `Ansoft.ElectronicsDesktop` 走注册表 CurVer 指到
@@ -103,9 +103,11 @@ def _progids_to_try() -> tuple[str, ...]:
 
     ⚠️ 版本化 ProgID **只在对应版本实例确实在跑时**才加入：`Dispatch` 在该版本不存在时
     会新建一个 AEDT，违反"只附着、绝不创建"。
+
+    `infos` 缺省时内部枚举一次；调用方已枚举过就传进来，省一次 psutil 全表扫描。
     """
     try:
-        versioned = aedt_procs.progid_candidates()
+        versioned = aedt_procs.progid_candidates(infos)
     except Exception:                               # noqa: BLE001 —— 枚举失败就只试裸名
         versioned = []
     extra = tuple(p for p in versioned if p not in _COM_PROGIDS)
@@ -122,31 +124,11 @@ def com_version_info() -> dict[str, Any]:
 
 def _connected_pid(desktop) -> int | None:
     """COM 连到的 AEDT 进程 PID（Desktop.GetProcessID）；拿不到就 None（不阻塞附着）。"""
-    # ⚠️ 本组「-Embedding 空壳处理」与 servers/ansys/com_child.py 的 _kill_embedding_shell /
-    # _reap_orphan_shells 逻辑一致，改这里要同步改另一边（com_child 是隔离子进程，不能 import 本模块）。
+    # 空壳判定/清理已收敛到 servers/ansys/aedt_procs.py（config 与 com_child 共用，不再两处同步）。
     try:
         return int(desktop.GetProcessID())
     except Exception:                                   # noqa: BLE001
         return None
-
-
-def _is_embedding_pid(pid: int) -> bool:
-    """这个 PID 是不是 `-Embedding` 空壳（无窗口、无工程，GetProjectList() 恒空）。"""
-    try:
-        return "-embedding" in " ".join(psutil.Process(pid).cmdline()).lower()
-    except Exception:                                   # noqa: BLE001 —— 进程没了就当不是
-        return False
-
-
-def _reap_orphan_shells() -> list[int]:
-    """只剩 `-Embedding` 空壳（没有任何 GUI 实例）时清掉它们，返回被清的 PID（实现见 aedt_procs）。
-
-    2026-11-25 真机：`taskkill /F` 掉 GUI 后，空壳 COM 服务进程活下来并继续被
-    `Dispatch` 抢到 → 之后每次附着都只连到这个无窗口、无工程的孤儿，用户看到的就是
-    「工程列表恒空 / 连到空壳」。空壳不持有任何工程，清它不丢数据；但只要还有真 GUI
-    在场就绝不动手（那不是孤儿）。
-    """
-    return aedt_procs.reap_orphan_shells(get_aedt_pids(), _is_embedding_pid, psutil)
 
 
 def _kill_embedding_shell(pid: int) -> bool:
@@ -157,11 +139,6 @@ def _kill_embedding_shell(pid: int) -> bool:
     空壳不持有工程，且杀它不影响 GUI —— 这是让附着能到达 GUI 的唯一有效手段。
     """
     return aedt_procs.kill_embedding_shell(pid, psutil)
-
-
-def _has_gui_instance() -> bool:
-    """机器上是否还有真 GUI 实例（非 -Embedding）。"""
-    return any(not _is_embedding_pid(p) for p in get_aedt_pids())
 
 
 def _attach_aedt():
@@ -187,13 +164,20 @@ def _attach_aedt():
     的瘦壳情形，探不通就换下一个 PROGID。
     """
     with _AEDT_LOCK:
-        if not aedt_is_running():
+        try:
+            infos = aedt_procs.instances()          # 一次枚举，全程复用（省掉 aedt_is_running /
+        except Exception as exc:                    # noqa: BLE001  progid_candidates/空壳判定的 3 次 psutil 全表扫描）
+            # ⚠️ 不许把"枚举失败"伪装成"AEDT 未运行"：2026-11-25 实测过（uv base python 缺 psutil
+            # 时）被这个假象带偏排查方向。失败就如实抛，并保留原始异常。
+            raise RuntimeError(f"枚举 AEDT 进程失败（不是「未运行」）：{exc}") from exc
+        if not infos:
             raise RuntimeError(
                 "AEDT 未运行：_attach_aedt 只附着现有实例，绝不创建新实例"
                 "（需要新建请用 launch_aedt）"
             )
+        is_embedding = lambda pid: aedt_procs.is_embedding(infos, pid)  # noqa: E731
         errors: list[str] = []
-        progids = _progids_to_try()
+        progids = _progids_to_try(infos)
         for progid in progids:
             for name, getter in (("GetActiveObject", GetActiveObject), ("Dispatch", Dispatch)):
                 # 最多两次：第一次撞到空壳就先清掉再重连一次（实测清完即连上 GUI）
@@ -203,9 +187,9 @@ def _attach_aedt():
                         desktop = app.GetAppDesktop()
                         list(desktop.GetProjectList())      # 探活：瘦壳 / 空壳在这里抛
                         pid = _connected_pid(desktop)
-                        if pid and _is_embedding_pid(pid):
+                        if pid and is_embedding(pid):
                             # 空壳 GetProjectList() 返回 [] 且不抛 → 探活抓不到，必须按 PID 认。
-                            if attempt == 1 and _has_gui_instance() and _kill_embedding_shell(pid):
+                            if attempt == 1 and aedt_procs.gui_pids(infos) and _kill_embedding_shell(pid):
                                 errors.append(
                                     f"{progid} via {name}: 连到 -Embedding 空壳(PID {pid})，已清掉，重试")
                                 continue
@@ -216,7 +200,7 @@ def _attach_aedt():
                     except Exception as exc:                # noqa: BLE001 —— 换下一通道/PROGID
                         errors.append(f"{progid} via {name}: {exc}")
                         break
-        reaped = _reap_orphan_shells()
+        reaped = aedt_procs.reap_orphan_shells(list(infos), is_embedding, psutil)
         if reaped:
             raise RuntimeError(
                 f"只连得到残留的 -Embedding 空壳（PID {reaped}，无 GUI 实例），已清理；"
