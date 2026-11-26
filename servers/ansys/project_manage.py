@@ -630,17 +630,27 @@ def _kill_aedt_processes(pids: list[int], rounds: int = 3) -> dict[str, Any]:
     killed: list[int] = []
     failed: list[dict[str, Any]] = []
     targets = list(dict.fromkeys(pids))
+    origin = set(targets)
     total_rounds = max(1, rounds)
     for rnd in range(total_rounds):
         failed = []                                 # 每轮重算：只保留最后一轮的结果
         for pid in targets:
             ok, reason = _taskkill(pid)
+            if not ok and not psutil.pid_exists(pid):
+                # 已经自己退了（-Embedding 会这么干）：目标达成，不是失败。
+                # 2026-11-25 实测缺陷：taskkill 报「没有找到进程」被当成失败，
+                # 明明 pids_after=[] 却回 KILL_FAILED。
+                ok, reason = True, ""
             if ok:
                 killed.append(pid)
             else:
                 failed.append({"pid": pid, "reason": reason})
         time.sleep(0.5)
-        remaining = [p for p in get_aedt_pids() if p not in killed]
+        # 重试轮只跟**本目标的残留 + 它派生的 -Embedding**；以前是无条件取全部
+        # ansysedt PID，用户在这 1.5s 内另开的实例也会被顺手杀掉（2026-11-25 修正）。
+        alive = get_aedt_pids()
+        helpers = set(_embedding_pids(alive))
+        remaining = [p for p in alive if p not in killed and (p in origin or p in helpers)]
         if not remaining or rnd == total_rounds - 1:
             break
         targets = remaining
@@ -1129,6 +1139,16 @@ def _quit_aedt_graceful(ok_state: bool, pids_before: list[int], timeout_seconds:
     辅助进程时直接清理（无窗口、无工程，杀它不丢数据）。仍不退回 STILL_RUNNING。
     """
     method = ""
+    deadline = t0 + timeout_seconds
+
+    def _budget() -> float:
+        """剩余等待预算：两段等待共享同一份 timeout_seconds，不各自再掐 20s。
+
+        2026-11-25 实测缺陷：原来两次 `min(timeout_seconds, 20)` 让上限恒为 40s，
+        调用方传 60s 却在 41.8s 收到「60s 内没退出」—— 文案与实际行为不一致。
+        """
+        return max(0.0, deadline - time.monotonic())
+
     if ok_state:
         okq, _v, qerr = _call_com_child("quit", (), _COM_CLOSE_TIMEOUT)
         if okq:
@@ -1136,12 +1156,12 @@ def _quit_aedt_graceful(ok_state: bool, pids_before: list[int], timeout_seconds:
         else:
             warnings.append(f"COM QuitApplication 失败：{qerr}")
 
-    if not (method and _wait_no_aedt(min(timeout_seconds, 20))):
+    if not (method and _wait_no_aedt(_budget())):
         sent = _post_wm_close_to_aedt(get_aedt_pids() or pids_before)
         if sent:
             method = "wm_close"
             warnings.append(f"COM 退出未完成，已向 {sent} 个 AEDT 窗口发送 WM_CLOSE")
-        _wait_no_aedt(min(timeout_seconds, 20))
+        _wait_no_aedt(_budget())
 
     pids_after = get_aedt_pids()
 
@@ -1159,24 +1179,28 @@ def _quit_aedt_graceful(ok_state: bool, pids_before: list[int], timeout_seconds:
     if not pids_after:
         return _quit_ok(method or "none", pids_before, open_projects, warnings, t0)
 
+    dialogs = _aedt_modal_dialogs()
+    waited = round(time.monotonic() - t0, 1)
     return error_response(
         "STILL_RUNNING",
-        f"AEDT 仍在运行（PID {pids_after}），{timeout_seconds}s 内没退出",
-        hint="窗口可能弹了「是否保存」确认框或正在求解：先人工处理窗口再重试；"
-             "确认改动可丢弃时才用 quit_aedt(force=true)（会 taskkill /F，关掉该实例所有工程）",
+        f"AEDT 仍在运行（PID {pids_after}），等满 {waited}s（timeout_seconds={timeout_seconds}）仍未退出",
+        hint=(f"AEDT 上有对话框 {dialogs}，先点掉再重试；" if dialogs else
+              "窗口可能弹了「是否保存」确认框或正在求解：先人工处理窗口再重试；")
+             + "确认改动可丢弃时才用 quit_aedt(force=true)（会 taskkill /F，关掉该实例所有工程）",
         method=method or "none",
         pids_before=pids_before,
         pids_after=pids_after,
         open_projects_before=open_projects,
+        modal_dialogs=dialogs,
         data_loss_risk=bool(open_projects),
         warnings=warnings,
-        duration_s=round(time.monotonic() - t0, 1),
+        duration_s=waited,
     )
 
 
 @mcp.tool()
 def quit_aedt(force: bool = False, confirm: bool = False,
-              timeout_seconds: int = 30) -> dict[str, Any]:
+              timeout_seconds: int = 10) -> dict[str, Any]:
     """退出 AEDT **程序**（关掉整个 AEDT 窗口、收掉进程）：不是关工程。
     用于「工程已关、AEDT 停在空窗口要收掉」/「释放 AEDT 的内存或许可证」/「实例卡死（未响应）且内容可丢弃」。
     只关某个工程用 `close_hfss_project`（进程保留）；硬杀必须 `force=True`+`confirm=True`（会终止机器上**所有** ansysedt.exe）。
@@ -1187,8 +1211,9 @@ def quit_aedt(force: bool = False, confirm: bool = False,
        `CONFIRM_REQUIRED`（附 PID、`open_projects`），要 `confirm=True` 才退 —— 避免替别人
        把他正在用的 AEDT（可能带未保存工程）关掉。本服务自己启动的实例无需确认。
 
-    顺序：COM `QuitApplication` → 给主窗发 `WM_CLOSE`（等同点右上角 X）→
-    仍不退出就回 `STILL_RUNNING` 并说明原因（**不会**自己硬杀，避免丢未保存改动）。
+    顺序：COM `QuitApplication` → 给主窗发 `WM_CLOSE`（等同点右上角 X）→ 等满 `timeout_seconds` 仍不退，
+    **直接自动强杀**（2026-11-25 用户要求：被 COM 占用/模态框挡住时不要回来问）。返回体带
+    `auto_forced=True` 和挡路的对话框标题（`modal_dialogs`），有打开的工程时 `data_loss_risk=True`。
 
     多实例（≥2 个 AEDT 实例，按启动批次计数）时拒绝执行：AEDT 2020 不注册 ROT，
     COM 无法按 PID 定向，猜一个会把别人在用的实例关掉。`force+confirm` 例外（scope=all）。
@@ -1201,7 +1226,8 @@ def quit_aedt(force: bool = False, confirm: bool = False,
     Args:
         force: True = 直接 `taskkill /F`（丢未保存改动、关掉该实例所有工程）；需配合 `confirm`。
         confirm: 二次确认闸门；`force=True` 或「目标 AEDT 不是本服务启动的」时必须为 True。
-        timeout_seconds: 等待 AEDT 退出的秒数，默认 30（5–120）。
+        timeout_seconds: 等待 AEDT 退出的秒数，默认 10（5–120）。被 COM 挡住时 AEDT 不会自己退，
+            等满即自动强杀；嫌慢可再调小。
     """
     t0 = time.monotonic()
     timeout_seconds = max(5, min(timeout_seconds, 120))
@@ -1250,8 +1276,21 @@ def quit_aedt(force: bool = False, confirm: bool = False,
             open_projects=open_projects,
             managed=False)
 
-    return _quit_aedt_graceful(ok_state, pids_before, timeout_seconds,
-                               open_projects, warnings, t0)
+    res = _quit_aedt_graceful(ok_state, pids_before, timeout_seconds,
+                              open_projects, warnings, t0)
+
+    # 2026-11-25 用户要求：关闭时被 COM 占用/模态框挡住（STILL_RUNNING）就直接强杀，
+    # 不再回一句「请人工处理」。优雅路径失败 ≠ 用户还想留这个窗口。
+    if isinstance(res, dict) and res.get("error_code") == "STILL_RUNNING":
+        dialogs = res.get("details", {}).get("modal_dialogs") or []
+        warnings.append(
+            f"优雅退出被挡住（{res.get('message')}"
+            + (f"，对话框 {dialogs}" if dialogs else "") + "），已自动强杀")
+        forced = _quit_aedt_force(pids_before, open_projects, warnings, t0)
+        forced["auto_forced"] = True
+        return forced
+
+    return res
 
 
 @mcp.tool()

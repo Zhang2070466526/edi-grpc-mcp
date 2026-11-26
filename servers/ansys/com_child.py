@@ -38,6 +38,40 @@ def _ansysedt_instances() -> dict[int, str]:
     return out
 
 
+def _kill_embedding_shell(pid: int) -> bool:
+    """杀掉抢镜的 `-Embedding` 空壳（清掉后 Dispatch 才能连到 GUI）。"""
+    # ⚠️ 本组「-Embedding 空壳处理」与 servers/ansys/config.py 的 _kill_embedding_shell /
+    # _reap_orphan_shells 逻辑一致，改这里要同步改另一边（本进程是隔离脚本，不能 import config）。
+    import psutil
+    try:
+        psutil.Process(pid).kill()
+        return True
+    except Exception:                               # noqa: BLE001 —— 已退出/无权
+        return False
+
+
+def _reap_orphan_shells(infos: dict[int, str]) -> list[int]:
+    """只剩 `-Embedding` 空壳（无 GUI）时清掉，返回被清 PID。
+
+    2026-11-25 真机：强杀 GUI 后空壳 COM 服务活下来继续被 `Dispatch` 抢到，
+    之后所有附着都只连到它。空壳不持有工程，清它不丢数据；有真 GUI 时不动手。
+    """
+    if not infos:
+        return []
+    shells = [p for p, cmd in infos.items() if "-embedding" in cmd.lower()]
+    if len(shells) != len(infos):
+        return []
+    import psutil
+    killed: list[int] = []
+    for pid in shells:
+        try:
+            psutil.Process(pid).kill()
+            killed.append(pid)
+        except Exception:                           # noqa: BLE001 —— 已退出/无权
+            continue
+    return killed
+
+
 def _aedt_running() -> bool:
     """AEDT 是否在跑。子进程必须自己判一次：Dispatch 在实例不存在时会**新建**一个，
     那会违反「附着现有实例、绝不创建」的约定。
@@ -58,16 +92,33 @@ def _attach():
 
     pythoncom.CoInitialize()
     errors: list[str] = []
+    instances = _ansysedt_instances()
     for progid in PROGIDS:
         for name, getter in (("GetActiveObject", GetActiveObject), ("Dispatch", Dispatch)):
-            try:
-                app = getter(progid)
-                desktop = app.GetAppDesktop()
-                list(desktop.GetProjectList())      # 探活：空壳/瘦壳在这里抛
-                return desktop
-            except Exception as exc:                # noqa: BLE001 —— 换下一条通道
-                errors.append(f"{progid} via {name}: {exc}")
-                continue
+            for attempt in (1, 2):          # 撞到空壳先清掉，再重连一次（实测清完即连上 GUI）
+                try:
+                    app = getter(progid)
+                    desktop = app.GetAppDesktop()
+                    list(desktop.GetProjectList())      # 探活：空壳/瘦壳在这里抛
+                    pid = _desktop_pid(desktop)
+                    if pid and "-embedding" in instances.get(pid, "").lower():
+                        # 2026-11-25 真机：空壳的 GetProjectList() 返回 [] 且不抛，
+                        # 探活形同虚设 → 必须按 PID 认出来，否则下游只看到"空工程列表"。
+                        gui = [p for p, cmd in instances.items() if "-embedding" not in cmd.lower()]
+                        if attempt == 1 and gui and _kill_embedding_shell(pid):
+                            errors.append(f"{progid} via {name}: 连到 -Embedding 空壳(PID {pid})，已清掉，重试")
+                            continue
+                        errors.append(f"{progid} via {name}: 连到的 PID {pid} 是 -Embedding 空壳，跳过")
+                        break
+                    return desktop
+                except Exception as exc:                # noqa: BLE001 —— 换下一条通道
+                    errors.append(f"{progid} via {name}: {exc}")
+                    break
+    reaped = _reap_orphan_shells(instances)
+    if reaped:
+        raise RuntimeError(
+            f"只连得到残留的 -Embedding 空壳（PID {reaped}，无 GUI 实例），已清理；"
+            f"重新 launch_aedt / open_hfss_project 即可")
     raise RuntimeError(f"attached none of {PROGIDS}: {' | '.join(errors)}")
 
 
@@ -95,9 +146,10 @@ def _instance_diagnosis(connected_pid: int | None) -> str | None:
     gui = [pid for pid, cmd in infos.items() if "-embedding" not in cmd.lower()]
     if not gui:
         return None                                 # 只有空壳，没有可选的真实实例
-    return (f"COM 连到了 -Embedding 空壳（PID {connected_pid}），真实 GUI 实例是 {gui}；"
-            f"通常是权限不匹配（UAC 隔离：MCP 普通权限 ↔ AEDT 管理员），"
-            f"让两者同权限运行即可")
+    return (f"COM 连到了 -Embedding 空壳（PID {connected_pid}），真实 GUI 实例是 {gui}："
+            f"要么服务与 AEDT 权限不一致（UAC 隔离，AEDT 以管理员启动时普通权限服务连不上 GUI），"
+            f"要么 Dispatch 抢在 GUI 注册前连上了 AEDT 自带的空壳。先让两者同权限运行；"
+            f"仍不行就重启该 AEDT 实例再试")
 
 
 def cmd_state() -> dict:

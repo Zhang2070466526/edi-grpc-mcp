@@ -254,6 +254,7 @@ def test_attach_aedt_error_keeps_each_attempt_reason():
         raise OSError(f"cannot attach {progid}")
 
     with patch.object(C, "aedt_is_running", return_value=True), \
+         patch.object(C, "_reap_orphan_shells", return_value=[]), \
          patch.object(C, "GetActiveObject", side_effect=boom), \
          patch.object(C, "Dispatch", side_effect=boom), \
          pytest.raises(RuntimeError) as ei:
@@ -263,6 +264,72 @@ def test_attach_aedt_error_keeps_each_attempt_reason():
     assert "AnsoftHfss.HfssScriptInterface" in msg and "Ansoft.ElectronicsDesktop" in msg
     assert "via GetActiveObject" in msg and "via Dispatch" in msg
     assert msg.count("cannot attach") == 4, msg      # 2 PROGID × 2 通道
+
+
+def test_attach_aedt_reaps_orphan_shell_only(tmp_path):
+    """只剩 -Embedding 空壳（无 GUI）时清掉并报明确错误；有真 GUI 时绝不杀。"""
+    from servers.ansys import config as C
+
+    killed = []
+    fake_psutil = type("P", (), {"Process": staticmethod(
+        lambda pid: type("X", (), {"kill": lambda self: killed.append(pid)})())})
+
+    with patch.object(C, "aedt_is_running", return_value=True), \
+         patch.object(C, "get_aedt_pids", return_value=[5824]), \
+         patch.object(C, "_is_embedding_pid", return_value=True), \
+         patch.object(C, "psutil", fake_psutil), \
+         patch.object(C, "GetActiveObject", side_effect=OSError("x")), \
+         patch.object(C, "Dispatch", side_effect=OSError("x")), \
+         pytest.raises(RuntimeError) as ei:
+        C._attach_aedt()
+
+    assert killed == [5824]
+    assert "空壳" in str(ei.value)
+
+    killed.clear()
+    with patch.object(C, "aedt_is_running", return_value=True), \
+         patch.object(C, "get_aedt_pids", return_value=[5824, 36612]), \
+         patch.object(C, "_is_embedding_pid", side_effect=lambda pid: pid == 5824), \
+         patch.object(C, "GetActiveObject", side_effect=OSError("x")), \
+         patch.object(C, "Dispatch", side_effect=OSError("x")), \
+         pytest.raises(RuntimeError):
+        C._attach_aedt()
+
+    assert killed == [], "存在 GUI 实例时不该杀空壳"
+
+
+def test_attach_aedt_kills_shell_then_retries_same_channel():
+    """GUI 在跑但 Dispatch 只给 -Embedding 空壳 → 清掉空壳、同通道重试并连上 GUI。
+
+    2026-11-25 真机：杀空壳前后各一次 Dispatch，前者连 41776(空壳)、后者连 47328(GUI)。
+    """
+    from servers.ansys import config as C
+
+    class Desk:
+        def __init__(self, pid): self.pid = pid
+        def GetProjectList(self): return []
+        def GetProcessID(self): return self.pid
+
+    class App:
+        def __init__(self, pid): self.pid = pid
+        def GetAppDesktop(self): return Desk(self.pid)
+
+    killed = []
+    fake_psutil = type("P", (), {"Process": staticmethod(
+        lambda pid: type("X", (), {"kill": lambda self: killed.append(pid)})())})
+    seq = iter([41776, 47328])                       # 第一次空壳，清理后第二次 GUI
+
+    with patch.object(C, "aedt_is_running", return_value=True), \
+         patch.object(C, "get_aedt_pids", return_value=[41776, 47328]), \
+         patch.object(C, "_is_embedding_pid", side_effect=lambda pid: pid == 41776), \
+         patch.object(C, "psutil", fake_psutil), \
+         patch.object(C, "GetActiveObject", side_effect=OSError("no rot")), \
+         patch.object(C, "Dispatch", side_effect=lambda progid: App(next(seq))), \
+         patch.object(C, "_COM_PROGIDS", ("P1",)):
+        _app, desk = C._attach_aedt()
+
+    assert desk.pid == 47328
+    assert killed == [41776]
 
 
 def test_launch_aedt_already_running_waits_for_com(tmp_path, monkeypatch):
@@ -1063,7 +1130,7 @@ def test_quit_aedt_force_requires_confirm(monkeypatch):
 
 
 def test_quit_aedt_still_running_returns_error(monkeypatch):
-    """COM 退出失败 + WM_CLOSE 也无效 → STILL_RUNNING，并给出人工处置提示（不自己硬杀）。"""
+    """优雅退出被挡住（COM 占用/模态框）→ 直接自动强杀，不再让用户去点框。2026-11-25 起。"""
     import contextlib
 
     from servers.ansys import project_manage as pm
@@ -1071,6 +1138,7 @@ def test_quit_aedt_still_running_returns_error(monkeypatch):
     def _boom():
         raise RuntimeError("COM 挂了")
 
+    killed = []
     monkeypatch.setattr(pm, "get_aedt_pids", lambda: [333])
     _patch_state(monkeypatch, pm, lambda: {"connected": True, "projects": []})
     monkeypatch.setattr(pm, "_aedt_instance_groups", lambda: [[333]])
@@ -1079,12 +1147,41 @@ def test_quit_aedt_still_running_returns_error(monkeypatch):
     monkeypatch.setattr(pm, "_attach_aedt", _boom)
     monkeypatch.setattr(pm, "_post_wm_close_to_aedt", lambda pids: 1)
     monkeypatch.setattr(pm, "_wait_no_aedt", lambda _t: False)
+    monkeypatch.setattr(pm, "_aedt_modal_dialogs",
+                        lambda: ["Electronics Desktop cannot be closed right now"])
+    monkeypatch.setattr(pm, "_kill_aedt_processes",
+                        lambda pids: (killed.extend(pids), {"success": True, "method": "taskkill"})[1])
 
     r = pm.quit_aedt()
 
+    assert r["success"] is True, r
+    assert r["auto_forced"] is True, r
+    assert killed == [333]
+    assert r["status"] == "killed"
+    # 优雅路径的 STILL_RUNNING 细节必须被带进 warnings，别静默吞掉
+    assert any("自动强杀" in w for w in r["warnings"]), r["warnings"]
+    assert any("cannot be closed" in w for w in r["warnings"]), r["warnings"]
+
+
+def test_quit_aedt_graceful_honors_timeout_seconds(monkeypatch):
+    """等待预算必须按调用方给的 timeout_seconds 走，不再各自掐 20s（2026-11-25 缺陷）。"""
+    import time as _time
+
+    from servers.ansys import project_manage as pm
+
+    budgets = []
+    monkeypatch.setattr(pm, "get_aedt_pids", lambda: [333])
+    monkeypatch.setattr(pm, "_post_wm_close_to_aedt", lambda pids: 1)
+    monkeypatch.setattr(pm, "_wait_no_aedt", lambda t: (budgets.append(t), False)[1])
+    monkeypatch.setattr(pm, "_embedding_pids", lambda pids: [])
+    monkeypatch.setattr(pm, "_aedt_modal_dialogs", lambda: ["是否保存改动"])
+
+    r = pm._quit_aedt_graceful(False, [333], 60, None, [], _time.monotonic())
+
     assert r["error_code"] == "STILL_RUNNING"
-    assert "force=true" in r["hint"]
-    assert r["details"]["pids_after"] == [333]
+    assert budgets and max(budgets) > 40, f"等待预算仍被掐到 40s 内：{budgets}"
+    assert r["details"]["modal_dialogs"] == ["是否保存改动"]
+    assert "是否保存改动" in r["hint"]
 
 
 def test_quit_aedt_unmanaged_instance_requires_confirm(monkeypatch):
@@ -1276,6 +1373,8 @@ def test_kill_aedt_processes_retries_when_helper_respawns(monkeypatch):
     monkeypatch.setattr(pm, "get_aedt_pids", fake_pids)
     monkeypatch.setattr(pm, "_taskkill", fake_taskkill2)
     monkeypatch.setattr(pm.time, "sleep", lambda _s: None)
+    # 新 PID 3 是 `-Embedding` 辅助进程（真机靠 cmdline 判定；测试里直接指定）
+    monkeypatch.setattr(pm, "_embedding_pids", lambda pids: [p for p in pids if p == 3])
 
     r = pm._kill_aedt_processes([1, 2])
 
@@ -1284,12 +1383,55 @@ def test_kill_aedt_processes_retries_when_helper_respawns(monkeypatch):
     assert alive == set()
 
 
+def test_kill_aedt_processes_does_not_sweep_unrelated_instance(monkeypatch):
+    """重试轮不能顺手杀掉期间用户另开的 AEDT（非本目标、也不是 -Embedding）。2026-11-25 修。"""
+    from servers.ansys import project_manage as pm
+
+    alive = {1, 99}                                 # 1 = 本目标，99 = 用户另开的实例
+    calls = []
+
+    def fake_taskkill(pid):
+        calls.append(pid)
+        alive.discard(pid)
+        return True, ""
+
+    monkeypatch.setattr(pm, "get_aedt_pids", lambda: sorted(alive))
+    monkeypatch.setattr(pm, "_taskkill", fake_taskkill)
+    monkeypatch.setattr(pm.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(pm, "_embedding_pids", lambda pids: [])
+
+    r = pm._kill_aedt_processes([1])
+
+    assert r["success"] is True, r
+    assert 99 not in calls, f"无关实例被误杀：{calls}"
+    assert 99 in alive
+
+
+def test_kill_aedt_processes_treats_vanished_pid_as_done(monkeypatch):
+    """目标在等待期间自己退了（taskkill 报「没有找到进程」）→ 算成功，不许回 KILL_FAILED。
+
+    2026-11-25 真机：`-Embedding` 52152 自行退出，明明 pids_after=[] 却报 KILL_FAILED。
+    """
+    from servers.ansys import project_manage as pm
+
+    monkeypatch.setattr(pm, "get_aedt_pids", lambda: [])
+    monkeypatch.setattr(pm, "_taskkill", lambda pid: (False, '错误: 没有找到进程 "52152"。'))
+    monkeypatch.setattr(pm, "psutil", type("P", (), {"pid_exists": staticmethod(lambda pid: False)}))
+    monkeypatch.setattr(pm.time, "sleep", lambda _s: None)
+
+    r = pm._kill_aedt_processes([52152], rounds=1)
+
+    assert r["success"] is True, r
+    assert r["method"] == "taskkill"
+
+
 def test_kill_aedt_processes_reports_permission_denied(monkeypatch):
     from servers.ansys import project_manage as pm
 
     monkeypatch.setattr(pm, "get_aedt_pids", lambda: [35932])
     monkeypatch.setattr(pm, "_taskkill",
                         lambda pid: (False, "错误: 无法终止 PID 为 35932 的进程。原因: 拒绝访问。"))
+    monkeypatch.setattr(pm, "psutil", type("P", (), {"pid_exists": staticmethod(lambda pid: True)}))
     monkeypatch.setattr(pm.time, "sleep", lambda _s: None)
 
     r = pm._kill_aedt_processes([35932], rounds=1)
@@ -1338,12 +1480,13 @@ def test_quit_aedt_cleans_leftover_embedding_helpers(monkeypatch):
     assert r["pids_after"] == []
 
 
-def test_quit_aedt_does_not_kill_when_launcher_alive(monkeypatch):
-    """启动器还活着时（可能弹着保存框）不许自动 helper 清理，要如实报 STILL_RUNNING。"""
+def test_quit_aedt_auto_forces_when_launcher_alive(monkeypatch):
+    """启动器还活着（COM/保存框挡住）→ 等满 timeout 后自动强杀全实例（2026-11-25 用户要求）。"""
     import contextlib
 
     from servers.ansys import project_manage as pm
 
+    killed = []
     monkeypatch.setattr(pm, "get_aedt_pids", lambda: [45920, 35932])
     _patch_state(monkeypatch, pm, lambda: {"connected": True, "projects": []})
     monkeypatch.setattr(pm, "_aedt_instance_groups", lambda: [[45920]])
@@ -1354,12 +1497,14 @@ def test_quit_aedt_does_not_kill_when_launcher_alive(monkeypatch):
     monkeypatch.setattr(pm, "_wait_no_aedt", lambda _t: False)
     monkeypatch.setattr(pm, "_post_wm_close_to_aedt", lambda pids: 1)
     monkeypatch.setattr(pm, "_embedding_pids", lambda pids: [35932])          # 只有一个是 helper
+    monkeypatch.setattr(pm, "_aedt_modal_dialogs", lambda: [])
     monkeypatch.setattr(pm, "_kill_aedt_processes",
-                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("启动器还活着，不该杀")))
+                        lambda pids: (killed.extend(pids), {"success": True, "method": "taskkill"})[1])
 
     r = pm.quit_aedt(confirm=True)
 
-    assert r["error_code"] == "STILL_RUNNING"
+    assert r["auto_forced"] is True, r
+    assert killed == [45920, 35932], f"启动器+helper 都要收掉：{killed}"
 
 
 if __name__ == "__main__":
