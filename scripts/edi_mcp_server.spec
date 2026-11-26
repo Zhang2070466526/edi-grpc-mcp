@@ -40,6 +40,12 @@ a = Analysis(
         (str(root / 'servers' / 'cst' / 'cst_worker.py'), 'servers/cst'),
         (str(root / 'servers' / 'ansys' / 'com_child.py'), 'servers/ansys'),
         (str(root / 'servers' / 'turbocharts' / 'RAW 转图像工具使用说明.txt'), 'servers/turbocharts'),
+        # simulation_tool 的 5 份说明 .md → 打包后经 edi://reference/*-guide Resource 供 agent 读
+        (str(root / 'servers' / 'simulation_tool' / 'Mixer_Simulator使用说明.md'), 'servers/simulation_tool'),
+        (str(root / 'servers' / 'simulation_tool' / 'TR_Simulator使用说明.md'), 'servers/simulation_tool'),
+        (str(root / 'servers' / 'simulation_tool' / 'Netlist_Pathfinder使用说明.md'), 'servers/simulation_tool'),
+        (str(root / 'servers' / 'simulation_tool' / 'Report_Exporter使用说明.md'), 'servers/simulation_tool'),
+        (str(root / 'servers' / 'simulation_tool' / 'xy_chart(drawtool)使用说明.md'), 'servers/simulation_tool'),
     ],
     hiddenimports=[
         # MCP 核心

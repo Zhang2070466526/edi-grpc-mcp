@@ -41,7 +41,7 @@ servers/
   utils.py                # 公共工具函数
   settings.py             # 统一配置加载
   task_runner.py          # 通用异步任务队列（EDA/HFSS/CST 复用）
-  resources_prompts/       # 8 个 Resource + 7 个 Prompt
+  resources_prompts/       # 13 个 Resource + 7 个 Prompt
   multimodal_vision/      # 图片 + 视觉分析 + 文档工具
   eda/                   # EDI 工程工具（45 个）
     __init__.py           # 公共 API + 工具清单

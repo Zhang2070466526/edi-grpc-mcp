@@ -1,6 +1,6 @@
 # EDI gRPC MCP 实现原理与机制
 
-> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 101 个工具的逐类实现，再到 8 个 Resource 与 7 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
+> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 101 个工具的逐类实现，再到 13 个 Resource 与 7 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
 
 > 相关文档：[TOOLS_API.md](./TOOLS_API.md)（101 个工具接口参数/返回）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由请求/响应体）。
 
@@ -15,7 +15,7 @@
 | 理解某个工具走什么协议、怎么实现 | [四、工具实现](#四工具实现) + [一、底层通信原理](#一底层通信原理) |
 | 排查远程连不上 / 421 / 产物打不开 | [三、特殊机制](#三特殊机制)（远程 / 白名单 / 产物传输） |
 | 查配置项 / 错误码 / 返回字段 / 校验管线 | [二、公有设置与公有方法](#二公有设置与公有方法) |
-| 查 Resource / Prompt | [五、Resources](#五resources8-个) / [六、Prompts](#六prompts7-个) |
+| 查 Resource / Prompt | [五、Resources](#五resources13-个) / [六、Prompts](#六prompts7-个) |
 
 **章节明细**：
 
@@ -58,7 +58,7 @@
   - `4.11` 微波计算（本地纯计算）
   - `4.12` 工具设计动机与数据依赖
 
-- **[五、Resources（8 个）](#五resources8-个)** —— 只读上下文/参考资料逐条详解
+- **[五、Resources（13 个）](#五resources13-个)** —— 只读上下文/参考资料逐条详解
   - `edi://service/overview` — 服务概览
   - `edi://service/status` — 实时运行状态
   - `edi://projects` — 工作区工程目录
@@ -1027,11 +1027,11 @@ else:                                 # 两者都没有
 
 ---
 
-## 五、Resources（8 个）
+## 五、Resources（13 个）
 
 Resource 是**只读上下文/参考资料**，客户端通过 `resources/list` → `resources/read` 访问。固定 URI、无参数、返回 JSON 或 Markdown。
 
-注册机制：`servers/resources_prompts/` 内 `@mcp.resource(uri, name, title, description, mime_type)` 装饰器定义，`registry_server.py` 的 `import servers.resources_prompts` 触发注册。其中 7 个在 `resources_prompts/` 包内，另 1 个由业务包自带（turbocharts）。
+注册机制：`servers/resources_prompts/` 内 `@mcp.resource(uri, name, title, description, mime_type)` 装饰器定义，`registry_server.py` 的 `import servers.resources_prompts` 触发注册。其中 7 个在 `resources_prompts/` 包内，另 6 个由业务包自带（turbocharts 1 + simulation_tool 5）。
 
 ### 1. `edi://service/overview` — 服务概览
 
@@ -1077,6 +1077,11 @@ Resource 是**只读上下文/参考资料**，客户端通过 `resources/list` 
 
 - **用途**：`turbocharts_convert` / `list_result_curves` 之前的参考——参数怎么传、曲线名（`--linename`）单位与线段名怎么写。
 - **怎么实现**：`servers/turbocharts/resource.py` 直接读引擎自带《RAW 转图像工具使用说明.txt》**原文**（不复制内容，引擎升级换文件即生效）；文件缺失返回带路径与单位要点的提示，不抛异常。
+
+### 9. `edi://reference/{mixer,tr,netlist,report,xy}-guide` — exe 说明文档原文
+
+- **用途**：5 个独立仿真 exe 的参数表/使用说明原文（混频链路 / TR 收发链路 / 网表寻路 / 报告导出 / XY 绘图），打包成 exe 后 agent 也能读全文。
+- **怎么实现**：`servers/simulation_tool/resource.py` 一张 `_GUIDES` 表循环注册，直接读 `servers/simulation_tool/*.md` **原文**（单一事实源，不复制内容）；文件缺失返回兜底提示不抛异常。
 
 ## 六、Prompts（7 个）
 

@@ -2398,7 +2398,7 @@ load_schematic_from_file(project_path: str, schematic_path: str, timeout_seconds
 
 除了 Tool（启动时动态统计，当前 101 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
 
-### Resources（8 个）
+### Resources（13 个）
 
 | URI | MIME | 说明 |
 |---|---|---|
@@ -2410,6 +2410,11 @@ load_schematic_from_file(project_path: str, schematic_path: str, timeout_seconds
 | `edi://projects` | `application/json` | 工作区工程目录清单（名称/路径/大小） |
 | `edi://reference/turbocharts-guide` | `text/plain` | 引擎《RAW 转图像工具使用说明》原文 |
 | `edi://reference/tr-simulation-guide` | `text/markdown` | TR 仿真 23 指标与 13 链路字段（由代码目录动态生成） |
+| `edi://reference/mixer-simulator-guide` | `text/markdown` | 混频链路仿真参数表（15 指标/逐指标必填字段） |
+| `edi://reference/tr-simulator-guide` | `text/markdown` | TR 收发链路仿真说明（13 链路字段/23 指标） |
+| `edi://reference/netlist-pathfinder-guide` | `text/markdown` | 网表寻路说明（器件连通规则/Bits/status） |
+| `edi://reference/report-exporter-guide` | `text/markdown` | 报告导出说明（report JSON 字段） |
+| `edi://reference/xy-chart-guide` | `text/markdown` | XY 绘图说明（JSON 配置） |
 
 > Resource 是只读上下文，由客户端主动拉取。标准 MCP 客户端可通过 `resources/list` 和 `resources/read` 访问。
 
