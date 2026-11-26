@@ -561,6 +561,10 @@ def build_file_link(path: str, label: str = "打开文件", *,
 
     ttl / disposition 透传给 token 注册（默认 3600 秒、inline）；需要按格式区分
     预览/下载时由调用方显式传，例如报告：PDF→inline、DOCX→attachment。
+
+    media_tag 是可直接粘进聊天正文内联显示的 ``MEDIA:"<路径>"`` 串。路径一律加
+    双引号：客户端按 ``\\S+`` 解析裸路径，含空格会被空格截断（2026-11-25 实测
+    ``D:\\EDI\\...\\Dual Conversion Link HB\\document.pdf`` 被切成 ``...\\Dual``）。
     """
     p = Path(path).resolve()
     uri = p.as_uri()
@@ -581,6 +585,7 @@ def build_file_link(path: str, label: str = "打开文件", *,
         "file_uri": uri,
         "download_url": download_url,
         "markdown_link": markdown_link,
+        "media_tag": f'MEDIA:"{p}"',
     }
 
 
