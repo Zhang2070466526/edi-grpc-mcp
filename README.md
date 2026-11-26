@@ -39,7 +39,7 @@ AI 客户端 (Claude Code / OpenClaw)
    │  Streamable HTTP (stateless) 或 stdio
    │  POST /mcp  │  initialize → tools/list → tools/call
    ▼
-EDI gRPC MCP 服务 (FastMCP, 100 工具, 8 Resource, 8 Prompt)
+EDI gRPC MCP 服务 (FastMCP, 100 工具, 8 Resource, 7 Prompt)
    │
    ├── EDA gRPC 工具 (50) ──→ EDI 客户端 (127.0.0.1:50055)
    │     FetchEvent ← PerformAction 异步模型，增量 ads_output
@@ -205,16 +205,16 @@ edi-grpc-mcp/
 │   ├── task_runner.py                  #   通用异步任务队列（EDA/HFSS/CST 复用，单 worker 串行）
 │   ├── describe_tool.py                #   工具自描述（describe_tool：完整参数 + 可抄示例 + 相似名建议）
 │   │
-│   ├── resources_prompts/              #   MCP Resource & Prompt（8 Resource + 8 Prompt）
+│   ├── resources_prompts/              #   MCP Resource & Prompt（8 Resource + 7 Prompt）
 │   │   ├── __init__.py                 #     注册入口（import 下面 6 模块触发注册）
 │   │   ├── resources_service.py        #     服务状态类（概览 / 状态 / 工程目录）
 │   │   ├── resources_reference.py      #     参考类（参数目录 / 操作规则 / 错误码）
 │   │   ├── prompts_project.py          #     工程类（检查 / 信号链）
-│   │   ├── prompts_simulation.py       #     仿真类（仿真 / 抗烧毁）
+│   │   ├── prompts_simulation.py       #     仿真类（仿真）
 │   │   ├── prompts_component.py        #     器件类（配置 / 选型）
 │   │   └── prompts_report.py           #     报告类（报告 / 诊断）
 │   │
-│   ├── eda/                            #   EDI 工程工具 (50 个)
+│   ├── eda/                            #   EDI 工程工具 (45 个)
 │   │   ├── __init__.py                 #     公共 API re-export
 │   │   ├── config.py                   #     路径检测 / 环境变量加载
 │   │   ├── project_reader.py           #     ProjectReader + S-expression 解析器
@@ -222,9 +222,9 @@ edi-grpc-mcp/
 │   │   │                               #     全局 _EDA_LOCK 串行锁，增量 ads_output 收集
 │   │   │                               #     _terminal_result() 统一返回结构
 │   │   ├── project_manage.py           #     工程管理：扫描/创建/打开/关闭/元件/概述/变量分析/静态参数 (10 工具)
-│   │   ├── simulation.py               #     仿真引擎：异步/网表/抗烧毁 (6 工具)
+│   │   ├── simulation.py               #     仿真引擎：异步/网表 (5 工具)
 │   │   │                               #     ThreadPoolExecutor(1) 串行执行，最多 8 个排队任务
-│   │   ├── simulation_components.py    #     仿真器件管理：10 工具（含 Out 挂载）
+│   │   ├── simulation_components.py    #     仿真器件管理：7 工具（含 Out 挂载）
 │   │   │                               #     11 步参数校验管线 + wire↔public 名称映射
 │   │   ├── simulation_component_catalog.json  # SP/HB/XDB 参数目录 v2.0
 │   │   ├── design_export.py            #     网表/截图/CSV 导出 (3 工具)
@@ -233,8 +233,8 @@ edi-grpc-mcp/
 │   │   ├── model_library.py            #     模型库 + 原理图库：分类/参数/检索/性能器件/拓扑设计 (5 工具)
 │   │   ├── soft_ip.py                 #     软 IP：按设计描述下载芯片模型 (1 工具)
 │   │   ├── edi_launcher.py             #     启动 EDI + 服务诊断/日志读取 (3 工具)
-│   │   ├── workspace_ops.py            #     工作区：创建/切换/查询 (3 工具)
-│   │   └── schematic_ops.py            #     原理图扩展操作 (4 工具)
+│   │   ├── workspace_ops.py            #     工作区：创建/切换/查询 (4 工具)
+│   │   └── schematic_ops.py            #     原理图扩展操作 (5 工具)
 │   │
 │   ├── turbocharts/                    #   ADS RAW 图表工具 (3 个)
 │   │   ├── __init__.py                 #     公共 API re-export
@@ -242,7 +242,7 @@ edi-grpc-mcp/
 │   │   ├── convert_raw.py              #     RAW→曲线图+CSV，VSWR 自动拆分，曲线查询
 │   │   └── compare_results.py          #     多 RAW 对比叠图 (Matplotlib), alignment 校验
 │   │
-│   ├── ansys/                          #   ANSYS HFSS 工具 (7 个, COM 附着)
+│   ├── ansys/                          #   ANSYS HFSS 工具 (8 个, COM 附着)
 │   │   ├── __init__.py                 #     公共 API re-export
 │   │   ├── config.py                   #     进程检测 / COM 附着 (多 ProgID 回退) / 锁文件管理
 │   │   ├── project_manage.py           #     工程打开/关闭/退出 + AEDT 启动 + 信息查询 (5 工具)
@@ -254,7 +254,7 @@ edi-grpc-mcp/
 │   │   ├── simulate.py                 #     仿真求解（异步，一次性会话）
 │   │   └── result_export.py            #     结果导出（S 参数 / 远场方向图）
 │   │
-│   ├── laspcem/                        #   LASPCEM 电磁仿真工具 (11 个)
+│   ├── laspcem/                        #   LASPCEM 电磁仿真工具 (12 个)
 │   │   ├── __init__.py                 #     公共 API re-export
 │   │   ├── config.py                   #     安装检测 / 进程枚举
 │   │   ├── launcher.py                 #     启动/打开/求解/导出 S 参数/建报告
@@ -280,7 +280,7 @@ edi-grpc-mcp/
 │   │   ├── mixer_spur.py               #     analyze_mixer_spur（混频杂散枚举）
 │   │   └── rf_dynamic_range.py         #     calculate_rf_dynamic_range（噪声底/灵敏度/动态范围）
 │   │
-│   ├── simulation_tool/                #   独立仿真 exe 包装 (4 个)
+│   ├── simulation_tool/                #   独立仿真 exe 包装 (5 个)
 │   │   ├── __init__.py                 #     公共 API re-export
 │   │   ├── config.py                   #     固定目录 exe 路径 / 子进程执行器 / ADS 探测
 │   │   ├── report_export.py            #     export_simulation_report（报告 exe → PDF/DOCX/report.json）
@@ -415,7 +415,7 @@ powershell -File scripts/build.ps1  # PyInstaller
 | [部署指南](./docs/WIN7部署与启动手册.md) | 打包产物使用、客户端配置 |
 | [工具 API](./docs/TOOLS_API.md) | 全部 100 个工具参数、返回值、示例 |
 | [HTTP 接口](./docs/HTTP_API.md) | 全部 HTTP 路由的请求体、响应体、成功/失败情况 |
-| [实现原理与机制](./docs/IMPLEMENTATION.md) | 通信原理、公有方法、特殊机制、工具、8 Resource + 8 Prompt |
+| [实现原理与机制](./docs/IMPLEMENTATION.md) | 通信原理、公有方法、特殊机制、工具、8 Resource + 7 Prompt |
 | [交接文档](./docs/HANDOVER.md) | 架构设计、技术栈、扩展开发、47 条注意事项 |
 | [gRPC 协议](./proto/grpc接口调用.md) | ExternalCall 接口调用说明 |
 | [EDI 系统接口汇总](./docs/EDI系统接口与外部调用汇总.md) | EDI 全量对外接口 |

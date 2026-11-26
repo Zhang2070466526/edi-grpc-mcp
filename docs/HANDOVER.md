@@ -41,16 +41,16 @@ servers/
   utils.py                # 公共工具函数
   settings.py             # 统一配置加载
   task_runner.py          # 通用异步任务队列（EDA/HFSS/CST 复用）
-  resources_prompts/       # 7 个 Resource + 8 个 Prompt
+  resources_prompts/       # 8 个 Resource + 7 个 Prompt
   multimodal_vision/      # 图片 + 视觉分析 + 文档工具
-  eda/                   # EDI 工程工具（50 个）
+  eda/                   # EDI 工程工具（45 个）
     __init__.py           # 公共 API + 工具清单
     config.py             # 配置 / 路径检测
     project_reader.py     # ProjectReader + S-expression 解析器
     grpc_client.py        # gRPC 通信层（FetchEvent → PerformAction）
     project_manage.py     # 工程管理（10 工具）
-    simulation.py         # 仿真（6 工具）
-    simulation_components.py  # 仿真器件（10 工具）
+    simulation.py         # 仿真（5 工具）
+    simulation_components.py  # 仿真器件（7 工具）
     simulation_component_catalog.json  # 参数目录 v2.0
     design_export.py      # 网表/截图/CSV（3 工具）
     signal_chain.py       # 信号链路追踪（1 工具）
@@ -58,8 +58,8 @@ servers/
     model_library.py      # 模型库 + 原理图库 + 拓扑设计（5 工具）
     soft_ip.py            # 按描述下载芯片模型（1 工具）
     edi_launcher.py       # 启动 EDI + 服务诊断（3 工具）
-    workspace_ops.py      # 工作区：创建/切换/查询（3 工具）
-    schematic_ops.py      # 原理图扩展操作（4 工具）
+    workspace_ops.py      # 工作区：创建/切换/查询（4 工具）
+    schematic_ops.py      # 原理图扩展操作（5 工具）
   turbocharts/
     config.py             # run_turbocharts（信号量串行）
     convert_raw.py        # RAW 转图 + 曲线查询（2 工具）
@@ -112,27 +112,27 @@ PyPI: https://pypi.org/project/edi-grpc-mcp/  |  当前版本：0.1.11
 
 ## MCP 工具清单
 
-工具总数随版本变化（当前 101 个，以运行时 `/ready` 的 `tool_count` 为准），按功能分 17 类：
+工具总数随版本变化（当前 100 个，以运行时 `/ready` 的 `tool_count` 为准），按功能分 17 类：
 
 | 分类 | 数量 | 说明 |
 |---|---|---|
 | 工程管理 | 10 | 创建 / 扫描 / 打开 / 关闭工程、查询器件、分析变量、批量查询器件 |
-| 仿真器件 | 10 | 器件 Schema、增删改、状态、网表导入、原理图加载 |
-| 仿真 | 7 | 同步 / 异步仿真、网表仿真、抗烧毁评估、任务查询 |
+| 仿真器件 | 7 | 器件 Schema、增删改、状态、网表导入、原理图加载 |
+| 仿真 | 5 | 同步 / 异步仿真、网表仿真、任务查询 |
 | 导出与分析 | 4 | 导出网表、截图原理图、导出器件 CSV、信号链路追踪 |
 | 模型库 / 原理图库 | 6 | 模型替换、模型分类/查询/搜索、性能器件放置、拓扑设计（到原理图库检索并实例化） |
 | 软 IP | 1 | 按设计描述下载芯片模型（生成 AEDT 模型） |
 | 启动 / 诊断 | 3 | 启动 EDI、服务状态、日志读取 |
-| 工作区 | 3 | 创建 / 切换 / 查询工作区 |
+| 工作区 | 4 | 创建 / 切换 / 查询工作区 |
 | 原理图扩展 | 5 | 内置器件、理想器件放置、清空原理图、连线、批量器件变换 |
-| ANSYS HFSS | 6 | AEDT 工程开关、HFSS 异步仿真 |
+| ANSYS HFSS | 8 | AEDT 工程开关、HFSS 异步仿真 |
 | CST 电磁仿真 | 13 | 异步求解 / 查询 / 取消、结果浏览、导出 S 参数 / 远场方向图 |
-| LASPCEM 电磁仿真 | 11 | 启动/打开/导入 aedt、异步求解、导出 S 参数、建报告、孤儿进程清理 |
+| LASPCEM 电磁仿真 | 12 | 启动/打开/导入 aedt、异步求解、导出 S 参数、建报告、孤儿进程清理 |
 | 图表与图片 | 5 | RAW 曲线、转图、结果对比、显示、视觉分析 |
 | 报告与文档 | 2 | 打开本地文档、下载任意产物（fetch_artifact） |
 | 微波工具 | 7 | 传输线计算、威尔金森功分器设计、滤波器阶数评估（高通/低通/带通/带阻）、功分器/巴伦节数（本地纯计算，无任务信封） |
 | 射频链路计算 | 2 | 混频杂散分析（analyze_mixer_spur）、噪声底/灵敏度/压缩受限动态范围（calculate_rf_dynamic_range）（本地纯计算，无任务信封） |
-| 独立仿真 | 4 | 独立报告导出（Report_Exporter.exe → PDF/DOCX）、TR 纯硬编码仿真（TR_Simulator.exe）、混频链路仿真（mixer_simulation.exe）、XY 数据绘图（drawtool.exe） |
+| 独立仿真 | 5 | 独立报告导出（Report_Exporter.exe → PDF/DOCX）、TR 纯硬编码仿真（TR_Simulator.exe）、混频链路仿真（mixer_simulation.exe）、XY 数据绘图（drawtool.exe） |
 
 > 完整工具签名、参数、返回格式见 [TOOLS_API.md](./TOOLS_API.md)，工具一览表见 [README.md](../README.md)。
 

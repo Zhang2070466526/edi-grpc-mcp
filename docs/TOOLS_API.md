@@ -17,7 +17,7 @@ from servers.eda.project_manage import list_epp_projects
 ## 目录
 
 - **[工程管理（10 个）](#工程管理10个)**：创建 / 扫描 / 打开 / 关闭工程、查询器件、分析变量
-- **[仿真（6 个）](#仿真6个)**：同步 / 异步仿真、网表仿真、抗烧毁评估、任务查询
+- **[仿真（5 个）](#仿真5个)**：同步 / 异步仿真、网表仿真、任务查询
 - **[导出与分析（4 个）](#导出与分析4个)**：导出网表、截图原理图、器件 CSV、信号链路追踪
 - **[模型库 / 原理图库（6 个）](#模型库--原理图库6个)**：模型替换、模型分类/查询/搜索、性能器件放置、拓扑设计
 - **[软 IP（1 个）](#软ip1个)**：按设计描述下载芯片模型
@@ -374,7 +374,7 @@ analyze_variables(project_path: str) -> dict
 
 ---
 
-## 仿真（6 个）
+## 仿真（5 个）
 
 
 ### `start_simulation_async`
@@ -499,41 +499,6 @@ simulate_netlist(netlist_path: str, timeout_seconds: int = 600) -> dict
     "details": {"netlist_path": "C:/test/netlist.log"}
 }
 ```
-
----
-
-### `simulate_anti_burnout`
-
-```python
-from servers.eda.simulation import simulate_anti_burnout
-
-simulate_anti_burnout(project_path: str, timeout_seconds: int = 600) -> dict
-```
-
-对工程原理图中具备抗烧毁数据的器件执行输入功率仿真和抗烧毁风险评估。服务端只计算并返回结果，不主动显示仿真窗口。`results` 只包含 `isAntiBurnout==true` 的器件；部分器件评估失败时整体仍成功，每个器件的结论/原因在各自的 `result` 字段。
-
-| 参数 | 类型 | 必填 | 默认 | 说明 |
-|---|---|---|---|---|
-| `project_path` | str | 是 | — | `.epp` 工程文件绝对路径 |
-| `timeout_seconds` | int | 否 | 600 | 最长等待秒数 |
-
-返回（gRPC 统一结构，业务字段在 `details` 中）：
-
-```python
-{
-    "success": True,
-    "status": "SUCCEEDED",
-    "details": {
-        "results": [
-            {"component_type": "Attenuator", "instance_name": "Attenuator1",
-             "simulated_input_power": "12.4 dBm", "max_input_power": "1 W",
-             "result": "无抗烧毁风险"},
-        ]
-    }
-}
-```
-
-每个结果项的 `result`：评估成功为 `无抗烧毁风险` / `有抗烧毁风险`，无法评估时为具体失败原因。
 
 ---
 
@@ -2377,9 +2342,9 @@ load_schematic_from_file(project_path: str, schematic_path: str, timeout_seconds
 
 ## Resources & Prompts
 
-除了 Tool（启动时动态统计，当前 101 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
+除了 Tool（启动时动态统计，当前 100 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
 
-### Resources（7 个）
+### Resources（8 个）
 
 | URI | MIME | 说明 |
 |---|---|---|
@@ -2390,10 +2355,11 @@ load_schematic_from_file(project_path: str, schematic_path: str, timeout_seconds
 | `edi://reference/error-codes` | `text/markdown` | gRPC 状态码词典及建议动作 |
 | `edi://projects` | `application/json` | 工作区工程目录清单（名称/路径/大小） |
 | `edi://reference/turbocharts-guide` | `text/plain` | 引擎《RAW 转图像工具使用说明》原文 |
+| `edi://reference/tr-simulation-guide` | `text/markdown` | TR 仿真 23 指标与 13 链路字段（由代码目录动态生成） |
 
 > Resource 是只读上下文，由客户端主动拉取。标准 MCP 客户端可通过 `resources/list` 和 `resources/read` 访问。
 
-### Prompts（8 个）
+### Prompts（7 个）
 
 | Prompt | 参数 | 用途 |
 |---|---|---|
@@ -2403,7 +2369,6 @@ load_schematic_from_file(project_path: str, schematic_path: str, timeout_seconds
 | `create_simulation_report` | `project_path`, `output_path`, `overwrite` | 查询工程 → 生成曲线 → 渲染 PDF/DOCX |
 | `troubleshoot_edi_error` | `status`, `error_code` | 按状态码查错误词典、检查服务状态、给排查建议 |
 | `analyze_signal_chain` | `project_path`, `start` | 追踪信号链路并逐级说明 |
-| `assess_anti_burnout` | `project_path` | 抗烧毁评估并按功率裕量排序 |
 | `select_component` | `sub_type_id`, `requirement` | 从公共/个人模型库选型（含替换闭环） |
 
 > Prompt 是用户主动选择的工作流模板。标准 MCP 客户端可通过 `prompts/list` 和 `prompts/get` 访问。
@@ -2422,7 +2387,7 @@ from servers.multimodal_vision import open_document
 open_document(file_path: str, mode: str = "link", disposition: str = "inline") -> dict
 ```
 
-打开本地文档：link 模式生成 10 分钟临时 HTTP 链接，local 模式用系统默认程序打开（os.startfile）。支持 10 种格式。仅用户明确要求时调用。
+打开本地文档：link 模式生成 HTTP 链接（无状态、不过期），local 模式用系统默认程序打开（os.startfile）。支持 10 种格式。仅用户明确要求时调用。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|

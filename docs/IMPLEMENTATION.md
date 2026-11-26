@@ -1,8 +1,8 @@
 # EDI gRPC MCP 实现原理与机制
 
-> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 101 个工具的逐类实现，再到 7 个 Resource 与 8 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
+> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 100 个工具的逐类实现，再到 8 个 Resource 与 7 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
 
-> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（101 个工具接口参数/返回）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由请求/响应体）。
+> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（100 个工具接口参数/返回）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由请求/响应体）。
 
 ---
 
@@ -15,7 +15,7 @@
 | 理解某个工具走什么协议、怎么实现 | [四、工具实现](#四工具实现) + [一、底层通信原理](#一底层通信原理) |
 | 排查远程连不上 / 421 / 产物打不开 | [三、特殊机制](#三特殊机制)（远程 / 白名单 / 产物传输） |
 | 查配置项 / 错误码 / 返回字段 / 校验管线 | [二、公有设置与公有方法](#二公有设置与公有方法) |
-| 查 Resource / Prompt | [五、Resources](#五resources8-个) / [六、Prompts](#六prompts9-个) |
+| 查 Resource / Prompt | [五、Resources](#五resources8-个) / [六、Prompts](#六prompts7-个) |
 
 **章节明细**：
 
@@ -44,7 +44,7 @@
   - `3.6` 日志系统
   - `3.7` Chat 会话与破坏性确认
 
-- **[四、工具实现](#四工具实现)** —— 101 个工具按通信类型分组 + 设计动机
+- **[四、工具实现](#四工具实现)** —— 100 个工具按通信类型分组 + 设计动机
   - `4.1` 工程管理
   - `4.2` 仿真器件
   - `4.3` 仿真
@@ -58,7 +58,7 @@
   - `4.11` 微波计算（本地纯计算）
   - `4.12` 工具设计动机与数据依赖
 
-- **[五、Resources（7 个）](#五resources7-个)** —— 只读上下文/参考资料逐条详解
+- **[五、Resources（8 个）](#五resources8-个)** —— 只读上下文/参考资料逐条详解
   - `edi://service/overview` — 服务概览
   - `edi://service/status` — 实时运行状态
   - `edi://projects` — 工作区工程目录
@@ -67,13 +67,12 @@
   - `edi://reference/error-codes` — 错误码词典
   - `edi://reference/turbocharts-guide` — RAW 转图说明
 
-- **[六、Prompts（8 个）](#六prompts8-个)** —— 可复用工作流模板逐条详解
+- **[六、Prompts（7 个）](#六prompts7-个)** —— 可复用工作流模板逐条详解
   - `inspect_edi_project` — 工程只读检查
   - `run_and_review_simulation` — 仿真执行 + 日志分析
   - `configure_simulation_component` — 配置仿真器件
   - `create_simulation_report` — 生成仿真报告
   - `troubleshoot_edi_error` — 诊断调用错误
-  - `assess_anti_burnout` — 抗烧毁评估
   - `select_component` — 器件选型
   - `analyze_signal_chain` — 信号链分析
 
@@ -815,7 +814,6 @@ else:                                 # 两者都没有
 - `get_simulation_async_status` / `get_simulation_async_result`：读 `_sim_tasks` 内存注册表
 - `list_eda_tasks`：列出当前异步任务，按状态过滤
 - `simulate_netlist`：校验 `netlist_path` 存在 → `call_grpc(SIMULATE_NETLIST)` → EDI 复制网表到临时目录 → 执行 ADS → 复制 `result.raw` 到 `history/` → 清理临时目录
-- `simulate_anti_burnout`：对具备抗烧毁数据的器件执行输入功率仿真和风险评估
 
 ### 4.4 导出与模型 / 软 IP
 
@@ -948,7 +946,6 @@ else:                                 # 两者都没有
 | `get_simulation_async_result` | 取最终结果和完整日志 | start（task_id） | list_result_curves / 报告 |
 | `list_eda_tasks` | 看有哪些仿真在跑/排队 | — | LLM 判断仿真状态 |
 | `simulate_netlist` | 不打开工程直接仿真网表 | export_project_netlist（netlist 文件） | list_result_curves / 报告 |
-| `simulate_anti_burnout` | 评估器件抗烧毁风险 | 已打开工程 | LLM 判断抗烧毁风险 |
 
 #### 导出与分析
 
@@ -957,7 +954,7 @@ else:                                 # 两者都没有
 | `export_project_netlist` | 查看/导出工程网表 | open_edi_project | simulate_netlist |
 | `capture_schematic` | 截图原理图供分析/报告 | open_edi_project | 报告、show_image |
 | `export_schematic_components_to_csv` | 生成模型替换用的器件 CSV | project_path | replace_schematic_components_from_csv |
-| `get_signal_chain` | 理解信号从源到负载 | 网表 | simulate_anti_burnout 前置 |
+| `get_signal_chain` | 理解信号从源到负载 | 网表 | — |
 
 #### 模型库 / 原理图库
 
@@ -1030,11 +1027,11 @@ else:                                 # 两者都没有
 
 ---
 
-## 五、Resources（7 个）
+## 五、Resources（8 个）
 
 Resource 是**只读上下文/参考资料**，客户端通过 `resources/list` → `resources/read` 访问。固定 URI、无参数、返回 JSON 或 Markdown。
 
-注册机制：`servers/resources_prompts/` 内 `@mcp.resource(uri, name, title, description, mime_type)` 装饰器定义，`registry_server.py` 的 `import servers.resources_prompts` 触发注册。其中 6 个在 `resources_prompts/` 包内，另 1 个由业务包自带（turbocharts）。
+注册机制：`servers/resources_prompts/` 内 `@mcp.resource(uri, name, title, description, mime_type)` 装饰器定义，`registry_server.py` 的 `import servers.resources_prompts` 触发注册。其中 7 个在 `resources_prompts/` 包内，另 1 个由业务包自带（turbocharts）。
 
 ### 1. `edi://service/overview` — 服务概览
 
@@ -1071,12 +1068,17 @@ Resource 是**只读上下文/参考资料**，客户端通过 `resources/list` 
 - **干什么**：返回状态码 → 含义 → 建议动作对照表（SUCCEEDED/FAILED/REJECTED/QUEUE_TIMEOUT/TIMEOUT/STREAM_DISCONNECTED/GRPC_UNAVAILABLE/PAYLOAD_TOO_LARGE/PROTOCOL_MISMATCH/TASK_NOT_FOUND）+ 重试原则。
 - **核心原则**：TIMEOUT/STREAM_DISCONNECTED 时 `outcome_known=false` 别假设失败；非幂等禁止自动重试；查询类可安全重试一次。
 
-### 7. `edi://reference/turbocharts-guide` — RAW 转图说明
+### 7. `edi://reference/tr-simulation-guide` — TR 仿真指标与链路字段
+
+- **用途**：`run_tr_simulation` 之前查 23 个指标的字段名、单位、实现方式与 13 个链路字段。
+- **怎么实现**：`resources_reference.py` 从 `tr_simulation.py` 的 `TR_CONTRACT_VERSION` / `_INDICATOR_CATALOG` / `_INDICATOR_REQUIRES` / `_LINK_FIELDS` 动态拼 Markdown，与工具校验同源，不维护两套定义。
+
+### 8. `edi://reference/turbocharts-guide` — RAW 转图说明
 
 - **用途**：`turbocharts_convert` / `list_result_curves` 之前的参考——参数怎么传、曲线名（`--linename`）单位与线段名怎么写。
 - **怎么实现**：`servers/turbocharts/resource.py` 直接读引擎自带《RAW 转图像工具使用说明.txt》**原文**（不复制内容，引擎升级换文件即生效）；文件缺失返回带路径与单位要点的提示，不抛异常。
 
-## 六、Prompts（8 个）
+## 六、Prompts（7 个）
 
 Prompt 是**可复用工作流模板**，客户端通过 `prompts/list` → `prompts/get` 访问。带参数（如 `project_path`），返回 `[{"role": "user", "content": "..."}]` 给 LLM 的步骤指令。
 
@@ -1102,15 +1104,11 @@ create/update 两条分支：先查 Schema → 映射需求为合法参数 → �
 
 读 `edi://reference/error-codes` → 查 `get_service_status` → 按 status 分支给建议（TIMEOUT 不重试、GRPC_UNAVAILABLE 启动 EDI、QUEUE_TIMEOUT 查长任务、REJECTED 修参数）。
 
-### 6. `assess_anti_burnout` — 抗烧毁评估
-
-调 `simulate_anti_burnout` → 处理已知失败原因（PORT1 功率 >40dBm、多通道合路）→ 按裕量升序汇总表格。约束「max_input_power 单位可能 dBm/W，比较前统一换算 dBm」。
-
-### 7. `select_component` — 器件选型（含替换闭环）
+### 6. `select_component` — 器件选型（含替换闭环）
 
 8 步闭环：`get_model_category_params` 确认子类 → **依次**搜公共/个人库（gRPC 串行不并行）→ 提取过滤 → `get_components_static_params` 查厂商/尺寸 → 对比表 → 推荐 → 确认后取 original 三列 → 生成 CSV 调 `replace_schematic_components_from_csv`。重点标注字段映射（`model_uuid` → `component_uuids`；`component_type/instance_name/model_id` → CSV 列），防 LLM 编造。
 
-### 8. `analyze_signal_chain` — 信号链分析
+### 7. `analyze_signal_chain` — 信号链分析
 
 步骤 0 若跑过抗烧毁先 `export_project_netlist` 刷新网表（防 PowerPin 污染）→ `get_signal_chain` 追踪 → 逐级说明器件作用 → 处理 warning → 结合 result.raw 说明功率。
 
