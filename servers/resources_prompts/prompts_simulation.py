@@ -1,7 +1,6 @@
-"""MCP Prompts（仿真类）— 仿真执行分析、抗烧毁评估。
+"""MCP Prompts（仿真类）— 仿真执行分析。
 
   run_and_review_simulation — 异步仿真+日志分析，含轮询限制
-  assess_anti_burnout       — 抗烧毁评估：仿真→按裕量排序→结论
 """
 
 from __future__ import annotations
