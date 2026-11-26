@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import re
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,49 @@ from servers import mcp
 # HFSS 全局串行队列：AEDT 是单实例桌面程序，同一时间只能跑一个仿真。
 # max_tasks 与原 _MAX_HFSS_TASKS=50 对齐；TTL 用 TaskRunner 默认 2h。
 hfss_runner = TaskRunner(name_prefix="hfss", max_tasks=50, max_run_seconds=7200)
+
+
+def _hfss_su_evidence(result_dir: str, design_name: str, since_ts: float | None = None) -> dict:
+    """扫 `<工程>.aedtresults/<设计>.results/*_SU.txt` 里的收敛证据。
+
+    AEDT 求解成功后 COM 仍可能抛 `GetAppDesktop.AreThereSimulationsRunning`（工具层因此
+    只能报 UNKNOWN / result_verified=false），但每个收敛频点都会落一份 `*_SU.txt`，首行
+    `Success 1` —— 这比「结果目录 mtime 变了」硬得多。`since_ts` 用来排除上一次求解留下的
+    旧文件（不传则只看有没有历史成功记录，供导出预检用）。
+    """
+    root = Path(result_dir) / f"{design_name}.results"
+    if not root.is_dir():
+        return {"found": False, "files": [], "count": 0, "directory": str(root)}
+    tol = 2.0  # 文件系统 mtime 精度留 2 s 容差
+    hits: list[str] = []
+    for f in sorted(root.glob("*_SU.txt")):
+        try:
+            if since_ts is not None and f.stat().st_mtime < since_ts - tol:
+                continue
+            text = f.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if re.search(r"^\s*Success\s+1\s*$", text, re.MULTILINE):
+            hits.append(str(f))
+    return {"found": bool(hits), "files": hits, "count": len(hits), "directory": str(root)}
+
+
+def _solved_evidence_or_error(project_path: str, design_name: str):
+    """导出前的求解预检：没有任何 `Success 1` 证据就别去调 ExportNetworkData。
+
+    返回 (evidence, None) 或 (None, error_response)。
+    """
+    result_dir = str(Path(project_path).with_suffix(".aedtresults"))
+    su = _hfss_su_evidence(result_dir, design_name)
+    if not su["found"]:
+        return None, error_response(
+            "SOLVE_REQUIRED",
+            f"没有找到 {design_name} 的求解结果证据（{su['directory']}\\*_SU.txt 里无 Success 1），"
+            "导出会失败或拿不到数据",
+            hint="先 start_hfss_analysis_async 跑完该 setup 的扫频，再导出",
+            evidence_directory=su["directory"],
+        )
+    return su, None
 
 
 def _run_hfss_analysis_task(
@@ -47,6 +91,7 @@ def _run_hfss_analysis_task(
         result_dir = str(Path(project_path).with_suffix(".aedtresults"))
         before_mtime = Path(result_dir).stat().st_mtime if Path(result_dir).is_dir() else None
 
+        before_ts = time.time()
         design.Analyze(setup_name)
 
         # AEDT 的 Analyze 失败时通常不抛异常（错误只进 message manager），
@@ -59,6 +104,11 @@ def _run_hfss_analysis_task(
                 result_verified = Path(result_dir).stat().st_mtime > before_mtime
             else:
                 result_verified = any(f.is_file() for f in Path(result_dir).rglob("*"))
+        # 硬证据优先：本次求解窗口内的 *_SU.txt 里出现 Success 1（目录 mtime 只是弱信号；
+        # COM 刷新失败时 AreThereSimulationsRunning 也拿不到，别因此判 UNKNOWN）。
+        su = _hfss_su_evidence(result_dir, design_name, before_ts)
+        if su["found"]:
+            result_verified = True
         still_running = False
         try:
             still_running = desktop.AreThereSimulationsRunning(True)
@@ -71,6 +121,7 @@ def _run_hfss_analysis_task(
             "result_verified": result_verified,
             "outcome_known": outcome_ok,
             "task_success": True if outcome_ok else None,
+            "su_evidence": su,
         }
 
 
@@ -257,6 +308,10 @@ def export_hfss_snp(
     不会拖住服务。端口数会先探测，文件名按端口数落成 .s<N>p。要重新求解请先调
     start_hfss_analysis_async。
 
+    导出前先扫 `<工程>.aedtresults/<设计>.results/*_SU.txt` 里的 `Success 1` 作求解证据；
+    没有任何证据时直接返回 `SOLVE_REQUIRED`，不去白调 ExportNetworkData（否则只会拿到
+    EXPORT_FAILED 或空/旧数据）。
+
     Args:
         project_path: .aedt 项目文件绝对路径。
         design_name: HFSS 设计名（如 "HFSSDesign1"）。
@@ -281,6 +336,10 @@ def export_hfss_snp(
         return error_response("AEDT_NOT_RUNNING", "AEDT 未运行，请先用 open_hfss_project 打开工程")
 
     project_name = Path(resolved).stem
+    # 预检：没有 Success 1 证据就别白调 ExportNetworkData（它会失败或给出空/旧数据）
+    su, su_err = _solved_evidence_or_error(resolved, design_name)
+    if su_err:
+        return su_err
     if not output_path:
         output_path = str(Path(resolved).parent / f"{project_name}_{design_name}.sNp")
 
