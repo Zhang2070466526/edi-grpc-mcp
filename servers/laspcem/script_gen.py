@@ -19,11 +19,10 @@ viewer 全局对象），等价于 GUI 的 File → Script → Run Script。
 
 from __future__ import annotations
 
-import os
-import tempfile
 from pathlib import Path
 
 from servers.laspcem.setup_reader import split_setup_name
+from servers.utils import default_result_path
 
 _SCRIPT_VERSION = "{'BuildDate':'2026-09-23','BuildNo':'28167'}"
 
@@ -54,10 +53,8 @@ _WRAPPER_EXIT: list[str] = []
 
 
 def default_log_path(tag: str = "script") -> str:
-    """给脚本日志一个默认可写的临时路径（工具一般会显式传并回传给调用方）。"""
-    fd, path = tempfile.mkstemp(prefix=f"laspcem_{tag}_", suffix=".log")
-    os.close(fd)
-    return path
+    """给脚本日志一个默认可写的路径，落 MCP_RESULT_DIR（不再堆 %TEMP% 根目录）。"""
+    return default_result_path(f"laspcem_{tag}", ".log")
 
 
 def render_script(steps: list[tuple[str, list[str]]], log_path: str,
