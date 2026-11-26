@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import functools
+import inspect
 import math
 import os
 import socket
@@ -27,6 +28,20 @@ def server_uptime_seconds() -> float:
     return time.time() - SERVER_STARTED_AT
 
 
+def _signature_for_schema(fn):
+    """取「在原始函数自己的 globals 里求值过」的签名，供工具装饰器挂到 wrapper 上。
+
+    `from __future__ import annotations` 让注解变成字符串；FastMCP 用 wrapper 的 __globals__
+    去求值，解析不到业务模块的类型（如 `MixerProject`）⇒ 参数 schema 退化成
+    `additionalProperties: true`（2026-11-26 实测：agent 只能靠报错反推结构）。
+    沿 `__wrapped__` 找到原始函数再 eval，Schema 才能生成真实字段。
+    """
+    try:
+        return inspect.signature(inspect.unwrap(fn), eval_str=True)
+    except Exception:                               # noqa: BLE001 —— 求值失败就保持原样
+        return None
+
+
 def per_tool_mutex(fn):
     """给工具函数加一把独立互斥锁。
 
@@ -42,6 +57,9 @@ def per_tool_mutex(fn):
         with lock:
             return fn(*args, **kwargs)
 
+    # ⚠️ 见 _signature_for_schema：不挂签名的话，FastMCP 会把 pydantic 参数退化成自由 object
+    if (sig := _signature_for_schema(fn)) is not None:
+        wrapper.__signature__ = sig
     return wrapper
 
 
@@ -494,6 +512,10 @@ def prune_empty_default_dirs(fn):
             for d in made:
                 discard_empty_dir(d)
         return result
+
+    # ⚠️ 见 _signature_for_schema：不加这个，pydantic 类型参数在 tools/list 里退化成自由 object
+    if (sig := _signature_for_schema(fn)) is not None:
+        wrapper.__signature__ = sig
     return wrapper
 
 

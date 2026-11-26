@@ -51,9 +51,13 @@ from servers.schema_descriptions import (
     inject_tool_descriptions,
     trim_tool_descriptions,
     inline_tool_schemas,
+    inject_model_param_schemas,
 )  # noqa: E402
 inject_tool_descriptions(mcp)
 trim_tool_descriptions(mcp)
+# pydantic 模型参数（如 run_mixer_simulation.project）：FastMCP 生成的 $ref 会缺 $defs，
+# 用模型自己的 JSON Schema 覆盖（否则参数在 tools/list 里只剩 additionalProperties:true）。
+inject_model_param_schemas(mcp)
 # 嵌套模型（如 run_tr_simulation.links 的 TrLink）会被 pydantic 生成成 $ref + $defs；
 # 扁平成自包含 schema，客户端/模型不必跟 $ref 就能看到元素字段。
 inline_tool_schemas(mcp)

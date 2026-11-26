@@ -132,14 +132,41 @@ def trim_tool_descriptions(mcp) -> int:
 # 模型不会去跟 $ref：只看到 links 是「数组」，不知道元素里能写什么 ⇒ 又开始猜参数。
 # 这里把本地 $defs 就地展开，让每个工具的 inputSchema 自包含。
 
-_MAX_REF_DEPTH = 8
+_MAX_REF_DEPTH = 40      # 嵌套模型 + Optional 包装会让层数变深（8 层不够，2026-11-26 实测）
+
+
+def _collect_defs(node, out: dict, depth: int = 0) -> None:
+    """递归收集任意层级的 `$defs`（pydantic 有时把 $defs 塞进 anyOf 分支，不是根级）。"""
+    if depth > 12:
+        return
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == "$defs" and isinstance(value, dict):
+                out.update(value)
+            else:
+                _collect_defs(value, out, depth + 1)
+    elif isinstance(node, list):
+        for value in node:
+            _collect_defs(value, out, depth + 1)
+
+
+def _strip_defs(node, depth: int = 0):
+    """展开完就把残留的 `$defs` 摘掉（否则 schema 体积翻倍且没有引用）。"""
+    if depth > 12:
+        return node
+    if isinstance(node, dict):
+        return {k: _strip_defs(v, depth + 1) for k, v in node.items() if k != "$defs"}
+    if isinstance(node, list):
+        return [_strip_defs(v, depth + 1) for v in node]
+    return node
 
 
 def inline_local_refs(schema: dict, *, max_depth: int = _MAX_REF_DEPTH) -> dict:
     """把 ``#/$defs/X`` 形式的本地引用就地展开，返回自包含的 schema（不改原对象）。"""
     if not isinstance(schema, dict):
         return schema
-    defs = schema.get("$defs") or {}
+    defs: dict = {}
+    _collect_defs(schema, defs)
 
     def resolve(node, depth: int = 0):
         """就地展开 #/$defs 引用，返回自包含节点。"""
@@ -163,8 +190,69 @@ def inline_local_refs(schema: dict, *, max_depth: int = _MAX_REF_DEPTH) -> dict:
 
     out = resolve(schema)
     if isinstance(out, dict):
-        out.pop("$defs", None)
+        out = _strip_defs(out)
     return out
+
+
+def _has_ref(node, depth: int = 0) -> bool:
+    """schema 里是否还有本地 `$ref`（含被 pydantic 塞进 anyOf 分支的那种）。"""
+    if depth > 12:
+        return False
+    if isinstance(node, dict):
+        if isinstance(node.get("$ref"), str) and node["$ref"].startswith("#/$defs/"):
+            return True
+        return any(_has_ref(v, depth + 1) for v in node.values())
+    if isinstance(node, list):
+        return any(_has_ref(v, depth + 1) for v in node)
+    return False
+
+
+def _model_param_map() -> dict[str, dict[str, type]]:
+    """哪些工具的哪个参数是 pydantic 模型（FastMCP 生成的 $ref 缺 $defs，得自己补）。
+
+    2026-11-26 实测：装饰器链 + `from __future__ import annotations` 下，FastMCP 对
+    `project: MixerProject` 只生成了 `{"items": {"$ref": "#/$defs/MixerLink"}}` 却**没带
+    `$defs`**（悬空引用），参数退化成自由 object。这里直接拿模型自己的 JSON Schema 覆盖。
+    """
+    try:
+        from servers.simulation_tool.mixer_models import MixerProject
+    except Exception:                                   # noqa: BLE001 —— 可选模块，缺了不影响启动
+        return {}
+    return {"run_mixer_simulation": {"project": MixerProject}}
+
+
+def inject_model_param_schemas(mcp) -> int:
+    """把 pydantic 模型参数的 schema 显式写进 inputSchema（并就地展开 $ref）。"""
+    mapping = _model_param_map()
+    if not mapping:
+        return 0
+    changed = 0
+    for tool in registered_tools(mcp):
+        spec_map = mapping.get(getattr(tool, "name", ""))
+        if not spec_map or not isinstance(getattr(tool, "parameters", None), dict):
+            continue
+        params = tool.parameters
+        props = params.setdefault("properties", {})
+        for pname, model in spec_map.items():
+            old = props.get(pname) if isinstance(props.get(pname), dict) else {}
+            try:
+                schema = model.model_json_schema()
+            except Exception as exc:                    # noqa: BLE001
+                _logger.warning("model schema failed for %s.%s: %s", tool.name, pname, exc)
+                continue
+            schema.pop("title", None)
+            if old.get("description"):
+                schema["description"] = old["description"]      # 保留工具作者写的说明
+            props[pname] = schema
+            if pname in (params.get("required") or []):
+                pass                                    # 必填关系保持 FastMCP 的判定
+        try:
+            tool.parameters = inline_local_refs(params)
+            changed += 1
+        except Exception as exc:                        # noqa: BLE001
+            _logger.warning("inline model schema failed for %s: %s", tool.name, exc)
+    _logger.info("tool model schemas injected=%d", changed)
+    return changed
 
 
 def inline_tool_schemas(mcp) -> int:
@@ -172,7 +260,7 @@ def inline_tool_schemas(mcp) -> int:
     changed = 0
     for tool in registered_tools(mcp):
         params = getattr(tool, "parameters", None)
-        if not isinstance(params, dict) or "$defs" not in params:
+        if not isinstance(params, dict) or not _has_ref(params):
             continue
         try:
             tool.parameters = inline_local_refs(params)

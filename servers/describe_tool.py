@@ -195,6 +195,62 @@ def _type_of(spec: dict) -> str:
     return "?"
 
 
+def _pick_object(spec: dict) -> dict:
+    """从 anyOf 里挑出带 properties 的对象分支（Optional/Union 包装用）。"""
+    if spec.get("properties"):
+        return spec
+    for alt in (spec.get("anyOf") or []):
+        if isinstance(alt, dict):
+            if alt.get("properties"):
+                return alt
+    return {}
+
+
+def _pick_array_items(spec: dict) -> dict:
+    """从 anyOf 里挑出数组分支的 items。"""
+    if spec.get("type") == "array" and isinstance(spec.get("items"), dict):
+        return spec["items"]
+    for alt in (spec.get("anyOf") or []):
+        if isinstance(alt, dict) and alt.get("type") == "array" and isinstance(alt.get("items"), dict):
+            return alt["items"]
+    return {}
+
+
+def _field_tree(spec: dict, prefix: str, depth: int, out: list[str], max_depth: int = 5) -> None:
+    """把嵌套对象/数组元素摊成 `links[].defaults.in_port: integer — 说明` 形式的可读行。
+
+    2026-11-26：`project` 这类复杂参数过去在 describe_tool 只显示 `object`，
+    agent 看不到 defaults/lo 的字段名，只能靠报错反推（3 轮、38.5 万 tokens）。
+    """
+    if depth > max_depth:
+        return
+    obj = _pick_object(spec)
+    items = _pick_array_items(spec)
+    if items:
+        _field_tree(items, prefix + "[]", depth + 1, out, max_depth)
+        return
+    for name, child in (obj.get("properties") or {}).items():
+        if not isinstance(child, dict):
+            continue
+        cobj = _pick_object(child)
+        citems = _pick_array_items(child)
+        desc = (child.get("description") or cobj.get("description") or "").strip()
+        required = name in set(obj.get("required") or [])
+        if citems:
+            line = f"{prefix}.{name}[]: {_type_of(citems)}"
+        elif cobj:
+            line = f"{prefix}.{name}: object"
+        else:
+            line = f"{prefix}.{name}: {_type_of(child)}"
+        if required:
+            line += "（必填）"
+        if desc:
+            line += f" — {desc}"
+        out.append(line)
+        if cobj or citems:
+            _field_tree(child, f"{prefix}.{name}", depth + 1, out, max_depth)
+
+
 def _param_rows(schema: dict | None) -> list[dict[str, Any]]:
     """把 inputSchema 摊平成参数表，并对「数组元素结构缺失」显式标注。"""
     schema = schema or {}
@@ -230,6 +286,12 @@ def _param_rows(schema: dict | None) -> list[dict[str, Any]]:
                     row["items_fields"] = list(items["properties"].keys())
                     if items.get("required"):
                         row["items_required"] = list(items["required"])
+        # 嵌套结构（对象参数 / 对象数组）：给出可读字段树，agent 不必再猜或反推
+        tree: list[str] = []
+        if _pick_object(spec) or _pick_array_items(spec):
+            _field_tree(spec, pname, 0, tree)
+        if tree:
+            row["field_tree"] = tree[:40]              # 上限 40 行，避免超大 schema 撑爆返回
         rows.append(row)
     return rows
 

@@ -27,6 +27,7 @@ from servers.simulation_tool.config import (
     run_exe,
 )
 from servers.eda.config import EDA_GRPC_SERVER
+from servers.simulation_tool.mixer_models import MixerProject
 from servers.utils import (
     collect_simulation_artifacts,
     error_response,
@@ -88,26 +89,43 @@ _INDICATOR_LOOKUP: dict[str, str] = {_norm_name(n): n for n in _MIXER_INDICATORS
 #: defaults 必填字段（使用说明「defaults」表）
 _DEFAULTS_REQUIRED: tuple[str, ...] = ("in_port", "out_port", "input_freq_ghz", "input_power_dbm", "lo")
 
+#: 最小可跑参数表（报错 hint 里直接给，省掉"靠报错反推结构"的几轮）
+_MINIMAL_PROJECT: str = (
+    '{"name":"<工程名>","epp":"<.epp 绝对路径>","links":[{"defaults":'
+    '{"in_port":1,"out_port":2,"input_freq_ghz":[2,2.1],"input_power_dbm":-30,'
+    '"lo":[{"freq_ghz":[20,20],"power_dbm":10,"output_bw_ghz":0.4}]},'
+    '"indicators":[{"name":"变频增益","orders":{"FREQ":5,"LO":5}}]}]}'
+)
+
 
 def _is_num(v: Any) -> bool:
     """有限数值（排除 bool、NaN、Inf）。"""
     return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
 
 
-def _range_reason(value: Any) -> str:
-    """校验 [min, max] 形式：合法返回空串，否则返回原因（**不含字段名**，由调用方拼 location）。"""
+def _range_reason(value: Any, *, allow_equal: bool = True) -> str:
+    """校验 [min, max] 形式：合法返回空串，否则返回原因（**不含字段名**，由调用方拼 location）。
+
+    `allow_equal=True` 用于本振（固定本振写 `[f, f]`）；输入频率必须 `min < max`
+    —— 2026-11-26 实测：exe 对 `input_freq_ghz:[2,2]` 只回一句"必须是递增正频率区间"，
+    在本地先拦下能省调用方一轮。
+    """
     if not isinstance(value, (list, tuple)) or len(value) != 2 or not all(_is_num(v) for v in value):
         return f"必须是 [min, max] 两个数值（当前 {value!r}）"
     if value[0] > value[1]:
         return f"min 不能大于 max（当前 {value[0]} > {value[1]}）"
+    if not allow_equal and value[0] == value[1]:
+        return (f"必须 min < max（当前 {value[0]} == {value[1]}）；固定输入频率也要写成递增小区间，"
+                f"如 [{value[0]}, {value[1] + 0.1}]")
     return ""
 
 
 def _missing_field(where: str, field: str) -> dict:
-    """参数表缺字段 → LINK_MISSING_FIELD（点名补哪个）。"""
+    """参数表缺字段 → LINK_MISSING_FIELD（点名补哪个，并给可抄的最小骨架）。"""
     resp = error_response(
         "LINK_MISSING_FIELD", f"{where} 缺少必填字段 {field!r}",
-        hint=f"在 {where} 里补 {field!r}；字段名/单位见 describe_tool(run_mixer_simulation)",
+        hint=f"在 {where} 里补 {field!r}；字段名/单位见 describe_tool(run_mixer_simulation)。"
+             f"可抄的最小骨架：{_MINIMAL_PROJECT}",
     )
     resp["missing_field"] = field
     return resp
@@ -175,7 +193,7 @@ def _check_project(project: dict) -> dict | None:
                     and defaults["in_port"] == defaults["out_port"]:
                 errors.append(_invalid(f"{label}.defaults.out_port",
                                        f"不能与 in_port 相同（当前都是 {defaults['in_port']}）"))
-            if reason := _range_reason(defaults["input_freq_ghz"]):
+            if reason := _range_reason(defaults["input_freq_ghz"], allow_equal=False):
                 errors.append(_invalid(f"{label}.defaults.input_freq_ghz", reason))
             if not _is_num(defaults["input_power_dbm"]):
                 errors.append(_invalid(f"{label}.defaults.input_power_dbm",
@@ -408,7 +426,7 @@ def _check_netlist_consistency(project: dict, netlist_path: Path) -> dict | None
 @per_tool_mutex
 @prune_empty_default_dirs
 def run_mixer_simulation(
-    project: dict,
+    project: MixerProject,
     out_dir: str = "",
     workers: int = 10,
     turbocharts_exe: str = "",
@@ -441,7 +459,8 @@ def run_mixer_simulation(
     结果直接读返回的 indicators / artifacts，**新版不生成 PDF/DOCX 报告**，别再去翻报告。
 
     Args:
-        project: 参数表 dict，必含 name（工程名）、epp（.epp 绝对路径）、links（链路数组，≥1）。
+        project: 参数表（`MixerProject` 模型，结构已进 tools/list 的 JSON Schema：name / epp / links；
+            links[].defaults 五件套 in_port/out_port/input_freq_ghz/input_power_dbm/lo，见上文）。
             （完整字段表见本 docstring 上文，已内联展开，不再依赖单独 .md。）
         out_dir: 结果目录；留空则落到默认产物目录下的子目录（<result_dir>/run_mixer_simulation_<时间戳>/）。response.json / indicator_results / runs / figs 都落这里。
         workers: 并发进程数（正整数），默认 10；EDI 不稳定时降到 5。
@@ -455,6 +474,11 @@ def run_mixer_simulation(
         indicators 是本次请求的指标摘要（≤15 个，未请求的不出现）；单值指标带 value、扫频指标带 min/max/points；
         status=incomplete 的指标带 reason（如「数值底」）。failures 为空表示成功。
     """
+    # 0. 兼容两种入参：FastMCP 传的是 MixerProject 实例；测试/内部直调可传 dict
+    #    （exclude_none ⇒ 未提供的字段不会凭空出现，下游"缺字段"校验照旧生效）
+    if hasattr(project, "model_dump"):
+        project = project.model_dump(exclude_none=True)
+
     # 1. project 参数表 + epp 校验
     if not isinstance(project, dict) or not project:
         return error_response(

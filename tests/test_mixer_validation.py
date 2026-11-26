@@ -13,12 +13,14 @@ import json
 
 from servers.simulation_tool.mixer_simulation import (
     _INDICATOR_REQUIRES,
+    _MINIMAL_PROJECT,
     _MIXER_INDICATORS,
     _check_netlist_consistency,
     _check_project,
     _failure_message,
     _fmt_errors,
     _imd_negative_warning,
+    _missing_field,
     _noise_ssb_warning,
     _read_netlist_facts,
     run_mixer_simulation,
@@ -307,3 +309,33 @@ def test_failure_message_priority():
     assert "工况矩阵为空" in _failure_message({"condition_count": 0}, [], [], "")
     # 其它兜底
     assert "未给出" in _failure_message({"condition_count": 3}, [], [], "")
+
+
+def test_missing_field_hint_carries_runnable_skeleton():
+    """缺字段的 hint 要直接给可抄的最小骨架 —— 别再让调用方靠报错反推结构。
+
+    2026-11-26：另一个会话为一张 5 字段的参数表试了 3 轮（38.5 万 tokens）才到 lo 那层。
+    """
+    r = _missing_field("links[0].defaults", "lo")
+    assert r["error_code"] == "LINK_MISSING_FIELD" and r["missing_field"] == "lo"
+    assert _MINIMAL_PROJECT in r["hint"]
+    # 骨架本身必须是合法 JSON，且含 defaults 五件套
+    import json as _json
+    skeleton = _json.loads(_MINIMAL_PROJECT)
+    assert {"in_port", "out_port", "input_freq_ghz", "input_power_dbm", "lo"} <= set(
+        skeleton["links"][0]["defaults"])
+
+
+def test_input_freq_equal_range_rejected_locally():
+    """`input_freq_ghz:[2,2]` 要在本地就拦下（exe 只回一句"必须是递增正频率区间"）。
+
+    本振允许 `[f,f]`（固定本振），输入频率不允许 —— 两者口径不同，2026-11-26 实测踩过。
+    """
+    proj = _link(defaults={"in_port": 1, "out_port": 2, "input_freq_ghz": [2, 2],
+                           "input_power_dbm": -30,
+                           "lo": [{"freq_ghz": [20, 20], "power_dbm": 10}]},
+                 indicators=[{"name": "变频增益", "orders": {"FREQ": 5, "LO": 5}}])
+    r = _check_project(proj)
+    assert r and r["error_code"] == "LINK_JSON_INVALID"
+    assert r["location"].endswith("defaults.input_freq_ghz")
+    assert "min < max" in r["message"]

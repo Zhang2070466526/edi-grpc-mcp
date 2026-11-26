@@ -50,6 +50,40 @@ def test_mixer_project_param_has_handwritten_example():
     assert {"in_port", "out_port", "input_freq_ghz", "input_power_dbm", "lo"} <= set(link["defaults"])
 
 
+def test_mixer_project_schema_is_explicit_in_tools_list():
+    """`project` 必须是**有结构**的 object：links[].defaults 的 5 个字段要出现在 schema 里。
+
+    2026-11-26：`project: dict` 时 schema 只有 `additionalProperties: true`，调用方拿不到
+    字段名，只能靠报错反推（另一个会话为此花了 3 轮、38.5 万 tokens）。
+    """
+    import servers.registry_server  # noqa: F401
+    from servers import mcp as m
+
+    tool = next(t for t in registered_tools(m) if t.name == "run_mixer_simulation")
+    project = (tool.parameters.get("properties") or {})["project"]
+    assert project.get("properties"), f"project 缺结构：{project}"
+    links = project["properties"]["links"]
+    arr = next(a for a in (links.get("anyOf") or [links]) if a.get("type") == "array")
+    defaults = arr["items"]["properties"]["defaults"]
+    d_obj = next(a for a in (defaults.get("anyOf") or [defaults]) if a.get("properties"))
+    assert {"in_port", "out_port", "input_freq_ghz", "input_power_dbm", "lo"} <= set(d_obj["properties"])
+    lo = d_obj["properties"]["lo"]
+    lo_arr = next(a for a in (lo.get("anyOf") or [lo]) if a.get("type") == "array")
+    assert {"freq_ghz", "power_dbm"} <= set(lo_arr["items"]["properties"])
+    # 自包含：不许留悬空 $ref
+    import json as _json
+    assert "$ref" not in _json.dumps(tool.parameters, ensure_ascii=False)
+
+
+def test_describe_tool_gives_field_tree_for_nested_project():
+    """describe_tool 要把嵌套字段摊成 `project.links[].defaults.in_port` 这种可读行。"""
+    r = describe_tool("run_mixer_simulation")
+    row = next(p for p in r["parameters"] if p["name"] == "project")
+    tree = " | ".join(row.get("field_tree") or [])
+    assert "project.links[].defaults.in_port" in tree
+    assert "project.links[].defaults.lo[]" in tree
+
+
 def test_empty_name_lists_all_tools():
     r = describe_tool("")
     assert r["success"] is True
