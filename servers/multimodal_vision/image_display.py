@@ -2,7 +2,7 @@
 
 功能：
   show_image           — 读取本地图片，≤10MB 返回 ImageContent，>10MB 返回本地路径提示
-  register_image_url   — 生成临时 HTTP Token（10 分钟有效），供 Chat 前端渲染
+  register_image_url   — 生成 HTTP Token（路径 urlencode，无状态永久有效），供 Chat 前端渲染
 """
 
 from __future__ import annotations
@@ -89,7 +89,7 @@ def show_image(image_path: str) -> list[Any] | dict[str, Any]:
 # ═══════════════════════════════════════════════════════════
 
 def register_image_url(img_path: str) -> str:
-    """注册图片临时 Token（10 分钟有效），供 Chat 前端通过 /images/{token} 访问。"""
+    """注册图片 Token（路径 urlencode，无状态永久有效），供 Chat 前端通过 /images/{token} 访问。"""
     p = validate_image_path(img_path)
     _, url = _image_store.register(str(p))
     return url
@@ -100,7 +100,7 @@ def register_image_url(img_path: str) -> str:
 # ═══════════════════════════════════════════════════════════
 
 async def serve_image(request: Request) -> FileResponse | JSONResponse:
-    """GET /images/{token} — 根据 Token 返回图片文件，10 分钟过期。"""
+    """GET /images/{token} — 根据 Token 返回图片文件（无状态、不过期）。"""
     token = request.path_params.get("token", "")
     entry = _image_store.lookup(token)
     if entry is None:

@@ -1,6 +1,6 @@
 """文档与产物访问工具 — HTTP 临时链接 + 系统默认程序打开。
 
-open_document         — 打开本地文档：link 模式生成 10 分钟 HTTP 链接，local 模式系统默认程序打开
+open_document         — 打开本地文档：link 模式生成 HTTP 链接（无状态、不过期），local 模式系统默认程序打开
 register_document_url — 注册办公文档 Token（仅 10 种格式；报告已改用 build_file_link，此函数暂无生产调用点，保留作公共 API）
 fetch_artifact        — 把任意产物文件（.snp/.raw/图/报告）注册成可下载 URL（远程取产物）
 """
@@ -70,7 +70,7 @@ def register_document_url(file_path: str, disposition: str = "inline") -> str:
 
     仅供限定的 10 种办公格式（_ALLOWED_EXTENSIONS），与 _register_any_file_url
     （不校验扩展名）语义不同。报告已改用 build_file_link，此函数暂无生产调用点。
-    Token 10 分钟后过期，仅本机 127.0.0.1 可访问。
+    Token 由路径 urlencode 生成，无状态、不过期，仅本机 127.0.0.1 可访问。
     """
     # 复用 open_document 的路径校验，防止未来调用方传入任意本地路径被注册为可访问 token
     path = _validate_path(file_path, _ALLOWED_EXTENSIONS)
@@ -94,7 +94,7 @@ def open_document(
     mode: str = "link",
     disposition: str = "inline",
 ) -> dict[str, Any]:
-    """打开本地文档：link 模式生成 10 分钟 HTTP 链接，local 模式用系统默认程序打开。
+    """打开本地文档：link 模式生成 HTTP 链接，local 模式用系统默认程序打开。
 
     用法："帮我打开这个 PDF"、"用 Word 打开这个报告"
 
@@ -208,7 +208,7 @@ def fetch_artifact(file_path: str, ttl_seconds: int = 600) -> dict[str, Any]:
 # ═══════════════════════════════════════════════════════════
 
 async def serve_document(request: Request) -> FileResponse | JSONResponse:
-    """GET /documents/{token} — 根据 Token 返回文档文件，10 分钟过期。"""
+    """GET /documents/{token} — 根据 Token 返回文档文件（无状态、不过期）。"""
     token = request.path_params.get("token", "")
     entry = _doc_store.lookup(token)
     if entry is None:
