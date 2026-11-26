@@ -2,7 +2,7 @@
 
 > 自动生成，勿手改。权威数量见 /ready 的 tool_count。
 
-共 100 个工具：
+共 101 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，只放置器件，不修改器件属性。
 - `add_performance_component` — 按指定坐标新增性能模型器件，只放置器件，不修改器件属性。
@@ -21,6 +21,7 @@
 - `close_hfss_project` — 关闭 AEDT **工程**（File → Close Project）：不退出 AEDT、绝不杀进程。
 - `close_laspcem_project` — 关闭在 LASPCEM 中打开某个 .sem 的 GUI 实例（等价于关窗口）。
 - `compare_simulation_results` — 比较多个 RAW 仿真结果文件中的同一条曲线并生成对比图。
+- `compare_snp` — 把多个 sNp 文件对齐到同一频率网格，按端口数出全部 S(i,j) 对比曲线与 CSV（可选重归一化）。
 - `create_project` — 创建新的 EDI 工程（不显示创建向导，也不自动打开）。
 - `create_workspace` — 创建一个新的工作区，不自动切换。
 - `cst_export_farfield` — 导出 CST 模型的远场方向图为 ASCII .txt（自动判断是否已求解）。

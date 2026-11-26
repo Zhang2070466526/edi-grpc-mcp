@@ -22,7 +22,7 @@ from servers.eda.project_manage import list_epp_projects
 - **[模型库 / 原理图库（6 个）](#模型库--原理图库6个)**：模型替换、模型分类/查询/搜索、性能器件放置、拓扑设计
 - **[软 IP（1 个）](#软ip1个)**：按设计描述下载芯片模型
 - **[微波计算（7 个）](#微波计算7个)**：传输线特性阻抗 / 线宽计算、多级威尔金森功分器设计、滤波器阶数评估（高通/低通/带通/带阻）、功分器/巴伦节数（本地纯计算，无任务信封）
-- **[射频链路计算（2 个）](#射频链路计算2个)**：混频杂散枚举、噪声底 / 灵敏度 / 压缩受限动态范围（本地纯计算，无任务信封）
+- **[射频链路计算（3 个）](#射频链路计算3个)**：混频杂散枚举、噪声底 / 灵敏度 / 压缩受限动态范围、多 Touchstone 对比（本地纯计算，无任务信封）
 - **[工作区（3 个）](#工作区3个)**：创建 / 切换 / 查询当前工作区
 - **[原理图扩展（5 个）](#原理图扩展5个)**：内置器件、清空原理图、连线、批量器件变换
 - **[启动 / 诊断（3 个）](#启动--诊断3个)**：启动 EDI、服务诊断、日志读取
@@ -1877,7 +1877,7 @@ wilkinson_marchand_order(ratio: float, rl_db: float = 15.0) -> dict
 
 ---
 
-## 射频链路计算（2 个）
+## 射频链路计算（3 个）
 
 纯本地计算：不走 gRPC(50055) / ADS / SimulationAgent(17866)，**EDI.exe 没起也能用**，返回里没有任务信封。
 算法层是 `servers/c++demo/` 下 C++ 原版（`mixerspuranalyzer.cpp`、`rfdynamicrangecalculator.cpp`）的逐行 Python 移植，**语义以 C++ 为准**。
@@ -1972,6 +1972,32 @@ calculate_rf_dynamic_range(noise_figure_db: float, input_p1dbm: float, bandwidth
 返回：`{"success": true, "noise_floor_dbm", "sensitivity_dbm", "dynamic_range_db"}`；给了 target 再加 `meets_target / margin_db / required_sensitivity_dbm`（`required_sensitivity = P1dB − target`，`meets_target = margin ≥ 0`）。
 
 实测锚点：NF=2 dB、P1dB=−20 dBm、BW=100 MHz、SNR=10 dB、target=60 dB → **−92 / −82 / 62 dB，margin 2 dB，达标**。
+
+---
+
+### `compare_snp`
+
+```python
+from servers.rf_analysis.snp_compare_tool import compare_snp
+
+compare_snp(paths: list, labels: list | None = None, renormalize_to: float = 0.0,
+            ref_impedance: list | None = None, z0_csv: str | None = None,
+            output_dir: str = "", title: str = "") -> dict
+```
+
+把多个 Touchstone（.sNp/.s2p/…）对齐到同一频率网格，**按端口数 N 出全部 N² 个 S(i,j) 对比曲线**（N×N 子图）+ CSV + 差值统计。自动识别 MA/RI/DB 三种格式与频率单位；可选重归一化参考阻抗（HFSS 是 50 Ω，LASPCEM 按端口自身阻抗，直接比会假偏差 4–7 dB）。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `paths` | list[str] | 是 | — | Touchstone 文件绝对路径（≥2） |
+| `labels` | list[str] | 否 | 文件名 | 图例名，与 paths 一一对应 |
+| `renormalize_to` | float | 否 | 0 | 目标参考阻抗（Ω）；>0 时先把每个文件从原始阻抗重归一化；0=不改口径 |
+| `ref_impedance` | list | 否 | 文件头 R | 各文件原始参考阻抗（标量或每端口列表；None=按文件头） |
+| `z0_csv` | str | 否 | null | LASPCEM 的 S_result.csv 路径，自动读端口阻抗并命中「文件名含 laspcem」的文件 |
+| `output_dir` | str | 否 | 默认产物目录 | 输出目录 |
+| `title` | str | 否 | 自动 | 图标题 |
+
+返回：`{"success", "png_path", "csv_path", "points", "freq_range", "files[{path,label,nports,fmt,z0,renormalized_from}]", "diff"{S11,S12,…: {label:{mean_db,max_db}}}, "warnings"}`。
 
 ---
 
@@ -2342,7 +2368,7 @@ load_schematic_from_file(project_path: str, schematic_path: str, timeout_seconds
 
 ## Resources & Prompts
 
-除了 Tool（启动时动态统计，当前 100 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
+除了 Tool（启动时动态统计，当前 101 个），服务还注册了只读 Resource 和可复用 Prompt 工作流模板。
 
 ### Resources（8 个）
 

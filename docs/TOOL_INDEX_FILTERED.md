@@ -6,7 +6,7 @@
 
 > 所有已注册工具；exe 打包版（frozen）会在此基础上无条件去掉 analyze_image。
 
-共 100 个工具：
+共 101 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，只放置器件，不修改器件属性。
 - `add_performance_component` — 按指定坐标新增性能模型器件，只放置器件，不修改器件属性。
@@ -25,6 +25,7 @@
 - `close_hfss_project` — 关闭 AEDT **工程**（File → Close Project）：不退出 AEDT、绝不杀进程。
 - `close_laspcem_project` — 关闭在 LASPCEM 中打开某个 .sem 的 GUI 实例（等价于关窗口）。
 - `compare_simulation_results` — 比较多个 RAW 仿真结果文件中的同一条曲线并生成对比图。
+- `compare_snp` — 把多个 sNp 文件对齐到同一频率网格，按端口数出全部 S(i,j) 对比曲线与 CSV（可选重归一化）。
 - `create_project` — 创建新的 EDI 工程（不显示创建向导，也不自动打开）。
 - `create_workspace` — 创建一个新的工作区，不自动切换。
 - `cst_export_farfield` — 导出 CST 模型的远场方向图为 ASCII .txt（自动判断是否已求解）。
@@ -113,7 +114,7 @@
 
 > 对外可见面 = 全量 − 内部工具（依赖 EDI gRPC / 独立 exe / 诊断）。
 
-共 51 个工具：
+共 52 个工具：
 
 - `analyze_image` — 调用视觉模型分析本地图片内容，返回结构化文字结果 —— ⚠️ 结果可能编造（实测把电路原理图认成加法器），只作粗看、不得作为工程结论。(仅开发使用)
 - `analyze_mixer_spur` — 混频杂散分析：枚举 m×源频 ± n×LO 的杂散组合，判断是否落入目标输出频带。
@@ -123,6 +124,7 @@
 - `calculate_transline` — 计算传输线的特性阻抗或线宽（微带 / 带状 / 接地共面波导 / 同轴）。
 - `close_hfss_project` — 关闭 AEDT **工程**（File → Close Project）：不退出 AEDT、绝不杀进程。
 - `close_laspcem_project` — 关闭在 LASPCEM 中打开某个 .sem 的 GUI 实例（等价于关窗口）。
+- `compare_snp` — 把多个 sNp 文件对齐到同一频率网格，按端口数出全部 S(i,j) 对比曲线与 CSV（可选重归一化）。
 - `cst_export_farfield` — 导出 CST 模型的远场方向图为 ASCII .txt（自动判断是否已求解）。
 - `cst_export_farfield_query` — 查询远场导出任务：返回进度，完成时附带 farfield_txts。
 - `cst_export_snp` — 同步导出 CST 的 S 参数为 .sNp（阻塞等完成后返回文件路径，适合小模型）。长任务请用 cst_export_snp_async。
@@ -237,7 +239,7 @@
 
 > 全量 − design_chip − LASPCEM 电磁仿真工具。
 
-共 88 个工具：
+共 89 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，只放置器件，不修改器件属性。
 - `add_performance_component` — 按指定坐标新增性能模型器件，只放置器件，不修改器件属性。
@@ -255,6 +257,7 @@
 - `close_hfss_project` — 关闭 AEDT **工程**（File → Close Project）：不退出 AEDT、绝不杀进程。
 - `close_laspcem_project` — 关闭在 LASPCEM 中打开某个 .sem 的 GUI 实例（等价于关窗口）。
 - `compare_simulation_results` — 比较多个 RAW 仿真结果文件中的同一条曲线并生成对比图。
+- `compare_snp` — 把多个 sNp 文件对齐到同一频率网格，按端口数出全部 S(i,j) 对比曲线与 CSV（可选重归一化）。
 - `create_project` — 创建新的 EDI 工程（不显示创建向导，也不自动打开）。
 - `create_workspace` — 创建一个新的工作区，不自动切换。
 - `cst_export_farfield` — 导出 CST 模型的远场方向图为 ASCII .txt（自动判断是否已求解）。
@@ -332,7 +335,7 @@
 
 > 全量 − analyze_image（不暴露第三方图片上传），与 mode 无关。
 
-共 99 个工具：
+共 100 个工具：
 
 - `add_ideal_component` — 按指定坐标新增内置器件，只放置器件，不修改器件属性。
 - `add_performance_component` — 按指定坐标新增性能模型器件，只放置器件，不修改器件属性。
@@ -350,6 +353,7 @@
 - `close_hfss_project` — 关闭 AEDT **工程**（File → Close Project）：不退出 AEDT、绝不杀进程。
 - `close_laspcem_project` — 关闭在 LASPCEM 中打开某个 .sem 的 GUI 实例（等价于关窗口）。
 - `compare_simulation_results` — 比较多个 RAW 仿真结果文件中的同一条曲线并生成对比图。
+- `compare_snp` — 把多个 sNp 文件对齐到同一频率网格，按端口数出全部 S(i,j) 对比曲线与 CSV（可选重归一化）。
 - `create_project` — 创建新的 EDI 工程（不显示创建向导，也不自动打开）。
 - `create_workspace` — 创建一个新的工作区，不自动切换。
 - `cst_export_farfield` — 导出 CST 模型的远场方向图为 ASCII .txt（自动判断是否已求解）。

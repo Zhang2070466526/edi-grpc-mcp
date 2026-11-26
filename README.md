@@ -8,7 +8,7 @@
 
 ## ✨ 亮点
 
-- 🛠️ **100 个 MCP 工具，全链路闭环** — 工程管理 → 器件配置 → 模型选型 → 信号链分析 → 仿真 → 出图 → 出报告，一个服务走到底
+- 🛠️ **101 个 MCP 工具，全链路闭环** — 工程管理 → 器件配置 → 模型选型 → 信号链分析 → 仿真 → 出图 → 出报告，一个服务走到底
 - ⚡ **三大仿真引擎统一封装** — EDI gRPC（ADS）· ANSYS HFSS · CST，同一套工具、同一种返回结构
 - 🌐 **本机 / 远程一键切换** — 双击 `start_local.bat`（本机）或 `start_remote.bat`（远程）；`--host 0.0.0.0` 即远程，**地址零配置、机器不固定、主机端零安装**（详见 [`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md)「三、特殊机制」）
 - 🧠 **自然语言驱动** — 接入 Claude Code / Hermes / OpenClaw，一句「帮我看看工程、跑个仿真」即可
@@ -39,7 +39,7 @@ AI 客户端 (Claude Code / OpenClaw)
    │  Streamable HTTP (stateless) 或 stdio
    │  POST /mcp  │  initialize → tools/list → tools/call
    ▼
-EDI gRPC MCP 服务 (FastMCP, 100 工具, 8 Resource, 7 Prompt)
+EDI gRPC MCP 服务 (FastMCP, 101 工具, 8 Resource, 7 Prompt)
    │
    ├── EDA gRPC 工具 (50) ──→ EDI 客户端 (127.0.0.1:50055)
    │     FetchEvent ← PerformAction 异步模型，增量 ads_output
@@ -102,7 +102,7 @@ curl http://127.0.0.1:50026/health     # 进程 + gRPC 状态
 → {"status":"ok","mcp_ready":true,"eda_grpc_ready":true}
 
 curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
-→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":100}
+→ {"status":"ready","transport":"streamable-http","stateless":true,"tool_count":101}
 ```
 
 ### 客户端接入
@@ -132,7 +132,7 @@ curl http://127.0.0.1:50026/ready      # 初始化完成 (启动中 503)
 
 | 方式 | 说明 |
 |---|---|
-| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 100 个工具 |
+| **MCP 客户端** | Claude Code / OpenClaw 接入后，自然语言调用全部 101 个工具 |
 | **聊天界面** | 浏览器访问 `http://127.0.0.1:50026/ui`，内置 LLM 多轮工具闭环 |
 | **Python 调用** | `from servers.eda import list_epp_projects` 直接调用 |
 
@@ -148,9 +148,9 @@ r = start_simulation_async("C:/Projects/test/test.epp")
 
 ---
 
-## 工具一览（100 个）
+## 工具一览（101 个）
 
-100 个工具按领域分组：工程管理 / 仿真器件 / 仿真 / 导出与分析 / 模型库·原理图库 / 软 IP / 启动·诊断 / 工作区 / 原理图扩展 / 微波计算 / ANSYS HFSS / CST / 图表与图片 / 独立仿真 / 报告与文档。
+101 个工具按领域分组：工程管理 / 仿真器件 / 仿真 / 导出与分析 / 模型库·原理图库 / 软 IP / 启动·诊断 / 工作区 / 原理图扩展 / 微波计算 / ANSYS HFSS / CST / 图表与图片 / 独立仿真 / 报告与文档。
 
 > 每个工具的**详细参数、返回、示例** → **[`docs/TOOLS_API.md`](docs/TOOLS_API.md)**；工具清单由 `scripts/gen_tool_index.py` 自动生成 → [`docs/TOOL_INDEX.md`](docs/TOOL_INDEX.md)。
 
@@ -275,7 +275,7 @@ edi-grpc-mcp/
 │   │   ├── wilkinson_designer.py       #     多级威尔金森功分器（微带尺寸委托 transline）
 │   │   └── filter_order/               #     阶数评估（高通/低通/带通/带阻滤波器 + 功分器/巴伦节数）
 │   │
-│   ├── rf_analysis/                    #   射频链路计算 (2 个，本地纯计算)
+│   ├── rf_analysis/                    #   射频链路计算 (3 个，本地纯计算)
 │   │   ├── __init__.py                 #     公共 API re-export
 │   │   ├── mixer_spur.py               #     analyze_mixer_spur（混频杂散枚举）
 │   │   └── rf_dynamic_range.py         #     calculate_rf_dynamic_range（噪声底/灵敏度/动态范围）
@@ -297,13 +297,13 @@ edi-grpc-mcp/
 │
 ├── docs/                               # 项目文档
 │   ├── WIN7部署与启动手册.md           #   部署指南（打包产物、客户端配置）
-│   ├── TOOLS_API.md                    #   工具 API（100 个工具完整签名+返回值示例）
+│   ├── TOOLS_API.md                    #   工具 API（101 个工具完整签名+返回值示例）
 │   ├── HTTP_API.md                     #   HTTP 接口（请求体、响应体、成功/失败情况）
 │   ├── IMPLEMENTATION.md               #   实现原理与机制（通信原理、公有方法、特殊机制、工具、Resource/Prompt）
 │   ├── HANDOVER.md                     #   交接文档（架构设计、技术栈、47 条注意事项）
 │   └── EDI系统接口与外部调用汇总.md    #   EDI 系统全量对外接口
 │
-├── tests/                              # 测试套件 (917 项)
+├── tests/                              # 测试套件 (942 项)
 │   ├── test_simulation_components.py   #   88 项：参数目录/Schema/11步校验/wire转换/权限/别名冲突
 │   ├── test_cst.py                     #   55 项：共享函数/静态解析/查询返回/导出流程 mock
 │   ├── test_bugfixes.py                #   38 项：历史 bug 修复回归
@@ -390,7 +390,7 @@ edi-grpc-mcp/
 | `test_tool_index.py` | 工具清单与注册表一致性 | 1 |
 
 ```powershell
-uv run pytest -q                 # 全量 917 项
+uv run pytest -q                 # 全量 942 项
 uv run pytest tests/ -v          # 详细输出
 uv run pytest tests/test_simulation_components.py -v  # 单文件
 ```
@@ -413,7 +413,7 @@ powershell -File scripts/build.ps1  # PyInstaller
 | 文档 | 说明 |
 |---|---|
 | [部署指南](./docs/WIN7部署与启动手册.md) | 打包产物使用、客户端配置 |
-| [工具 API](./docs/TOOLS_API.md) | 全部 100 个工具参数、返回值、示例 |
+| [工具 API](./docs/TOOLS_API.md) | 全部 101 个工具参数、返回值、示例 |
 | [HTTP 接口](./docs/HTTP_API.md) | 全部 HTTP 路由的请求体、响应体、成功/失败情况 |
 | [实现原理与机制](./docs/IMPLEMENTATION.md) | 通信原理、公有方法、特殊机制、工具、8 Resource + 7 Prompt |
 | [交接文档](./docs/HANDOVER.md) | 架构设计、技术栈、扩展开发、47 条注意事项 |

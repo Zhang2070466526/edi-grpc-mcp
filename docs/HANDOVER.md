@@ -78,7 +78,7 @@ servers/
     transline.py          # 4 线型特性阻抗/线宽
     wilkinson_designer.py # 多级威尔金森功分器
     filter_order/         # 阶数评估（高通/低通/带通/带阻滤波器 + 功分器/巴伦节数）
-  rf_analysis/            # 射频链路计算（2 个，本地纯计算）
+  rf_analysis/            # 射频链路计算（3 个，本地纯计算）
     mixer_spur.py         # analyze_mixer_spur（混频杂散枚举）
     rf_dynamic_range.py   # calculate_rf_dynamic_range（噪声底/灵敏度/动态范围）
   simulation_tool/        # 独立仿真 exe 包装（4 个，固定目录直接调 exe）
@@ -112,7 +112,7 @@ PyPI: https://pypi.org/project/edi-grpc-mcp/  |  当前版本：0.1.11
 
 ## MCP 工具清单
 
-工具总数随版本变化（当前 100 个，以运行时 `/ready` 的 `tool_count` 为准），按功能分 18 类：
+工具总数随版本变化（当前 101 个，以运行时 `/ready` 的 `tool_count` 为准），按功能分 18 类：
 
 | 分类 | 数量 | 说明 |
 |---|---|---|
@@ -132,7 +132,7 @@ PyPI: https://pypi.org/project/edi-grpc-mcp/  |  当前版本：0.1.11
 | 图表与图片 | 5 | RAW 曲线、转图、结果对比、显示、视觉分析 |
 | 报告与文档 | 2 | 打开本地文档、下载任意产物（fetch_artifact） |
 | 微波工具 | 7 | 传输线计算、威尔金森功分器设计、滤波器阶数评估（高通/低通/带通/带阻）、功分器/巴伦节数（本地纯计算，无任务信封） |
-| 射频链路计算 | 2 | 混频杂散分析（analyze_mixer_spur）、噪声底/灵敏度/压缩受限动态范围（calculate_rf_dynamic_range）（本地纯计算，无任务信封） |
+| 射频链路计算 | 3 | 混频杂散分析（analyze_mixer_spur）、噪声底/灵敏度/压缩受限动态范围（calculate_rf_dynamic_range）（本地纯计算，无任务信封） |
 | 独立仿真 | 5 | 独立报告导出（Report_Exporter.exe → PDF/DOCX）、TR 纯硬编码仿真（TR_Simulator.exe）、混频链路仿真（mixer_simulation.exe）、XY 数据绘图（drawtool.exe） |
 
 > 完整工具签名、参数、返回格式见 [TOOLS_API.md](./TOOLS_API.md)，工具一览表见 [README.md](../README.md)。
