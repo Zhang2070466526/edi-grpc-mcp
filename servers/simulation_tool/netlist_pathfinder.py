@@ -106,7 +106,7 @@ def find_netlist_paths(
         混频链路的上下变频/镜像等指标请用 run_mixer_simulation）。switch_settings 只含
         EP genl_type=27 的开关；
         Bits 存在不代表器件是开关，移相器/衰减器的 Bits 不由寻路决定，保持原值。
-        器件连通规则全表见仓库 servers/simulation_tool/Netlist_Pathfinder使用说明.md。
+        （上为拓扑寻路的关键规则，已足够构造调用；逐器件连通细节不再展开。）
     """
     netlist, err = require_file(netlist_path)
     if err:

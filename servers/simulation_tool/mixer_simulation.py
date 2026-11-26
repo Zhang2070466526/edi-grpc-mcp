@@ -107,7 +107,7 @@ def _missing_field(where: str, field: str) -> dict:
     """参数表缺字段 → LINK_MISSING_FIELD（点名补哪个）。"""
     resp = error_response(
         "LINK_MISSING_FIELD", f"{where} 缺少必填字段 {field!r}",
-        hint=f"按 Mixer_Simulator使用说明.md 的参数表章节，在 {where} 里补 {field!r}",
+        hint=f"在 {where} 里补 {field!r}；字段名/单位见 describe_tool(run_mixer_simulation)",
     )
     resp["missing_field"] = field
     return resp
@@ -117,7 +117,7 @@ def _invalid(where: str, reason: str) -> dict:
     """参数表结构不合法 → LINK_JSON_INVALID（带定位）。"""
     resp = error_response(
         "LINK_JSON_INVALID", f"{where} {reason}",
-        hint="按 Mixer_Simulator使用说明.md 的参数表章节逐项核对（links[i].defaults / switch_bits / indicators）",
+        hint="逐项核对 links[i].defaults / switch_bits / indicators 的结构；字段表见 describe_tool(run_mixer_simulation)",
     )
     resp["location"] = where
     return resp
@@ -233,7 +233,7 @@ def _check_project(project: dict) -> dict | None:
                 errors.append(error_response(
                     "LINK_JSON_INVALID",
                     f"{where} 必须是含 name 的对象（受害链路可为空数组）",
-                    hint="按 Mixer_Simulator使用说明.md：{\"name\": \"<指标名>\", ...该指标字段}"))
+                    hint="每个指标是 {\"name\": \"<指标名>\", ...该指标字段}；15 个合法名与字段见 describe_tool(run_mixer_simulation)"))
                 continue
             raw_name = str(ind["name"])
             name = _INDICATOR_LOOKUP.get(_norm_name(raw_name))
@@ -421,7 +421,7 @@ def run_mixer_simulation(
     前提：Windows + EDI 已运行（gRPC 127.0.0.1:50055 可用）；网表 netlist.log 与器件库
     component.json 必须在 epp 同目录（工具会先查这两份文件，缺了直接点名，不启动 exe）。
 
-    project 是参数表 JSON（{name, epp, links}），结构见 servers/simulation_tool/Mixer_Simulator使用说明.md：
+    project 是参数表 JSON（{name, epp, links}），结构如下：
       links[i] = {switch_bits?, defaults, indicators}；defaults 必含 {in_port, out_port,
       input_freq_ghz:[min,max], input_power_dbm, lo:[{freq_ghz:[min,max], power_dbm, output_bw_ghz?}]}；
       indicators 每项带 name 及该指标字段（指标级字段写在指标里或放进该链路 defaults 均可，
@@ -436,13 +436,13 @@ def run_mixer_simulation(
     单通道线性动态范围需 snr_min_db；交调抑制需 tone_frequencies_ghz + input_power_dbm + orders 的 FREQ/FREQ2/LO。
     参数表在调用 exe 前就会校验（结构/必填字段/指标名/peer_link 形状），**一次收集全部问题**：
     顶层 error_code/message 取第一条，另带 error_count 与 all_errors[]（含 location / missing_field）。
-    已知限制（exe 侧，详见使用说明「已知问题」）：out_port 不是第一个输出端口时该链路指标取数错误，
+    已知限制（exe 侧）：out_port 不是第一个输出端口时该链路指标取数错误，
     多通道工程目前只信首通道（out_port=2）；输入 P1dB 建议与 变频增益 放同一次请求。
     结果直接读返回的 indicators / artifacts，**新版不生成 PDF/DOCX 报告**，别再去翻报告。
 
     Args:
         project: 参数表 dict，必含 name（工程名）、epp（.epp 绝对路径）、links（链路数组，≥1）。
-            详见 Mixer_Simulator使用说明.md 的参数表章节。
+            （完整字段表见本 docstring 上文，已内联展开，不再依赖单独 .md。）
         out_dir: 结果目录；留空则落到默认产物目录下的子目录（<result_dir>/run_mixer_simulation_<时间戳>/）。response.json / indicator_results / runs / figs 都落这里。
         workers: 并发进程数（正整数），默认 10；EDI 不稳定时降到 5。
         turbocharts_exe: turbocharts_app.exe 路径，默认空 = 用 MCP 自动探测的 turbocharts（从 exe 往上找 EDI 根）。
@@ -457,8 +457,11 @@ def run_mixer_simulation(
     """
     # 1. project 参数表 + epp 校验
     if not isinstance(project, dict) or not project:
-        return error_response("INVALID_PARAMETERS",
-                              "project 必须是非空对象（{name, epp, links}），见 Mixer_Simulator使用说明.md")
+        return error_response(
+            "INVALID_PARAMETERS",
+            "project 必须是非空对象：{\"name\": 工程名, \"epp\": \".epp 绝对路径\", "
+            "\"links\": [{\"defaults\": {...}, \"indicators\": [...]}]}；"
+            "完整字段表见 describe_tool(run_mixer_simulation)")
     epp = project.get("epp")
     if not isinstance(epp, str) or not epp.strip():
         return error_response("INVALID_PARAMETERS", "project.epp 必须是 .epp 绝对路径字符串")
@@ -468,7 +471,8 @@ def run_mixer_simulation(
     links = project.get("links")
     if not isinstance(links, list) or not links:
         return error_response("NO_LINKS", "project.links 必须是非空数组（至少一条链路）",
-                              hint="至少给一条链路：{switch_bits?, defaults, indicators}，见使用说明「链路级」")
+                              hint="至少给一条链路：{\"defaults\": {...}, \"indicators\": [...]}；"
+                                   "结构见 describe_tool(run_mixer_simulation)")
     if not all(isinstance(x, dict) for x in links):
         return error_response("LINK_JSON_INVALID", "project.links 每项必须是对象（含 defaults/indicators）")
     if err := _check_project(project):

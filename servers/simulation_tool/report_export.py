@@ -1,6 +1,6 @@
 r"""Report_Exporter.exe 包装 — 独立报告导出（document.pdf / document.docx / report.json）。
 
-命令（见 exe 同目录 Report_Exporter使用说明.md）：
+命令（见仓库 servers/simulation_tool/Report_Exporter使用说明.md）：
     Report_Exporter.exe --json-file <json> --output <dir> [--schematic <img>]
 stdout 单行 UTF-8 JSON：{"success":bool,"pdf_path","docx_path","report_data_path","errors":[]}
 退出码 0/1。本工具用 --json-file 方式（避免 Windows 内联 JSON 引号/长度限制），
@@ -68,7 +68,7 @@ def export_simulation_report(
 
     用法："把这组电参数导出成仿真报告"、"生成 PDF 到 D:/reports/run001"
 
-    report 透传 exe 的原生 JSON（见 exe 同目录 Report_Exporter使用说明.md），常用字段：
+    report 透传 exe 的原生 JSON，常用字段：
         model_name(封面型号) / description(简介) / conclusion(结论) /
         components([{type,model,manufacturer,specs}]) /
         links([{name, electrical_parameters:[{indicator,minimum,typical,maximum,unit,requirement,result}]}]) /

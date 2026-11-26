@@ -1,6 +1,6 @@
 r"""drawtool.exe 包装 — XY 数据绘图（读 JSON 配置 → 画曲线图 → 存图片）。
 
-命令（见 exe 同目录 xy_chart(drawtool)使用说明.md）：
+命令（见仓库 servers/simulation_tool/xy_chart(drawtool)使用说明.md）：
     drawtool.exe <配置文件路径>
 stdout 单行 UTF-8 JSON：{"status":"success","message":"绘图完成","image_path":"...","error_code":null}
 退出码 0/1。输入是 JSON 配置文件（chart_title/series/marks/show_window/image_path/image_format），

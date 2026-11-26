@@ -1,6 +1,6 @@
 r"""TR_Simulator.exe 包装 — TR 纯硬编码仿真（网表→路径分析→ADS→结果提取）。
 
-命令（见 exe 同目录 Report_Exporter使用说明.md）：
+命令（见仓库 servers/simulation_tool/TR_Simulator使用说明.md）：
     TR_Simulator.exe --epp <epp> --edi <edi> --ads <ads> [--indicators <csv>] [--threads <n>] --json <links>
 stdout 单行 UTF-8 JSON：{"simulation_path","errors":[],"results":[...]}
 退出码 0/1。results 的 electrical_parameters 可喂给 export_simulation_report
@@ -126,7 +126,7 @@ _NUMERIC_LINK_FIELDS = ("min_freq", "max_freq", "phase_step", "atten_step",
 
 
 class TrLink(BaseModel):
-    """一条收发链路。字段与 TR_Simulator使用说明.md「链路 JSON」表一致，**不接受表外字段**。
+    """一条收发链路（13 个字段，见 inputSchema；**不接受表外字段**）。
 
     放进 MCP inputSchema 的意义：智能体不必猜 links 里能写什么——字段名、类型、单位、
     默认值都在 schema 里；写错类型/表外字段在调用前就被拒，并给出正确字段名。
