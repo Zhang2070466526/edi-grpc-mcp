@@ -169,7 +169,8 @@ def open_laspcem_project(project_path: str, laspcem_path: str = "",
 
 
 @mcp.tool()
-def close_laspcem_project(project_path: str, force: bool = False) -> dict[str, Any]:
+def close_laspcem_project(project_path: str, force: bool = False,
+                          include_script_sessions: bool = False) -> dict[str, Any]:
     """关闭在 LASPCEM 中打开某个 .sem 的 GUI 实例（等价于关窗口）。
 
     LASPCEM 没有进程间 IPC，只能按「谁的 cmdline 里带这个工程」定位实例。
@@ -182,6 +183,10 @@ def close_laspcem_project(project_path: str, force: bool = False) -> dict[str, A
         project_path: .sem 工程文件绝对路径。**不要求文件仍然存在** —— 工程被删/改名后
             LASPCEM 实例的 cmdline 仍可能指向原路径，这种残留更要能关掉。
         force: True 时 terminate 超时后再 kill；默认只 terminate 并等 5 s。
+        include_script_sessions: True 时把 `laspcem.exe /session <脚本>` 起的实例也算进来。
+            这类实例 cmdline 里只有脚本路径、没有 .sem（服务端求解/导出就是这么起的），
+            按工程路径匹配不到，2026-11-26 实测只能强杀。默认 False = 不动它们（避免误关
+            别人手工开的窗口）。
 
     Returns:
         {"success": True, "project": "<绝对路径>", "closed": [pid, ...],
@@ -202,9 +207,15 @@ def close_laspcem_project(project_path: str, force: bool = False) -> dict[str, A
 
     closed: list[int] = []
     failed: list[dict[str, Any]] = []
+    matched_scripts: list[int] = []
     for proc in find_laspcem_processes():
         proj = proc.get("project") or ""
-        if not proj or not _same_path(proj, resolved):
+        matched = bool(proj) and _same_path(proj, resolved)
+        if not matched and include_script_sessions and not proj:
+            if "/session" in (proc.get("cmdline") or "").lower():
+                matched = True
+                matched_scripts.append(int(proc.get("pid")))
+        if not matched:
             continue
         pid = proc.get("pid")
         try:
@@ -408,7 +419,24 @@ def solve_progress(sem_path: str, since: float = 0.0) -> dict[str, Any]:
             last_line = text[-1].strip() if text else ""
     except OSError:
         pass
-    return {"adapt_iterations": iters, "log_bytes": log_bytes, "last_log_line": last_line[:200]}
+    # MaxNumberOfPass 只能当参照：adapt_iterations 统计的是 Hofem_adapt_itr*.log 份数，
+    # 实测会超过该值（同一 pass 会产出多份日志，2026-11-26 观测 12 份 vs MaxNumberOfPass=6），
+    # 所以不给百分比，只把上限一并回传，避免把假 ETA 当精确进度。
+    max_passes = None
+    if iters:   # 求解还没开始就不必读 6 MB 的 .sem（轮询是高频调用，别白花 IO）
+        try:
+            from servers.laspcem.setup_reader import read_setup_report
+            max_passes = (read_setup_report(str(Path(sem_path))).get("setup") or {}).get("MaxNumberOfPass")
+        except Exception:  # noqa: BLE001 — 进度展示失败不影响求解
+            max_passes = None
+    return {
+        "adapt_iterations": iters,
+        "log_bytes": log_bytes,
+        "last_log_line": last_line[:200],
+        "max_passes": max_passes,
+        "progress_note": ("adapt_iterations 是 Hofem_adapt_itr*.log 计数，实测会超过 MaxNumberOfPass"
+                          "（同一 pass 可产出多份），只能当粗略进度"),
+    }
 
 
 def _running_solve_task_for(sem_path: str) -> str | None:
@@ -845,7 +873,9 @@ def _busy_response(held: list[dict[str, Any]], action: str) -> dict[str, Any]:
         "PROJECT_IN_USE",
         f"工程已被 LASPCEM 实例占用（PID {pids}），无法{action}",
         hint=("LASPCEM 没有单实例转发，同时开两个实例操作同一个 .sem 会互相踩。"
-              "先关闭占用它的窗口（或让它跑完）再重试。"),
+              "先调 close_laspcem_project(project_path) 关掉占用它的那个实例"
+              "（按命令行匹配、发 terminate 并等 5 s；closed=[] 表示本来没有实例开着，不算失败），"
+              "或直接在 GUI 里关掉窗口，再重试。"),
         pids=[p.get("pid") for p in held],
     )
 
@@ -1177,7 +1207,12 @@ def _resolve_snp_output(requested: str) -> str | None:
     parent = stem.parent
     if not parent.is_dir():
         return None
-    pat = re.compile(re.escape(stem.name) + r"\.s\d+p", re.IGNORECASE)
+    # ⚠️ 真机双重不匹配（2026-11-26 复现）：① LASPCEM 把请求串里的 "snp" 整段替换成 "s2p"
+    # （export_laspcem_snp_<ts>.sNp → 落地 export_laspcem_s2p_<ts>.sNp），stem 变了；
+    # ② 落地文件的扩展名就是 ".sNp"（N 不是端口数字），原 `\.s\d+p` 也匹配不上。
+    # 两者叠加 ⇒ 永远等不到产物，白等满 export timeout、任务假 RUNNING、export_result 拿不到路径。
+    frag = re.escape(stem.name).replace("snp", r"s(?:np|\d+p)")
+    pat = re.compile(frag + r"\.s(?:np|\d+p)", re.IGNORECASE)
     cands = [f for f in parent.iterdir() if f.is_file() and pat.fullmatch(f.name)]
     return str(max(cands, key=lambda f: f.stat().st_mtime)) if cands else None
 

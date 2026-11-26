@@ -73,6 +73,14 @@ def test_build_solve_script_has_no_cleanup():
     assert "app.Exit" not in s
 
 
+def test_build_solve_script_never_edits_solution():
+    """2026-11-26 实测：并行参数脚本 API 改不了（EditSolution/EditSolutionOption 均无效），
+    且往求解脚本里加 EditSolution 会让求解器起不来 ⇒ 脚本必须保持录制原样，不许出现这些调用。"""
+    s = build_solve_script(r"C:\proj\a.sem", setup_name="Setup1")
+    assert "EditSolution" not in s
+    assert "SetOptionValue" not in s
+
+
 def test_build_export_snp_script_no_analyze():
     """导出脚本只打开工程 + ExportSnpFile（求解必须由 run_laspcem_solve 先跑完）。"""
     s = build_export_snp_script(r"C:\proj\CPW.sem", r"C:\proj\CPW.sNp", solution_name="FEM_2")
@@ -144,6 +152,21 @@ def test_resolve_snp_output_accepts_port_suffix(tmp_path):
     got = _resolve_snp_output(str(tmp_path / "a.sNp"))
     assert got is not None and got.endswith("a.s2p")
     assert _resolve_snp_output(str(tmp_path / "b.s3p")) is None
+
+
+def test_resolve_snp_output_handles_laspcem_snp_to_s2p_rename(tmp_path):
+    """真机复现（2026-11-26）：LASPCEM 把请求串里的 snp 整段换成 s2p ——
+    export_laspcem_snp_<ts>.sNp 落地成 export_laspcem_s2p_<ts>.sNp，stem 变了。
+    按原 stem 精确匹配会永远等不到产物 ⇒ 白等满 export timeout、任务假 RUNNING、
+    export_result 拿不到路径。"""
+    from servers.laspcem.launcher import _resolve_snp_output
+
+    actual = tmp_path / "export_laspcem_s2p_20261126_093140_955.sNp"
+    actual.write_text("! touchstone\n1.0 2.0 3.0\n", encoding="utf-8")
+    got = _resolve_snp_output(str(tmp_path / "export_laspcem_snp_20261126_093140_955.sNp"))
+    assert got == str(actual)
+    # 时间戳不同的请求不能被误命中（防止把上一次的产物当本次结果）
+    assert _resolve_snp_output(str(tmp_path / "export_laspcem_snp_20261126_093141_000.sNp")) is None
 
 
 def test_new_solutions_diff():

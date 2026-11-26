@@ -143,6 +143,14 @@ def build_solve_script(sem_path: str, setup_name: str = "Setup1", log_path: str 
         f'app.Open("{p}")',
         "viewer.SetSelectionMode(3)",
     ]
+    # ⚠️ 并行设置（NumberOfProcesses / NumberOfThreadsPerProcess）**脚本 API 改不了**（2026-11-26 真机实测）：
+    #   cem.EditSolution('Cluster'|'Parallel'|'General'|...)  → 抛 "An error occurred while editing solution"
+    #   cem.EditSolution('Setup1', {'NumberOfProcesses': '4'}) → 接受但 .sem 值不变（扁平键被忽略）
+    #   cem.EditSolution('Setup1', {'General'/'Mesh'/'Advance': {...}}) → Advance 是空骨架，无这些键
+    #   cem.EditSolutionOption(<4 种组名>)                     → 接受但无效
+    #   app.SetOptionValue / GetOptionValue                    → Set 无效、Get 读回空串
+    # 结论：并行参数只能在 LASPCEM GUI 的求解设置里改，改一次随 .sem 保存后长期生效；
+    # 求解脚本按现状「逐字照抄录制」即可，不要往里加 EditSolution（加了会让求解器起不来）。
     lines += [
         f"cem.FEMAnalyze({_display_setup_name(setup_name)!r},{{",
         "        'Redo Mesh':True",
