@@ -1116,6 +1116,34 @@ get_hfss_project_info() -> dict
 
 返回：`{"success": True, "aedt_running": True, "pids": [...], "open_projects": [...], "active_project": "...", "active_design": "..."}`
 
+2026-11-26 增补**版本自证**字段（双版本机器上"查询全部未响应"多为 COM 版本失配）：
+`aedt_version`（连到的实例版本）、`com_progid_used`（实际 Dispatch 的 ProgID）、
+`curver_progid` / `curver_version`（裸 ProgID 走注册表 CurVer 指向的版本）、
+`version_mismatch`（两者不一致）、`modal_dialogs`（探测到的 AEDT 模态框标题）。
+失败时不再一律 `AEDT_NOT_RESPONDING`，按 `com_reason` 分档：
+`AEDT_VERSION_MISMATCH` / `AEDT_PERMISSION_MISMATCH` / `AEDT_SHELL_ONLY` / `AEDT_NOT_RUNNING` / `AEDT_NOT_RESPONDING`
+（错误响应里 `com_reason` / `modal_dialogs` / `curver_version` 等附加字段统一在 `details` 下）。
+
+### `export_hfss_snp`
+
+```python
+from servers.ansys.run_analysis import export_hfss_snp
+
+export_hfss_snp(project_path, design_name, setup_name, sweep_name="Sweep",
+                output_path="", port_count=0, overwrite=False) -> dict
+```
+
+导出已求解的 S 参数为 Touchstone（隔离子进程执行）。返回：
+`{"success": true, "snp_path": "...s2p", "size_bytes": 33125, "port_count": 2,
+"port_count_source": "content", "solution": "Setup1 : Sweep", "result_verified": true,
+"solution_mtime": 1795678493.3, "solution_age_seconds": 12.4}`
+
+- `overwrite=False`（默认）：显式给的 `output_path` 已存在 → `OUTPUT_ALREADY_EXISTS` + `suggested_path`；
+  不传 `output_path` 时默认落 MCP_RESULT_DIR（`<result_dir>/export_hfss_snp_<时间戳>.sNp`，自带时间戳不会撞名）。
+  2026-11-26 之前是**静默覆盖**。
+- `solution_age_seconds` 很大 ⇒ 导出的是**旧解**（本次没有重新求解）。
+- `port_count_source` ∈ `content`（文件列数推断）/ `argument`（入参）/ `default`（兜底 2）。
+
 ### `start_hfss_analysis_async`
 
 ```python

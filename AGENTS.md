@@ -77,4 +77,4 @@ EDI MCP 服务：把 EDI / ANSYS HFSS / CST 三个仿真引擎包装成 **101 �
 - `docs/TOOLS_API.md` —— 工具契约
 - `docs/IMPLEMENTATION.md` —— 机制权威说明
 
-改完代码必须跑：`uv run pytest -q`（当前基线 **942 passed / 2 skipped**）。
+改完代码必须跑：`uv run pytest -q`（当前基线 **964 passed / 2 skipped**）。
