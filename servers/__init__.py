@@ -9,8 +9,8 @@
   - servers.ansys : ANSYS HFSS 工具（COM 附着）
   - servers.cst : CST 电磁仿真（求解 / S 参数 / 远场方向图导出）
   - servers.multimodal_vision : 图片显示 / 视觉分析 / 文档访问
-  - servers.resources_prompts : MCP Resources & Prompts（6 Resource + 8 Prompt）
-  - 另有 1 个 Resource 随业务包走：turbocharts（RAW 转图说明）
+  - servers.resources_prompts : MCP Resources & Prompts（7 Resource + 7 Prompt）
+  - 另有 6 个 Resource 随业务包走：turbocharts（RAW 转图说明）+ simulation_tool（5 个 exe 说明文档）
   - servers.chat : 聊天模块（会话管理、LLM 工具闭环）
 """
 
@@ -22,7 +22,7 @@ from servers.settings import get_settings
 
 # 版本号：需与 pyproject.toml 里的 version 保持一致。
 # /ready、/health 等端点和 Resource 会返回这个版本号。
-__version__ = "0.1.12"
+__version__ = "0.1.13"
 
 # 全局配置单例：所有环境变量（EDA_GRPC_SERVER、LLM_*、VISION_* 等）都从这里读。
 # lru_cache 保证整个进程只加载一次、所有模块共享同一个 Settings 对象。
