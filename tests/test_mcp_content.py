@@ -353,3 +353,29 @@ class TestSearchLimit:
         r = ms.search_public_models("62")  # 默认 limit=0，不截断
         assert len(r["details"]["data"]["results"]) == 5
         assert "returned" not in r["details"]  # 未截断，无标记
+
+
+class TestReportPromptBranches:
+    """create_simulation_report：RAW 分支 + 步骤编号连续（曾因插入子行导致跳号）。"""
+
+    def test_numbering_contiguous_both_branches(self):
+        import re
+        from servers.resources_prompts.prompts_report import prompt_create_simulation_report as f
+
+        for kw in ({"result_path": "r.raw"}, {"project_path": "p.epp"}):
+            text = f(output_path="out", **kw)[0]["content"]
+            nums = [int(m) for m in re.findall(r"(?m)^(\d+)\. ", text)]
+            assert nums == list(range(1, len(nums) + 1)), (kw, nums)
+
+    def test_result_path_branch_uses_raw_directly(self):
+        from servers.resources_prompts.prompts_report import prompt_create_simulation_report as f
+
+        text = f(result_path="r.raw", output_path="out")[0]["content"]
+        assert "r.raw" in text and "get_project_summary" not in text
+        assert "list_result_curves" in text and "turbocharts_convert" in text
+        assert "overwrite" in text
+
+    def test_no_input_asks_for_one(self):
+        from servers.resources_prompts.prompts_report import prompt_create_simulation_report as f
+
+        assert "result_path" in f()[0]["content"]
