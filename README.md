@@ -303,7 +303,7 @@ edi-grpc-mcp/
 │   ├── HANDOVER.md                     #   交接文档（架构设计、技术栈、47 条注意事项）
 │   └── EDI系统接口与外部调用汇总.md    #   EDI 系统全量对外接口
 │
-├── tests/                              # 测试套件 (533 项)
+├── tests/                              # 测试套件 (917 项)
 │   ├── test_simulation_components.py   #   88 项：参数目录/Schema/11步校验/wire转换/权限/别名冲突
 │   ├── test_cst.py                     #   55 项：共享函数/静态解析/查询返回/导出流程 mock
 │   ├── test_bugfixes.py                #   38 项：历史 bug 修复回归
@@ -390,7 +390,7 @@ edi-grpc-mcp/
 | `test_tool_index.py` | 工具清单与注册表一致性 | 1 |
 
 ```powershell
-uv run pytest -q                 # 全量 533 项
+uv run pytest -q                 # 全量 917 项
 uv run pytest tests/ -v          # 详细输出
 uv run pytest tests/test_simulation_components.py -v  # 单文件
 ```
