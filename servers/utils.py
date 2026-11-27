@@ -227,7 +227,7 @@ _DEFAULT_HINTS: dict[str, str] = {
     "UNSUPPORTED_PARAMETER": "该器件类型不支持这个参数；先用 get_simulation_component_schema 查可写参数",
     "COMPONENT_TYPE_MISMATCH": "传的 component_type 与器件实际类型不符；用 list_schematic_components 核对",
     "COMPONENT_TYPE_REQUIRED": "该操作需要 component_type；用 list_schematic_components / get_schematic_component_info 查",
-    "COMPONENT_SCHEMA_UNAVAILABLE": "该器件类型的参数目录不可用；改走 list_schematic_components 直接读器件参数",
+    "COMPONENT_SCHEMA_UNAVAILABLE": "该器件类型的参数目录不可用；确认 simulation_component_catalog.json 已随包部署，或换用其它器件类型",
     # ── 链路/仿真 ──
     "LINK_JSON_INVALID": "links 结构不合法，看 details 的 location/message 定位具体字段；字段名与单位照 describe_tool 的 schema",
     "NETLIST_EMPTY": "网表为空或没解析出器件；先 export_project_netlist 导出再核对",
