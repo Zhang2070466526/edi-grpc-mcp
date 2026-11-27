@@ -245,7 +245,7 @@ python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto 
 ### 产物格式
 - 所有文件生成工具返回统一的 `artifacts` 数组
 - MCP 负责生成，客户端负责显示——message 用"已生成"不说"已显示"
-- 报告自动返回 HTTP 预览链接（10 分钟有效）
+- 报告自动返回 HTTP 预览链接（60 分钟有效）
 
 ### 配置管理
 - 所有环境变量收敛到 `servers/settings.py` → Settings dataclass (frozen)
@@ -320,7 +320,7 @@ python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto 
 ### 图片与文档
 31. show_image 始终返回 ImageContent，不依赖工作区
 33. analyze_image 仅用户明确要求时调用，会上传到第三方
-34. open_document 生成 10 分钟 HTTP token，仅本机 127.0.0.1 可访问
+34. open_document 生成 60 分钟 HTTP token，链接按请求 Host 推导（远程也可访问）
 
 ### 工具注册
 35. 新增 MCP 工具自动注册到 Chat（除非加入 _CHAT_EXCLUDED_TOOLS）

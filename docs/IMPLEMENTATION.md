@@ -1,8 +1,8 @@
 # EDI gRPC MCP 实现原理与机制
 
-> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 101 个工具的逐类实现，再到 13 个 Resource 与 8 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
+> 本文档是这个项目**所有机制**的权威说明：从底层通信原理、公有设置与公有方法、特殊机制（远程 / 进程白名单 / 产物传输），到 105 个工具的逐类实现，再到 13 个 Resource 与 8 个 Prompt。要改代码 / 排查问题 / 理解某个设计决策，都从这里找。
 
-> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（101 个工具接口参数/返回）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由请求/响应体）。
+> 相关文档：[TOOLS_API.md](./TOOLS_API.md)（105 个工具接口参数/返回）、[HTTP_API.md](./HTTP_API.md)（HTTP 路由请求/响应体）。
 
 ---
 
@@ -44,14 +44,14 @@
   - `3.6` 日志系统
   - `3.7` Chat 会话与破坏性确认
 
-- **[四、工具实现](#四工具实现)** —— 101 个工具按通信类型分组 + 设计动机
+- **[四、工具实现](#四工具实现)** —— 105 个工具按通信类型分组 + 设计动机
   - `4.1` 工程管理
   - `4.2` 仿真器件
   - `4.3` 仿真
   - `4.4` 导出与模型 / 软IP
   - `4.5` 工作区 / 原理图扩展
   - `4.6` 图表
-  - `4.7` ANSYS HFSS 与 CST
+  - `4.7` ANSYS HFSS / CST / LASPCEM
   - `4.8` 启动 / 诊断
   - `4.9` 图片 / 文档
   - `4.10` 独立仿真工具（固定目录 exe）
@@ -790,6 +790,7 @@ Chat 层拦截 → 保存 `PendingAction` → 展示操作摘要 → 用户明�
 | `attach_out_component` | ATTACH_OUT_COMPONENT(17) | 自动判断引脚朝向 → 计算放置位置 → 顺时针四方向检测重叠 → 器件+网线同一撤销组 |
 | `get_simulation_component_schema` | — | 读 catalog，与 `edi://reference/simulation-components` 同源 |
 | `load_schematic_from_file` | LOAD_SCHEMATIC_FROM_FILE | 从 .ep 文件整体替换原理图 |
+| `update_schematic_components_transform` | UPDATE_SCHEMATIC_COMPONENTS_TRANSFORM(64) | 批量几何：uuid/instance_name 定位 → 整批校验（任一项非法则整批不改）→ 一个撤销组 + 保存，保存失败回滚；位置按 12.5 网格吸附，`rotation_deg` 归一化到 [0,360) |
 
 **update 三路类型推断**：
 
@@ -827,6 +828,7 @@ else:                                 # 两者都没有
 | `export_schematic_components_to_csv` | EXPORT_SCHEMATIC_COMPONENTS_TO_CSV(40) | `csv_path` 非空 |
 | `get_signal_chain` | — | 本地解析网表，节点接力追踪信号链路（源→负载），方向 forward/backward |
 | `design_chip` | DESIGN_SOFT_IP(48) | `description` + `save_path` 非空 + 可选 `freq`/`bandwidth` |
+| `design_schematic_topology` | DESIGN_SCHEMATIC_TOPOLOGY(47) | `requirement` 自然语言非空；服务端据此在当前工作区**创建并打开**新工程 |
 
 ### 4.5 工作区 / 原理图扩展
 
@@ -849,7 +851,7 @@ else:                                 # 两者都没有
 | `turbocharts_convert` | subprocess | `run_turbocharts()` 串行信号量，`--linename`/`--dependcy`（真实参数名少一个 n）；chart_type 留空调 list_result_curves 自动推断 |
 | `compare_simulation_results` | subprocess | 2-8 个 RAW 对比，alignment=intersection/interpolation，Matplotlib 叠图 |
 
-### 4.7 ANSYS HFSS 与 CST
+### 4.7 ANSYS HFSS / CST / LASPCEM
 
 | 工具 | 通信 | 关键实现 |
 |---|---|---|
@@ -863,6 +865,31 @@ else:                                 # 两者都没有
 | `cst_solve_async` / `cst_solve_query` | CST 会话 | `cst.interface` run_solver，`cst_runner` 排队 |
 | `cst_export_snp` | CST 无会话 | `cst.results` 读 S 参数导出 Touchstone |
 | `cst_export_farfield` / `cst_export_farfield_query` | 混合 | `cst.results` 检测已求解 + `cst.interface` execute_vba 导远场 |
+| `cst_open_project` | CST 无会话 | 解包归档 `.cst`（`cst.interface`），只打开不求解 |
+| `cst_get_model_info` | CST 无会话 | 读模型状态：是否已解 / 已解包、端口数、有无远场监视器 |
+| `cst_list_results` | CST 无会话 | `cst.results` 遍历结果树与监视器（2020 需对 `1D Results` 做包含匹配） |
+| `cst_plot_farfield` | subprocess | 远场 ASCII → 指定切面（`phi=0` 等）的极坐标/直角图 |
+| `cst_task_list` | 内存 | 列出全部 CST 异步任务（求解 + 导出）及状态 |
+| `cst_task_cancel` | 内存 + 进程 | 标记 CANCELLED 并尽力终止 python worker；CST 引擎进程未必立即释放 |
+| `cst_export_snp_async` / `cst_export_snp_query` | CST 无会话 + 内存 | 异步导出 Touchstone，`task_id` 轮询进度 |
+| `hfss_task_list` | 内存 | 读 `hfss_runner` 全部任务（task_id / status / op / design / setup / elapsed） |
+| `hfss_task_cancel` | 内存 | 只把任务标记 CANCELLED —— AEDT 的 `Analyze()` 不可打断，求解仍跑完但结果不再记录 |
+
+**LASPCEM**：没有 COM / gRPC / socket 控制通道，唯一入口是命令行 `laspcem /session <脚本>`
+（等价 GUI 的 Run Script），脚本由服务端生成，`FEMAnalyze` 会拉起 `mpiexec + phofem.exe`。
+**单工程独占**：GUI 正开着该 `.sem` 时后台求解/导出必 `PROJECT_IN_USE`（秒失败）—— 先求解再开 GUI。
+
+| 工具 | 通信 | 关键实现 |
+|---|---|---|
+| `launch_laspcem` | subprocess | `Popen(laspcem.exe)`；路径按 `LASPCEM_PATH` → 注册表卸载项 → `.sem` 关联逐级探测 |
+| `open_laspcem_project` | subprocess | `laspcem.exe "<工程>"`（等价双击 .sem） |
+| `close_laspcem_project` | session 脚本 | 发 `CloseProject` 脚本关工程，不动 GUI 进程 |
+| `get_laspcem_setup` | 文件解析 | 读 `.sem` 的 setup / 解算算法 / 扫参设置 |
+| `export_laspcem_snp` | session 脚本 | 只导已求解工程（未解回 `SOLVE_REQUIRED`）；产物按端口数落成 `.s<N>p` |
+| `build_laspcem_report` | session 脚本 | 求解后建报告（`then_report` 链路的一环） |
+| `laspcem_task_list` | 内存 | 后台任务（operation / phase / steps / 耗时） |
+| `laspcem_task_cancel` | 内存 + 进程 | 求解 / 导出 / 建报告任一阶段都能取消 |
+| `laspcem_cleanup_orphans` | 进程 | 清理残留 GUI / mpiexec / phofem / MPI 代理 |
 
 ### 4.8 启动 / 诊断
 
@@ -891,6 +918,7 @@ else:                                 # 两者都没有
 | `run_tr_simulation` | `tr_simulation/TR_Simulator.exe` | 子进程 + gRPC | 网表 → 路径分析 → 开关状态/参数注入 → ADS 仿真 → 结果提取，返回各链路 `electrical_parameters`（可直接喂给上表报告工具） |
 | `run_mixer_simulation` | `mixer_simulation/mixer_simulation.exe` | 子进程 + gRPC | 混频链路仿真（上下变频/多通道/任意级变频）：频率规划 → 工况构建 → 改网表 → ADS → 提取 9 个混频指标，出 PDF/DOCX 报告 |
 | `draw_chart` | `simulation_report/drawtool.exe` | 子进程 | XY 数据绘图：写 JSON 配置（series/marks/标题）→ 曲线图 PNG/JPG（固定 1600×1000） |
+| `find_netlist_paths` | `tr_simulation/Netlist_Pathfinder.exe` | 子进程 | 拓扑寻路（**仅 TR 链路**）：端口对 → 全部信号路径 + 每条路径的开关目标 Bits；`max_paths`/`max_states`/`timeout` 控预算，超预算该对 `status=incomplete` |
 
 ### 4.11 微波计算（本地纯计算，不走 gRPC/COM）
 
@@ -905,6 +933,10 @@ else:                                 # 两者都没有
 | `filter_order_bandpass` | 本地 | 广义切比雪夫带通综合（Cameron N+2）+ SLSQP 零点优化（零点可在两侧） |
 | `filter_order_bandstop` | 本地 | 倒数变换法复用低通核心（物理阶数 = 2N） |
 | `wilkinson_marchand_order` | 本地 | Chebyshev 变阻公式 + 单节三端口精确校验 |
+| `design_matching_network` | 本地 | L 型两元件匹配（实阻抗→实阻抗），给低通（串 L 并 C）/ 高通（串 C 并 L）两解；串联接低阻侧、并联接高阻侧 |
+| `calculate_cascade` | 本地 | Friis 级联 NF + 级联增益；OP1dB / OIP3 用输入参考级联，**只有每级都给了对应字段**才算 |
+| `calculate_rf_dynamic_range` | 本地 | 灵敏度 S（NF + 带宽 + 要求 SNR）与压缩受限动态范围 DR（S 到 P1dB 的区间） |
+| `analyze_mixer_spur` | 本地 | 枚举 m×源 ± n×LO（m+n≤max_order），与目标输出频带（接收=IF、发射=RF）重叠即碰撞；多路 Mixer 支持全通过 / 任一通过 |
 
 ### 4.12 工具设计动机与数据依赖
 
@@ -997,7 +1029,7 @@ else:                                 # 两者都没有
 | `turbocharts_convert` | RAW → 曲线图/CSV | list_result_curves（曲线名） | 报告 |
 | `compare_simulation_results` | 对比多个仿真的同一条曲线 | list_result_curves + 多个 result.raw | — |
 
-#### ANSYS HFSS / CST
+### 4.7 ANSYS HFSS 与 CST
 
 | 工具 | 动机 | 依赖（输入来自） | 被依赖（输出供） |
 |---|---|---|---|

@@ -21,12 +21,12 @@ from servers.eda.project_manage import list_epp_projects
 - **[导出与分析（4 个）](#导出与分析4个)**：导出网表、截图原理图、器件 CSV、信号链路追踪
 - **[模型库 / 原理图库（6 个）](#模型库--原理图库6个)**：模型替换、模型分类/查询/搜索、性能器件放置、拓扑设计
 - **[软 IP（1 个）](#软ip1个)**：按设计描述下载芯片模型
-- **[微波计算（7 个）](#微波计算7个)**：传输线特性阻抗 / 线宽计算、多级威尔金森功分器设计、滤波器阶数评估（高通/低通/带通/带阻）、功分器/巴伦节数（本地纯计算，无任务信封）
-- **[射频链路计算（3 个）](#射频链路计算3个)**：混频杂散枚举、噪声底 / 灵敏度 / 压缩受限动态范围、多 Touchstone 对比（本地纯计算，无任务信封）
+- **[微波计算（8 个）](#微波计算8个)**：传输线特性阻抗 / 线宽计算、多级威尔金森功分器设计、L 型匹配网络合成、滤波器阶数评估（高通/低通/带通/带阻）、功分器/巴伦节数（本地纯计算，无任务信封）
+- **[射频链路计算（4 个）](#射频链路计算4个)**：多级级联增益/噪声/线性度、混频杂散枚举、噪声底 / 灵敏度 / 压缩受限动态范围、多 Touchstone 对比（本地纯计算，无任务信封）
 - **[工作区（3 个）](#工作区3个)**：创建 / 切换 / 查询当前工作区
 - **[原理图扩展（5 个）](#原理图扩展5个)**：内置器件、清空原理图、连线、批量器件变换
 - **[启动 / 诊断（3 个）](#启动--诊断3个)**：启动 EDI、服务诊断、日志读取
-- **[ANSYS HFSS（7 个）](#ansys-hfss7个)**：AEDT 工程开关、退出、HFSS 异步仿真
+- **[ANSYS HFSS（9 个）](#ansys-hfss9个)**：AEDT 工程开关、退出、HFSS 异步仿真、子任务查询与取消
 - **[CST 电磁仿真（13 个）](#cst电磁仿真13个)**：异步求解 .cst、导出 S 参数 / 远场方向图
 - **[LASPCEM 电磁仿真（11 个）](#laspcem电磁仿真11个)**：启动 LASPCEM、打开 .sem 工程、aedt 转 sem、异步求解（可带导出/建报告后处理）、任务查询与取消、同步导出 S 参数 / 建报告、读取求解设置
 - **[图表（3 个）](#图表3个)**：RAW 曲线解析、转图、结果对比
@@ -1010,7 +1010,7 @@ get_service_logs(lines: int = 50, keyword: str = "", level: str = "") -> dict
 
 ---
 
-## ANSYS HFSS（7 个）
+## ANSYS HFSS（9 个）
 
 ### `open_hfss_project`
 
@@ -1179,6 +1179,38 @@ get_hfss_analysis_status(task_id: str, refresh_from_aedt: bool = False) -> dict
 | `refresh_from_aedt` | bool | 否 | False | 是否实时查询 AEDT 仿真状态 |
 
 返回：`{"success": true, "task_id": "...", "status": "RUNNING"/"SUCCEEDED"/"FAILED", "completed": false, "task_success": null, "outcome_known": false, "result_directory": "..."}`；不存在 `{"success": false, "error_code": "TASK_NOT_FOUND", "status": "UNKNOWN"}`。
+
+---
+
+### `hfss_task_list`
+
+```python
+from servers.ansys.tasks import hfss_task_list
+
+hfss_task_list() -> dict
+```
+
+列出当前所有 HFSS 异步任务及状态，无需参数直接调。查单个任务进度用 `get_hfss_analysis_status`。
+
+返回：`{"success": true, "task_list": [{"task_id", "status", "op", "project_path", "design_name", "setup_name", "started_at", "elapsed_seconds"}]}`
+
+---
+
+### `hfss_task_cancel`
+
+```python
+from servers.ansys.tasks import hfss_task_cancel
+
+hfss_task_cancel(task_id: str) -> dict
+```
+
+⚠️ 取消一个 HFSS 异步任务（尽力终止运行中的仿真）。运行中的求解由 AEDT COM 的 `Analyze()` 阻塞执行、无法真正打断 —— 取消只把任务标记为 CANCELLED（与 FAILED 区分），后台求解仍会跑完但结果不再记录。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `task_id` | str | 是 | — | `hfss_task_list` 或 `start_hfss_analysis_async` 返回的 task_id |
+
+返回：`{"success": true/false, "cancelled": true/false, "reason": "..."}`
 
 ---
 
@@ -1727,7 +1759,67 @@ LASPCEM `D:\LASPCEM_2026\bin\laspcem.exe`。
 
 ---
 
-## 微波计算（7 个）
+### `run_laspcem_solve_async`
+
+提交 LASPCEM 求解任务（异步，立即返回 task_id）
+
+```python
+run_laspcem_solve_async(sem_path: string, setup_name: string = "", timeout_seconds: integer = 7200, stall_seconds: integer = 900, then_export: boolean = false, then_report: boolean = false, export_path: string = "", report_name: string = "Sparameter_1", port_count: integer = 0) -> dict
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `sem_path` | string | 是 | `.sem` 工程绝对路径。 |
+| `setup_name` | string | 否 | 求解 setup 名；留空自动探测。传错名字会**立刻**返回 SETUP_NOT_FOUND（不进队列）。 |
+| `timeout_seconds` | integer | 否 | 求解超时（后台线程内生效）。 |
+| `stall_seconds` | integer | 否 | 卡死判定（求解器还在但日志/工程/CPU 这么久没进展 ⇒ SOLVE_STALLED）；0 = 关闭。 |
+| `then_export` | boolean | 否 | 求解完成后自动导出 sNp（服务端执行，结果在 `export_result`）。 |
+| `then_report` | boolean | 否 | 求解完成后自动建报告（结果在 `report_result`）。 |
+| `export_path` | string | 否 | 指定 sNp 输出路径；留空落到默认产物目录（`<result_dir>/export_laspcem_snp_<时间戳>.sNp`，实际后缀按端口数 .s2p/.s4p）。 |
+| `report_name` | string | 否 | 报告名，默认 Sparameter_1。 |
+| `port_count` | integer | 否 | 报告曲线端口数；0 = 自动（按 sNp 后缀推断，兜底 2）。 |
+
+example: `{"sem_path": "<string>"}`
+
+### `laspcem_solve_query`
+
+查询 LASPCEM 求解任务（配合 run_laspcem_solve_async 的 task_id）。
+
+```python
+laspcem_solve_query(task_id: string) -> dict
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `task_id` | string | 是 | run_laspcem_solve_async 返回的 task_id。 |
+
+example: `{"task_id": "<string>"}`
+
+### `laspcem_task_list`
+
+列出 LASPCEM 后台任务（含 operation=solve、phase、steps、状态与耗时）。
+
+```python
+laspcem_task_list() -> dict
+```
+
+### `laspcem_task_cancel`
+
+取消 LASPCEM 求解任务（求解/导出/建报告 任一阶段都能取消）。
+
+```python
+laspcem_task_cancel(task_id: string) -> dict
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `task_id` | string | 是 | run_laspcem_solve_async 返回的 task_id。 |
+
+example: `{"task_id": "<string>"}`
+
+---
+
+## 微波计算（8 个）
 
 > 本地纯计算（不产生 task 信封，`details` 为 `null`，数据在顶层）。数值解算独立复核过（见 `审查报告.md` §十四）。
 
@@ -1905,7 +1997,29 @@ wilkinson_marchand_order(ratio: float, rl_db: float = 15.0) -> dict
 
 ---
 
-## 射频链路计算（3 个）
+### `design_matching_network`
+
+```python
+from servers.microwave.matching_network import design_matching_network
+
+design_matching_network(source_impedance_ohm: float, load_impedance_ohm: float, freq_ghz: float) -> dict
+```
+
+L 型匹配网络合成：已知源/负载**实阻抗**与频率，给出两元件 L 匹配的两个解（低通：串 L 并 C；高通：串 C 并 L）。元件按「串联接低阻侧、并联接高阻侧」给出。带虚部的负载、π/T 三元件网络（需指定 Q）不支持。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `source_impedance_ohm` | float | 是 | — | 源阻抗实部（Ω，>0） |
+| `load_impedance_ohm` | float | 是 | — | 负载阻抗实部（Ω，>0，≠ 源阻抗） |
+| `freq_ghz` | float | 是 | — | 工作频率（GHz，>0） |
+
+返回：`{"success": true, "q": ..., "solutions": [{"type": "low_pass"/"high_pass", "series": {"kind": "L"/"C", "value_si", "unit", "reactance_ohm", "side"}, "shunt": {"kind", "value_si", "unit", "susceptance_siemens", "side"}}]}`。
+
+实测锚点：50Ω → 100Ω @ 2.4GHz ⇒ Q=1、串 X=50Ω、并 B=0.01S，低通/高通两解的 Z_in 均回到 50+j0。
+
+---
+
+## 射频链路计算（4 个）
 
 纯本地计算：不走 gRPC(50055) / ADS / SimulationAgent(17866)，**EDI.exe 没起也能用**，返回里没有任务信封。
 算法层是 `servers/c++demo/` 下 C++ 原版（`mixerspuranalyzer.cpp`、`rfdynamicrangecalculator.cpp`）的逐行 Python 移植，**语义以 C++ 为准**。
@@ -2029,63 +2143,25 @@ compare_snp(paths: list, labels: list | None = None, renormalize_to: float = 0.0
 
 ---
 
-### `run_laspcem_solve_async`
-
-提交 LASPCEM 求解任务（异步，立即返回 task_id）
+### `calculate_cascade`
 
 ```python
-run_laspcem_solve_async(sem_path: string, setup_name: string = "", timeout_seconds: integer = 7200, stall_seconds: integer = 900, then_export: boolean = false, then_report: boolean = false, export_path: string = "", report_name: string = "Sparameter_1", port_count: integer = 0) -> dict
+from servers.rf_analysis.cascade import calculate_cascade
+
+calculate_cascade(stages: list) -> dict
 ```
 
-| 参数 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `sem_path` | string | 是 | `.sem` 工程绝对路径。 |
-| `setup_name` | string | 否 | 求解 setup 名；留空自动探测。传错名字会**立刻**返回 SETUP_NOT_FOUND（不进队列）。 |
-| `timeout_seconds` | integer | 否 | 求解超时（后台线程内生效）。 |
-| `stall_seconds` | integer | 否 | 卡死判定（求解器还在但日志/工程/CPU 这么久没进展 ⇒ SOLVE_STALLED）；0 = 关闭。 |
-| `then_export` | boolean | 否 | 求解完成后自动导出 sNp（服务端执行，结果在 `export_result`）。 |
-| `then_report` | boolean | 否 | 求解完成后自动建报告（结果在 `report_result`）。 |
-| `export_path` | string | 否 | 指定 sNp 输出路径；留空落到默认产物目录（`<result_dir>/export_laspcem_snp_<时间戳>.sNp`，实际后缀按端口数 .s2p/.s4p）。 |
-| `report_name` | string | 否 | 报告名，默认 Sparameter_1。 |
-| `port_count` | integer | 否 | 报告曲线端口数；0 = 自动（按 sNp 后缀推断，兜底 2）。 |
+多级射频链路的级联增益 / 噪声系数（Friis）/ 输出 P1dB / 输出 IP3。噪声用 `F_total = 1 + Σ(F_i−1)/G_(i−1)`；线性度用输入参考级联 `1/P_total = Σ(G_(i−1)/P_i)`，**只有每一级都给了对应字段才计算**，否则省略该项（不猜默认值）。
 
-example: `{"sem_path": "<string>"}`
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `stages` | list | 是 | — | 各级器件列表（非空）。每项 `{"gain_db": 增益 dB（可负）, "nf_db": 噪声系数 dB（≥0）, "op1db_dbm": 输出 P1dB dBm（可选）, "iip3_dbm": 输入 IP3 dBm（可选）}` |
 
-### `laspcem_solve_query`
+返回：`{"success": true, "total_gain_db": ..., "total_nf_db": ..., "per_stage": [{"stage", "cumulative_gain_db", "cumulative_nf_db"}], ["total_op1db_dbm", "total_iip3_dbm", "total_oip3_dbm"]（仅当各级都给了对应字段）}`。
 
-查询 LASPCEM 求解任务（配合 run_laspcem_solve_async 的 task_id）。
+实测锚点：15dB/2dB + 10dB/3dB ⇒ 总增益 25dB、总 NF ≈ 2.086dB（Friis 解析解 2.0864）。
 
-```python
-laspcem_solve_query(task_id: string) -> dict
-```
-
-| 参数 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `task_id` | string | 是 | run_laspcem_solve_async 返回的 task_id。 |
-
-example: `{"task_id": "<string>"}`
-
-### `laspcem_task_list`
-
-列出 LASPCEM 后台任务（含 operation=solve、phase、steps、状态与耗时）。
-
-```python
-laspcem_task_list() -> dict
-```
-
-### `laspcem_task_cancel`
-
-取消 LASPCEM 求解任务（求解/导出/建报告 任一阶段都能取消）。
-
-```python
-laspcem_task_cancel(task_id: string) -> dict
-```
-
-| 参数 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `task_id` | string | 是 | run_laspcem_solve_async 返回的 task_id。 |
-
-example: `{"task_id": "<string>"}`
+---
 
 ## 图表（3 个）
 
