@@ -15,6 +15,9 @@ $MAX_EXE_MB  = 80   # 超过此值提示可能重复打包
 # ── [1/8] 清理 ──
 Write-Host "[1/8] Cleaning..." -ForegroundColor Yellow
 Remove-Item -Recurse -Force dist, build -ErrorAction SilentlyContinue
+# 杀残留 exe 进程：只删文件的话，还在跑的旧 exe 继续占着 50026，smoke test 会命中旧实例
+#（旧代码工具数不同 → 奇偶校验误报 frozen=105 != 104）。Stop-Process 静默失败即可。
+Get-Process edi_mcp_server -ErrorAction SilentlyContinue | Stop-Process -Force
 
 # ── [2/8] 测试 ──
 Write-Host "[2/8] Running tests..." -ForegroundColor Yellow

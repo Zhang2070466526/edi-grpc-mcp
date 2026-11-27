@@ -1209,6 +1209,13 @@ hfss_task_cancel(task_id: str) -> dict
 ## CST 电磁仿真（13 个）
 
 > 本节覆盖全部 13 个 CST 工具。
+>
+> **两条共性约束**（2026-11-27 起在入口统一拦截，CST 侧 8 个带 `model_path` 的工具一致）：
+> ① `model_path` 必须**纯 ASCII**——CST 自带库按 ANSI 路径查文件，路径含中文/全角字符时
+> open/solve/export 报 `does not exist`、info/list 读空（旧版这里还会回 `success: true`），
+> 现在统一回 `error_code: NON_ASCII_PATH`，hint 指向"拷到纯英文目录再调"；
+> ② `cst_export_farfield` 对**已求解但结果树里没有远场结果**（`monitors` 为空）的模型
+> 直接回 `NO_FARFIELD_MONITOR`，不提交任务，避免白跑一次 solver 占满 CST 单会话。
 
 ### `cst_solve_async`
 
@@ -1408,6 +1415,11 @@ example: `{"task_id": "<string>"}`
 ## LASPCEM 电磁仿真（11 个）
 
 > LASPCEM（西安电子科技大学国产电磁仿真平台）无 COM/gRPC 接口，程序化入口是 GUI 内嵌 Python 脚本（`app`/`cem`/`report`/`viewer` 全局对象），用 `laspcem /session <脚本>` 执行（会弹 GUI，需要可见桌面会话）。
+>
+> `laspcem_solve_query` 的**顶层 `status`** 自 2026-11-27 起与 CST/EDI 的 `*_query` 对齐：
+> 任务不存在 → `UNKNOWN`；被取消 → `CANCELLED`；业务失败（求解/导出/建报告任一步失败，
+> 即使任务本身记为 SUCCEEDED）→ `FAILED`，原始任务态留在 `details.task_status`。
+> 按 `status` 判断的调用方不会再拿到 `None`。
 >
 > **实测要点（2026-11-12，BuildNo 28167，2 端口 CPW 模型）**
 > - `cem.FEMAnalyze` 是**异步**的：调用立即返回，真正求解在 GUI 里跑 `mpiexec + phofem`，结果由 GUI 自己写回 `.sem`。脚本里**不能**跟 `SaveAs`/`app.Exit()`（会把求解器掐死）。
