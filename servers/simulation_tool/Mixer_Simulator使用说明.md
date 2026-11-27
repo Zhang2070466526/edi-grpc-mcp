@@ -118,6 +118,8 @@ payload = json.loads(out)                                          # 失败时�
 
 ⚠️ 指标级字段**逐指标校验**：除 `input_freq_ghz`、`peer_link` 外，字段既可写在指标对象里、也可放在该链路 `defaults`（两者任一即可）。这两个例外**只能写在该指标对象里**：`input_freq_ghz` 要标量（`defaults` 里是 `[min,max]` 区间）；`peer_link` 各链路的受害方不同，放 `defaults` 会被所有链路共用、还可能指向自己。
 
+⚠️ **`orders` 的键要带本振基频名**（2026-11-26 实测）：单级混频写 `{"FREQ":5,"LO":5}`；**多级混频必须逐个本振**写 `{"FREQ":5,"LO1":5,"LO2":5}`（本振名由 exe 从网表的 LO 源推出）。只写 `FREQ/LO` 在双混频工程上会被 exe 退回 `缺少 HB 基频 ['LO2','LO1'] 的阶数`；包装层现已提前拦成 `ORDERS_MISSING_LO` 并给出正确写法。
+
 | 指标 | 字段 |
 | --- | --- |
 | 变频增益 | 可选 `frequency_sweep_ghz`、`orders` |

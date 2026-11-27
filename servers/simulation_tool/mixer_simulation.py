@@ -1,6 +1,6 @@
 r"""mixer_simulation.exe 包装 — 混频链路仿真（上下变频/多通道/多级寻路，15 个指标）。
 
-命令（见仓库 servers/simulation_tool/Mixer_Simulator使用说明.md；exe 目录下没有该 md）：
+命令（完整参数表见 Resource edi://reference/mixer-simulator-guide）：
     mixer_simulation.exe --project <参数表json> --out <结果目录> [--workers n] [--turbocharts-exe <路径>]
 stdout 是 **GBK(cp936)** JSON：成功时单行、失败时缩进多行（内容同 response.json）；`<out>/error.json` 是 UTF-8。
 退出码：0 成功 / 2 参数或工程预检失败、仿真失败（写 error.json）/ 1 参数表文件读不了（traceback）。
@@ -419,6 +419,26 @@ def _check_netlist_consistency(project: dict, netlist_path: Path) -> dict | None
                 f"links[{i}].defaults.lo 给了 {len(lo)} 个本振，但网表里只有 {facts['mixers']} 个混频器",
                 hint="lo[] 按寻路得到的混频器顺序一一配对，多给的会被忽略；请核对数量",
             ))
+        # orders 的本振阶数必须按本振逐个命名（多级 = LO1/LO2…）—— exe 会硬性要求，
+        # 只写 {"FREQ":5,"LO":5} 在双混频工程上会被它退回（2026-11-26 实测）。
+        n_mix = facts["mixers"]
+        if n_mix > 1:
+            for j, ind in enumerate(link.get("indicators") or []):
+                if not isinstance(ind, dict) or not isinstance(ind.get("orders"), dict):
+                    continue
+                have = {str(k).upper() for k in ind["orders"]}
+                want = [f"LO{k}" for k in range(1, n_mix + 1)]
+                missing = [k for k in want if k not in have]
+                if missing:
+                    skeleton = {k: 5 for k in ["FREQ"] + want}
+                    keys_text = "/".join(skeleton)
+                    errors.append(error_response(
+                        "ORDERS_MISSING_LO",
+                        f"links[{i}].indicators[{j}].orders 缺少本振阶数 {missing}"
+                        f"（网表 {n_mix} 级混频，exe 要求逐本振给阶数）",
+                        hint=f"按 {keys_text} 逐个给阶数，例如 {skeleton}；"
+                             "本振名取自网表 LO 源（多级就是 LO1/LO2），单级混频写 {\"FREQ\":5,\"LO\":5} 即可",
+                    ))
     return _aggregate(errors)
 
 
@@ -447,6 +467,8 @@ def run_mixer_simulation(
     15 个合法指标名：变频增益, 增益平坦度, 镜像抑制, 本振泄漏, 输入 P1dB, 输出 P1dB, Psat, 噪声,
     带内杂散, 带内杂散抑制, 带外杂散, 带外杂散抑制, 通道间隔离度, 单通道线性动态范围, 交调抑制。
     指标名做归一化（去空白 + 忽略大小写），`输入P1dB` / `PSAT` 会自动纠正成标准名并写回参数表。
+    `orders` 的键含**本振基频名**：单级混频写 {"FREQ":5,"LO":5}；**多级混频必须逐个本振**
+    写 {"FREQ":5,"LO1":5,"LO2":5}（本振名取自网表 LO 源，缺了 exe 会退回 `ORDERS_MISSING_LO`）。
     必填字段：输入 P1dB / 输出 P1dB / Psat **各自都要写三项**
       input_freq_ghz（标量 GHz）+ input_power_sweep_dbm（{start,stop,step} dBm）+ orders（如 {FREQ:5, LO:5}）；
       后两者只复用输入 P1dB 的 RAW，字段不继承；
@@ -652,6 +674,8 @@ def run_mixer_simulation(
         warnings.append(ssb_warn)
     if imd_warn := _imd_negative_warning(data.get("indicators") or []):
         warnings.append(imd_warn)
+    if floor_warn := _numeric_floor_warning(data.get("indicators") or []):
+        warnings.append(floor_warn)
 
     resp: dict[str, Any] = {
         "success": True,
@@ -697,6 +721,29 @@ def _fmt_errors(errors: list) -> str:
             parts.append(str(e))
     tail = f"（另有 {len(errors) - 3} 条）" if len(errors) > 3 else ""
     return "；".join(parts) + tail
+
+
+def _numeric_floor_warning(indicators: list) -> str:
+    """指标全是数值底（−939 dB 这类）时给可操作诊断。
+
+    2026-11-26 实测：规划把 2 GHz 按**和频**升到 22 GHz，而网表里 `Mixer2` 的
+    `SideBand=0` 让模型只出**差频**（20−2=18 GHz）⇒ 22 GHz 无能量 ⇒ 变频增益 100 点全 −939 dB，
+    末级带通后面自然也没信号。包装层若只说「数值底」会让人去查滤波器/器件模型，查不到点上。
+    """
+    floors: list[str] = []
+    for ind in indicators:
+        if not isinstance(ind, dict) or ind.get("status") != "incomplete":
+            continue
+        vals = [ind.get("value"), ind.get("min"), ind.get("max")]
+        if any(isinstance(v, (int, float)) and (v <= -300 or v >= 300) for v in vals):
+            floors.append(str(ind.get("indicator") or "?"))
+    if not floors:
+        return ""
+    return (f"{'、'.join(floors)} 全是数值底（|dB| ≥ 300），说明该频点没有信号通过，不是器件损耗："
+            "最常见是**频率规划与混频器边带/接法不一致** —— 规划按和频（LO+RF）出中频，"
+            "而网表里 Mixer2/TableMixer 的 SideBand、或混频器 RF/IF 引脚接法让模型只出差频（|LO−RF|）。"
+            "核对顺序：① run.json 里每级的 direction/f_out 是否等于网表模型的输出频率；"
+            "② 混频器 SideBand/ReferToInput 与 RF/IF 接线；③ 输出频点是否落在末级滤波器通带内。")
 
 
 def _noise_ssb_warning(out_dir: str) -> str:

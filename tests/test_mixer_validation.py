@@ -339,3 +339,32 @@ def test_input_freq_equal_range_rejected_locally():
     assert r and r["error_code"] == "LINK_JSON_INVALID"
     assert r["location"].endswith("defaults.input_freq_ghz")
     assert "min < max" in r["message"]
+
+
+def test_orders_must_name_each_lo_on_multimixer_link(tmp_path):
+    """双混频只写 {"FREQ","LO"} → 提前拦成 ORDERS_MISSING_LO（exe 会退回，2026-11-26 实测）。"""
+    nl = tmp_path / "netlist.log"
+    nl.write_text(
+        "Mixer2:Mixer21 A B C\n"
+        "TableMixer:HMC1 D E F\n"
+        "Port:P1 X 0 Num=1 Z=50 Ohm\n"
+        "Port:P2 Y 0 Num=2 Z=50 Ohm\n", encoding="utf-8")
+    proj = _link(indicators=[{"name": "变频增益", "orders": {"FREQ": 5, "LO": 5}}])
+    r = _check_netlist_consistency(proj, nl)
+    assert r and r["error_code"] == "ORDERS_MISSING_LO", r
+    assert "LO1" in r["message"] and "LO2" in r["message"]
+    # 补齐后不再报
+    ok = _link(indicators=[{"name": "变频增益", "orders": {"FREQ": 5, "LO1": 5, "LO2": 5}}])
+    r2 = _check_netlist_consistency(ok, nl)
+    assert r2 is None, r2
+
+
+def test_numeric_floor_warning_explains_sideband_mismatch():
+    """−939 dB 这种数值底 → 给"规划与混频器边带/接法不一致"的诊断，而不是只回 incomplete。"""
+    from servers.simulation_tool.mixer_simulation import _numeric_floor_warning
+
+    inds = [{"indicator": "变频增益", "status": "incomplete", "unit": "dB",
+             "min": -939.0, "max": -939.0, "points": 100}]
+    msg = _numeric_floor_warning(inds)
+    assert "数值底" in msg and "边带" in msg and "run.json" in msg
+    assert _numeric_floor_warning([{"indicator": "变频增益", "status": "ok", "value": 25.0}]) == ""
