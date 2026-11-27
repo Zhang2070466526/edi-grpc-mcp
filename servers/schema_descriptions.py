@@ -213,46 +213,84 @@ def _model_param_map() -> dict[str, dict[str, type]]:
     2026-11-26 实测：装饰器链 + `from __future__ import annotations` 下，FastMCP 对
     `project: MixerProject` 只生成了 `{"items": {"$ref": "#/$defs/MixerLink"}}` 却**没带
     `$defs`**（悬空引用），参数退化成自由 object。这里直接拿模型自己的 JSON Schema 覆盖。
+
+    本表只留 `run_mixer_simulation`（模型在 `simulation_tool/mixer_models.py`，附带完整
+    字段表常量）；其余工具参数模型集中在 `servers/param_models.py`，由
+    `_extra_param_schemas()` 提供（含 `list[Model]` / `dict[str, Model]` 两种包装）。
     """
+    mapping: dict[str, dict[str, type]] = {}
     try:
         from servers.simulation_tool.mixer_models import MixerProject
     except Exception:                                   # noqa: BLE001 —— 可选模块，缺了不影响启动
+        return mapping
+    mapping["run_mixer_simulation"] = {"project": MixerProject}
+    return mapping
+
+
+def _extra_param_schemas(tool_name: str) -> dict[str, dict]:
+    """`servers/param_models.py` 声明的参数 schema（对象 / 数组元素 / 字典值 / 手工片段）。"""
+    try:
+        from servers.param_models import (
+            ARRAY_PARAMS,
+            DICT_PARAMS,
+            OBJECT_PARAMS,
+            RAW_SCHEMAS,
+            param_schema,
+        )
+    except Exception as exc:                            # noqa: BLE001 —— 缺了只是少一层文档
+        _logger.warning("param_models unavailable: %s", exc)
         return {}
-    return {"run_mixer_simulation": {"project": MixerProject}}
+    names = (
+        set(OBJECT_PARAMS.get(tool_name, {}))
+        | set(ARRAY_PARAMS.get(tool_name, {}))
+        | set(DICT_PARAMS.get(tool_name, {}))
+        | {p for (t, p) in RAW_SCHEMAS if t == tool_name}
+    )
+    out: dict[str, dict] = {}
+    for pname in names:
+        schema = param_schema(tool_name, pname)
+        if isinstance(schema, dict) and schema:
+            out[pname] = schema
+    return out
 
 
 def inject_model_param_schemas(mcp) -> int:
     """把 pydantic 模型参数的 schema 显式写进 inputSchema（并就地展开 $ref）。"""
-    mapping = _model_param_map()
-    if not mapping:
-        return 0
+    from_mixer = _model_param_map()
     changed = 0
     for tool in registered_tools(mcp):
-        spec_map = mapping.get(getattr(tool, "name", ""))
-        if not spec_map or not isinstance(getattr(tool, "parameters", None), dict):
-            continue
-        params = tool.parameters
-        props = params.setdefault("properties", {})
-        for pname, model in spec_map.items():
-            old = props.get(pname) if isinstance(props.get(pname), dict) else {}
+        name = getattr(tool, "name", "")
+        specs = _extra_param_schemas(name)
+        for pname, model in from_mixer.get(name, {}).items():
             try:
-                schema = model.model_json_schema()
+                specs[pname] = model.model_json_schema()
             except Exception as exc:                    # noqa: BLE001
-                _logger.warning("model schema failed for %s.%s: %s", tool.name, pname, exc)
+                _logger.warning("model schema failed for %s.%s: %s", name, pname, exc)
+        if not specs:
+            continue
+        params = getattr(tool, "parameters", None)
+        if not isinstance(params, dict):
+            continue
+        props = params.setdefault("properties", {})
+        for pname, schema in specs.items():
+            if pname not in props:
+                # 表里写错名字时不造幽灵参数（FastMCP 的签名才是参数的唯一来源）
+                _logger.warning("param_models: %s 没有参数 %s，跳过 schema 注入", name, pname)
                 continue
             schema.pop("title", None)
+            old = props.get(pname) if isinstance(props.get(pname), dict) else {}
             if old.get("description"):
-                schema["description"] = old["description"]      # 保留工具作者写的说明
+                schema.setdefault("description", old["description"])   # 保留工具作者写的说明
             props[pname] = schema
-            if pname in (params.get("required") or []):
-                pass                                    # 必填关系保持 FastMCP 的判定
+            # 必填关系保持 FastMCP 的判定（不动 params["required"]）
         try:
             tool.parameters = inline_local_refs(params)
             changed += 1
         except Exception as exc:                        # noqa: BLE001
-            _logger.warning("inline model schema failed for %s: %s", tool.name, exc)
+            _logger.warning("inline model schema failed for %s: %s", name, exc)
     _logger.info("tool model schemas injected=%d", changed)
     return changed
+
 
 
 def inline_tool_schemas(mcp) -> int:

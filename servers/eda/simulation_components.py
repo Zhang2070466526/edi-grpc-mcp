@@ -578,9 +578,9 @@ def delete_component_from_schematic(
         instance_name: str,
         timeout_seconds: int = 120,
 ) -> dict[str, Any]:
-    """按实例名删除原理图器件及其连接线。
+    """按实例名删除原理图器件及其连接线（不可撤销，断开的连接需用 add_wire 重连）。
 
-    建议调用前先用 list_schematic_components 确认目标实例名。
+        建议调用前先用 list_schematic_components 确认目标实例名；删错只能靠撤销栈回退，不要拿它当"试一下"的手段。
 
     Args:
         project_path: .epp 工程文件绝对路径。
