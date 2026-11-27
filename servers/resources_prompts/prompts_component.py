@@ -14,7 +14,7 @@ from servers import mcp
 @mcp.prompt(
     name="configure_simulation_component",
     title="配置仿真器件",
-    description="按用户需求配置 SP/HB/XDB 仿真器件参数。创建或修改前先查询 Schema 和现有配置。",
+    description="按用户需求更新 SP/HB/XDB 仿真器件参数。更新前先查询 Schema 和现有配置。",
 )
 def prompt_configure_simulation_component(
         project_path: str,

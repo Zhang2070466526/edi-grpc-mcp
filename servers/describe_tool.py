@@ -465,6 +465,21 @@ def _keyword_result(key: str, hits: list[tuple[float, str]], tools: dict[str, An
     return body
 
 
+def _prompt_detail(prompt: Any, key: str) -> dict[str, Any]:
+    """描述一个 prompt：prompts/list 不暴露参数类型/描述，这里返回完整 docstring（含 Args）。"""
+    fn = getattr(prompt, "fn", None)
+    doc = (getattr(fn, "__doc__", "") or "").strip()
+    summary = (getattr(prompt, "description", "") or "").strip()
+    return {
+        "success": True,
+        "name": key,
+        "kind": "prompt",
+        "summary": summary,
+        "doc": doc,
+        "notes": "prompts/list 不暴露参数类型/描述；参数契约以本 doc 的 Args 段为准",
+    }
+
+
 @mcp.tool()
 def describe_tool(name: str = "") -> dict:
     """查工具参数/示例，或按能力关键词找工具（留空 name=列全部）；先查它，别猜也别读源码。
@@ -507,6 +522,11 @@ def describe_tool(name: str = "") -> dict:
     tool = tools.get(key)
     if tool is not None:
         return _build_detail(tool, key)
+
+    # 工具没命中 → 查 prompt（prompts/list 不暴露参数类型/描述，describe_tool 兜底）
+    prompt = getattr(getattr(mcp, "_prompt_manager", None), "_prompts", {}).get(key)
+    if prompt is not None:
+        return _prompt_detail(prompt, key)
 
     # 精确名没命中：能力词直连优先，其次名字命中（拼错/前缀），再其次通用打分，最后相似名建议
     hits = _keyword_match(key, tools)
