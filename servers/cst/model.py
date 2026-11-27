@@ -14,6 +14,7 @@ from servers.cst.cst_api import (
     cst_busy_response,
     cst_cancel_active,
     cst_runner,
+    non_ascii_model_path_response,
     run_cst_job,
 )
 from servers.task_runner import QueueBusyError
@@ -57,8 +58,14 @@ def cst_get_model_info(model_path: str) -> dict[str, Any]:
         {"success": True, "solved": bool, "unpacked": bool, "ports": int,
          "freq_range": [min, max] | None, "monitors": ["Farfield"], "result_items": [...],
          "notes": "..."}
+
+    路径含中文等非 ASCII 字符时直接返回 NON_ASCII_PATH（CST 库按 ANSI 路径查文件，
+    过去这里会静默返回空结果树 + success=True，与 open/solve 的失败口径相反）。
     """
     resolved, err = require_file(model_path, (".cst",))
+    if err:
+        return err
+    err = non_ascii_model_path_response(resolved, "模型体检")
     if err:
         return err
     try:
@@ -90,8 +97,14 @@ def cst_open_project(model_path: str) -> dict[str, Any]:
 
     Returns:
         {"success": True, "model_path": "...", "unpacked": True, "message": "..."}
+
+    路径含中文等非 ASCII 字符时直接返回 NON_ASCII_PATH（CST 库按 ANSI 路径查文件，
+    会报 "The given project path does not exist"）。
     """
     resolved, err = require_file(model_path, (".cst",))
+    if err:
+        return err
+    err = non_ascii_model_path_response(resolved, "模型解包")
     if err:
         return err
     try:
@@ -126,8 +139,13 @@ def cst_list_results(model_path: str) -> dict[str, Any]:
 
     Returns:
         {"success": True, "result_items": [...], "monitors": ["Farfield"], "notes": "..."}
+
+    路径含中文等非 ASCII 字符时直接返回 NON_ASCII_PATH（原因是 CST 库按 ANSI 路径查文件）。
     """
     resolved, err = require_file(model_path, (".cst",))
+    if err:
+        return err
+    err = non_ascii_model_path_response(resolved, "结果清单读取")
     if err:
         return err
     try:

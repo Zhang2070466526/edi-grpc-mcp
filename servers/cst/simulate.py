@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from servers import mcp
-from servers.cst.cst_api import cst_runner, query_task, run_cst_job
+from servers.cst.cst_api import cst_runner, non_ascii_model_path_response, query_task, run_cst_job
 from servers.utils import bounded_wait, queue_full_response, require_file, submitted_response
 
 
@@ -45,8 +45,14 @@ def cst_solve_async(model_path: str) -> dict[str, Any]:
 
     Returns:
         {"success": True, "task_id": "cst-a1b2...", "status": "QUEUED"}
+
+    路径含中文等非 ASCII 字符时直接返回 NON_ASCII_PATH（CST 库按 ANSI 路径查文件，
+    会报 "The given project path does not exist"）。
     """
     resolved, err = require_file(model_path, (".cst",))
+    if err:
+        return err
+    err = non_ascii_model_path_response(resolved, "模型求解")
     if err:
         return err
     task_id = _simulator.submit_solve(resolved)

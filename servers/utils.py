@@ -233,6 +233,10 @@ _DEFAULT_HINTS: dict[str, str] = {
     "NETLIST_EMPTY": "网表为空或没解析出器件；先 export_project_netlist 导出再核对",
     "INVALID_STATUS": "status 过滤值不合法；用 list_eda_tasks 不带参看全部，合法值见工具说明",
     # ── CST ──
+    "NON_ASCII_PATH": "把 .cst 拷到纯英文目录（如 C:/cst_work/model.cst）再调用；CST 自带库按 ANSI 路径"
+                      "查文件，路径含中文/全角字符时一律读不到（open/solve/export/info 全受此限）",
+    "NO_FARFIELD_MONITOR": "模型没配 farfield 监视器（结果树里没有远场结果），再跑 solver 也导不出来："
+                           "在 CST 里加监视器并求解后再导出；先 cst_get_model_info 看 monitors",
     "CST_OPEN_FAILED": "归档 .cst 解包失败；确认文件存在且 CST 能打开（必要时先在 GUI 里打开一次）",
     "CST_INFO_FAILED": "读 CST 模型信息失败；确认模型已解包（cst_open_project）且 CST 已安装",
     "CST_PLOT_FAILED": "远场 txt 解析/绘图失败；确认 txt 是 cst_export_farfield 产物、cut 格式为 phi=0 或 theta=0",

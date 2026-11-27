@@ -15,6 +15,7 @@ from servers.cst.cst_api import (
     cst_busy_response,
     cst_cancel_active,
     cst_runner,
+    non_ascii_model_path_response,
     query_task,
     run_cst_job,
 )
@@ -27,6 +28,24 @@ from servers.utils import (
     result_subdir,
     submitted_response,
 )
+
+
+# 远场导出的超时看门狗：导出本身 438ms 级，自动求解也就几分钟（实测小模型 197 s）。
+# 若沿用全局 2h，真卡死会把单会话堵到 2h。这里给 15 分钟上限，作为
+# 「已求解但没配 farfield 监视器」前置拦截之外的兜底（2026-11-27 实测）。
+_FARFIELD_JOB_TIMEOUT_SECONDS = 900
+
+
+def _probe_model_state(model_path: str) -> dict[str, Any] | None:
+    """无会话探测模型状态（solved / monitors）；探测失败返回 None，不阻断导出。"""
+    try:
+        return cst_runner.run_sync(
+            run_cst_job, "info", timeout=120, model_path=model_path,
+            metadata={"op": "info", "model_path": model_path},
+            require_idle=True, kill=cst_cancel_active,
+        )
+    except Exception:  # noqa: BLE001 — 前置探测只是优化，失败就退回原路径
+        return None
 
 
 class CstResultExporter:
@@ -50,6 +69,7 @@ class CstResultExporter:
             "export_farfield",
             model_path=os.path.abspath(str(model_path)),
             output_dir=output_dir,
+            timeout=_FARFIELD_JOB_TIMEOUT_SECONDS,
         )
 
 
@@ -81,8 +101,13 @@ def cst_export_snp(
 
     Returns:
         {"success": True, "snp_path": "C:/.../xxx.s2p", "message": "S 参数已导出"}
+
+    路径含中文等非 ASCII 字符时直接返回 NON_ASCII_PATH（CST 库按 ANSI 路径查文件）。
     """
     resolved, err = require_file(model_path, (".cst",))
+    if err:
+        return err
+    err = non_ascii_model_path_response(resolved, "S 参数导出")
     if err:
         return err
     if not output_dir:
@@ -122,10 +147,29 @@ def cst_export_farfield(model_path: str, output_dir: str = "") -> dict[str, Any]
 
     Returns:
         {"success": True, "task_id": "cst-a1b2...", "status": "QUEUED"}
+
+    两条前置拦截：路径含中文 → NON_ASCII_PATH；模型**已求解但结果树里没有远场结果**
+    （monitors 为空，即没配 farfield 监视器）→ NO_FARFIELD_MONITOR，不提交任务 ——
+    否则会白跑一次 run_solver（实测 197 s 级）并在这段时间占满 CST 单会话。
+    未求解的模型不受第二条限制（求解后可能产生远场结果）。
     """
     resolved, err = require_file(model_path, (".cst",))
     if err:
         return err
+    err = non_ascii_model_path_response(resolved, "远场导出")
+    if err:
+        return err
+    state = _probe_model_state(resolved)
+    if state and state.get("solved") and not state.get("monitors"):
+        return error_response(
+            "NO_FARFIELD_MONITOR",
+            "模型已求解，但结果树里没有任何远场结果（monitors 为空）——多为没配 farfield "
+            "监视器，再跑一次 solver 也导不出来，故未提交任务",
+            hint="在 CST 里给该模型加 farfield 监视器并求解后再导出；"
+                 "只想确认有无远场结果可用 cst_get_model_info / cst_list_results",
+            model_path=resolved,
+            result_items=(state.get("result_items") or [])[:8],
+        )
     if not output_dir:
         output_dir = result_subdir("cst_export_farfield")
     task_id = cst_runner.submit(
@@ -183,8 +227,13 @@ def cst_export_snp_async(
 
     Returns:
         {"success": True, "task_id": "cst-a1b2...", "status": "QUEUED"}
+
+    路径含中文等非 ASCII 字符时直接返回 NON_ASCII_PATH（CST 库按 ANSI 路径查文件）。
     """
     resolved, err = require_file(model_path, (".cst",))
+    if err:
+        return err
+    err = non_ascii_model_path_response(resolved, "S 参数导出")
     if err:
         return err
     if not output_dir:

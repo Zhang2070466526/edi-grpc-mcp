@@ -46,6 +46,30 @@ def cst_busy_response(what: str = "该操作") -> dict:
         hint="先用 cst_task_list 查看队列与进度；稍后重试，或改用对应的 *_async / *_query 工具",
     )
 
+def non_ascii_model_path_response(model_path: str, what: str = "该操作") -> dict | None:
+    """模型路径含非 ASCII 字符时统一拒绝，返回 None 表示路径可用。
+
+    CST 自带库（cst.results / cst.interface）用 ANSI 路径查文件：路径里带中文/全角字符时
+    一律「读不到这个文件」。过去各工具表现不一致 —— info/list_results 静默返回空结果树
+    且 `success=True`，open/solve/export 直接 `does not exist`，同一个模型两种口径
+    （2026-11-27 实测：`D:/EDI/data/data/案例数据/.../MSLINE_V2020.cst` 全灭，拷到
+    纯英文目录后 open 36 s / solve 197 s / export_snp 438 ms 全通）。这里入口统一拦下，
+    让调用方拿到一致且可执行的结论。
+    """
+    try:
+        str(model_path).encode("ascii")
+    except UnicodeEncodeError:
+        return error_response(
+            "NON_ASCII_PATH",
+            "模型路径含非 ASCII 字符（中文/全角），CST 自带库按 ANSI 路径查文件会报 "
+            "\"does not exist\"，%s未开始：%s" % (what, model_path),
+            hint="把 .cst 拷到纯英文目录（如 C:/cst_work/model.cst）后再调用；"
+                 "CST 侧所有工具（info/list/open/solve/export）都受这条限制",
+            model_path=str(model_path),
+        )
+    return None
+
+
 # 单个作业的整体超时（秒）：求解可能很久，给足余量（与 cst_runner 的兜底一致）
 JOB_TIMEOUT_SECONDS = 7200
 
@@ -258,7 +282,9 @@ def query_task(
     success_key 字段；失败返回 error_response。供各 *_query 工具复用，消除同构模板。
     """
     if snap is None:
-        return error_response("TASK_NOT_FOUND", not_found_msg)
+        resp = error_response("TASK_NOT_FOUND", not_found_msg)
+        resp["status"] = "UNKNOWN"  # 顶层 status：与其它 *_query 一致，按 status 判断的调用方不会拿到 None
+        return resp
     payload = {
         "success": True,
         "task_id": task_id,
@@ -275,4 +301,8 @@ def query_task(
         payload[success_key] = snap["result"]
         payload["message"] = success_msg
         return payload
-    return error_response(fail_code, snap.get("error") or fail_msg)
+    # FAILED：error_response 没有顶层 status，这里补上（如 "No S-Parameter results found" 时
+    # 只有 message 没 status，按 status 判断的调用方会拿到 None）
+    resp = error_response(fail_code, snap.get("error") or fail_msg)
+    resp["status"] = snap["status"]
+    return resp

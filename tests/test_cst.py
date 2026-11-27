@@ -43,6 +43,7 @@ class TestSolveQuery:
             r = simulate.cst_solve_query("t1")
         assert r["success"] is False
         assert r["error_code"] == "CST_SOLVE_FAILED"
+        assert r["status"] == "FAILED"
 
     def test_not_found(self):
         from servers.cst import simulate
@@ -50,6 +51,7 @@ class TestSolveQuery:
             r = simulate.cst_solve_query("t1")
         assert r["success"] is False
         assert r["error_code"] == "TASK_NOT_FOUND"
+        assert r["status"] == "UNKNOWN"
 
 
 class TestExportFarfieldQuery:
@@ -75,12 +77,14 @@ class TestExportFarfieldQuery:
             r = result_export.cst_export_farfield_query("t1")
         assert r["success"] is False
         assert r["error_code"] == "CST_EXPORT_FARFIELD_FAILED"
+        assert r["status"] == "FAILED"
 
     def test_not_found(self):
         from servers.cst import result_export
         with patch.object(result_export.cst_runner, "snapshot", return_value=None):
             r = result_export.cst_export_farfield_query("t1")
         assert r["error_code"] == "TASK_NOT_FOUND"
+        assert r["status"] == "UNKNOWN"
 
     def test_empty_result_message_is_honest(self):
         """success=true + 空列表 不该说成「已导出」（模型没配 farfield 监视器）。"""
@@ -129,12 +133,14 @@ class TestExportSnpAsyncQuery:
             r = result_export.cst_export_snp_query("t1")
         assert r["success"] is False
         assert r["error_code"] == "CST_EXPORT_SNP_FAILED"
+        assert r["status"] == "FAILED"
 
     def test_not_found(self):
         from servers.cst import result_export
         with patch.object(result_export.cst_runner, "snapshot", return_value=None):
             r = result_export.cst_export_snp_query("t1")
         assert r["error_code"] == "TASK_NOT_FOUND"
+        assert r["status"] == "UNKNOWN"
 
 
 # ── CST 解释器定位 ──
@@ -622,6 +628,108 @@ class TestCstBusyGuard:
         for kwargs in seen:
             assert kwargs.get("require_idle") is True
             assert kwargs.get("kill") is model.cst_cancel_active
+
+
+# ── 非 ASCII 路径统一拦截（CST 自带库按 ANSI 路径查文件，2026-11-27 实测） ──
+
+class TestNonAsciiPathGuard:
+    @staticmethod
+    def _cn_model(tmp_path):
+        d = tmp_path / "案例数据"
+        d.mkdir()
+        p = d / "MSLINE.cst"
+        p.write_text("x", encoding="utf-8")
+        return str(p)
+
+    def test_model_info_rejects_non_ascii(self, tmp_path, monkeypatch):
+        from servers.cst import model
+        called = []
+        monkeypatch.setattr(model.cst_runner, "run_sync", lambda *a, **k: called.append(1))
+        r = model.cst_get_model_info(self._cn_model(tmp_path))
+        assert r["success"] is False
+        assert r["error_code"] == "NON_ASCII_PATH"
+        assert "纯英文" in r["hint"]
+        assert called == [], "非 ASCII 路径不该进 CST 作业队列"
+
+    def test_list_results_rejects_non_ascii(self, tmp_path):
+        from servers.cst import model
+        assert model.cst_list_results(self._cn_model(tmp_path))["error_code"] == "NON_ASCII_PATH"
+
+    def test_open_project_rejects_non_ascii(self, tmp_path):
+        from servers.cst import model
+        assert model.cst_open_project(self._cn_model(tmp_path))["error_code"] == "NON_ASCII_PATH"
+
+    def test_solve_async_rejects_non_ascii(self, tmp_path):
+        from servers.cst import simulate
+        assert simulate.cst_solve_async(self._cn_model(tmp_path))["error_code"] == "NON_ASCII_PATH"
+
+    def test_export_snp_rejects_non_ascii(self, tmp_path):
+        from servers.cst import result_export
+        assert result_export.cst_export_snp(self._cn_model(tmp_path))["error_code"] == "NON_ASCII_PATH"
+
+    def test_export_snp_async_rejects_non_ascii(self, tmp_path):
+        from servers.cst import result_export
+        r = result_export.cst_export_snp_async(self._cn_model(tmp_path))
+        assert r["error_code"] == "NON_ASCII_PATH"
+
+    def test_export_farfield_rejects_non_ascii(self, tmp_path):
+        from servers.cst import result_export
+        r = result_export.cst_export_farfield(self._cn_model(tmp_path))
+        assert r["error_code"] == "NON_ASCII_PATH"
+
+    def test_ascii_path_still_passes(self, tmp_path, monkeypatch):
+        """对照组：ASCII 路径不被拦，避免把整条 CST 链误杀。"""
+        from servers.cst import model
+        monkeypatch.setattr(model.cst_runner, "run_sync",
+                            lambda *a, **k: {"result_items": [], "monitors": [], "notes": "",
+                                             "unpacked": True, "solved": False, "ports": 0,
+                                             "freq_range": None})
+        p = tmp_path / "m.cst"
+        p.write_text("x", encoding="utf-8")
+        assert model.cst_get_model_info(str(p))["success"] is True
+
+
+class TestFarfieldMonitorPrecheck:
+    """已求解但 monitors 为空 ⇒ 不提交任务（否则白跑一次 solver 并占满单会话）。"""
+
+    @staticmethod
+    def _model(tmp_path):
+        p = tmp_path / "m.cst"
+        p.write_text("x", encoding="utf-8")
+        return str(p)
+
+    def test_solved_without_farfield_rejected_before_submit(self, tmp_path, monkeypatch):
+        from servers.cst import result_export
+        submitted = []
+        monkeypatch.setattr(result_export, "_probe_model_state",
+                            lambda _p: {"solved": True, "monitors": [],
+                                        "result_items": ["1D Results\\Energy"]})
+        monkeypatch.setattr(result_export.cst_runner, "submit",
+                            lambda *a, **k: submitted.append(1) or "cst-x")
+        r = result_export.cst_export_farfield(self._model(tmp_path))
+        assert r["success"] is False
+        assert r["error_code"] == "NO_FARFIELD_MONITOR"
+        assert submitted == []
+
+    def test_unsolved_model_still_submits(self, tmp_path, monkeypatch):
+        """未求解的模型不受限：求解后可能产生远场结果。"""
+        from servers.cst import result_export
+        monkeypatch.setattr(result_export, "_probe_model_state",
+                            lambda _p: {"solved": False, "monitors": [], "result_items": []})
+        monkeypatch.setattr(result_export.cst_runner, "submit", lambda *a, **k: "cst-y")
+        r = result_export.cst_export_farfield(self._model(tmp_path))
+        assert r["success"] is True
+        assert r["task_id"] == "cst-y"
+
+    def test_probe_failure_fails_open(self, tmp_path, monkeypatch):
+        """探测失败（如 CST 忙）不能阻断正常导出。"""
+        from servers.cst import result_export
+        monkeypatch.setattr(result_export.cst_runner, "run_sync",
+                            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("busy")))
+        monkeypatch.setattr(result_export.cst_runner, "submit", lambda *a, **k: "cst-z")
+        r = result_export.cst_export_farfield(self._model(tmp_path))
+        assert r["success"] is True
+        assert r["task_id"] == "cst-z"
 
 
 if __name__ == "__main__":
