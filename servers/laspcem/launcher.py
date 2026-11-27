@@ -102,11 +102,11 @@ def _same_path(a: str, b: str) -> bool:
 
 
 @mcp.tool()
-def open_laspcem_project(project_path: str, laspcem_path: str = "",
+def open_laspcem_project(sem_path: str, laspcem_path: str = "",
                          force_new_instance: bool = False) -> dict[str, Any]:
     """在 LASPCEM 中打开 .sem 工程文件（GUI 打开与后台求解互斥，先求解后打开）。
 
-    等价于双击 .sem 文件：laspcem.exe "<project_path>"。
+    等价于双击 .sem 文件：laspcem.exe "<sem_path>"。
 
     ⚠️ 实测（2026-11-10）：LASPCEM **没有进程间投递**（无 COM/gRPC/IPC），带文件启动一律新起
     一个 GUI 进程，不会交给已在跑的实例。所以本工具默认做「同工程去重」——目标 .sem 已经在
@@ -116,7 +116,7 @@ def open_laspcem_project(project_path: str, laspcem_path: str = "",
     用法："在 LASPCEM 中打开 C:/Users/xx/demo.sem"、"用 laspcem 打开这个工程"
 
     Args:
-        project_path: .sem 工程文件绝对路径。
+        sem_path: .sem 工程文件绝对路径。
         laspcem_path: laspcem.exe 路径，默认自动检测。
         force_new_instance: 该工程已在某实例中打开时也强制再起一个新实例（默认 False）。
 
@@ -125,7 +125,7 @@ def open_laspcem_project(project_path: str, laspcem_path: str = "",
          "new_instance": bool, "pid": int | None, "running_instances": [pid, ...], "message": "..."}
     """
     try:
-        resolved = validate_file(project_path, (".sem",))
+        resolved = validate_file(sem_path, (".sem",))
     except (FileNotFoundError, ValueError) as exc:
         return error_response("INVALID_PATH", str(exc))
 
@@ -169,7 +169,7 @@ def open_laspcem_project(project_path: str, laspcem_path: str = "",
 
 
 @mcp.tool()
-def close_laspcem_project(project_path: str, force: bool = False,
+def close_laspcem_project(sem_path: str, force: bool = False,
                           include_script_sessions: bool = False) -> dict[str, Any]:
     """关闭在 LASPCEM 中打开某个 .sem 的 GUI 实例（等价于关窗口）。
 
@@ -180,7 +180,7 @@ def close_laspcem_project(project_path: str, force: bool = False,
     用法："把这个工程的 LASPCEM 窗口关掉"、"关闭 CPW_SL.sem 的实例"
 
     Args:
-        project_path: .sem 工程文件绝对路径。**不要求文件仍然存在** —— 工程被删/改名后
+        sem_path: .sem 工程文件绝对路径。**不要求文件仍然存在** —— 工程被删/改名后
             LASPCEM 实例的 cmdline 仍可能指向原路径，这种残留更要能关掉。
         force: True 时 terminate 超时后再 kill；默认只 terminate 并等 5 s。
         include_script_sessions: True 时把 `laspcem.exe /session <脚本>` 起的实例也算进来。
@@ -193,9 +193,9 @@ def close_laspcem_project(project_path: str, force: bool = False,
          "remaining": [pid, ...], "message": "..."}
         `closed` 为空 = 没有实例在打开该工程（不算失败）。
     """
-    raw = (project_path or "").strip()
+    raw = (sem_path or "").strip()
     if not raw:
-        return error_response("INVALID_PATH", "project_path 不能为空")
+        return error_response("INVALID_PATH", "sem_path 不能为空")
     if Path(raw).suffix.lower() != ".sem":
         return error_response("INVALID_PATH", f"文件扩展名必须是 ('.sem',): {raw}")
     # 这里**不**调 validate_file：那个会校验文件存在，而"关掉一个文件已被删除的工程"
@@ -873,7 +873,7 @@ def _busy_response(held: list[dict[str, Any]], action: str) -> dict[str, Any]:
         "PROJECT_IN_USE",
         f"工程已被 LASPCEM 实例占用（PID {pids}），无法{action}",
         hint=("LASPCEM 没有单实例转发，同时开两个实例操作同一个 .sem 会互相踩。"
-              "先调 close_laspcem_project(project_path) 关掉占用它的那个实例"
+              "先调 close_laspcem_project(sem_path) 关掉占用它的那个实例"
               "（按命令行匹配、发 terminate 并等 5 s；closed=[] 表示本来没有实例开着，不算失败），"
               "或直接在 GUI 里关掉窗口，再重试。"),
         pids=[p.get("pid") for p in held],

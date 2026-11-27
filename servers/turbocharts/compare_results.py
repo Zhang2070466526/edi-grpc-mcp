@@ -31,7 +31,7 @@ from servers import mcp
 @mcp.tool()
 @per_tool_mutex
 def compare_simulation_results(
-    result_paths: list[str],
+    raw_paths: list[str],
     curve: str,
     output_path: str = "",
     chart_type: str = "",
@@ -47,7 +47,7 @@ def compare_simulation_results(
     按依赖轴对齐，用 Matplotlib 生成叠图并计算差异指标。
 
     Args:
-        result_paths: RAW 文件路径列表（2-8 个）。
+        raw_paths: RAW 文件路径列表（2-8 个）。
         curve: 曲线名，如 "DB_S[2,1]"。
         output_path: 对比图输出路径；留空则落到默认产物目录（<result_dir>/compare_simulation_results_<时间戳>.png）。
         chart_type: 图表类型 SP / HB / XDB；默认空 = 自动从 RAW 的 Plotname 推断
@@ -61,9 +61,9 @@ def compare_simulation_results(
     if not Path(TURBOCHARTS_PATH).is_file():
         return error_response("FILE_NOT_FOUND", f"turbocharts_app.exe 不存在: {TURBOCHARTS_PATH}")
 
-    file_count = len(result_paths)
+    file_count = len(raw_paths)
     if file_count < 2 or file_count > 8:
-        return error_response("INVALID_PARAMETERS", "result_paths 需要 2-8 个文件")
+        return error_response("INVALID_PARAMETERS", "raw_paths 需要 2-8 个文件")
 
     if alignment not in ("intersection", "interpolation"):
         return error_response("INVALID_PARAMETERS", "alignment 必须是 intersection 或 interpolation")
@@ -71,7 +71,7 @@ def compare_simulation_results(
     if reference_index < 0 or reference_index >= file_count:
         return error_response("INVALID_PARAMETERS", f"reference_index={reference_index} 超出范围（0-{file_count - 1}）")
 
-    for raw_path in result_paths:
+    for raw_path in raw_paths:
         if not Path(raw_path).is_file():
             return error_response("FILE_NOT_FOUND", f"RAW 文件不存在: {raw_path}")
 
@@ -79,19 +79,19 @@ def compare_simulation_results(
     # 没传就按第一个 RAW 自动识别（2026-09-28 体检 GW-2），识别不出退回旧默认 SP 并告警。
     # 另外**逐文件**探测类型：混用不同数据集时后续文件必然白跑（同一个 curve 名不可能同时
     # 存在于两种数据集，实测引擎对错配类型还会直接 0xC0000005 崩溃）⇒ 显式记进 notes。
-    file_types: dict[str, str] = {str(p): detect_chart_type(str(p)) for p in result_paths}
+    file_types: dict[str, str] = {str(p): detect_chart_type(str(p)) for p in raw_paths}
     notes: list[str] = []
     if not chart_type:
-        detected = file_types[str(result_paths[0])]
+        detected = file_types[str(raw_paths[0])]
         if detected:
             chart_type = detected
             _logger.info("compare_results chart_type auto-detected=%s (%s)",
-                         chart_type, result_paths[0])
+                         chart_type, raw_paths[0])
         else:
             chart_type = "SP"
             notes.append("无法从 RAW 自动识别 chart_type（缺 Plotname 或未知格式），"
                          "已按旧默认 SP 处理；HB / XDB 数据请显式传 chart_type")
-            _logger.warning("compare_results chart_type fallback=SP (%s)", result_paths[0])
+            _logger.warning("compare_results chart_type fallback=SP (%s)", raw_paths[0])
     mismatched = [p for p, t in file_types.items() if t and t != chart_type]
     if mismatched:
         notes.append(
@@ -102,9 +102,9 @@ def compare_simulation_results(
         _logger.warning("compare_results chart_type mismatch: %s", notes[-1])
 
     if labels is None:
-        labels = [Path(raw_path).stem for raw_path in result_paths]
+        labels = [Path(raw_path).stem for raw_path in raw_paths]
     if len(labels) != file_count:
-        return error_response("INVALID_PARAMETERS", "labels 数量与 result_paths 不一致")
+        return error_response("INVALID_PARAMETERS", "labels 数量与 raw_paths 不一致")
     if not all(isinstance(lb, str) for lb in labels):
         return error_response("INVALID_PARAMETERS", "labels 每个元素必须是字符串")
 
@@ -128,7 +128,7 @@ def compare_simulation_results(
     command_runs: list[dict] = []   # 每个 RAW 一次引擎调用，逐条回传（引擎输出基本为空）
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        for i, rp in enumerate(result_paths):
+        for i, rp in enumerate(raw_paths):
             tmp_csv = os.path.join(tmpdir, f"tmp_{i}.csv")
             cmd = [
                 TURBOCHARTS_PATH,

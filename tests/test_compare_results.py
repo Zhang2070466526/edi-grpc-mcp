@@ -39,7 +39,7 @@ def test_compare_intersection_regression(tmp_path, monkeypatch):
     img = tmp_path / "cmp.png"
     csv = tmp_path / "cmp.csv"
     result = cr.compare_simulation_results(
-        result_paths=[str(raw_a), str(raw_b)],
+        raw_paths=[str(raw_a), str(raw_b)],
         curve="DB_S[2,1]",
         output_path=str(img),
         csv_path=str(csv),
@@ -62,7 +62,7 @@ def test_compare_interpolation_requires_increasing_reference(tmp_path, monkeypat
 
     img = tmp_path / "cmp.png"
     result = cr.compare_simulation_results(
-        result_paths=[str(raw_a), str(raw_b)],
+        raw_paths=[str(raw_a), str(raw_b)],
         curve="DB_S[2,1]",
         output_path=str(img),
         alignment="interpolation",
@@ -81,7 +81,7 @@ def test_compare_timeout_returns_error(tmp_path, monkeypatch):
     monkeypatch.setattr(cr, "run_turbocharts", _raise)
 
     result = cr.compare_simulation_results(
-        result_paths=[str(raw_a), str(raw_b)],
+        raw_paths=[str(raw_a), str(raw_b)],
         curve="DB_S[2,1]",
         output_path=str(tmp_path / "cmp.png"),
     )
@@ -94,7 +94,7 @@ def test_compare_missing_csv_dir_returns_error(tmp_path, monkeypatch):
     cr, raw_a, raw_b = _setup(tmp_path, monkeypatch)
 
     result = cr.compare_simulation_results(
-        result_paths=[str(raw_a), str(raw_b)],
+        raw_paths=[str(raw_a), str(raw_b)],
         curve="DB_S[2,1]",
         output_path=str(tmp_path / "cmp.png"),
         csv_path=str(tmp_path / "nonexistent_dir" / "cmp.csv"),
@@ -127,7 +127,7 @@ def test_compare_auto_detects_chart_type_from_plotname(tmp_path, monkeypatch):
     _write_mds_raw(raw_b, "HB HB1[1] freq=(1 GHz->2 GHz)")
 
     result = cr.compare_simulation_results(
-        result_paths=[str(raw_a), str(raw_b)],
+        raw_paths=[str(raw_a), str(raw_b)],
         curve="dBm_out",
         output_path=str(tmp_path / "cmp.png"),
     )
@@ -140,7 +140,7 @@ def test_compare_chart_type_falls_back_to_sp_with_warning(tmp_path, monkeypatch)
     """识别不出时退回旧默认 SP，但必须带 warning —— 不静默。"""
     cr, raw_a, raw_b = _setup(tmp_path, monkeypatch)  # 空 RAW，没有 Plotname
     result = cr.compare_simulation_results(
-        result_paths=[str(raw_a), str(raw_b)],
+        raw_paths=[str(raw_a), str(raw_b)],
         curve="DB_S[2,1]",
         output_path=str(tmp_path / "cmp.png"),
     )
@@ -155,7 +155,7 @@ def test_compare_mixed_dataset_types_is_flagged(tmp_path, monkeypatch):
     _write_mds_raw(raw_b, "HB HB1[1] freq=(1 GHz->2 GHz)")
 
     result = cr.compare_simulation_results(
-        result_paths=[str(raw_a), str(raw_b)],
+        raw_paths=[str(raw_a), str(raw_b)],
         curve="DB_S[1,1]",
         output_path=str(tmp_path / "cmp.png"),
     )
@@ -180,7 +180,7 @@ def test_compare_failure_message_names_file_plotname(tmp_path, monkeypatch):
 
     monkeypatch.setattr(cr, "run_turbocharts", fake_run)
     result = cr.compare_simulation_results(
-        result_paths=[str(raw_a), str(raw_b)],
+        raw_paths=[str(raw_a), str(raw_b)],
         curve="DB_S[1,1]",
         output_path=str(tmp_path / "cmp.png"),
     )
@@ -197,7 +197,7 @@ def test_compare_failure_message_carries_rc_and_stdout(tmp_path, monkeypatch):
         lambda cmd, timeout_seconds=60: SimpleNamespace(returncode=1, stderr="", stdout="引擎：未找到曲线"),
     )
     result = cr.compare_simulation_results(
-        result_paths=[str(raw_a), str(raw_b)],
+        raw_paths=[str(raw_a), str(raw_b)],
         curve="DB_S[2,1]",
         output_path=str(tmp_path / "cmp.png"),
     )
@@ -208,7 +208,7 @@ def test_command_runs_recorded_per_raw(tmp_path, monkeypatch):
     """compare：每个 RAW 一次的引擎调用逐条回传（引擎多数失败零输出，故要留痕）。"""
     cr, raw_a, raw_b = _setup(tmp_path, monkeypatch)
     result = cr.compare_simulation_results(
-        result_paths=[str(raw_a), str(raw_b)], curve="DB_S[2,1]",
+        raw_paths=[str(raw_a), str(raw_b)], curve="DB_S[2,1]",
         output_path=str(tmp_path / "cmp.png"),
     )
     runs = result["command_runs"]
@@ -230,7 +230,7 @@ def test_command_runs_in_failure_details(tmp_path, monkeypatch):
 
     monkeypatch.setattr(cr, "run_turbocharts", fake)
     result = cr.compare_simulation_results(
-        result_paths=[str(raw_a), str(raw_b)], curve="DB_S[2,1]",
+        raw_paths=[str(raw_a), str(raw_b)], curve="DB_S[2,1]",
         output_path=str(tmp_path / "cmp.png"),
     )
     assert result["error_code"] == "TOOL_EXECUTION_FAILED"

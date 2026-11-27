@@ -291,7 +291,7 @@ def _resolve_curves(raw_path: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def list_result_curves(result_path: str) -> dict[str, Any]:
+def list_result_curves(raw_path: str) -> dict[str, Any]:
     """调用引擎原生 `--curve-info` 列出 RAW 中可用的「依赖 → 曲线名 + 可用单位」。
 
     引擎是唯一事实源（不再手写解析 RAW 头部 —— 手写版有 64KB 截断、HB 多 sweep 读不全的
@@ -302,10 +302,10 @@ def list_result_curves(result_path: str) -> dict[str, Any]:
     `--dependcy`。曲线名/依赖名大小写须与 curves 的键一致，多条曲线用 & 连接（逗号非法）。
 
     Args:
-        result_path: RAW 结果文件路径（必须已存在）。
+        raw_path: RAW 结果文件路径（必须已存在）。
     """
     try:
-        resolved = validate_file(result_path)
+        resolved = validate_file(raw_path)
     except (FileNotFoundError, ValueError) as e:
         return error_response("FILE_NOT_FOUND", str(e))
 
@@ -314,9 +314,9 @@ def list_result_curves(result_path: str) -> dict[str, Any]:
         return error_response(
             info["error_code"],
             "引擎 --curve-info 未能列出曲线（引擎不可用 / 超时 / 输出非 JSON）",
-            result_path=resolved,
+            raw_path=resolved,
         )
-    return {"success": True, "result_path": resolved,
+    return {"success": True, "raw_path": resolved,
             "chart_type": info["chart_type"], "curves": info["curves"], "unit_notes": info["unit_notes"]}
 
 

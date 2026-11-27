@@ -141,8 +141,8 @@ _EXAMPLES: dict[str, Any] = {
     "turbocharts_convert": {"raw_path": "C:/path/history/result.raw",
                             "output_path": "C:/Users/<user>/edi_tmp/curve.png",
                             "chart_type": "SP", "linename": "DB_S[2,1]"},
-    "list_result_curves": {"result_path": "C:/path/history/result.raw"},
-    "compare_simulation_results": {"result_paths": ["C:/a/result.raw", "C:/b/result.raw"],
+    "list_result_curves": {"raw_path": "C:/path/history/result.raw"},
+    "compare_simulation_results": {"raw_paths": ["C:/a/result.raw", "C:/b/result.raw"],
                                    "curve": "DB_S[2,1]",
                                    "output_path": "C:/Users/<user>/edi_tmp/compare.png"},
     # ── CST / HFSS ────────────────────────────────────────────

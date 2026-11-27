@@ -121,7 +121,7 @@ def test_compare_interpolation_checks_all_files(tmp_path, monkeypatch):
     monkeypatch.setattr(cr, "_read_curve_csv_xy", _read)
     img = tmp_path / "cmp.png"
     result = cr.compare_simulation_results(
-        result_paths=[str(raw_a), str(raw_b)],
+        raw_paths=[str(raw_a), str(raw_b)],
         curve="DB_S[2,1]", output_path=str(img),
         alignment="interpolation", reference_index=0)
     assert result["success"] is False
@@ -302,7 +302,7 @@ def test_compare_rejects_missing_output_dir(tmp_path, monkeypatch):
     raw_b.write_text("")
     img = tmp_path / "nonexistent" / "cmp.png"  # 父目录不存在
     result = cr.compare_simulation_results(
-        result_paths=[str(raw_a), str(raw_b)],
+        raw_paths=[str(raw_a), str(raw_b)],
         curve="DB_S[2,1]", output_path=str(img))
     assert result["success"] is False
     assert result["error_code"] == "OUTPUT_DIRECTORY_NOT_FOUND"
