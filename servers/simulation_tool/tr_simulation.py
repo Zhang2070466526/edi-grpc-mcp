@@ -1,6 +1,6 @@
 r"""TR_Simulator.exe 包装 — TR 纯硬编码仿真（网表→路径分析→ADS→结果提取）。
 
-命令（见仓库 servers/simulation_tool/TR_Simulator使用说明.md）：
+命令（完整参数表见 Resource edi://reference/tr-simulator-guide）：
     TR_Simulator.exe --epp <epp> --edi <edi> --ads <ads> [--indicators <csv>] [--threads <n>] --json <links>
 stdout 单行 UTF-8 JSON：{"simulation_path","errors":[],"results":[...]}
 退出码 0/1。results 的 electrical_parameters 可喂给 export_simulation_report

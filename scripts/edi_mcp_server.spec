@@ -23,9 +23,13 @@ _msvc_dlls = [
 # scipy 子模块多、带动态库；只写两条 hiddenimports 会漏收 —— 2026-10-20 实测：包内
 # _internal/scipy 目录齐全却 import 失败，3 个阶数评估工具全报 DEPENDENCY_MISSING。
 # 用官方 collect_all 一次收全（datas / binaries / hiddenimports 三份都要并入）。
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 _scipy_datas, _scipy_binaries, _scipy_hiddenimports = collect_all("scipy")
+
+# 手维护 servers.* 的 hiddenimports 会漂移（漏新模块 / 留已删模块 ⇒ 源码 vs 打包工具割裂）。
+# 这里按 .py 文件现扫 servers 包下全部子模块，一劳永逸；下面再留几处显式项仅作历史注释。
+_servers_submodules = collect_submodules("servers")
 
 a = Analysis(
     # 入口必须是 edi_entry.py：它在 import start_servers 之前拦截 `--com-child`，
@@ -46,8 +50,13 @@ a = Analysis(
         (str(root / 'servers' / 'simulation_tool' / 'Netlist_Pathfinder使用说明.md'), 'servers/simulation_tool'),
         (str(root / 'servers' / 'simulation_tool' / 'Report_Exporter使用说明.md'), 'servers/simulation_tool'),
         (str(root / 'servers' / 'simulation_tool' / 'xy_chart(drawtool)使用说明.md'), 'servers/simulation_tool'),
+        # 射频纯计算的公式推导说明（源码态随包，冻结态必须收进 datas 否则「见 .md」悬空）
+        (str(root / 'servers' / 'rf_analysis' / '混频杂散分析说明.md'), 'servers/rf_analysis'),
+        (str(root / 'servers' / 'rf_analysis' / '射频链路灵敏度与动态范围计算说明.md'), 'servers/rf_analysis'),
     ],
     hiddenimports=[
+        # 自动收集 servers 下全部子模块（含以后新增的工具模块，防手维护漏收）
+        *_servers_submodules,
         # MCP 核心
         'servers',
         'servers.registry_server',
@@ -59,10 +68,8 @@ a = Analysis(
         'servers.chat.service',
         'servers.chat.routes',
 
-        # MCP Resources & Prompts
+        # MCP Resources & Prompts（子模块由 collect_submodules 覆盖）
         'servers.resources_prompts',
-        'servers.resources_prompts.resources',
-        'servers.resources_prompts.prompts',
 
         # EDA 工具
         'servers.eda',
@@ -86,6 +93,7 @@ a = Analysis(
         'servers.ansys.config',
         'servers.ansys.project_manage',
         'servers.ansys.run_analysis',
+        'servers.ansys.tasks',
         # ⚠️ 冻结态由 `edi_mcp_server.exe --com-child` 走到这个模块（edi_entry.py 里
         # 函数内 import）。漏收 ⇒ 打包后 export_snp/open/state 报 ModuleNotFoundError。
         'servers.ansys.com_child',
@@ -97,7 +105,6 @@ a = Analysis(
         # 图片 / 视觉 / 文档工具
         'servers.multimodal_vision',
         'servers.multimodal_vision.image_display',
-        'servers.multimodal_vision.workspace_copy',
         'servers.multimodal_vision.vision_analyzer',
         'servers.multimodal_vision.document',
         'servers.multimodal_vision.validators',
@@ -136,6 +143,9 @@ a = Analysis(
         'servers.microwave.filter_order.filter_order_estimator_highpass',
         'servers.microwave.filter_order.filter_order_estimator_bandstop',
         'servers.microwave.filter_order.filter_order_estimator_bandpass',
+        # 微波/射频本地纯计算 + HFSS 任务管理（静态可分析，仍显式列出防漏）
+        'servers.microwave.matching_network',
+        'servers.rf_analysis.cascade',
 
         # Windows COM（ANSYS 依赖）
         'pythoncom',

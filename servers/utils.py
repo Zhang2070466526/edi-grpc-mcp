@@ -184,7 +184,7 @@ _DEFAULT_HINTS: dict[str, str] = {
     "CURVE_NOT_FOUND": "先用曲线查询能力确认可用曲线名（形如 DB_S[2,1]）再重试",
     "NO_SOLUTION": "指标不可达：放宽抑制/回波损耗，或调大 max_notches / 增加阶数后重试",
     "TOOL_NOT_FOUND": '工具名拼写检查：describe_tool("") 可列出全部可用工具名',
-    "DEPENDENCY_MISSING": "该功能需要可选依赖（如 scipy）；可改用源码态运行，或换不依赖它的工具",
+    "DEPENDENCY_MISSING": "该功能需要可选依赖（如 scipy）；请确认部署包已收全该依赖，或换不依赖它的工具",
     "SIMULATION_EXECUTION_FAILED": "看 details 里的原始错误/日志；确认 EDI 已打开目标工程、ADS 许可可用",
     "TOOL_TIMEOUT": "调大 timeout_seconds（上限见工具说明）后重试；或减少链路/指标数量",
     "UNSUPPORTED_COMPONENT_TYPE": "先查可用器件类型与参数，再重试",
@@ -194,6 +194,8 @@ _DEFAULT_HINTS: dict[str, str] = {
                            "核对解名/setup，必要时到 GUI 手工建一次确认",
     "AEDT_NOT_RUNNING": "先 launch_aedt 启动 AEDT（或 open_hfss_project 会自动拉起）",
     "AEDT_NOT_FOUND": "用 aedt_path 显式指定 AEDT 安装目录",
+    "ORDERS_MISSING_LO": "多级混频的 orders 要逐个本振给阶数（如 {\"FREQ\":5,\"LO1\":5,\"LO2\":5}）；"
+                         "本振名取自网表的 LO 源，单级混频写 {\"FREQ\":5,\"LO\":5} 即可",
     # 2026-11-26：COM 失败按原因分档（com_child 的 reason → 错误码），默认 hint 覆盖"没显式传 hint"的调用点
     "AEDT_VERSION_MISMATCH": "双版本 AEDT：给 open_hfss_project 传 aedt_path 指向与 GUI 同版本的 "
                              "ansysedt.exe，或关掉另一版本的 AEDT 后重试",
@@ -208,6 +210,79 @@ _DEFAULT_HINTS: dict[str, str] = {
     "SOLVE_REQUIRED": "先跑完 setup 拿到求解证据（start_hfss_analysis_async / run_laspcem_solve_async），"
                       "再导出；details 里会给出已扫描的证据目录",
     "EXPORT_FAILED": "看 details 与 AEDT 日志的原始错误：确认 setup/sweep 名对、该 sweep 已求解、输出目录可写",
+    # ── 任务/进程（此前退化成 do_not_retry，补 actionable 指引）──
+    "TASK_NOT_FOUND": "任务不存在、已过期或服务已重启（任务状态在内存里，重启即丢）；重新提交，别当失败重试",
+    "TASK_ALREADY_FINISHED": "任务已结束（成功/失败/取消），不能重复操作；用对应的 query/status 查最终结果",
+    "TASK_CANCELLED": "任务已被取消，不是失败；如需结果重新提交",
+    "LAUNCH_FAILED": "看 details 里的原始报错；确认目标软件已安装且路径正确（可用对应 launch_* 工具自动探测）",
+    "EDI_NOT_FOUND": "显式传 edi_path，或先用 launch_edi 自动探测 EDI 安装目录",
+    "LASPCEM_NOT_FOUND": "显式传 laspcem_path，或确认 LASPCEM 已安装（注册表 .sem 关联可探测）",
+    "PROCESS_EXITED": "子进程已退出，看 details 里的 exit code 与 stderr 定位原因",
+    # ── 器件/参数 ──
+    "EMPTY_INSTANCE_NAME": "instance_name 不能为空；先用 list_schematic_components 拿准确的实例名",
+    "AMBIGUOUS_INSTANCE_NAME": "实例名有歧义/重复；用 list_schematic_components 找到唯一实例名再传",
+    "INVALID_ACTIVE_STATE": "state 只接受 NORMAL / DISABLED / SHORTED（大小写不敏感）",
+    "CLEAR_CONFIRMATION_REQUIRED": "破坏性操作需显式 confirm_clear=True 二次确认才执行",
+    "INVALID_PROJECT_PATH": "检查工程路径：必须是存在的 .epp 绝对路径，同目录需有 schematics/main/schematic.ep",
+    "UNSUPPORTED_PARAMETER": "该器件类型不支持这个参数；先用 get_simulation_component_schema 查可写参数",
+    "COMPONENT_TYPE_MISMATCH": "传的 component_type 与器件实际类型不符；用 list_schematic_components 核对",
+    "COMPONENT_TYPE_REQUIRED": "该操作需要 component_type；用 list_schematic_components / get_schematic_component_info 查",
+    "COMPONENT_SCHEMA_UNAVAILABLE": "该器件类型的参数目录不可用；改走 list_schematic_components 直接读器件参数",
+    # ── 链路/仿真 ──
+    "LINK_JSON_INVALID": "links 结构不合法，看 details 的 location/message 定位具体字段；字段名与单位照 describe_tool 的 schema",
+    "NETLIST_EMPTY": "网表为空或没解析出器件；先 export_project_netlist 导出再核对",
+    "INVALID_STATUS": "status 过滤值不合法；用 list_eda_tasks 不带参看全部，合法值见工具说明",
+    # ── CST ──
+    "CST_OPEN_FAILED": "归档 .cst 解包失败；确认文件存在且 CST 能打开（必要时先在 GUI 里打开一次）",
+    "CST_INFO_FAILED": "读 CST 模型信息失败；确认模型已解包（cst_open_project）且 CST 已安装",
+    "CST_PLOT_FAILED": "远场 txt 解析/绘图失败；确认 txt 是 cst_export_farfield 产物、cut 格式为 phi=0 或 theta=0",
+    "CST_EXPORT_FAILED": "CST 导出失败；先 cst_get_model_info 确认已求解、有对应结果",
+    # ── HFSS/AEDT ──
+    "SETUP_NOT_FOUND": "setup 名不存在；用 get_hfss_project_info 查设计，传正确的 setup 名",
+    "DESIGN_NOT_FOUND": "设计名不存在；用 get_hfss_project_info 查当前项目的设计列表",
+    "ANALYSIS_BUSY": "已有 HFSS 仿真正在跑（AEDT 单实例串行）；等它完成或用 hfss_task_list 看进度",
+    "TASK_LIMIT_REACHED": "HFSS 任务数达上限；等旧任务结束或 hfss_task_cancel 取消",
+    "COM_ERROR": "AEDT COM 调用失败，看 details 原始错误；确认 AEDT 未卡死、版本匹配（aedt_path 与 GUI 同版本）",
+    "INVALID_AEDT_PATH": "aedt_path 指向的 ansysedt.exe 不存在；用 launch_aedt 自动探测",
+    "COM_OPEN_FAILED": "AEDT COM 附着失败；确认 AEDT 已启动（launch_aedt / open_hfss_project）",
+    "EXISTING_INSTANCE_COM_UNAVAILABLE": "已有 AEDT 实例但 COM 附着不上；确认两者同权限（UAC 隔离会只连到空壳），或重开 AEDT",
+    "NO_PROJECT_TO_CLOSE": "没有打开的项目可关；用 get_hfss_project_info 看当前状态",
+    # ── LASPCEM ──
+    "SOLVE_FAILED": "求解失败，看 details 原始日志；判成败看 steps 而非 laspcem_task_list 顶层 status（会误报）",
+    "SOLVE_TIMEOUT": "求解超时；看 logs 判断是真慢还是卡死，必要时 laspcem_task_cancel",
+    "SOLVE_CANCELLED": "求解已被取消，不是失败",
+    "REPORT_FAILED": "建报告失败；确认已求解（没求解会回 SOLVE_REQUIRED）",
+    "REPORT_TIMEOUT": "建报告超时；重试或查 logs",
+    "IMPORT_FAILED": "导入 .aedt 失败；确认源文件存在、ansys_version 匹配",
+    "READ_FAILED": "读 .sem 工程失败；确认文件存在且未被 LASPCEM 独占",
+    # ── 报告/绘图/产物 ──
+    "INVALID_REPORT_JSON": "报告 JSON 结构不合法；字段见 export_simulation_report 的 report 参数说明",
+    "REPORT_EXPORT_FAILED": "报告导出失败，看 details 原始错误；确认图片路径是绝对路径",
+    "DRAW_FAILED": "绘图失败，看 details 原始错误；确认 series/points 结构与 draw_chart schema 一致",
+    "OUTPUT_DIRECTORY_NOT_FOUND": "输出目录不存在；先建目录或换一个已存在目录",
+    "INVALID_RAW_DATA": "RAW 数据不合法/解析失败；先用 list_result_curves 确认曲线名与类型",
+    "NO_OVERLAP": "多个 sNp 无重叠频点；换 alignment=interpolation 或核对频段",
+    "SYNTHESIS_FAILED": "线宽综合未收敛；检查基板参数（h/er）与目标阻抗是否合理，或换传输线类型",
+    "TOOL_EXECUTION_FAILED": "工具执行失败，看 details 原始错误",
+    "INVALID_LINENAME": "曲线名格式不对；先 list_result_curves 拿准确「单位_线段名」",
+    "WRITE_FAILED": "写文件失败；换可写目录（%TEMP% 或工作区）",
+    "PATHFINDER_FAILED": "网表寻路失败，看 details；确认 netlist.log 与 schematic.ep 配对正确",
+    # ── 视觉/文档 ──
+    "VISION_NOT_CONFIGURED": "视觉模型未配置；在 .env 配 VISION_API_KEY / VISION_BASE_URL / VISION_MODEL",
+    "VISION_TIMEOUT": "视觉模型超时；调大 vision_timeout 或重试",
+    "VISION_PROVIDER_ERROR": "视觉模型返回错误，看 details；确认 model 名与 base_url 正确",
+    "VISION_AUTH_FAILED": "视觉模型鉴权失败；核对 VISION_API_KEY",
+    "VISION_RATE_LIMITED": "视觉模型限流；稍后重试",
+    "VISION_BUSY": "视觉模型忙；稍后重试",
+    "INVALID_VISION_RESPONSE": "视觉模型返回结构异常；换 prompt 或重试",
+    "INVALID_IMAGE": "图片路径/内容非法；确认是本地 PNG/JPEG/WebP 绝对路径",
+    "IMAGE_TOO_LARGE": "图片超过大小上限；压缩后重试",
+    "UNSUPPORTED_IMAGE_FORMAT": "不支持的图片格式；用 PNG/JPEG/WebP",
+    "UNSUPPORTED_FORMAT": "不支持的文档格式；open_document 支持 10 种办公格式（pdf/docx/xlsx/ppt/txt/csv 等）",
+    "DEFAULT_APPLICATION_UNAVAILABLE": "系统没有打开该文件的默认程序；改用 mode=link 生成下载链接",
+    # ── 日志 ──
+    "LOG_NOT_FOUND": "日志文件不存在；确认服务已运行并产生日志",
+    "LOG_READ_ERROR": "读日志失败；确认路径与权限",
 }
 
 

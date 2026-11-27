@@ -36,6 +36,19 @@ def _wait_ready(timeout: float = 90) -> bool:
     return False
 
 
+def _source_expected_tool_count() -> int:
+    """源码（全量态）注册工具数 − 冻结态下架数 = 冻结产物应有的工具数。
+
+    强制 MCP_HIDE_INTERNAL_TOOLS=0 再 import，与 build.ps1 生成的冻结 .env 口径一致
+    （否则源 .env 若开了隐藏开关，会算出错误的期望值、误报割裂）。
+    """
+    os.environ["MCP_HIDE_INTERNAL_TOOLS"] = "0"
+    import servers.registry_server  # noqa: F401 — 触发工具注册
+    from servers import mcp
+    from servers.registry_server import _EXE_HIDDEN_TOOLS
+    return len(mcp._tool_manager._tools) - len(_EXE_HIDDEN_TOOLS)
+
+
 def _check_com_child(exe: Path) -> bool:
     """验证冻结产物的 `--com-child` 隐藏入口（AEDT 隔离子进程那条路）。
 
@@ -88,12 +101,14 @@ def main() -> int:
         print(f"  /health        -> status={health.get('status')}, "
               f"mcp_ready={health.get('mcp_ready')}")
 
-        # 2. 工具注册
+        # 2. 工具注册 —— 必须与源码注册数一致（源码全量 − 冻结下架数），
+        #    否则说明打包漏收模块 / 下架名单漂移（「源码 vs 打包」功能割裂）
         ready = httpx.get(f"{BASE}/ready", timeout=5).json()
         tool_count = ready.get("tool_count", 0)
-        print(f"  /ready         -> {tool_count} 个工具")
-        if tool_count == 0:
-            print("FAIL: 工具数异常")
+        expected = _source_expected_tool_count()
+        print(f"  /ready         -> {tool_count} 个工具（源码应注册 {expected}）")
+        if tool_count != expected:
+            print(f"FAIL: 工具数割裂 frozen={tool_count} != 源码 {expected}")
             return 1
 
         print("PASS: exe 可用（启动 / 健康检查 / 工具注册 均正常）")

@@ -3,7 +3,7 @@ r"""Netlist_Pathfinder.exe 包装 — 独立网表寻路（纯本地，不需 ED
 输入 netlist.log + schematic.ep + 有向端口对，输出每个端口对的全部信号路径，
 以及每条路径上每个开关的目标 Bits（required_bits）。源文件只读。
 
-命令（见仓库 servers/simulation_tool/Netlist_Pathfinder使用说明.md）：
+命令（完整参数表见 Resource edi://reference/netlist-pathfinder-guide）：
     Netlist_Pathfinder.exe --netlist <netlist> --ep <ep> --pairs "1-2,2-1" \
         [--max-paths N] [--max-states N] [--timeout N] [--encoding auto]
 stdout 单行 UTF-8 JSON：{"netlist_path","ep_path","ports","results","errors"}。

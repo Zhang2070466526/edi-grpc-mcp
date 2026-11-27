@@ -1,6 +1,6 @@
 r"""Report_Exporter.exe 包装 — 独立报告导出（document.pdf / document.docx / report.json）。
 
-命令（见仓库 servers/simulation_tool/Report_Exporter使用说明.md）：
+命令（完整参数表见 Resource edi://reference/report-exporter-guide）：
     Report_Exporter.exe --json-file <json> --output <dir> [--schematic <img>]
 stdout 单行 UTF-8 JSON：{"success":bool,"pdf_path","docx_path","report_data_path","errors":[]}
 退出码 0/1。本工具用 --json-file 方式（避免 Windows 内联 JSON 引号/长度限制），

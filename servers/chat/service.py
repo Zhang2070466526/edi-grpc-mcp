@@ -292,7 +292,7 @@ ERROR_CODES = {
     "LINK_JSON_INVALID": "链路 JSON 不合法",
     "SIMULATION_EXECUTION_FAILED": "TR 仿真执行失败",
     # 微波阶数评估：目标环境 scipy 不可用（Win7 精简环境 / 打包包内 import 或 DLL 加载失败）
-    "DEPENDENCY_MISSING": "缺少可选依赖（阶数评估需要 scipy，可用源码态运行）",
+    "DEPENDENCY_MISSING": "缺少可选依赖（阶数评估需要 scipy；请确认部署包已收全该依赖）",
     # 高频通用码（2026-10-21 补：此前只在 MCP 侧返回，chat 里会显示裸英文码）
     "INVALID_PARAMETERS": "参数不合法",
     "PATH_NOT_FOUND": "路径不存在",
@@ -403,7 +403,7 @@ class ChatService:
         session = self._get_or_create(session_id)
         if session is None:
             # 旧 session 失效（重启/过期），自动创建新会话，对用户透明
-            _logger.warning("MCP_SESSION_NOT_FOUND session=%s — auto-creating new", session_id[:12])
+            _logger.info("MCP_SESSION_NOT_FOUND session=%s — auto-creating new", session_id[:12])
             session = self._get_or_create("")
             session_id = session.session_id  # 更新为新 session_id
 
