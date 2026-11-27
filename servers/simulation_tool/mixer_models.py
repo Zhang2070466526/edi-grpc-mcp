@@ -62,7 +62,7 @@ class IndicatorSpec(BaseModel):
     name: str | None = Field(
         default=None, description="15 个标准指标名之一（如 变频增益 / 噪声 / 镜像抑制 / 输入 P1dB）")
     orders: dict[str, int] | None = Field(
-        default=None, description='交调阶数，如 {"FREQ": 5, "LO": 5}')
+        default=None, description='交调阶数：单级写 {"FREQ":5,"LO":5}；多级混频逐本振写 {"FREQ":5,"LO1":5,"LO2":5}')
     input_freq_ghz: float | list[float] | dict[str, float] | None = Field(
         default=None,
         description="**指标级只认标量 GHz**（如 35）；写成区间会被拒 —— 区间请放该链路的 defaults")
@@ -78,7 +78,7 @@ class IndicatorSpec(BaseModel):
 
 
 class MixerLink(BaseModel):
-    """一条链路：开关状态 + 公共工况 + 指标列表。"""
+    """一条链路：开关状态 + 公共工况 + 指标列表。**链路不带 name**（name 只在 project 顶层，是工程名）。"""
 
     model_config = ConfigDict(extra="allow")
 
