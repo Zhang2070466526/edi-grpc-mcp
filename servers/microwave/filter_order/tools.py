@@ -106,6 +106,10 @@ def _format_filter_result(result: dict) -> dict[str, Any]:
         "N": result["N"],
         "notches": result["notches"],
         "notches_ghz": [_hz_to_ghz(f) for f in result["notches_Hz"]],
+        # 跨工具统一键：四个阶数估算工具的传输零点都从这里读（低通/高通/带通是单点，
+        # 带阻的 zeros_are_bands=True、每项是 [下, 上] 频段对）。旧键保留，不破坏既有调用。
+        "zeros_ghz": [_hz_to_ghz(f) for f in result["notches_Hz"]],
+        "zeros_are_bands": False,
         "verify_rows": [
             {"f_ghz": _hz_to_ghz(f), "atten_db": a, "required_db": A}
             for f, a, A in result["verify_rows"]
@@ -113,6 +117,7 @@ def _format_filter_result(result: dict) -> dict[str, Any]:
         "solutions": [
             {"N": s["N"], "notches": s["notches"],
              "notches_ghz": [_hz_to_ghz(f) for f in s["notches_Hz"]],
+             "zeros_ghz": [_hz_to_ghz(f) for f in s["notches_Hz"]],
              "min_margin_db": s["min_margin_dB"]}
             for s in result["solutions"]
         ],
@@ -301,6 +306,9 @@ def filter_order_bandstop(
         "order_bandstop": result["order_bandstop"],
         "notches": result["notches"],
         "notch_freq_pairs_ghz": _pairs_ghz(result["notch_freq_pairs_Hz"]),
+        # 统一键：带阻的零点是频段对，故 zeros_are_bands=True（与低通/高通/带通同键不同形状）
+        "zeros_ghz": _pairs_ghz(result["notch_freq_pairs_Hz"]),
+        "zeros_are_bands": True,
         "f0_ghz": _hz_to_ghz(result["f0"]),
         "fbw": result["FBW"],
         "passband_ripple_db": result["passband_ripple_dB"],
@@ -310,6 +318,7 @@ def filter_order_bandstop(
                 "order_bandstop": s["order_bandstop"],
                 "notches": s["notches"],
                 "notch_freq_pairs_ghz": _pairs_ghz(s["notch_freq_pairs_Hz"]),
+                "zeros_ghz": _pairs_ghz(s["notch_freq_pairs_Hz"]),
                 "min_margin_db": s["min_margin_dB"]
             }
             for s in result["solutions"]
@@ -460,6 +469,7 @@ def filter_order_bandpass(
         "N": result["N"],
         "k": result["k"],
         "zeros_ghz": _zeros_ghz(result["zeros_bandpass_Hz"]),
+        "zeros_are_bands": False,
         "f0_ghz": _hz_to_ghz(result["f0"]),
         "fbw": result["FBW"],
         "passband_ripple_db": result["passband_ripple_dB"],

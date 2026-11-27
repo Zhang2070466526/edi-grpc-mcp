@@ -226,6 +226,22 @@ RAW_SCHEMAS: dict[tuple[str, str], dict] = {
     },
 }
 
+#: 「只能给列表」的三个阶数估算工具共用同一份元素结构。
+# 它们的签名是裸 `stopband_specs: list`，FastMCP 只能生成 `items: {}` —— 元素里一个约束都没有，
+# agent 从 tools/list 看不出每项该给 [f, A] 还是 {f, A}，只能靠运行时 INVALID_PARAMETERS 试错。
+# bandstop 的签名是 `float | list` 且上面已单独补过，故不在这个列表里。
+_STOPBAND_ITEMS_DOC = "每项 [f, A]（抑制点）或 [f_lo, f_hi, A]（抑制频段），频率 GHz、抑制 dB"
+RAW_SCHEMAS.update({
+    (tool, "stopband_specs"): {
+        "type": "array",
+        "description": "阻带规范列表，" + _STOPBAND_ITEMS_DOC,
+        # 每次给一份新 dict：schema 注入时会对节点做原地处理（去 title / 展平 $ref）
+        "items": {"type": "array", "items": {"type": "number"},
+                  "minItems": 2, "maxItems": 3, "description": _STOPBAND_ITEMS_DOC},
+    }
+    for tool in ("filter_order_lowpass", "filter_order_highpass", "filter_order_bandpass")
+})
+
 
 def _strip_titles(node):
     """递归去掉 pydantic 自动生成的 `title`（对 agent 无用，且会把内联 schema 撑得很长）。"""

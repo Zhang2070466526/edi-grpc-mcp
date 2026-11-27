@@ -123,3 +123,29 @@ def test_unknown_param_name_is_ignored(capsys):
         names |= set((t.parameters or {}).get("properties") or {})
     assert "position" in names             # 正常参数在
     assert "sweeping_parameters" in names
+
+
+#: 裸 `list` 的阻带规范：元素结构必须写进 schema（否则 agent 只能靠 INVALID_PARAMETERS 试错）
+STOPBAND_LIST_TOOLS = ["filter_order_lowpass", "filter_order_highpass", "filter_order_bandpass"]
+
+
+@pytest.mark.parametrize("tool", STOPBAND_LIST_TOOLS)
+def test_stopband_specs_items_are_structured(tools, tool):
+    """2026-11-27：这三个工具签名是裸 `list`，FastMCP 只生成 `items: {}`。
+
+    实测影响：agent 从 tools/list 看不出每项该给 [f, A] 还是 {f, A}，传对象数组会报
+    `INVALID_PARAMETERS: 阻带规范每项必须是 [f, A]（抑制点）或 [f_lo, f_hi, A]（抑制频段）`，
+    白跑一次往返。bandstop 的签名是 `float | list`，早前已在 RAW_SCHEMAS 里补过。
+    """
+    items = (_props(tools, tool, "stopband_specs").get("items") or {})
+    assert items.get("type") == "array", f"{tool}.stopband_specs 的元素结构缺失: {items}"
+    assert (items.get("items") or {}).get("type") == "number", items
+    assert items.get("minItems") == 2 and items.get("maxItems") == 3, items
+    assert "抑制点" in (items.get("description") or ""), items
+
+
+def test_bandstop_still_accepts_scalar(tools):
+    """bandstop 的 `float | list` union 不能被覆盖掉（scalar 是「整个阻带 ≥A dB」的合法写法）。"""
+    spec = _props(tools, "filter_order_bandstop", "stopband_specs")
+    kinds = [a.get("type") for a in (spec.get("anyOf") or [])]
+    assert "number" in kinds and "array" in kinds, spec

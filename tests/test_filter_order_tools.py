@@ -169,3 +169,17 @@ def test_scipy_missing_returns_dependency_error(monkeypatch):
     assert filter_order_highpass(1.0, [[0.5, 40.0]])["error_code"] == "DEPENDENCY_MISSING"
     assert filter_order_bandstop(2.1, 2.2, 20, [2, 1, 2.3, 1])["error_code"] == "DEPENDENCY_MISSING"
     assert wilkinson_marchand_order(6)["success"] is True   # 不依赖 scipy
+
+
+def test_all_filter_order_tools_share_zeros_key():
+    """四个阶数估算工具统一用 zeros_ghz；带阻是频段对，故 zeros_are_bands=True。"""
+    lp = filter_order_lowpass(1.0, [[2.0, 3.0, 40.0]])
+    hp = filter_order_highpass(1.0, [[0.4, 0.5, 40.0]])
+    bp = filter_order_bandpass(1.8, 2.2, [[1.5, 30.0]])
+    bs = filter_order_bandstop(1.8, 2.2, [[1.8, 2.2, 30.0]], [1.5, 3.0, 2.6, 3.0])
+    for r in (lp, hp, bp, bs):
+        assert "zeros_ghz" in r, r
+        assert "zeros_are_bands" in r, r
+    assert lp["zeros_are_bands"] is False and bs["zeros_are_bands"] is True
+    assert lp["zeros_ghz"] == lp["notches_ghz"]
+    assert bs["zeros_ghz"] == bs["notch_freq_pairs_ghz"]
