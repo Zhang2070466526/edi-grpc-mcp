@@ -70,6 +70,17 @@ class ParamValue(_Loose):
         default=None, description='单位，如 "GHz" / "dB" / "mm" / "dBm"；无单位参数可省略')
 
 
+# ---------------------------------------------------------------- 模型库过滤
+
+
+class ModelFilter(_Loose):
+    """模型库检索的一个过滤条件（search_public_models / search_personal_models 的 filters 元素）。"""
+
+    key: str | None = Field(default=None, description="参数 id（get_model_category_params 返回，如 gain / min_freq）")
+    min: float | None = Field(default=None, description="下限（闭区间，含边界；与 max 二选一或都用）")
+    max: float | None = Field(default=None, description="上限（闭区间，含边界）")
+
+
 # ---------------------------------------------------------------- 混频杂散
 
 
@@ -186,6 +197,8 @@ ARRAY_PARAMS: dict[str, dict[str, type[BaseModel]]] = {
     "analyze_mixer_spur": {"mixers": MixerSpurSpec},
     "find_netlist_paths": {"pairs": PortPair},
     "draw_chart": {"series": ChartSeries, "marks": ChartMark},
+    "search_public_models": {"filters": ModelFilter},
+    "search_personal_models": {"filters": ModelFilter},
 }
 
 #: 参数是 `dict[str, Model]`（键是参数名 / 变量名，运行时才知道，故只能约束值）
@@ -200,6 +213,16 @@ RAW_SCHEMAS: dict[tuple[str, str], dict] = {
         "type": "object",
         "description": ('扫参变量，形如 {"L1": ["nominal", 140, 150]}；不传则按工程变量取标称值'),
         "additionalProperties": {"type": "array", "items": {}},
+    },
+    # float | list 的 union：scalar 是「整个阻带抑制 ≥A」，列表是 [[f, A]] / [[f_lo, f_hi, A]]
+    ("filter_order_bandstop", "stopband_specs"): {
+        "anyOf": [
+            {"type": "number", "description": "整个阻带抑制 ≥A dB 时直接给浮点数 A"},
+            {"type": "array", "description": "抑制点/子带列表",
+             "items": {"type": "array", "items": {"type": "number"},
+                       "minItems": 2, "maxItems": 3,
+                       "description": "每项 [f, A]（抑制点）或 [f_lo, f_hi, A]（子带），频率 GHz、抑制 dB"}},
+        ],
     },
 }
 
