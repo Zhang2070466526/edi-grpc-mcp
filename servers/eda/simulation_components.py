@@ -41,6 +41,11 @@ _logger = logging.getLogger("sim_components")
 _COMPONENT_TYPES = SIM_COMPONENT_TYPES
 _ACTIVE_STATES = {"NORMAL", "DISABLED", "SHORTED"}
 
+# 读接口 get_schematic_component_info 返回 EDI 原生字段（Value/CurrentUnit + 元数据），
+# 写接口做「读-改-写」归一化时的别名映射与「应丢弃的 EDI 元数据键」。
+_READBACK_FIELD_ALIAS = {"Value": "value", "CurrentUnit": "unit"}
+_EDI_METADATA_KEYS = {"DefaultUnit", "Unit", "Visible", "Tunable", "instructions"}
+
 
 # ═══════════════════════════════════════════════════════════
 # Catalog
@@ -196,6 +201,23 @@ def _prepare_parameters(
             return None, _param_error("INVALID_PARAMETER_VALUE",
                                       f"参数 {pname} 的值必须是对象 {{\"value\": ...}}",
                                       component_type, parameter=pname)
+
+        # 读接口 get_schematic_component_info 返回的是 EDI 原生字段（Value / CurrentUnit
+        # + DefaultUnit/Unit/Visible/Tunable/instructions 等元数据），调用方做「读-改-写」时
+        # 会把这串原样喂回来 —— 先归一化，否则必然撞下面的"包含多余字段"。
+        # 只做别名映射 + 丢弃明确的 EDI 元数据键；其它未知键原样保留，仍由 extra 校验报错（不掩盖拼错）。
+        if any(k in pval for k in _READBACK_FIELD_ALIAS):
+            normalized: dict = {}
+            for k, v in pval.items():
+                if k in _READBACK_FIELD_ALIAS:
+                    normalized[_READBACK_FIELD_ALIAS[k]] = v
+                elif k in ("value", "unit"):
+                    normalized[k] = v
+                elif k in _EDI_METADATA_KEYS:
+                    continue
+                else:
+                    normalized[k] = v
+            pval = normalized
 
         # Only "value" and "unit" allowed
         extra = set(pval.keys()) - {"value", "unit"}

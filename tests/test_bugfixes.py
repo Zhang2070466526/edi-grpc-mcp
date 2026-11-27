@@ -723,3 +723,35 @@ def test_create_project_payload(monkeypatch):
     # 只传 name（author/path 空则不进 payload）
     pm.create_project("demo")
     assert calls[-1][1] == {"name": "demo"}
+
+
+# ── 读-改-写：读接口的 Value/CurrentUnit 必须能直接回灌（2026-11-27）──
+
+
+def test_update_accepts_edi_readback_shape():
+    """get_schematic_component_info 读回的是 EDI 原生字段（Value/CurrentUnit + 元数据）。
+
+    以前写接口只认 value/unit，把读回的结构原样喂回去必然报
+    「参数 Freq[1] 包含多余字段: CurrentUnit, Value」，逼调用方手工改大小写。
+    """
+    from servers.eda.simulation_components import _prepare_parameters
+
+    wire, err = _prepare_parameters(
+        "HarmonicBalance",
+        {"Freq[1]": {"Value": "1.0", "CurrentUnit": "GHz", "DefaultUnit": "GHz",
+                     "Unit": "None,Hz,kHz,MHz,GHz,THz", "Visible": "true"}},
+        "update", allow_empty=False)
+    assert err is None, err
+    assert wire == {"Freq[1]": {"value": "1.0", "unit": "GHz"}}
+
+
+def test_update_still_rejects_unknown_field():
+    """归一化不能变成"什么都接收"：真正的拼写错误仍要报出来。"""
+    from servers.eda.simulation_components import _prepare_parameters
+
+    wire, err = _prepare_parameters(
+        "HarmonicBalance", {"Freq[1]": {"valu": "1.0", "CurrentUnit": "GHz"}},
+        "update", allow_empty=False)
+    assert wire is None
+    assert err["error_code"] == "INVALID_PARAMETER_VALUE"
+    assert "valu" in err["message"]
