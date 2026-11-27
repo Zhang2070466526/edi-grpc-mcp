@@ -77,6 +77,8 @@ def find_netlist_paths(
     Args:
         netlist_path: 网表文件路径（netlist.log，无扩展名限制）。
         ep_path: 与该网表对应的 schematic.ep 路径（不能用其他工程的 EP）。
+            注意：应传 schematics/main/schematic.ep（原理图本体），
+            不是 schematics/schematics.ep（那是索引，exe 会报 EP_PARSE_ERROR）。
         pairs: 有向端口对数组，每项 {input, output}（正整数、二者不同），如
             [{input:1, output:2}, {input:2, output:1}] 分别查正向和反向。
         max_paths: 每个端口对最多保存路径数，0 不限，默认 10000。
@@ -114,6 +116,13 @@ def find_netlist_paths(
     ep, err = require_file(ep_path)
     if err:
         return err
+    if Path(ep).name.lower() == "schematics.ep":
+        return error_response(
+            "INVALID_PATH",
+            f"传了索引文件 {Path(ep).name}，不是原理图",
+            hint="应传 schematics/main/schematic.ep（原理图本体）；schematics/schematics.ep 只是索引，"
+                 "exe 会报 EP_PARSE_ERROR（EP 不完整或没有 component 信息）",
+        )
 
     pair_list, perr = _normalize_pairs(pairs)
     if perr:

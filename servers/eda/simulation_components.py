@@ -712,6 +712,8 @@ def load_schematic_from_file(
         project_path: .epp 工程文件绝对路径。
         schematic_path: .ep 原理图文件路径（本地文件、必须已存在、内容为完整 S-Expression 且不能为空；
                         建议传绝对路径，Windows 下路径用 / 或 \\ 分隔）。
+                        注意：应传 schematics/main/schematic.ep（原理图本体），
+                        不是 schematics/schematics.ep（那是索引文件，会被 EDI 报 invalid schematic document）。
         timeout_seconds: 最长等待秒数，默认 300。
     """
     resolved, err = require_project_path(project_path)
@@ -732,6 +734,13 @@ def load_schematic_from_file(
         return error_response("FILE_NOT_FOUND", f"原理图文件不存在: {sch_path}")
     if sch_path.suffix.lower() != ".ep":
         return error_response("INVALID_PATH", "schematic_path 必须是 .ep 文件")
+    if sch_path.name.lower() == "schematics.ep":
+        return error_response(
+            "INVALID_PATH",
+            f"传了索引文件 {sch_path.name}，不是原理图",
+            hint="应传 schematics/main/schematic.ep（原理图本体）；schematics/schematics.ep 只是索引，"
+                 "EDI 会报 invalid schematic document",
+        )
 
     return call_grpc(
         ecserver_pb2.LOAD_SCHEMATIC_FROM_FILE,
