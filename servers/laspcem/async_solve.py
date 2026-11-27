@@ -451,14 +451,20 @@ def laspcem_solve_query(task_id: str, wait_seconds: int = 0) -> dict[str, Any]:
     _bounded_wait(task_id, wait_seconds, _runner.snapshot)
     snap = _runner.snapshot(task_id)
     if snap is None:
-        return error_response("TASK_NOT_FOUND", "任务不存在、已过期或服务已重启",
+        # 顶层 status 与 CST/EDI 的 *_query 对齐（那边都回 status），按 status 判断的
+        # 调用方不会拿到 None（2026-11-27 实测：只有这里缺）
+        resp = error_response("TASK_NOT_FOUND", "任务不存在、已过期或服务已重启",
                              task_id=task_id)
+        resp["status"] = "UNKNOWN"
+        return resp
 
     status = snap.get("status")
     if status == "CANCELLED":
         _reap(task_id, snap)
-        return error_response("TASK_CANCELLED", snap.get("error") or "任务已取消",
-                             task_id=task_id, status="CANCELLED")
+        resp = error_response("TASK_CANCELLED", snap.get("error") or "任务已取消",
+                             task_id=task_id)
+        resp["status"] = "CANCELLED"
+        return resp
 
     with _events_lock:
         state = dict(_phases.get(task_id) or {})
@@ -482,7 +488,11 @@ def laspcem_solve_query(task_id: str, wait_seconds: int = 0) -> dict[str, Any]:
     if isinstance(result, dict) and result.get("success") is False:
         resp = error_response(result.get("error_code") or "LASPECM_SOLVE_FAILED",
                               result.get("message") or "任务失败",
-                              task_id=task_id, status=status)
+                              task_id=task_id)
+        # 业务失败：任务本身可能记为 SUCCEEDED（跑完了但求解/导出结果失败），
+        # 顶层 status 按业务结论给 FAILED，原始任务态留在 details 里
+        resp["status"] = "FAILED"
+        resp["details"]["task_status"] = status
         for key in ("steps", "solve_result", "export_result", "report_result"):
             if key in result:
                 resp[key] = result[key]

@@ -241,6 +241,33 @@ def test_cancel_finished_task_rejected(tmp_path, monkeypatch):
 def test_query_unknown_task():
     r = A.laspcem_solve_query("nope123456")
     assert r["error_code"] == "TASK_NOT_FOUND"
+    # 顶层 status 与 CST/EDI 的 *_query 对齐（此前只在 details 里，按 status 判会拿到 None）
+    assert r["status"] == "UNKNOWN"
+
+
+def test_query_cancelled_has_top_level_status(tmp_path, monkeypatch):
+    sem = _sem(tmp_path)
+    monkeypatch.setattr(A, "run_laspcem_solve",
+                        lambda *a, **k: (time.sleep(0.5), {"success": True})[1])
+    monkeypatch.setattr(A, "_kill_task", lambda h, s: None)
+    first = A.run_laspcem_solve_async(sem)
+    second = A.run_laspcem_solve_async(sem)          # 单 worker ⇒ 排队
+    A.laspcem_task_cancel(second["task_id"])
+    q = A.laspcem_solve_query(second["task_id"])
+    assert q["error_code"] == "TASK_CANCELLED"
+    assert q["status"] == "CANCELLED"
+    _wait(first["task_id"])
+
+
+def test_query_failed_has_top_level_status(tmp_path, monkeypatch):
+    monkeypatch.setattr(A, "run_laspcem_solve",
+                        lambda *a, **k: {"success": False, "error_code": "SOLVE_STALLED",
+                                         "message": "卡住"})
+    r = A.run_laspcem_solve_async(_sem(tmp_path))
+    _wait(r["task_id"])
+    q = A.laspcem_solve_query(r["task_id"])
+    assert q["success"] is False
+    assert q["status"] == "FAILED"
 
 
 def test_reap_clears_tables(tmp_path, monkeypatch):
