@@ -179,6 +179,17 @@ def _handle_sim_event(task_id: str, update: dict[str, Any]) -> None:
 # 后台执行
 # ---------------------------------------------------------------------------
 
+def _sim_project_result_path(project_path: str) -> str:
+    """按 EDI 约定构造异步工程仿真的结果路径：<EDI>/simulation/<工程名>/result.raw。
+
+    SIMULATE_PROJECT 的 SUCCESS 事件 payload 不带 result_path（实测为空），而 EDI 侧固定把
+    RAW 写到 <EDI 安装根>/simulation/<工程名>/result.raw。成功分支用它在 result_path 为空时兜底。
+    """
+    from pathlib import Path
+    from servers.simulation_tool.config import EDI_INSTALL_DIR
+    return str(Path(EDI_INSTALL_DIR) / "simulation" / Path(project_path).stem / "result.raw")
+
+
 def _run_sim_task(
         task_id: str,
         client_uuid: str,
@@ -197,6 +208,9 @@ def _run_sim_task(
             client_uuid=client_uuid,
             on_event=lambda update: _handle_sim_event(task_id, update),
         )
+        # 成功但 result_path 为空时，按 EDI 约定回填（SIMULATE_PROJECT 的 SUCCESS 事件不带路径，实测）
+        if result.get("success") and not result.get("result_path"):
+            result["result_path"] = _sim_project_result_path(project_path)
 
         with _sim_lock:
             task = _sim_tasks.get(task_id)
