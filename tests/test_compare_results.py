@@ -29,6 +29,10 @@ def _setup(tmp_path, monkeypatch, x_values=(1.0, 2.0, 3.0)):
         cr, "_read_curve_csv_xy",
         lambda path: (list(x_values), [10.0, 11.0, 12.0]),
     )
+    # 前置校验会调 resolve_curves（→ 引擎 --curve-info）；离线 mock，否则老测试会真去
+    # spawn 引擎进程（convert_raw 里的 run_turbocharts/TURBOCHARTS_PATH 是独立名字，上面
+    # 只 patch 了 compare_results 的）。个别测试要测这条路径时再自己覆盖本 patch。
+    monkeypatch.setattr(cr, "resolve_curves", lambda p: {"error_code": "CURVE_INFO_FAILED"})
     return cr, raw_a, raw_b
 
 
@@ -239,8 +243,26 @@ def test_command_runs_in_failure_details(tmp_path, monkeypatch):
     assert runs[1]["stderr"] == "引擎: 无数据"
 
 
-def test_compare_reports_available_curves_on_bad_curve(tmp_path, monkeypatch):
-    """曲线名写错时报错必须列出可用写法（以前只说"与 RAW 不匹配"）。"""
+def test_compare_rejects_bad_linename_before_running_engine(tmp_path, monkeypatch):
+    """括号形式会让 exe 段错误（实测 rc=0xC0000005）⇒ 必须在启动前拦下并给出可用写法。"""
+    cr, raw_a, raw_b = _setup(tmp_path, monkeypatch)
+    calls = []
+    monkeypatch.setattr(
+        cr, "run_turbocharts",
+        lambda cmd, timeout_seconds=60: (calls.append(cmd),
+                                         SimpleNamespace(returncode=0, stderr=""))[1])
+    monkeypatch.setattr(cr, "resolve_curves", lambda p: {
+        "chart_type": "SP", "curves": {}, "usable_linenames": ["db_S[1,1]"]})
+    r = cr.compare_simulation_results(
+        raw_paths=[str(raw_a), str(raw_b)], curve="DB(S11)",
+        output_path=str(tmp_path / "bad.png"))
+    assert r["error_code"] == "INVALID_LINENAME", r
+    assert (r.get("details") or {}).get("available_curves") == ["db_S[1,1]"], r
+    assert calls == [], "语法非法的曲线名不应启动引擎"
+
+
+def test_compare_reports_available_curves_when_csv_empty(tmp_path, monkeypatch):
+    """语法合法、但该 RAW 没有对应数据时，报错要列出可用写法。"""
     cr, raw_a, raw_b = _setup(tmp_path, monkeypatch)
     monkeypatch.setattr(cr, "_read_curve_csv_xy", lambda path: ([], []))
     monkeypatch.setattr(cr, "resolve_curves", lambda p: {
@@ -248,10 +270,33 @@ def test_compare_reports_available_curves_on_bad_curve(tmp_path, monkeypatch):
         "curves": {"freq": [{"S[1,1]": ["db", "APS"]}]},
         "usable_linenames": ["db_S[1,1]"],
     })
+    # 变量必须存在，否则会被前置的存在性校验拦下（那是另一条路径）
     r = cr.compare_simulation_results(
-        raw_paths=[str(raw_a), str(raw_b)], curve="DB(S11)",
-        output_path=str(tmp_path / "bad.png"))
-    assert r["error_code"] == "INVALID_RAW_DATA"
+        raw_paths=[str(raw_a), str(raw_b)], curve="db_S[1,1]",
+        output_path=str(tmp_path / "bad2.png"))
+    assert r["error_code"] == "INVALID_RAW_DATA", r
     # error_response 的额外字段统一进 details（与 turbocharts_convert 的 known_variables 一致）
-    assert (r.get("details") or {}).get("available_curves") == ["db_S[1,1]"]
+    assert (r.get("details") or {}).get("available_curves") == ["db_S[1,1]"], r
     assert "db_S[1,1]" in r["message"]
+
+
+def test_compare_rejects_missing_variable_before_running_engine(tmp_path, monkeypatch):
+    """变量不存在时 exe 同样段错误（实测 dBm_Out9 → rc=0xC0000005）⇒ 必须前置拦下。"""
+    cr, raw_a, raw_b = _setup(tmp_path, monkeypatch)
+    calls = []
+    monkeypatch.setattr(
+        cr, "run_turbocharts",
+        lambda cmd, timeout_seconds=60: (calls.append(cmd),
+                                        SimpleNamespace(returncode=0, stderr=""))[1])
+    monkeypatch.setattr(cr, "resolve_curves", lambda p: {
+        "chart_type": "SP",
+        "curves": {"freq": [{"S[1,1]": ["db"]}, {"S[2,1]": ["db"]}]},
+        "usable_linenames": ["db_S[1,1]", "db_S[2,1]"],
+    })
+    r = cr.compare_simulation_results(
+        raw_paths=[str(raw_a), str(raw_b)], curve="dBm_Out9",
+        output_path=str(tmp_path / "miss.png"))
+    assert r["error_code"] == "CURVE_NOT_FOUND", r
+    assert (r.get("details") or {}).get("available_curves") == ["db_S[1,1]", "db_S[2,1]"], r
+    assert "S[1,1]" in r["message"], r      # 报错里带该 RAW 实测变量
+    assert calls == [], "变量不存在时不应启动引擎"

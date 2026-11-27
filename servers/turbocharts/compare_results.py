@@ -25,7 +25,7 @@ from servers.utils import (build_artifact, build_file_link, default_result_path,
                            error_response, per_tool_mutex)
 from servers.turbocharts.config import engine_report, record_run, run_turbocharts
 from servers.turbocharts.convert_raw import (detect_chart_type, resolve_curves,
-                                            usable_linenames)
+                                            usable_linenames, _validate_linename)
 from servers import mcp
 
 
@@ -108,6 +108,30 @@ def compare_simulation_results(
         return error_response("INVALID_PARAMETERS", "labels 数量与 raw_paths 不一致")
     if not all(isinstance(lb, str) for lb in labels):
         return error_response("INVALID_PARAMETERS", "labels 每个元素必须是字符串")
+
+    # 曲线名语法 + 变量存在性都必须在启动引擎前校验：实测 exe 对「括号形式（DB(S11)）/
+    # 逗号 / 空白」和「变量不存在」都是直接段错误（rc=0xC0000005），连 CSV 都拿不到，
+    # 根本走不到下面"CSV 解析失败"那条分支。代价是每次多一次 --curve-info（约 0.6s），
+    # 相比让 exe 崩溃完全值得。
+    _pre = resolve_curves(raw_paths[0])
+    if "error_code" in _pre:
+        _known_vars, _avail = [], []
+    else:
+        _known_vars = [v for items in (_pre.get("curves") or {}).values()
+                       for item in (items or []) for v in (item or {})]
+        _avail = _pre.get("usable_linenames") or []
+    _ok_curves, _syntax_errors, _missing, _name_warnings = _validate_linename(
+        curve, chart_type, _known_vars, Path(raw_paths[0]).name)
+    if _syntax_errors:
+        return error_response(
+            "INVALID_LINENAME", " ".join(_syntax_errors),
+            hint="曲线名必须是 <前缀>_<变量名>（如 db_S[1,1] / dBm_Out1），多条曲线用 & 连接",
+            curve=curve, chart_type=chart_type, available_curves=_avail)
+    if _missing:
+        return error_response(
+            "CURVE_NOT_FOUND", " ".join(_missing),
+            hint="变量名须与 RAW 中一致（大小写敏感）；可用写法见 available_curves",
+            curve=curve, chart_type=chart_type, available_curves=_avail)
 
     _logger.info("compare_results files=%d curve=%s type=%s align=%s ref=%d csv=%s",
                  file_count, curve, chart_type, alignment, reference_index,
