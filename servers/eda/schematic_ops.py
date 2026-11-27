@@ -91,7 +91,7 @@ def clear_schematic(
         confirm_clear: bool = False,
         timeout_seconds: int = 300,
 ) -> dict[str, Any]:
-    """清空工程原理图中的全部器件和网段并保存（破坏性操作）。
+    """清空工程原理图全部器件和网段并保存（破坏性，需 confirm_clear=True 才执行）。
 
     用法："清空这个工程的原理图"
 

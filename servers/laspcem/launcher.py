@@ -104,7 +104,7 @@ def _same_path(a: str, b: str) -> bool:
 @mcp.tool()
 def open_laspcem_project(project_path: str, laspcem_path: str = "",
                          force_new_instance: bool = False) -> dict[str, Any]:
-    """在 LASPCEM 中打开 .sem 工程文件。
+    """在 LASPCEM 中打开 .sem 工程文件（GUI 打开与后台求解互斥，先求解后打开）。
 
     等价于双击 .sem 文件：laspcem.exe "<project_path>"。
 

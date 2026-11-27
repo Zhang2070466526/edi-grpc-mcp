@@ -27,7 +27,7 @@ def _fmt_task(t: dict[str, Any]) -> dict[str, Any]:
 
 @mcp.tool()
 def cst_task_list() -> dict[str, Any]:
-    """列出当前所有 CST 异步任务（求解 / 导出）及状态。
+    """列出当前所有 CST 异步任务（求解 / 导出）及状态，无需参数直接调。查单个任务进度用 cst_solve_query / cst_export_snp_query。
 
     用法："现在有哪些 CST 任务在跑"
 
@@ -43,7 +43,7 @@ def cst_task_list() -> dict[str, Any]:
 
 @mcp.tool()
 def cst_task_cancel(task_id: str) -> dict[str, Any]:
-    """⚠️ 取消一个 CST 异步任务（会终止运行中的求解）。
+    """⚠️ 取消一个 CST 异步任务：会终止运行中的求解，未导出的结果作废，CST 引擎进程未必立即释放。
 
     用法："把那个求解任务停掉"
 

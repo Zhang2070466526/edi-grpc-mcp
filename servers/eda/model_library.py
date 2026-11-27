@@ -20,7 +20,7 @@ from servers import mcp
 @mcp.tool()
 def get_model_category_params(timeout_seconds: int = 60,
                               categories_only: bool = True) -> dict[str, Any]:
-    """获取模型管理模块的全部子类及对应参数列表。
+    """获取模型库全部子类及参数列表（search_public_models/search_personal_models 的前置：拿 sub_type 与参数 id）。
 
     用法："看看模型库有哪些分类"、"获取模型分类和参数"
 

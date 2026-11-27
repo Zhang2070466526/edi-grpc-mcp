@@ -480,7 +480,7 @@ def simulate_netlist(
 
 @mcp.tool()
 def list_eda_tasks(status: str = "") -> dict[str, Any]:
-    """列出当前所有异步仿真任务，可选按状态过滤。不阻塞。
+    """列出当前所有 EDI/ADS 异步仿真任务，可选按状态过滤，无需参数直接调。只管 EDI 侧任务——CST / HFSS / LASPCEM 各有自己的 task_list（cst_task_list / hfss_task_list / laspcem_task_list），本工具看不到它们；查单个用 get_simulation_async_status。
 
     用法："现在有哪些仿真在跑"、"列出所有失败的任务"
 

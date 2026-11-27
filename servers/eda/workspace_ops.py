@@ -33,7 +33,7 @@ def _set_workspace(path: str, task_type: int, timeout_seconds: int) -> dict[str,
 
 @mcp.tool()
 def create_workspace(path: str, timeout_seconds: int = 60) -> dict[str, Any]:
-    """创建一个新的工作区，不自动切换。
+    """创建一个新的工作区（不切换过去）。要切换用 switch_workspace，查当前工作区用 get_current_workspace_path。
 
     用法："创建一个工作区 D:/EDI-Workspace-New"
 

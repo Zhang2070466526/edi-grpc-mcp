@@ -156,7 +156,7 @@ def create_project(
         path: str = "",
         timeout_seconds: int = 60,
 ) -> dict[str, Any]:
-    """创建新的 EDI 工程（不显示创建向导，也不自动打开）。
+    """创建新的 EDI 工程（不显示创建向导、不自动打开）。建完用 open_edi_project 打开。
 
     用法："创建一个名为 demo 的工程"、"在 D:/projects 下创建 test 工程"
 
@@ -359,7 +359,7 @@ def get_project_summary(
 
 @mcp.tool()
 def analyze_variables(project_path: str) -> dict[str, Any]:
-    """分析工程中的变量定义和引用关系。
+    """分析工程中的变量定义、引用与 Sweep 扫描配置。改完变量想确认谁在引用、扫参配了啥时用。
 
     识别 Var 元件定义的变量、其他元件中对这些变量的引用、
     以及 Sweep 的扫描配置。

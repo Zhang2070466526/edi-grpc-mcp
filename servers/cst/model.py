@@ -76,7 +76,7 @@ def cst_get_model_info(model_path: str) -> dict[str, Any]:
 
 @mcp.tool()
 def cst_open_project(model_path: str) -> dict[str, Any]:
-    """打开并保存 CST 模型（= 解包归档文件），不求解。
+    """打开并保存 CST 模型（= 解包归档文件），不求解。归档 .cst 求解/导出前必先解包。
 
     用法："把这个归档模型解包"
 

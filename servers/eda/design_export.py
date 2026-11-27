@@ -52,7 +52,7 @@ def capture_schematic(
     output_path: str = "",
     timeout_seconds: int = 60,
 ) -> dict[str, Any]:
-    """截取工程原理图为图片。
+    """截取工程原理图为图片，返回 PNG 路径（需 EDI gRPC 在线）。用于视觉核对布局；字段级校验改动用 get_schematic_component_info。
 
     产物路径看 details.img_path（同时给 artifacts[0].path、file_uri、download_url、
     markdown_link）；统一信封里的 result_path 为空是常态，不代表没生成。

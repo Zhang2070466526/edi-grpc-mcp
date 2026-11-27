@@ -210,7 +210,7 @@ def design_wilkinson(
         fbw: float | None = None,
         ripple_db: float | None = None,
 ) -> dict[str, Any]:
-    """设计多级威尔金森功分器，输出各级微带线宽、线长和隔离电阻。
+    """设计多级威尔金森功分器（只算尺寸、不建原理图）。给定基板 h/er、中心频率 f0、级数，返回各级线宽/线长与隔离电阻。
 
     用法："设计一个 FR4、0.8mm、2.45GHz、2 级的威尔金森功分器"
 

@@ -41,7 +41,7 @@ def compare_simulation_results(
     alignment: str = "intersection",
     reference_index: int = 0,
 ) -> dict[str, Any]:
-    """比较多个 RAW 仿真结果文件中的同一条曲线并生成对比图。
+    """比较 2-8 个 RAW 里的同一条曲线并出对比图。曲线名用 curve 参数（先 list_result_curves 拿准确名）。
 
     逐 RAW 调用 turbocharts 导出 CSV 后，读取真实列名，
     按依赖轴对齐，用 Matplotlib 生成叠图并计算差异指标。
