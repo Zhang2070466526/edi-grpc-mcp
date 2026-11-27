@@ -63,7 +63,7 @@
 - `get_hfss_project_info` — 查询当前 AEDT 打开的项目和活动设计（纯查询，不启动 AEDT）。
 - `get_laspcem_setup` — 读取 .sem 工程当前配置的求解设置参数（cem.EditSolution 那套键，约 64 个）。
 - `get_model_category_params` — 获取模型库全部子类及参数列表（search_public_models/search_personal_models 的前置：拿 sub_type 与参数 id）。
-- `get_project_summary` — 获取 .epp 工程概览：元数据、原理图文件路径、元件统计、仿真器件配置、最近结果文件路径。注意：该接口只判断有无仿真结果，禁止解析raw文件。
+- `get_project_summary` — 获取 .epp 工程概览：元数据、原理图文件路径、最近结果文件路径。注意：该接口只判断有无仿真结果，禁止解析raw文件。
 - `get_schematic_component_info` — 按实例名查询器件参数与几何：支持单个名称或名称列表（批量）。
 - `get_service_logs` — 读取 EDI 服务端日志，检查运行异常（含 ERROR/WARN/异常堆栈分析）。
 - `get_service_status` — 返回 EDI gRPC 通道状态和队列占用信息（只读，不占执行槽位），用于诊断：通道是否健康、是否有任务在排队。

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import time
 from pathlib import Path
@@ -14,11 +13,6 @@ META = (
     ' (name "{name}")\n (author "tester")\n (version "1")\n'
     ' (created 2026-01-01T00:00:00Z)\n)\n'
 )
-
-
-def _psi(params: dict) -> str:
-    """(paramsinfo "<两次转义 JSON>")"""
-    return "(paramsinfo " + json.dumps(json.dumps(params)) + ")"
 
 
 def _build(
@@ -67,7 +61,6 @@ def test_summary_reports_dir_name_and_posix_paths(tmp_path: Path) -> None:
     assert r["project"]["project_dir_name"] == "demo_dir"
     assert "\\" not in r["schematics"]["paths"][0]
     assert Path(r["schematics"]["paths"][0]).is_file()
-    assert set(r["components"]) == {"total", "by_type"}, r["components"]
 
 
 def test_missing_metadata_keeps_keys_and_warns(tmp_path: Path) -> None:
@@ -118,65 +111,6 @@ def test_latest_result_ignores_model_dir(tmp_path: Path) -> None:
     r = get_project_summary(str(epp))["latest_result"]
     assert Path(r["path"]) == hist.resolve(), r
     assert model.exists()
-
-
-def test_simulation_parameters_are_structured(tmp_path: Path) -> None:
-    """仿真器件参数返回 {value, unit} 结构，不再拼成 '8 GHz' 字符串。"""
-    comp = (
-        ' (component aaaaaaaa-0000-0000-0000-000000000001 (type "SParameter")'
-        ' (name "SP1") (active_state 0) '
-        + _psi({
-            "BasicParameters": {"ItemName": "SP1", "ItemType": "SParameter"},
-            "Start": {"Value": "8", "CurrentUnit": "GHz"},
-            "Pts": {"Value": "41", "CurrentUnit": "None"},
-        })
-        + ")\n"
-    )
-    epp = _build(tmp_path, extra_schematic=comp)
-    r = get_project_summary(str(epp))
-
-    assert r["components"]["total"] == 1
-    sim = r["simulation"][0]
-    assert set(sim) == {"component_type", "instance_name", "parameters"}
-    assert sim["parameters"]["Start"] == {"value": "8", "unit": "GHz"}
-    assert sim["parameters"]["Pts"]["value"] == "41"
-
-
-def test_missing_schematic_file_warns_instead_of_silent_skip(tmp_path: Path) -> None:
-    """schematics.ep 登记了但文件缺失/为空：不能静默返回 count=1 且 total=0。"""
-    epp = _build(tmp_path)
-    sch = epp.parent / "schematics" / "main" / "schematic.ep"
-
-    sch.unlink()
-    r = get_project_summary(str(epp))
-    assert r["schematics"]["count"] == 1
-    assert r["components"]["total"] == 0
-    assert [w["code"] for w in r["warnings"]] == ["SCHEMATIC_MISSING"], r["warnings"]
-    assert r["warnings"][0]["path"] == r["schematics"]["paths"][0]
-
-    sch.write_text("", encoding="utf-8")
-    r2 = get_project_summary(str(epp))
-    assert [w["code"] for w in r2["warnings"]] == ["SCHEMATIC_MISSING"], r2["warnings"]
-
-
-def test_by_type_null_when_types_not_requested(tmp_path: Path) -> None:
-    """include_component_types=False → by_type 为 null（区别于"没有器件"的空对象）。"""
-    comp = (
-        ' (component aaaaaaaa-0000-0000-0000-000000000009 (type "TermG")'
-        ' (name "TermG1") (active_state 0) '
-        + _psi({"BasicParameters": {"ItemName": "TermG1", "ItemType": "TermG"}})
-        + ")\n"
-    )
-    epp = _build(tmp_path, extra_schematic=comp)
-
-    on = get_project_summary(str(epp))
-    assert on["components"]["total"] == 1
-    assert on["components"]["by_type"] == {"TermG": 1}
-    assert on["warnings"] == []
-
-    off = get_project_summary(str(epp), include_component_types=False)
-    assert off["components"]["total"] == 1
-    assert off["components"]["by_type"] is None
 
 
 def test_analyze_variables_project_path_is_posix(tmp_path: Path) -> None:

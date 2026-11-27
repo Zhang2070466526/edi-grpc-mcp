@@ -35,7 +35,7 @@ from typing import Any
 
 from proto import ecserver_pb2
 from servers.eda.grpc_client import call_grpc, call_project_grpc
-from servers.eda.config import SIM_COMPONENT_TYPES, require_project_path
+from servers.eda.config import require_project_path
 from servers.eda.project_reader import ProjectReader, parse_components
 from servers.utils import require_nonempty, error_response
 from servers import mcp
@@ -230,10 +230,9 @@ def close_edi_project(
 @mcp.tool()
 def get_project_summary(
         project_path: str,
-        include_component_types: bool = True,
         include_latest_result: bool = True,
 ) -> dict[str, Any]:
-    """获取 .epp 工程概览：元数据、原理图文件路径、元件统计、仿真器件配置、最近结果文件路径。注意：该接口只判断有无仿真结果，禁止解析raw文件。
+    """获取 .epp 工程概览：元数据、原理图文件路径、最近结果文件路径。注意：该接口只判断有无仿真结果，禁止解析raw文件。
 
     用法："帮我看看这个工程的概览"、"查看工程信息"
 
@@ -243,17 +242,12 @@ def get_project_summary(
         latest_result：未查询时为 null；查询了但工程里没有 .raw 时为
             {"path": "", "exists": false, "size": 0}；文件大小为 0 时 exists=false 并附 warning。
             只认 history/*.raw 优先，其次工程内其他 .raw，但排除 model/ 目录（模型自带文件）与隐藏文件。
-        simulation[].parameters 为结构化参数 {"参数名": {"value": ..., "unit": ...}}。
-        include_component_types 只控制 components.by_type 的统计，无论 True/False 都要解析原理图；
-            False 时 by_type 为 null（不是空对象，避免与"没有器件"混淆），器件总数看 total。
         warnings 为结构化列表，每项 {"code": ..., "message": ..., "path"?: ...}，
             code 取值：METADATA_MISSING（元数据缺失）、NO_SCHEMATIC（未找到原理图）、
-            SCHEMATIC_MISSING（某个原理图文件缺失或为空，其器件未统计，带 path）、
             RESULT_EMPTY（最近结果文件 0 字节，带 path）。success 为 True 时也可能带 warning，需转告用户。
 
     Args:
         project_path: .epp 工程文件绝对路径。
-        include_component_types: 是否统计元件类型分布（components.by_type）。
         include_latest_result: 是否包含最近仿真结果信息（False 时 latest_result 为 null）。
 
     Returns:
@@ -261,9 +255,6 @@ def get_project_summary(
          "project": {"project_id": "...", "name": "NC35352ME-812",
                      "project_dir_name": "NC35352ME-812", "author": "bm", ...},
          "schematics": {"count": 1, "paths": ["D:/.../schematics/main/schematic.ep"]},
-         "components": {"total": 55, "by_type": {"HGC367": 16}},
-         "simulation": [{"component_type": "SParameter", "instance_name": "SP1",
-                         "parameters": {"Start": {"value": "8", "unit": "GHz"}}}],
          "latest_result": {"path": "D:/.../result.raw", "exists": True, "size": 2048},
          "warnings": []}
     """
@@ -294,44 +285,8 @@ def get_project_summary(
     entries = reader.list_schematic_entries()
     schematics_info = {"count": len(entries), "paths": [e["path"] for e in entries]}
 
-    # by_type 用 None 表示"未统计"，与 {}（工程里没有器件）区分开
-    components_info: dict[str, Any] = {
-        "total": 0,
-        "by_type": {} if include_component_types else None,
-    }
-    simulation_info: list[dict] = []
-    # 单遍遍历：每个原理图只读+解析一次，同时统计组件与仿真配置
-    for entry in entries:
-        raw = reader.read_schematic(entry["name"])
-        if not raw:
-            # schematics.ep 里登记了但文件缺失/为空：不能静默跳过，否则 count=1 而 total=0
-            warnings.append({
-                "code": "SCHEMATIC_MISSING",
-                "message": "原理图文件缺失或为空，其器件未统计",
-                "path": entry["path"],
-            })
-            continue
-        comps = parse_components(raw)
-        components_info["total"] += len(comps)
-        for comp in comps:
-            ct = comp.get("type", "")
-            if include_component_types:
-                components_info["by_type"][ct] = components_info["by_type"].get(ct, 0) + 1
-            if ct in SIM_COMPONENT_TYPES:
-                pi = comp.get("paramsinfo", {})
-                sim_params: dict[str, dict[str, str]] = {}
-                for key, info in pi.items():
-                    if key == "BasicParameters" or not isinstance(info, dict):
-                        continue
-                    sim_params[key] = {
-                        "value": str(info.get("value") or ""),
-                        "unit": str(info.get("unit") or ""),
-                    }
-                simulation_info.append({
-                    "component_type": ct,
-                    "instance_name": comp.get("name", ""),
-                    "parameters": sim_params,
-                })
+    # 不再解析 schematics/{name}/schematic.ep（大文件解析开销大）：components/simulation 已移除，
+    # 器件与仿真配置信息改用 EDI 侧的器件查询工具获取。
 
     latest_result: dict[str, Any] | None = None
     if include_latest_result:
@@ -350,8 +305,6 @@ def get_project_summary(
         "success": True,
         "project": metadata,
         "schematics": schematics_info,
-        "components": components_info,
-        "simulation": simulation_info,
         "latest_result": latest_result,
         "warnings": warnings,
     }
