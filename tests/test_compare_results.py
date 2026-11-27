@@ -237,3 +237,21 @@ def test_command_runs_in_failure_details(tmp_path, monkeypatch):
     runs = result["details"]["command_runs"]
     assert [r["return_code"] for r in runs] == [0, 7]
     assert runs[1]["stderr"] == "引擎: 无数据"
+
+
+def test_compare_reports_available_curves_on_bad_curve(tmp_path, monkeypatch):
+    """曲线名写错时报错必须列出可用写法（以前只说"与 RAW 不匹配"）。"""
+    cr, raw_a, raw_b = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(cr, "_read_curve_csv_xy", lambda path: ([], []))
+    monkeypatch.setattr(cr, "resolve_curves", lambda p: {
+        "chart_type": "SP",
+        "curves": {"freq": [{"S[1,1]": ["db", "APS"]}]},
+        "usable_linenames": ["db_S[1,1]"],
+    })
+    r = cr.compare_simulation_results(
+        raw_paths=[str(raw_a), str(raw_b)], curve="DB(S11)",
+        output_path=str(tmp_path / "bad.png"))
+    assert r["error_code"] == "INVALID_RAW_DATA"
+    # error_response 的额外字段统一进 details（与 turbocharts_convert 的 known_variables 一致）
+    assert (r.get("details") or {}).get("available_curves") == ["db_S[1,1]"]
+    assert "db_S[1,1]" in r["message"]

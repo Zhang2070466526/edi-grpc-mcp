@@ -229,23 +229,23 @@ def test_unit_notes_only_for_auto_compose(env):
 
 def test_chart_type_autodetect_tells_user(env):
     """不传 chart_type 时必须交代「类型是怎么来的」（推断成功 / 识别不出 / 解析失败三种）。"""
-    orig = cr._resolve_curves
+    orig = cr.resolve_curves
     try:
-        cr._resolve_curves = lambda p: {"chart_type": "HB",
+        cr.resolve_curves = lambda p: {"chart_type": "HB",
                                         "curves": {"freq": [{"Out1": ["dBm"]}]}, "unit_notes": []}
         r = cr.turbocharts_convert(raw_path=str(env.raw), output_path=str(env.tmp / "e.png"))
         assert any("推断为 HB" in w for w in (r.get("warnings") or [])), r.get("warnings")
 
-        cr._resolve_curves = lambda p: {"chart_type": "",
+        cr.resolve_curves = lambda p: {"chart_type": "",
                                         "curves": {"freq": [{"Out1": ["dBm"]}]}, "unit_notes": []}
         r2 = cr.turbocharts_convert(raw_path=str(env.raw), output_path=str(env.tmp / "f.png"))
         assert any("没有可识别的 Plotname" in w for w in (r2.get("warnings") or [])), r2.get("warnings")
 
-        cr._resolve_curves = lambda p: {"error_code": "CURVE_INFO_FAILED"}
+        cr.resolve_curves = lambda p: {"error_code": "CURVE_INFO_FAILED"}
         r3 = cr.turbocharts_convert(raw_path=str(env.raw), output_path=str(env.tmp / "g.png"))
         assert any("解析失败" in w for w in (r3.get("warnings") or [])), r3.get("warnings")
     finally:
-        cr._resolve_curves = orig
+        cr.resolve_curves = orig
 
 
 def test_label_unit_maps_csv_header():
@@ -649,3 +649,91 @@ def test_record_run_marks_nonzero_rc_as_failure(env, monkeypatch):
     assert resp["command_runs"][0]["return_code"] == 127
     assert resp["engine_ok"] is False
     assert resp["message"].startswith("引擎自报未成功")
+
+
+def test_empty_curve_data_is_error(env, monkeypatch):
+    """只有表头、0 行数据（引擎 rc=0 并照写空图）必须判失败。
+
+    2026-11-27 实测：`--curve-info` 对 SP RAW 列出 APS/MAS/MV/PSS，但该 RAW 的 Variables 里
+    没有这些数据集；用它画图时引擎 rc=0、打印「导出成功」、PNG 只有坐标轴、CSV 只有表头。
+    MCP 以前把 rc=0 当成功，调用方会拿到一张空图还以为画成了。
+    """
+    def _run_empty(cmd, timeout_seconds=60):
+        env.commands.append(list(cmd))
+        for flag in ("--img", "--csv"):
+            if flag in cmd:
+                target = cmd[cmd.index(flag) + 1]
+                if flag == "--img":
+                    Path(target).write_bytes(b"\x89PNG-empty")
+                else:
+                    Path(target).write_text("freq,APS(S11)\n", encoding="utf-8")   # 只有表头
+        return SimpleNamespace(
+            returncode=0,
+            stderr='绘制线名： "APS_Out1"\n"C:\\\\x.png 导出成功"\n"C:\\\\x.csv 导出成功"',
+            stdout="")
+
+    monkeypatch.setattr(cr, "run_turbocharts", _run_empty)
+    resp = cr.turbocharts_convert(
+        raw_path=str(env.raw), output_path=str(env.tmp / "e.png"), chart_type="HB",
+        linename="dBm_Out1", csv_path=str(env.tmp / "e.csv"))
+
+    assert resp["success"] is False, resp
+    assert resp["error_code"] == "EMPTY_CURVE_DATA"
+    assert resp["empty_curves"] == ["dBm_Out1"]
+    assert "0 行数据" in resp["message"]
+    # 空图不该再给「打开曲线图」的链接（否则调用方点开以为有结果）
+    assert "markdown_link" not in resp
+    assert resp["img_generated"] is True          # 图片确实存在，只是没有数据
+
+
+def test_partial_empty_keeps_success(env, monkeypatch):
+    """多曲线里只有一部分无数据时仍算成功（能拿到有数据的那条），但必须有 warning。"""
+    def _run(cmd, timeout_seconds=60):
+        env.commands.append(list(cmd))
+        ln = cmd[cmd.index("--linename") + 1] if "--linename" in cmd else ""
+        for flag in ("--img", "--csv"):
+            if flag in cmd:
+                target = cmd[cmd.index(flag) + 1]
+                if flag == "--img":
+                    Path(target).write_bytes(b"\x89PNG")
+                else:
+                    body = "freq,dBm(Out1)\n0.0,-3.0\n" if "Out1" in ln else "freq,dBm(Out2)\n"
+                    Path(target).write_text(body, encoding="utf-8")
+        return SimpleNamespace(returncode=0, stderr="", stdout="")
+
+    monkeypatch.setattr(cr, "run_turbocharts", _run)
+    resp = cr.turbocharts_convert(
+        raw_path=str(env.raw), output_path=str(env.tmp / "p.png"), chart_type="HB",
+        linename="dBm_Out1&dBm_Out2", csv_path=str(env.tmp / "p.csv"))
+
+    assert resp["success"] is True, resp
+    assert "error_code" not in resp
+    assert any("0 行数据" in w for w in resp.get("warnings", [])), resp.get("warnings")
+
+
+# ── usable_linenames：模板前缀 ≠ 该 RAW 真有数据（2026-11-27）──
+
+
+def testusable_linenames_drops_template_only_prefixes():
+    """`--curve-info` 按类型模板枚举；APS/MAS/MV/PSS 在某 RAW 里没有数据集，不能列给调用方。
+
+    实测：某 SP RAW 的 Variables 只有 freq + S[1,1..2,2] + PORTZ + PortName，
+    用 APS_S[1,1] 画图得到「表头 + 0 行数据」的空图。
+    """
+    from servers.turbocharts.convert_raw import usable_linenames
+
+    sp = {"freq": [{"S[1,1]": ["db", "dBm", "phase", "real", "imag", "mag",
+                               "VSWR", "APS", "MAS", "MV", "PSS"]}]}
+    names, total = usable_linenames(sp, "SP")
+    assert "db_S[1,1]" in names and "VSWR_S[1,1]" in names
+    assert not [n for n in names if n.startswith(("APS_", "PSS_", "MAS_", "MV_"))]
+    assert total == len(names)
+
+
+def testusable_linenames_hb_only_dbm_and_real():
+    """HB 下 db_ 会被引擎静默回退成 dBm，不应出现在 usable 列表里。"""
+    from servers.turbocharts.convert_raw import usable_linenames
+
+    names, total = usable_linenames({"LO2": [{"Out1": ["dBm", "real", "db"]}]}, "HB")
+    assert names == ["dBm_Out1", "real_Out1"]
+    assert total == 2

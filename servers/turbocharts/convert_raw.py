@@ -85,6 +85,44 @@ _DEFAULT_UNIT_BY_CHART = {
     "XDB": ["db", "dBm", "real"],
 }
 
+#: `--curve-info` 是**按类型模板**枚举的，不代表该 RAW 真有那些数据集 —— 2026-11-27 实测：
+#: 某 SP RAW 的 Variables 只有 freq + S[1,1..2,2] + PORTZ + PortName，`--curve-info` 照样列出
+#: APS/MAS/MV/PSS，用它们画图会得到「表头 + 0 行数据」的空图（引擎仍 rc=0、打印导出成功）。
+#: 所以这里只放实测能出真图的前缀，供 usable_linenames 与 compare 的报错提示使用。
+#: ⚠️ 类型级白名单的代价：若某 RAW 真带数控衰减器/移相器（Variables 里有 APS/MAS/MV/PSS 数据集），
+#: 它们会被从这里漏掉 —— 此时看 `curves`（--curve-info 全文，未过滤）或手动传对应 linename 仍可用。
+_USABLE_PREFIX_BY_CHART: dict[str, set[str]] = {
+    "HB": {"dBm", "real"},
+    "SP": {"db", "dBm", "phase", "real", "imag", "mag", "VSWR"},
+    "XDB": {"db", "dBm", "phase", "real", "imag", "mag", "VSWR"},
+}
+
+
+def usable_linenames(curves: dict[str, Any] | None, chart: str | None,
+                      limit: int = 12) -> tuple[list[str], int]:
+    """把引擎的「依赖 → [{变量: [单位]}]」摊平成可直接传给 `--linename` 的写法。
+
+    返回 `(前 limit 条, 总条数)`；前缀按 chart 类型过滤（`_USABLE_PREFIX_BY_CHART`），
+    避免把「模板里有、这份 RAW 里没有」的前缀（APS/MAS/MV/PSS）列给调用方。
+    """
+    allow = _USABLE_PREFIX_BY_CHART.get((chart or "").upper())
+    if allow is None:
+        allow = {"dBm", "real"}
+    out: list[str] = []
+    seen: set[str] = set()
+    for items in (curves or {}).values():
+        for item in (items or []):
+            for var, units in (item or {}).items():
+                for unit in (units or []):
+                    if unit not in allow:
+                        continue
+                    name = f"{unit}_{var}"
+                    if name not in seen:
+                        seen.add(name)
+                        out.append(name)
+    return out[:limit], len(out)
+
+
 _VSWR_RE = re.compile(r'^VSWR_S\[\d+,\d+\]$', re.IGNORECASE)
 
 
@@ -277,7 +315,7 @@ def _build_unit_notes(chart: str) -> list[str]:
     return notes
 
 
-def _resolve_curves(raw_path: str) -> dict[str, Any]:
+def resolve_curves(raw_path: str) -> dict[str, Any]:
     """解析 RAW：引擎 `--curve-info` 列曲线+单位 + `detect_chart_type` 推断类型 + unit_notes。
 
     返回 `{chart_type, curves, unit_notes}`；引擎 --curve-info 失败时只返回 `{error_code}`。
@@ -287,7 +325,11 @@ def _resolve_curves(raw_path: str) -> dict[str, Any]:
     if engine_curves is None:
         return {"error_code": "CURVE_INFO_FAILED"}
     chart = detect_chart_type(raw_path)
-    return {"chart_type": chart, "curves": engine_curves, "unit_notes": _build_unit_notes(chart)}
+    usable, usable_total = usable_linenames(engine_curves, chart)
+    return {"chart_type": chart, "curves": engine_curves,
+            "usable_linenames": usable, "usable_total": usable_total,
+            "dependencies": list(engine_curves),
+            "unit_notes": _build_unit_notes(chart)}
 
 
 @mcp.tool()
@@ -309,7 +351,7 @@ def list_result_curves(raw_path: str) -> dict[str, Any]:
     except (FileNotFoundError, ValueError) as e:
         return error_response("FILE_NOT_FOUND", str(e))
 
-    info = _resolve_curves(resolved)
+    info = resolve_curves(resolved)
     if "error_code" in info:
         return error_response(
             info["error_code"],
@@ -317,7 +359,13 @@ def list_result_curves(raw_path: str) -> dict[str, Any]:
             raw_path=resolved,
         )
     return {"success": True, "raw_path": resolved,
-            "chart_type": info["chart_type"], "curves": info["curves"], "unit_notes": info["unit_notes"]}
+            "chart_type": info["chart_type"],
+            # 可直接传给 turbocharts_convert(linename=...) / compare_simulation_results(curve=...) 的写法
+            "usable_linenames": info.get("usable_linenames", []),
+            "usable_total": info.get("usable_total", 0),
+            # 第一层是依赖名（传给 --dependcy 用），**不是**曲线名
+            "dependencies": info.get("dependencies", []),
+            "curves": info["curves"], "unit_notes": info["unit_notes"]}
 
 
 def _build_cmd(raw_path, output_path, chart_type, *, linename="", dependency="", csv_path="", ac_config=""):
@@ -463,6 +511,10 @@ def turbocharts_convert(
         engine_ok / engine_report：**引擎自报的执行成败**（True / False / None）与关键输出行（原措辞，去重）。
         ⚠️ 引擎 rc 恒为 0（曲线不存在/无数据也 rc=0 并写空图）⇒ **判成败看 `engine_ok` + `img_generated` /
         `csv_generated` / `output_paths`，不要看 return_code**；engine_ok=None 表示这次没有可判信号。
+        **空数据不算成功**：请求的曲线全部「只有表头、0 行数据」时返回 `success=False` +
+        `error_code="EMPTY_CURVE_DATA"` + `empty_curves`，且不给「打开曲线图」链接 ——
+        `--curve-info` 列出的前缀不代表该 RAW 真有对应数据集（2026-11-27 实测：SP 的 APS_/PSS_ 合法但 0 行）。
+        只有传了 `csv_path` 才能做这项判定（靠产物 CSV 行数；不传 CSV 时无法分辨空图）。
 
         log_path / log_lines：引擎原文**追加落盘**到「与 RAW 同目录的 <raw 文件名>.turbocharts.log」，
         log_lines = 本次新增行数（历史调用累积在同一文件，可随时全文核对）。
@@ -483,7 +535,7 @@ def turbocharts_convert(
         chart_type = _requested_chart
     else:
         # chart_type 留空 → 先解析 RAW（曲线 + 对应单位），以它为准
-        _curve_info = _resolve_curves(raw_file)
+        _curve_info = resolve_curves(raw_file)
         if "chart_type" in _curve_info:
             _detected_chart = (_curve_info.get("chart_type") or "").strip()
         chart_type = _detected_chart or "SP"
@@ -547,7 +599,7 @@ def turbocharts_convert(
     elif _curve_info is None:
         engine_curves = _engine_curve_info(raw_file)
     else:
-        # _resolve_curves 已失败（引擎 --curve-info 不可用），不再重复调引擎
+        # resolve_curves 已失败（引擎 --curve-info 不可用），不再重复调引擎
         engine_curves = None
     if engine_curves is None and (linename or "").strip():
         # 引擎 --curve-info 不可用 → 无法做存在性校验，拼错的曲线名会送引擎白跑/段错误
@@ -639,6 +691,8 @@ def turbocharts_convert(
     # → 这两种情况按曲线拆成多次调用；SP 的多曲线 CSV 一次即可导出多列。
     csv_plan: list[tuple[list[str], str]] = []
     csv_labels: dict[str, list[str]] = {}
+    # 只有表头、0 行数据的曲线组：引擎 rc 恒为 0、照写空图，这里记下来好把假成功判掉
+    empty_curves: list[str] = []
     if csv_path:
         # 重复曲线会拆出同名 CSV 互相覆盖，先按唯一曲线去重
         uniq = list(dict.fromkeys(curves))
@@ -708,6 +762,7 @@ def turbocharts_convert(
                     f"引擎丢数据，请逐条调用 turbocharts_convert。"
                 )
             if labels and data_rows == 0:
+                empty_curves.append("&".join(group))
                 warnings.append(
                     f"{Path(target_csv).name}：只有表头、0 行数据（{labels[1:] or ['未知量']}）——"
                     "该曲线在此 RAW 中无数据，图片大概率是空的。"
@@ -755,8 +810,16 @@ def turbocharts_convert(
     if engine_ok is False and failures:
         warnings.append("引擎自报未成功：" + "；".join(failures[:3]))
 
+    # 所有请求的曲线都只有表头、0 行数据 ⇒ 图是空的，不能算成功（引擎 rc 仍为 0）
+    all_curves_empty = bool(empty_curves) and len(empty_curves) >= len(csv_plan)
     if not img_generated:
         message = "图表生成失败，请检查 RAW 文件和参数。"
+    elif all_curves_empty:
+        message = (
+            f"曲线无数据：{'、'.join(empty_curves)} 在 {Path(raw_file).name} 里只有表头、0 行数据"
+            "（引擎仍返回 rc=0 并照写了空图）。请用 list_result_curves 核对该 RAW 可用的曲线名；"
+            "若曲线名来自 --curve-info 的清单，说明该前缀在本 RAW 里没有对应数据集。"
+        )
     elif csv_path and csv_count == 0:
         reason = next((l for l in failures if "CSV" in l), failures[0] if failures else "")
         message = f"CSV 未生成：{reason}" if reason else "CSV 未生成（详见 warnings / command_runs）。"
@@ -786,8 +849,8 @@ def turbocharts_convert(
         warnings.append(f"引擎原文日志落盘失败：{exc}（原文仍见返回的 stderr / command_runs）")
 
     resp: dict[str, Any] = {
-        # 引擎 rc 恒为 0（曲线不存在/无数据也 rc=0），判成败看 img_generated 而非 return_code
-        "success": img_generated,
+        # 引擎 rc 恒为 0（曲线不存在/无数据也 rc=0）⇒ 判成败看 img_generated + 是否真有数据
+        "success": img_generated and not all_curves_empty,
         "return_code": result.returncode,
         "command": " ".join(cmd_img),
         "stdout": (result.stdout or "").strip(),
@@ -807,10 +870,13 @@ def turbocharts_convert(
         | ({"csv": csv_path} if csv_path and csv_count == 1 and len(csv_plan) <= 1 else {}),
         "message": message,
     }
+    if all_curves_empty:
+        resp["error_code"] = "EMPTY_CURVE_DATA"
+        resp["empty_curves"] = empty_curves
     if csv_labels:
         resp["curve_labels"] = csv_labels
     if warnings:
         resp["warnings"] = warnings
-    if result.returncode == 0 and img_generated:
+    if result.returncode == 0 and img_generated and not all_curves_empty:
         resp.update(build_file_link(output_path, "打开曲线图"))
     return resp

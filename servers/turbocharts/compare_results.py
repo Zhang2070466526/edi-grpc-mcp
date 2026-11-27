@@ -24,7 +24,8 @@ from servers.eda.config import TURBOCHARTS_PATH
 from servers.utils import (build_artifact, build_file_link, default_result_path,
                            error_response, per_tool_mutex)
 from servers.turbocharts.config import engine_report, record_run, run_turbocharts
-from servers.turbocharts.convert_raw import detect_chart_type
+from servers.turbocharts.convert_raw import (detect_chart_type, resolve_curves,
+                                            usable_linenames)
 from servers import mcp
 
 
@@ -162,12 +163,19 @@ def compare_simulation_results(
 
             x_vals, y_vals = _read_curve_csv_xy(tmp_csv)
             if not x_vals:
+                # 报错要能直接改对：补一次 --curve-info 把「可用的曲线写法」列出来。
+                # 只在失败分支付这一次代价（约 0.6s），成功路径不受影响。
+                info = resolve_curves(rp)
+                avail = info.get("usable_linenames") or usable_linenames(
+                    info.get("curves"), info.get("chart_type") or chart_type)[0]
                 return error_response(
                     "INVALID_RAW_DATA",
                     f"无法从 {rp} 的 CSV 解析出数据（chart_type={chart_type!r}、曲线名 "
                     f"{curve!r} 与 RAW 不匹配时会这样"
-                    f"{_own_type_hint(file_types, rp, chart_type)}；"
-                    "先用 list_result_curves 查曲线名）",
+                    f"{_own_type_hint(file_types, rp, chart_type)}）；"
+                    + (f"该 RAW 可用写法举例：{', '.join(avail)}" if avail
+                       else "该 RAW 未列出可用曲线，先用 list_result_curves 核对"),
+                    available_curves=avail,
                     **(_notes_detail(notes)),
                 )
             raw_curves.append((x_vals, y_vals))
