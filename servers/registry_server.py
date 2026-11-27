@@ -32,6 +32,7 @@ import servers.turbocharts.convert_raw   # noqa: F401
 import servers.turbocharts.resource      # noqa: F401 — edi://reference/turbocharts-guide（RAW 转图说明）
 import servers.ansys.project_manage       # noqa: F401
 import servers.ansys.run_analysis         # noqa: F401
+import servers.ansys.tasks                # noqa: F401 — hfss_task_list + hfss_task_cancel
 import servers.laspcem                    # noqa: F401 — launch/open/solve/export_snp/report/get_setup
 import servers.multimodal_vision          # noqa: F401 — show_image + analyze + open_document
 import servers.mcp_arg_guard            # noqa: F401 — 缺参/参数名拼错回统一信封（包装 ToolManager.call_tool）

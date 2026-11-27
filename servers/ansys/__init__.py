@@ -12,6 +12,9 @@ run_analysis.py      异步仿真 + 导出（3 工具）
     start_hfss_analysis_async 异步启动 HFSS Setup 仿真
     get_hfss_analysis_status  查询 HFSS 仿真状态
     export_hfss_snp           导出已求解的 S 参数为 Touchstone
+tasks.py             任务管理（2 工具）
+    hfss_task_list           列出当前所有 HFSS 异步任务
+    hfss_task_cancel         取消一个 HFSS 异步任务（尽力终止运行中的求解）
 """
 
 from servers.ansys.project_manage import (
@@ -20,8 +23,10 @@ from servers.ansys.project_manage import (
 from servers.ansys.run_analysis import (
     start_hfss_analysis_async, get_hfss_analysis_status, export_hfss_snp,
 )
+from servers.ansys.tasks import hfss_task_list, hfss_task_cancel
 
 __all__ = [
     "open_hfss_project", "close_hfss_project", "launch_aedt", "quit_aedt", "get_hfss_project_info",
     "start_hfss_analysis_async", "get_hfss_analysis_status", "export_hfss_snp",
+    "hfss_task_list", "hfss_task_cancel",
 ]
